@@ -4,7 +4,10 @@
       {
           "label": "Start Backend",
           "type": "shell",
-          "command": "cd backend && source venv/bin/activate && uvicorn app.main:app --reload",
+          "command": "source venv/bin/activate && uvicorn app.main:app --reload",
+          "options": {
+            "cwd": "${workspaceFolder}/backend"
+          },
           "problemMatcher": [],
           "presentation": {
             "reveal": "always",
@@ -16,7 +19,10 @@
         {
           "label": "Start Frontend",
           "type": "shell",
-          "command": "cd frontend && ./start-dev.sh",
+          "command": "./start-dev.sh",
+          "options": {
+            "cwd": "${workspaceFolder}/frontend"
+          },
           "problemMatcher": [],
           "presentation": {
             "reveal": "always",
