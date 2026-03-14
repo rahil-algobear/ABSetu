@@ -73,6 +73,19 @@ class UnauthorizedError(AppException):
         return "Authentication required. Please provide a valid token."
 
 
+class ForbiddenError(AppException):
+    """Forbidden — user lacks required permissions."""
+
+    def __init__(self, message: str = ""):
+        super().__init__(
+            message=message or self.default_message(),
+            status_code=HTTPStatus.FORBIDDEN,
+        )
+
+    def default_message(self) -> str:
+        return "You do not have permission to perform this action."
+
+
 class TooManyRequestsError(AppException):
     """Too many requests / rate limit exceeded."""
 

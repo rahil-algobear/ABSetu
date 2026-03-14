@@ -16,6 +16,7 @@ from app.core.logging import setup_logging
 from app.common.exceptions import (
     AppException,
     DatabaseError,
+    ForbiddenError,
     IntegrityError,
     NotFoundError,
     UnauthorizedError,
@@ -116,6 +117,14 @@ async def unauthorized_exception_handler(request: Request, exc: UnauthorizedErro
     )
 
 
+@app.exception_handler(ForbiddenError)
+async def forbidden_exception_handler(request: Request, exc: ForbiddenError):
+    """Handle forbidden errors"""
+    return JSONResponse(
+        status_code=exc.status_code, content={"message": exc.message}
+    )
+
+
 @app.exception_handler(exc.IntegrityError)
 async def sqlalchemy_integrity_error_handler(
     request: Request, exc: exc.IntegrityError
@@ -173,9 +182,15 @@ def root():
 
 from app.modules.auth.routes import router as auth_router
 from app.modules.user.routes import router as user_router
+from app.modules.organization.routes import router as org_router
+from app.modules.session.routes import router as session_router
+from app.modules.beneficiary.routes import router as beneficiary_router
 
 app.include_router(auth_router, prefix="/api", tags=["auth"])
 app.include_router(user_router, prefix="/api", tags=["user"])
+app.include_router(org_router, prefix="/api", tags=["organization"])
+app.include_router(session_router, prefix="/api", tags=["sessions"])
+app.include_router(beneficiary_router, prefix="/api", tags=["beneficiaries"])
 
 
 if __name__ == "__main__":

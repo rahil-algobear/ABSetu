@@ -75,6 +75,9 @@ upgrade:
 downgrade:
 	alembic downgrade -1
 
+seed:
+	$(PYTHON) -m app.seeds.initial
+
 kill-server:
 	@echo "Killing server on port 8000..."
 	@if lsof -ti:8000 > /dev/null 2>&1; then \

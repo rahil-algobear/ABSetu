@@ -1,8 +1,9 @@
 """
 Common FastAPI Dependencies
-Reusable dependencies for authentication
+Reusable dependencies for authentication and authorization
 """
 import uuid
+from typing import Callable
 
 import jwt
 from fastapi import Depends
@@ -10,7 +11,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.common.exceptions import UnauthorizedError
+from app.common.exceptions import ForbiddenError, UnauthorizedError
 from app.common.helpers.tokenhelper import TokenHelper
 
 # Lazy import to avoid circular imports — resolved at call time
@@ -69,3 +70,44 @@ def get_current_user(
         raise
     except Exception as e:
         raise UnauthorizedError(f"Token verification failed: {str(e)}")
+
+
+def _get_user_permissions(user) -> set[str]:
+    """
+    Extract permission keys from a user's role.
+    Returns a set of permission key strings.
+    """
+    if not user.role:
+        return set()
+    return {
+        rp.permission.key
+        for rp in user.role.role_permissions
+        if rp.permission
+    }
+
+
+def require_permissions(*required_keys: str) -> Callable:
+    """
+    FastAPI dependency factory that checks if the current user has
+    all the required permission keys.
+
+    Usage:
+        @router.post("/", dependencies=[Depends(require_permissions("beneficiary:create"))])
+        def create_beneficiary(...):
+
+        # Multiple permissions (user must have ALL):
+        @router.delete("/{id}", dependencies=[Depends(require_permissions("beneficiary:edit"))])
+
+    Raises:
+        ForbiddenError: If the user lacks any of the required permissions.
+    """
+    def _checker(current_user=Depends(get_current_user)):
+        user_permissions = _get_user_permissions(current_user)
+        missing = set(required_keys) - user_permissions
+        if missing:
+            raise ForbiddenError(
+                f"Missing required permissions: {', '.join(sorted(missing))}"
+            )
+        return current_user
+
+    return _checker

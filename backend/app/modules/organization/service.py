@@ -1,0 +1,161 @@
+"""
+Organization, Center, Programme services
+"""
+import uuid
+
+from sqlalchemy.orm import Session
+
+from app.common.exceptions import NotFoundError, ValidationError
+from app.modules.organization.model import Center, Organization, Programme, ProgrammeCenter
+
+
+class OrganizationService:
+    def __init__(self, db: Session):
+        self.db = db
+
+    def get_by_id(self, org_id: uuid.UUID) -> Organization:
+        org = self.db.query(Organization).filter_by(id=org_id).first()
+        if not org:
+            raise NotFoundError("Organization not found")
+        return org
+
+    def update(self, org_id: uuid.UUID, data: dict) -> Organization:
+        org = self.get_by_id(org_id)
+        for key, value in data.items():
+            if value is not None:
+                setattr(org, key, value)
+        self.db.commit()
+        self.db.refresh(org)
+        return org
+
+
+class CenterService:
+    def __init__(self, db: Session):
+        self.db = db
+
+    def list_by_org(self, org_id: uuid.UUID) -> list[Center]:
+        return self.db.query(Center).filter_by(organization_id=org_id).all()
+
+    def get_by_id(self, center_id: uuid.UUID, org_id: uuid.UUID) -> Center:
+        center = (
+            self.db.query(Center)
+            .filter_by(id=center_id, organization_id=org_id)
+            .first()
+        )
+        if not center:
+            raise NotFoundError("Center not found")
+        return center
+
+    def create(self, org_id: uuid.UUID, data: dict) -> Center:
+        center = Center(organization_id=org_id, **data)
+        self.db.add(center)
+        self.db.commit()
+        self.db.refresh(center)
+        return center
+
+    def update(self, center_id: uuid.UUID, org_id: uuid.UUID, data: dict) -> Center:
+        center = self.get_by_id(center_id, org_id)
+        for key, value in data.items():
+            if value is not None:
+                setattr(center, key, value)
+        self.db.commit()
+        self.db.refresh(center)
+        return center
+
+    def delete(self, center_id: uuid.UUID, org_id: uuid.UUID) -> None:
+        center = self.get_by_id(center_id, org_id)
+        self.db.delete(center)
+        self.db.commit()
+
+
+class ProgrammeService:
+    def __init__(self, db: Session):
+        self.db = db
+
+    def list_by_org(self, org_id: uuid.UUID) -> list[Programme]:
+        return self.db.query(Programme).filter_by(organization_id=org_id).all()
+
+    def get_by_id(self, programme_id: uuid.UUID, org_id: uuid.UUID) -> Programme:
+        programme = (
+            self.db.query(Programme)
+            .filter_by(id=programme_id, organization_id=org_id)
+            .first()
+        )
+        if not programme:
+            raise NotFoundError("Programme not found")
+        return programme
+
+    def create(self, org_id: uuid.UUID, data: dict) -> Programme:
+        programme = Programme(organization_id=org_id, **data)
+        self.db.add(programme)
+        self.db.commit()
+        self.db.refresh(programme)
+        return programme
+
+    def update(self, programme_id: uuid.UUID, org_id: uuid.UUID, data: dict) -> Programme:
+        programme = self.get_by_id(programme_id, org_id)
+        for key, value in data.items():
+            if value is not None:
+                setattr(programme, key, value)
+        self.db.commit()
+        self.db.refresh(programme)
+        return programme
+
+    def delete(self, programme_id: uuid.UUID, org_id: uuid.UUID) -> None:
+        programme = self.get_by_id(programme_id, org_id)
+        self.db.delete(programme)
+        self.db.commit()
+
+
+class ProgrammeCenterService:
+    def __init__(self, db: Session):
+        self.db = db
+
+    def list_by_org(self, org_id: uuid.UUID) -> list[ProgrammeCenter]:
+        return (
+            self.db.query(ProgrammeCenter)
+            .join(Programme, ProgrammeCenter.programme_id == Programme.id)
+            .filter(Programme.organization_id == org_id)
+            .all()
+        )
+
+    def create(
+        self, org_id: uuid.UUID, programme_id: uuid.UUID, center_id: uuid.UUID
+    ) -> ProgrammeCenter:
+        # Verify both belong to same org
+        programme = (
+            self.db.query(Programme)
+            .filter_by(id=programme_id, organization_id=org_id)
+            .first()
+        )
+        if not programme:
+            raise ValidationError("Programme not found in this organization")
+
+        center = (
+            self.db.query(Center)
+            .filter_by(id=center_id, organization_id=org_id)
+            .first()
+        )
+        if not center:
+            raise ValidationError("Center not found in this organization")
+
+        existing = (
+            self.db.query(ProgrammeCenter)
+            .filter_by(programme_id=programme_id, center_id=center_id)
+            .first()
+        )
+        if existing:
+            raise ValidationError("This programme-center combination already exists")
+
+        pc = ProgrammeCenter(programme_id=programme_id, center_id=center_id)
+        self.db.add(pc)
+        self.db.commit()
+        self.db.refresh(pc)
+        return pc
+
+    def delete(self, pc_id: uuid.UUID) -> None:
+        pc = self.db.query(ProgrammeCenter).filter_by(id=pc_id).first()
+        if not pc:
+            raise NotFoundError("Programme-Center assignment not found")
+        self.db.delete(pc)
+        self.db.commit()

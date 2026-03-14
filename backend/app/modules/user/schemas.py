@@ -12,3 +12,7 @@ class UserProfileResponse(BaseResponseSchema):
     country_code: str
     mobile_number: str
     is_verified: bool
+    organization_id: str | None = None
+    role_id: str | None = None
+    role_name: str | None = None
+    permissions: list[str] = []

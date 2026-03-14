@@ -3,6 +3,7 @@ Auth models: User, OTP, and RefreshToken
 """
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import relationship
 
 from app.common.models.base_model import BaseModel
 
@@ -15,6 +16,41 @@ class User(BaseModel):
     country_code = Column(String, nullable=False)
     mobile_number = Column(String, nullable=False, unique=True, index=True)
     is_verified = Column(Boolean, default=False)
+    organization_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    role_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("roles.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    organization = relationship("Organization")
+    role = relationship("Role", back_populates="users")
+
+
+class UserCenterAssignment(BaseModel):
+    __tablename__ = "user_center_assignments"
+
+    user_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    programme_center_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("programme_centers.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    user = relationship("User")
+    programme_center = relationship("ProgrammeCenter")
 
 
 class OTP(BaseModel):

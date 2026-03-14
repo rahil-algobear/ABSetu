@@ -7,7 +7,11 @@ from alembic import context
 
 from app.core.config import settings
 from app.core.database import Base
-from app.modules.auth.model import User, OTP, RefreshToken
+from app.modules.auth.model import User, OTP, RefreshToken, UserCenterAssignment  # noqa: F401
+from app.modules.organization.model import Organization, Center, Programme, ProgrammeCenter  # noqa: F401
+from app.modules.session.model import SessionTemplate, Facilitator, Session, SessionFacilitator, Attendance  # noqa: F401
+from app.modules.beneficiary.model import Beneficiary, Enrollment  # noqa: F401
+from app.modules.role.model import Permission, Role, RolePermission  # noqa: F401
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
