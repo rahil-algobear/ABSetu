@@ -334,8 +334,30 @@ All entities include:
 
 ---
 
+## Seeding (Phase 1)
+
+No super admin UI in phase 1. Instead, a **seed script** provisions the first org:
+
+1. Create the Organization (name, code, case number format)
+2. Create all Permission records (from the permission keys table above)
+3. Create default Roles — "Admin" (all permissions), "Team Member" (scoped permissions)
+4. Create the first Admin user (linked to the org + Admin role)
+
+Run via: `make seed` or `python -m app.seeds.initial`
+
+Multi-NGO onboarding / super admin panel deferred to when needed.
+
+---
+
+## Single App, Permissions-Driven
+
+There is no separate admin panel. The frontend is one app — what a user sees is determined entirely by their permissions. An admin and a team member use the same app; the UI adapts based on permission keys.
+
+---
+
 ## Out of Scope (Phase 1)
 
+- Super admin panel for managing multiple NGOs
 - Assessments, outcomes, referrals tracking
 - Offline/PWA support
 - PDF exports
