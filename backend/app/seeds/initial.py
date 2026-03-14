@@ -12,6 +12,9 @@ from app.core.database import SessionLocal
 from app.modules.organization.model import Organization
 from app.modules.role.model import Permission, Role, RolePermission
 from app.modules.auth.model import User
+# Import all models so SQLAlchemy can resolve relationship strings
+from app.modules.session.model import SessionTemplate, Facilitator, Session  # noqa: F401
+from app.modules.beneficiary.model import Beneficiary, Enrollment  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
