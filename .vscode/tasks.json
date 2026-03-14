@@ -1,0 +1,41 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+      {
+          "label": "Start Backend",
+          "type": "shell",
+          "command": "cd backend && source venv/bin/activate && uvicorn app.main:app --reload",
+          "problemMatcher": [],
+          "presentation": {
+            "reveal": "always",
+            "panel": "new",
+            "group": "servers"
+          },
+          "isBackground": true
+        },
+        {
+          "label": "Start Frontend",
+          "type": "shell",
+          "command": "cd frontend && ./start-dev.sh",
+          "problemMatcher": [],
+          "presentation": {
+            "reveal": "always",
+            "panel": "new",
+            "group": "servers"
+          },
+          "isBackground": true
+        },
+      {
+          "label": "Run Project",
+          "dependsOn": [
+            "Start Backend",
+            "Start Frontend",
+          ],
+          "group": {
+            "kind": "build",
+            "isDefault": true
+          },
+          "problemMatcher": []
+        }
+    ]
+  } 

@@ -1,0 +1,24 @@
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+ENV/
+VENV/
+.venv/
+.mypy_cache/
+.pytest_cache/
+.coverage
+*.sqlite3
+
+# Alembic
+
+
+# Environment
+.env
+.env.*
+
+# VSCode
+.vscode/ 

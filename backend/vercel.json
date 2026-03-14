@@ -1,0 +1,26 @@
+{
+    "version": 2,
+    "regions": ["bom1", "sin1", "sfo1"],
+    "builds": [
+      {
+        "src": "app/main.py",
+        "use": "@vercel/python",
+        "config": {
+          "maxLambdaSize": "15mb",
+          "runtime": "python3.10"
+        }
+      }
+    ],
+    "routes": [
+      {
+        "src": "/(.*)",
+        "dest": "app/main.py"
+      }
+    ],
+    "env": {
+      "PYTHONPATH": ".",
+      "ENVIRONMENT": "production",
+      "PYTHONUNBUFFERED": "1"
+    },
+    "buildCommand": "chmod +x vercel-build.sh && ./vercel-build.sh"
+  }

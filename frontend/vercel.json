@@ -1,0 +1,9 @@
+{
+    "version": 2,
+    "regions": ["bom1", "sin1", "sfo1"],
+    "buildCommand": "npm run build",
+    "devCommand": "npm run dev",
+    "installCommand": "npm install",
+    "framework": "nextjs",
+    "outputDirectory": ".next"
+  } 

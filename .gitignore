@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.sqlite3
+*.db
+*.env
+*.venv
+venv/
+ENV/
+.env.*
+
+# macOS
+.DS_Store
+
+# Node
+node_modules/
+dist/
+build/
+
+# VSCode
+# .vscode/
+
+# Logs
+*.log
+
+# Ignore backend and frontend venvs
+backend/venv/
+frontend/venv/ 
