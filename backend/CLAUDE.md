@@ -65,6 +65,12 @@ app/
 - Use FastAPI `Depends()` for DB session and auth
 - Return consistent response format
 - Prefix: `/api/{module_name}`
+- **Every route must declare required permissions** using `require_permissions`:
+  ```python
+  @router.post("/", dependencies=[Depends(require_permissions("beneficiary:create"))])
+  ```
+- `require_permissions` resolves user → role → permission keys, returns 403 if missing
+- Located in `app/common/dependencies.py` alongside `get_current_user`
 
 ## Auth
 - OTP-based login (phone number + OTP)

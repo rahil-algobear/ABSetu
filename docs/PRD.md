@@ -244,6 +244,50 @@ Roles are org-defined. Each role bundles a set of permissions.
 
 Frontend checks permission keys (not role names) to determine what to render.
 
+### Permissions Architecture (Built-in from Day 1)
+
+Even though full role management UI is deferred, permissions are enforced from the start to avoid gaps.
+
+**Backend — `require_permissions` dependency:**
+```python
+# Usage on any route:
+@router.post("/", dependencies=[Depends(require_permissions("beneficiary:create"))])
+def create_beneficiary(...):
+
+# Multiple permissions (user must have ALL):
+@router.delete("/{id}", dependencies=[Depends(require_permissions("beneficiary:edit", "beneficiary:view"))])
+```
+
+How it works:
+1. `get_current_user` resolves the authenticated user (existing)
+2. `require_permissions` loads the user's role → role_permissions → permission keys
+3. Checks that the user has all required permission keys
+4. Returns 403 if missing
+
+**Frontend — `usePermissions` hook + `<Can>` component:**
+```tsx
+// Hook — returns permission checker
+const { can, permissions } = usePermissions();
+if (can("beneficiary:create")) { ... }
+
+// Component — conditionally renders children
+<Can permission="beneficiary:create">
+  <Button>Add Beneficiary</Button>
+</Can>
+
+// Multiple permissions (must have ALL):
+<Can permissions={["reports:view", "reports:export"]}>
+  <Button>Export</Button>
+</Can>
+```
+
+How it works:
+1. User profile API returns the user's permission keys (resolved from their role)
+2. `usePermissions` hook reads from auth context
+3. `<Can>` component wraps any UI element that needs permission gating
+
+**Every new route and every new UI action must use these from the start.**
+
 ---
 
 ## Meta Fields System

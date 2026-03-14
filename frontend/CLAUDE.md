@@ -72,10 +72,27 @@ src/
 - Protected pages should check auth status and redirect to `/login`
 - Tokens stored in cookies via `utils/jwt.ts`
 
-### Permissions
+### Permissions (Enforced from Day 1)
 - Frontend checks permission keys (strings like `"beneficiary:create"`) not role names
-- User's permissions come from their role via the API
-- Conditionally render UI elements based on permissions
+- User's permissions come from the profile API (role → permission keys)
+- **Every UI action/element that needs gating must use `<Can>` or `usePermissions`:**
+  ```tsx
+  // Wrap UI elements
+  <Can permission="beneficiary:create">
+    <Button>Add Beneficiary</Button>
+  </Can>
+
+  // Programmatic check
+  const { can } = usePermissions();
+  if (can("reports:export")) { ... }
+
+  // Multiple permissions (ALL required)
+  <Can permissions={["reports:view", "reports:export"]}>
+    <Button>Export</Button>
+  </Can>
+  ```
+- `usePermissions` hook and `<Can>` component live in `src/components/Auth/`
+- Never check role names — always check permission keys
 
 ### Navigation
 - Mobile: bottom tab bar
