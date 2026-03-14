@@ -1,10 +1,8 @@
 """
 Session, SessionTemplate, Facilitator, Attendance schemas
 """
-from __future__ import annotations
-
-from datetime import date
-from typing import Any
+import datetime
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field
 
@@ -58,14 +56,14 @@ class FacilitatorResponse(BaseResponseSchema):
 class SessionCreate(BaseModel):
     session_template_id: str
     programme_center_id: str
-    date: date
+    date: datetime.date
     notes: str | None = None
     facilitator_ids: list[str] = []
     meta: dict[str, Any] | None = None
 
 
 class SessionUpdate(BaseModel):
-    date: date | None = None
+    date: Optional[datetime.date] = None
     notes: str | None = None
     meta: dict[str, Any] | None = None
 
@@ -73,7 +71,7 @@ class SessionUpdate(BaseModel):
 class SessionResponse(BaseResponseSchema):
     session_template_id: str
     programme_center_id: str
-    date: date
+    date: datetime.date
     notes: str | None = None
     created_by: str | None = None
     meta: dict[str, Any] | None = None
