@@ -1,11 +1,8 @@
 import type { Metadata, Viewport } from "next";
-import { Baloo_2 } from "next/font/google";
 import "../styles/globals.css";
 import Providers from "../components/Providers";
 import MainLayout from "../components/layout";
 import { generatePageTitle } from "../utils/metadata";
-
-const platformFont = Baloo_2({ subsets: ["latin"] });
 
 export const viewport: Viewport = {
   themeColor: '#ffffff',
@@ -59,7 +56,7 @@ export default function RootLayout({
         <link rel="manifest" href="/favicons/manifest.json" />
         <meta name="theme-color" content="#ffffff" />
       </head>
-      <body className={platformFont.className}>
+      <body className="font-sans">
         <Providers>
           <MainLayout>{children}</MainLayout>
         </Providers>
