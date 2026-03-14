@@ -2,6 +2,7 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from '../services/auth';
+import { PermissionsProvider } from './Auth/Permissions';
 import { useState } from 'react';
 import { Toaster } from 'react-hot-toast';
 
@@ -9,8 +10,8 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient({
     defaultOptions: {
       queries: {
-        staleTime: 0, // Don't cache
-        retry: 1, // Only retry once on failure
+        staleTime: 0,
+        retry: 1,
       },
     },
   }));
@@ -18,9 +19,11 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        {children}
-        <Toaster position="bottom-right" />
+        <PermissionsProvider>
+          {children}
+          <Toaster position="bottom-right" />
+        </PermissionsProvider>
       </AuthProvider>
     </QueryClientProvider>
   );
-} 
+}
