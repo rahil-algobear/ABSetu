@@ -318,6 +318,16 @@ export const userApi = {
     const response = await authAxios.get<UserListItem[]>('/user/list');
     return response.data;
   },
+  create: async (data: {
+    first_name: string;
+    last_name: string;
+    country_code: string;
+    mobile_number: string;
+    role_id: string;
+  }): Promise<UserListItem> => {
+    const response = await authAxios.post<UserListItem>('/user/', data);
+    return response.data;
+  },
   updateRole: async (userId: string, roleId: string): Promise<UserListItem> => {
     const response = await authAxios.put<UserListItem>(`/user/${userId}/role`, { role_id: roleId });
     return response.data;

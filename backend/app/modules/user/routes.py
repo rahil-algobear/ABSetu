@@ -10,6 +10,7 @@ from app.core.database import get_db
 from app.common.dependencies import get_current_user, require_permissions
 from app.modules.auth.model import User
 from app.modules.user.schemas import (
+    UserCreate,
     UserListResponse,
     UserProfileResponse,
     UserRoleUpdate,
@@ -76,6 +77,40 @@ def list_users(
             ).dump()
         )
     return results
+
+
+@router.post(
+    "/",
+    dependencies=[Depends(require_permissions("user:manage"))],
+    status_code=201,
+)
+def create_user(
+    data: UserCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Create a new user within the organization."""
+    service = UserService(db)
+    user = service.create_user(
+        org_id=current_user.organization_id,
+        first_name=data.first_name,
+        last_name=data.last_name,
+        country_code=data.country_code,
+        mobile_number=data.mobile_number,
+        role_id=uuid.UUID(data.role_id),
+    )
+    role_name = user.role.name if user.role else None
+    return UserListResponse(
+        id=str(user.id),
+        updated_at=user.updated_at,
+        first_name=user.first_name,
+        last_name=user.last_name,
+        country_code=user.country_code,
+        mobile_number=user.mobile_number,
+        is_verified=user.is_verified,
+        role_id=str(user.role_id) if user.role_id else None,
+        role_name=role_name,
+    ).dump()
 
 
 @router.put(

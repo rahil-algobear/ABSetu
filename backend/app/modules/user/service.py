@@ -5,7 +5,7 @@ import uuid
 
 from sqlalchemy.orm import Session
 
-from app.common.exceptions import NotFoundError
+from app.common.exceptions import NotFoundError, ValidationError
 from app.modules.auth.model import User
 from app.modules.role.model import Role
 
@@ -54,6 +54,48 @@ class UserService:
             raise NotFoundError("Role not found")
 
         user.role_id = role_id
+        self.db.commit()
+        self.db.refresh(user)
+        return user
+
+    def create_user(
+        self,
+        org_id: uuid.UUID,
+        first_name: str,
+        last_name: str,
+        country_code: str,
+        mobile_number: str,
+        role_id: uuid.UUID,
+    ) -> User:
+        """Create a new user within the organization."""
+        # Check for duplicate mobile number
+        existing = (
+            self.db.query(User)
+            .filter_by(mobile_number=mobile_number)
+            .first()
+        )
+        if existing:
+            raise ValidationError("A user with this mobile number already exists")
+
+        # Verify role belongs to same org
+        role = (
+            self.db.query(Role)
+            .filter_by(id=role_id, organization_id=org_id)
+            .first()
+        )
+        if not role:
+            raise NotFoundError("Role not found")
+
+        user = User(
+            first_name=first_name,
+            last_name=last_name,
+            country_code=country_code,
+            mobile_number=mobile_number,
+            organization_id=org_id,
+            role_id=role_id,
+            is_verified=False,
+        )
+        self.db.add(user)
         self.db.commit()
         self.db.refresh(user)
         return user

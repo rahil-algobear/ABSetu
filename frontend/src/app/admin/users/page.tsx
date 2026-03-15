@@ -6,6 +6,7 @@ import { userApi, roleApi } from "@/services/api";
 import { UserListItem, Role } from "@/types";
 import { Can } from "@/components/Auth/Permissions";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog } from "@/components/ui/dialog";
 import {
@@ -16,14 +17,22 @@ import {
   TableHead,
   TableCell,
 } from "@/components/ui/page-table";
-import { Pencil, Phone } from "lucide-react";
+import { Plus, Pencil, Phone } from "lucide-react";
 import toast from "react-hot-toast";
 
 export default function UsersPage() {
   const queryClient = useQueryClient();
-  const [modalOpen, setModalOpen] = useState(false);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserListItem | null>(null);
   const [selectedRoleId, setSelectedRoleId] = useState("");
+  const [createForm, setCreateForm] = useState({
+    first_name: "",
+    last_name: "",
+    country_code: "+91",
+    mobile_number: "",
+    role_id: "",
+  });
 
   const { data: users = [], isLoading } = useQuery({
     queryKey: ["users"],
@@ -35,30 +44,65 @@ export default function UsersPage() {
     queryFn: roleApi.list,
   });
 
+  const createMutation = useMutation({
+    mutationFn: userApi.create,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+      queryClient.invalidateQueries({ queryKey: ["roles"] });
+      closeCreateModal();
+      toast.success("User added");
+    },
+    onError: (err: Error & { response?: { data?: { message?: string } } }) => {
+      const msg = err.response?.data?.message || "Failed to add user";
+      toast.error(msg);
+    },
+  });
+
   const updateRoleMutation = useMutation({
     mutationFn: ({ userId, roleId }: { userId: string; roleId: string }) =>
       userApi.updateRole(userId, roleId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users"] });
       queryClient.invalidateQueries({ queryKey: ["roles"] });
-      closeModal();
+      closeEditModal();
       toast.success("Role updated");
     },
     onError: () => toast.error("Failed to update role"),
   });
 
+  const openCreate = () => {
+    const defaultRole = roles.find((r) => r.is_default);
+    setCreateForm({
+      first_name: "",
+      last_name: "",
+      country_code: "+91",
+      mobile_number: "",
+      role_id: defaultRole?.id || "",
+    });
+    setCreateModalOpen(true);
+  };
+
+  const closeCreateModal = () => {
+    setCreateModalOpen(false);
+  };
+
   const openEdit = (user: UserListItem) => {
     setEditingUser(user);
     setSelectedRoleId(user.role_id || "");
-    setModalOpen(true);
+    setEditModalOpen(true);
   };
 
-  const closeModal = () => {
-    setModalOpen(false);
+  const closeEditModal = () => {
+    setEditModalOpen(false);
     setEditingUser(null);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleCreate = (e: React.FormEvent) => {
+    e.preventDefault();
+    createMutation.mutate(createForm);
+  };
+
+  const handleEditSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingUser || !selectedRoleId) return;
     updateRoleMutation.mutate({
@@ -71,6 +115,12 @@ export default function UsersPage() {
     <>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold">Users</h2>
+        <Can permission="user:manage">
+          <Button size="sm" onClick={openCreate}>
+            <Plus className="h-4 w-4 mr-1" />
+            Add User
+          </Button>
+        </Can>
       </div>
 
       {isLoading ? (
@@ -126,13 +176,106 @@ export default function UsersPage() {
         </Table>
       )}
 
+      {/* Add User Modal */}
       <Dialog
-        open={modalOpen}
-        onClose={closeModal}
+        open={createModalOpen}
+        onClose={closeCreateModal}
+        title="Add User"
+      >
+        <form onSubmit={handleCreate} className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label htmlFor="first-name">First Name</Label>
+              <Input
+                id="first-name"
+                value={createForm.first_name}
+                onChange={(e) =>
+                  setCreateForm({ ...createForm, first_name: e.target.value })
+                }
+                required
+              />
+            </div>
+            <div>
+              <Label htmlFor="last-name">Last Name</Label>
+              <Input
+                id="last-name"
+                value={createForm.last_name}
+                onChange={(e) =>
+                  setCreateForm({ ...createForm, last_name: e.target.value })
+                }
+                required
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-[80px_1fr] gap-3">
+            <div>
+              <Label htmlFor="country-code">Code</Label>
+              <Input
+                id="country-code"
+                value={createForm.country_code}
+                onChange={(e) =>
+                  setCreateForm({ ...createForm, country_code: e.target.value })
+                }
+                placeholder="+91"
+                required
+              />
+            </div>
+            <div>
+              <Label htmlFor="mobile">Mobile Number</Label>
+              <Input
+                id="mobile"
+                value={createForm.mobile_number}
+                onChange={(e) =>
+                  setCreateForm({
+                    ...createForm,
+                    mobile_number: e.target.value,
+                  })
+                }
+                placeholder="9876543210"
+                required
+              />
+            </div>
+          </div>
+
+          <div>
+            <Label htmlFor="create-role">Role</Label>
+            <select
+              id="create-role"
+              value={createForm.role_id}
+              onChange={(e) =>
+                setCreateForm({ ...createForm, role_id: e.target.value })
+              }
+              className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
+              required
+            >
+              <option value="">Select a role...</option>
+              {roles.map((role) => (
+                <option key={role.id} value={role.id}>
+                  {role.name}
+                  {role.is_default ? " (Default)" : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="outline" onClick={closeCreateModal}>
+              Cancel
+            </Button>
+            <Button type="submit">Add User</Button>
+          </div>
+        </form>
+      </Dialog>
+
+      {/* Edit Role Modal */}
+      <Dialog
+        open={editModalOpen}
+        onClose={closeEditModal}
         title="Change User Role"
       >
         {editingUser && (
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleEditSubmit} className="space-y-4">
             <div className="bg-gray-50 rounded-lg p-3">
               <p className="font-medium">
                 {editingUser.first_name} {editingUser.last_name}
@@ -162,7 +305,7 @@ export default function UsersPage() {
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={closeModal}>
+              <Button type="button" variant="outline" onClick={closeEditModal}>
                 Cancel
               </Button>
               <Button type="submit" disabled={!selectedRoleId}>
