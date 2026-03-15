@@ -22,36 +22,38 @@ export default function MainLayout({
         {children}
       </div>
       <footer className="border-t border-gray-200 bg-white">
-        <div className="mx-auto px-4 sm:px-6 py-6">
-          <div className="flex flex-col sm:flex-row items-center sm:items-start justify-between gap-6">
+        <div className="px-4 sm:px-6 py-8">
+          <div className="flex flex-col sm:flex-row items-center sm:items-start justify-between gap-8">
             {/* Brand */}
-            <div className="flex flex-col items-center sm:items-start gap-2">
-              <div className="flex items-center gap-2">
-                <Image src="/logo.png" alt="ABSetu" width={32} height={32} className="rounded-lg" />
-                <span className="text-sm font-bold text-gray-900">ABSetu</span>
+            <div className="flex flex-col items-center sm:items-start gap-2.5">
+              <div className="flex items-center gap-2.5">
+                <Image src="/logo.png" alt="ABSetu" width={36} height={36} className="rounded-lg" />
+                <span className="text-base font-bold text-gray-900">ABSetu</span>
               </div>
-              <p className="text-xs text-gray-400">
+              <p className="text-sm text-gray-400">
                 NGO outreach management platform
               </p>
             </div>
 
             {/* Links */}
-            <div className="flex flex-col sm:flex-row gap-6 sm:gap-10 text-xs">
-              <div className="flex flex-col gap-1.5">
-                <p className="font-semibold text-gray-500 uppercase tracking-wider">Product</p>
+            <div className="flex flex-col sm:flex-row gap-8 sm:gap-16 text-sm">
+              <div className="flex flex-col items-center sm:items-start gap-2">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Product</p>
                 <a href="/dashboard" className="text-gray-400 hover:text-gray-600 transition-colors">Dashboard</a>
                 <a href="/sessions" className="text-gray-400 hover:text-gray-600 transition-colors">Sessions</a>
               </div>
-              <div className="flex flex-col gap-1.5">
-                <p className="font-semibold text-gray-500 uppercase tracking-wider">Contact</p>
+              <div className="flex flex-col items-center sm:items-start gap-2">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Contact</p>
                 <a href="mailto:rahil@algobear.in" className="text-gray-400 hover:text-gray-600 transition-colors">rahil@algobear.in</a>
                 <a href="https://algobear.in" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-600 transition-colors">algobear.in</a>
               </div>
             </div>
           </div>
+        </div>
 
-          {/* Bottom bar */}
-          <div className="mt-6 pt-4 border-t border-gray-100 text-center text-[11px] text-gray-400">
+        {/* Bottom bar — full-bleed divider */}
+        <div className="border-t border-gray-200">
+          <div className="px-4 sm:px-6 py-4 text-center text-xs text-gray-400">
             &copy; {new Date().getFullYear()} Algobear Pvt Ltd. All rights reserved.
           </div>
         </div>
