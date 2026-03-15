@@ -11,10 +11,13 @@ import {
   MetaFieldSchemas,
   OTPVerifyData,
   Organization,
+  Permission,
   Programme,
   ProgrammeCenter,
+  Role,
   Session,
   SessionTemplate,
+  UserListItem,
   UserLoginData,
   UserProfileResponse,
   UserRegisterData,
@@ -279,6 +282,44 @@ export const beneficiaryApi = {
   },
   update: async (id: string, data: Partial<Beneficiary>): Promise<Beneficiary> => {
     const response = await authAxios.put<Beneficiary>(`/beneficiaries/${id}`, data);
+    return response.data;
+  },
+};
+
+// --- Roles ---
+
+export const roleApi = {
+  list: async (): Promise<Role[]> => {
+    const response = await authAxios.get<Role[]>('/roles/');
+    return response.data;
+  },
+  create: async (data: { name: string; is_default?: boolean; permission_ids: string[] }): Promise<Role> => {
+    const response = await authAxios.post<Role>('/roles/', data);
+    return response.data;
+  },
+  update: async (id: string, data: { name?: string; is_default?: boolean; permission_ids?: string[] }): Promise<Role> => {
+    const response = await authAxios.put<Role>(`/roles/${id}`, data);
+    return response.data;
+  },
+  delete: async (id: string) => {
+    const response = await authAxios.delete(`/roles/${id}`);
+    return response.data;
+  },
+  listPermissions: async (): Promise<Permission[]> => {
+    const response = await authAxios.get<Permission[]>('/roles/permissions');
+    return response.data;
+  },
+};
+
+// --- Users (Admin) ---
+
+export const userApi = {
+  list: async (): Promise<UserListItem[]> => {
+    const response = await authAxios.get<UserListItem[]>('/user/list');
+    return response.data;
+  },
+  updateRole: async (userId: string, roleId: string): Promise<UserListItem> => {
+    const response = await authAxios.put<UserListItem>(`/user/${userId}/role`, { role_id: roleId });
     return response.data;
   },
 };

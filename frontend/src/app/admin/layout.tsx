@@ -11,6 +11,7 @@ import {
   ClipboardList,
   UserCheck,
   Users,
+  Shield,
   SlidersHorizontal,
 } from "lucide-react";
 
@@ -21,6 +22,8 @@ const tabs = [
   { href: "/admin/session-templates", label: "Session Templates", icon: ClipboardList, permission: "session_template:view" },
   { href: "/admin/facilitators", label: "Facilitators", icon: UserCheck, permission: "facilitator:view" },
   { href: "/admin/beneficiaries", label: "Beneficiaries", icon: Users, permission: "beneficiary:view" },
+  { href: "/admin/roles", label: "Roles", icon: Shield, permission: "role:view" },
+  { href: "/admin/users", label: "Users", icon: Users, permission: "user:view" },
   { href: "/admin/meta-fields", label: "Custom Fields", icon: SlidersHorizontal, permission: "org:settings" },
 ];
 
