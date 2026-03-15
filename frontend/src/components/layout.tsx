@@ -36,7 +36,7 @@ export default function MainLayout({
             </div>
 
             {/* Links */}
-            <div className="flex gap-10 text-xs">
+            <div className="flex flex-col sm:flex-row gap-6 sm:gap-10 text-xs">
               <div className="flex flex-col gap-1.5">
                 <p className="font-semibold text-gray-500 uppercase tracking-wider">Product</p>
                 <a href="/dashboard" className="text-gray-400 hover:text-gray-600 transition-colors">Dashboard</a>
