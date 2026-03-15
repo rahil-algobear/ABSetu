@@ -178,6 +178,10 @@ def root():
     }
 
 
+# --- Import all models so SQLAlchemy resolves string-based relationships ---
+from app.core import models as _models  # noqa: F401
+
+
 # --- Register module routers ---
 
 from app.modules.auth.routes import router as auth_router
