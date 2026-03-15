@@ -1,20 +1,19 @@
 'use client';
 
-import Link from 'next/link';
 import { useAuth } from '../services/auth';
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
 
 export default function HomePage() {
   const { isAuthenticated } = useAuth();
   const router = useRouter();
+  const planningRoute = '/beneficiaries';
 
   const handleStartPlanning = (e: React.MouseEvent) => {
     e.preventDefault();
     if (isAuthenticated) {
-      router.push('/places');
+      router.push(planningRoute);
     } else {
-      router.push('/login?redirect=/places');
+      router.push(`/login?redirect=${encodeURIComponent(planningRoute)}`);
     }
   };
 

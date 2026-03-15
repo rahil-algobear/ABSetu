@@ -8,12 +8,13 @@ import HomePage from '@/components/HomePage';
 export default function HomeClient() {
   const { isAuthenticated } = useAuth();
   const router = useRouter();
+  const defaultAuthenticatedRoute = '/beneficiaries';
 
   useEffect(() => {
     if (isAuthenticated) {
-      router.push('/places');
+      router.push(defaultAuthenticatedRoute);
     }
-  }, [isAuthenticated, router]);
+  }, [isAuthenticated, router, defaultAuthenticatedRoute]);
 
   return <HomePage />;
 }
