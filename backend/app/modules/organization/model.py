@@ -1,7 +1,7 @@
 """
 Organization and related models: Organization, Center, Programme, ProgrammeCentre
 """
-from sqlalchemy import Column, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import Column, ForeignKey, String, Text, UniqueConstraint, VARCHAR
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 
@@ -16,6 +16,7 @@ class Organization(BaseModel):
     case_number_format = Column(
         String, nullable=False, default="{ORG_CODE}-{SERIAL}"
     )
+    logo_url = Column(VARCHAR(2048), nullable=True)
     meta = Column(JSONB, nullable=True, default=dict)
 
     centers = relationship("Center", back_populates="organization", lazy="dynamic")

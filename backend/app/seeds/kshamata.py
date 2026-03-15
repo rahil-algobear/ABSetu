@@ -40,6 +40,7 @@ ADMIN_COUNTRY_CODE = "+91"
 # ---------------------------------------------------------------------------
 ORG_NAME = "Kshamata"
 ORG_CODE = "KSHAMATA"
+ORG_LOGO_URL = "https://kshamata.org/wp-content/uploads/2022/06/revised-logo.png"
 
 # ---------------------------------------------------------------------------
 # Centres (code, name, address hint)
@@ -279,19 +280,23 @@ CENTRE_INTERVENTIONS = {
 def seed():
     db = SessionLocal()
     try:
-        # 1. Organisation
+        # 1. Organisation (upsert)
         org = db.query(Organization).filter_by(code=ORG_CODE).first()
         if not org:
             org = Organization(
                 name=ORG_NAME,
                 code=ORG_CODE,
                 case_number_format="{ORG_CODE}-{YY}-{SERIAL}",
+                logo_url=ORG_LOGO_URL,
             )
             db.add(org)
             db.flush()
             print(f"Created organization: {org.name} ({org.code})")
         else:
-            print(f"Organization already exists: {org.name}")
+            org.name = ORG_NAME
+            org.logo_url = ORG_LOGO_URL
+            db.flush()
+            print(f"Updated organization: {org.name} ({org.code})")
 
         # 2. Centres
         center_map = {}

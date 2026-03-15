@@ -52,6 +52,7 @@ export interface Organization {
   name: string;
   code: string;
   case_number_format: string;
+  logo_url: string | null;
   meta: Record<string, unknown> | null;
   updated_at: number | null;
 }

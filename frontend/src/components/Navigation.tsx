@@ -3,6 +3,8 @@
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "../services/auth";
 import { usePermissions, Can } from "./Auth/Permissions";
+import { useQuery } from "@tanstack/react-query";
+import { organizationApi } from "../services/api";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import Image from "next/image";
@@ -189,6 +191,13 @@ export default function Navigation() {
   const router = useRouter();
   const { can } = usePermissions();
 
+  const { data: org } = useQuery({
+    queryKey: ["organization"],
+    queryFn: organizationApi.get,
+    enabled: isAuthenticated,
+    staleTime: 5 * 60 * 1000,
+  });
+
   // Close mobile menu on navigation
   useEffect(() => {
     setMobileOpen(false);
@@ -226,20 +235,32 @@ export default function Navigation() {
             </button>
           )}
 
-          {/* Mobile: centered logo */}
+          {/* Mobile: centered logo + org name */}
           <Link
             href={isAuthenticated ? "/dashboard" : "/"}
-            className="absolute left-1/2 -translate-x-1/2 md:hidden flex items-center shrink-0"
+            className="absolute left-1/2 -translate-x-1/2 md:hidden flex items-center gap-2 shrink-0"
             onClick={handleLogoClick}
           >
-            <Image
-              src="/logo.png"
-              alt="Logo"
-              width={36}
-              height={36}
-              className="rounded-lg transition-transform hover:scale-105"
-              priority={true}
-            />
+            {org?.logo_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={org.logo_url}
+                alt={org.name}
+                className="h-9 w-9 rounded-lg object-contain transition-transform hover:scale-105"
+              />
+            ) : (
+              <Image
+                src="/logo.png"
+                alt="Logo"
+                width={36}
+                height={36}
+                className="rounded-lg transition-transform hover:scale-105"
+                priority={true}
+              />
+            )}
+            <span className="text-sm font-bold text-gray-900">
+              {org?.name || "ABSetu"}
+            </span>
           </Link>
 
           {/* Desktop: Logo + Nav Links */}
@@ -249,16 +270,25 @@ export default function Navigation() {
               className="flex items-center gap-2 mr-4 shrink-0"
               onClick={handleLogoClick}
             >
-              <Image
-                src="/logo.png"
-                alt="Logo"
-                width={36}
-                height={36}
-                className="rounded-lg transition-transform hover:scale-105"
-                priority={true}
-              />
+              {org?.logo_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={org.logo_url}
+                  alt={org.name}
+                  className="h-9 w-9 rounded-lg object-contain transition-transform hover:scale-105"
+                />
+              ) : (
+                <Image
+                  src="/logo.png"
+                  alt="Logo"
+                  width={36}
+                  height={36}
+                  className="rounded-lg transition-transform hover:scale-105"
+                  priority={true}
+                />
+              )}
               <span className="text-sm font-bold text-gray-900">
-                ABSetu
+                {org?.name || "ABSetu"}
               </span>
             </Link>
 
