@@ -69,8 +69,8 @@ Unique constraint: `(organization_id, key)`
 **Kshamata example:**
 | name | key |
 |------|-----|
-| Location | location |
-| Location Type | location_type |
+| Centre | centre |
+| Centre Type | centre_type |
 | Programme | programme |
 
 ---
@@ -93,7 +93,7 @@ Values within a dimension.
 
 Unique constraint: `(dimension_id, code)`
 
-**Kshamata example (Location dimension):**
+**Kshamata example (Centre dimension):**
 | name | code | meta |
 |------|------|------|
 | ShantiSadan | SHANTISADAN | `{"address": "Institution"}` |
@@ -126,24 +126,24 @@ Unique constraint: `(dimension_value_id_1, dimension_value_id_2)` — order is n
 
 **Kshamata examples:**
 
-Programme ↔ Location rules (replaces `programme_centers`):
+Programme ↔ Centre rules (replaces `programme_centers`):
 | dimension_value_1 | dimension_value_2 |
 |--------------------|-------------------|
-| Programme:Outreach | Location:ShantiSadan |
-| Programme:Outreach | Location:Kasturba |
-| Programme:Transformation | Location:Thane |
-| Programme:Unlimited | Location:Thane |
-| Programme:Unlimited | Location:Mankhurd |
+| Programme:Outreach | Centre:ShantiSadan |
+| Programme:Outreach | Centre:Kasturba |
+| Programme:Transformation | Centre:Thane |
+| Programme:Unlimited | Centre:Thane |
+| Programme:Unlimited | Centre:Mankhurd |
 
-Location ↔ SessionTemplate rules (replaces `CENTRE_INTERVENTIONS`):
+Centre ↔ ActivityType rules (replaces `CENTRE_INTERVENTIONS`):
 | dimension_value_1 | dimension_value_2 |
 |--------------------|-------------------|
-| Location:ShantiSadan | SessionTemplate:Life Skill Education |
-| Location:ShantiSadan | SessionTemplate:Job Readiness |
-| Location:ShantiSadan | SessionTemplate:Vocational Skill Training |
+| Centre:ShantiSadan | ActivityType:Life Skill Education |
+| Centre:ShantiSadan | ActivityType:Job Readiness |
+| Centre:ShantiSadan | ActivityType:Vocational Skill Training |
 | ... | ... |
 
-> **Note on SessionTemplate in tag rules:** SessionTemplate remains a first-class table, but for tag rule purposes we create a system-managed "Session Type" dimension whose values mirror the session_templates table. This lets tag_rules work with a single mechanism (dimension_value ↔ dimension_value) without special-casing session templates. When a session template is created/deleted, the corresponding dimension value is synced automatically.
+> **Note on ActivityType in tag rules:** ActivityType remains a first-class table (`activity_types`), but for tag rule purposes we create a system-managed "Activity Type" dimension whose values mirror the `activity_types` table. This lets `tag_rules` work with a single mechanism (dimension_value ↔ dimension_value) without special-casing activity types. When an activity type is created/deleted, the corresponding dimension value is synced automatically.
 
 ---
 
@@ -162,7 +162,7 @@ Unique constraint: `(activity_id, dimension_value_id)`
 **Example — a Life Skill Education session at ShantiSadan:**
 | activity_id | dimension_value_id |
 |-------------|--------------------|
-| act-001 | Location:ShantiSadan |
+| act-001 | Centre:ShantiSadan |
 | act-001 | Programme:Outreach |
 
 ---
@@ -210,8 +210,8 @@ Unique constraint: `(user_id, dimension_value_id)`
 **Example — field worker scoped to ShantiSadan + Outreach:**
 | user_id | dimension_value_id |
 |---------|--------------------|
-| worker-001 | Location:ShantiSadan |
-| worker-001 | Location:Kasturba |
+| worker-001 | Centre:ShantiSadan |
+| worker-001 | Centre:Kasturba |
 | worker-001 | Programme:Outreach |
 
 **Access logic:** When querying sessions for a user, filter to sessions whose tags are a subset of the user's dimension access. Admin users with no access restrictions see everything.
@@ -307,28 +307,38 @@ The prefix `dimension:{key}` makes schemas dynamic per-dimension. When an admin 
 Centres | Programmes | Programme-Centres | Session Templates | Facilitators | Beneficiaries | Roles | Users | Custom Fields
 ```
 
-**New tabs:**
+**New tabs (dynamically generated from org dimensions + static entities):**
 ```
-Dimensions | Tag Rules | Activity Types | Facilitators | Beneficiaries | Roles | Users | Custom Fields
+{Dimension 1} | {Dimension 2} | ... | Tag Rules | Activity Types | Facilitators | Beneficiaries | Roles | Users | Custom Fields
 ```
 
-> Note: Tab labels like "Activity Types" are displayed using the org's vocabulary mapping. Kshamata would see "Session Templates" here.
+Each dimension the org has created becomes its own settings tab/page. Tab labels come from the dimension name. For Kshamata this renders as:
+```
+Centres | Programmes | Tag Rules | Session Templates | Facilitators | Beneficiaries | Roles | Users | Custom Fields
+```
+> "Centres" because that's what Kshamata named their location dimension. "Session Templates" via vocabulary mapping of "Activity Types". Looks nearly identical to today.
 
-### Dimensions Settings Page (`/admin/dimensions`)
+For a different NGO with dimensions "Region", "Project", "Funder":
+```
+Regions | Projects | Funders | Tag Rules | Activity Types | Facilitators | Beneficiaries | Roles | Users | Custom Fields
+```
 
-Left panel: list of dimensions for the org. Right panel: selected dimension's values.
+### Dimension Settings Pages (`/admin/dimensions/{dimension_key}`)
+
+Each dimension gets its own page (one route, reused component). Shows a list of that dimension's values with add/edit/delete.
 
 Admin can:
-- Create new dimensions (e.g., "Funder", "Cohort", "Region")
-- Add/edit/remove values within each dimension
+- Add/edit/remove values within the dimension
 - Custom fields per dimension render via DynamicMetaForm (fetched from meta_field_schemas using `dimension:{key}`)
+
+A separate admin page (or section within org settings) allows creating new dimensions themselves.
 
 ### Tag Rules Page (`/admin/tag-rules`)
 
 Matrix view showing valid combinations between two selected dimensions.
 
 ```
-Dimension: [Location ▼]  ×  Dimension: [Session Type ▼]
+Dimension: [Centre ▼]  ×  Dimension: [Activity Type ▼]
 
                     Life Skill  Job Ready  Vocational  Digital Lit  ...
 ShantiSadan            ✓           ✓          ✓           ✓
@@ -340,12 +350,12 @@ Admin selects two dimensions from dropdowns, then toggles checkboxes in the matr
 
 ### Activity Creation Form
 
-Dynamically renders one dropdown per dimension (filtered by user's access scope). Selection cascading via tag rules — choosing a Location filters Programme to valid options, which filters Activity Type to valid options.
+Dynamically renders one dropdown per dimension (filtered by user's access scope). Selection cascading via tag rules — choosing a Centre filters Programme to valid options, which filters Activity Type to valid options.
 
 ```
-[Location dropdown]       → filtered by UserDimensionAccess
-[Programme dropdown]      → filtered by tag_rules(selected location)
-[Activity Type dropdown]  → filtered by tag_rules(selected location)
+[Centre dropdown]         → filtered by UserDimensionAccess
+[Programme dropdown]      → filtered by tag_rules(selected centre)
+[Activity Type dropdown]  → filtered by tag_rules(selected centre)
 [Date picker]
 [Facilitator dropdown]
 [Participation checklist] → beneficiaries filtered by matching tags
@@ -499,22 +509,22 @@ Since we don't need backward compatibility:
 ## Kshamata Seeder (New Version)
 
 ```python
-# Dimensions
+# Dimensions (key, name — name is what appears in the UI/settings tabs)
 DIMENSIONS = [
-    ("location", "Location"),
-    ("location_type", "Location Type"),
+    ("centre", "Centre"),
+    ("centre_type", "Centre Type"),
     ("programme", "Programme"),
 ]
 
 # Dimension Values
 DIMENSION_VALUES = {
-    "location": [
+    "centre": [
         ("SHANTISADAN", "ShantiSadan"),
         ("KASTURBA", "Kasturba"),
         ("NAVJEEVAN", "Navjeevan"),
-        # ... all 15 locations
+        # ... all 15 centres
     ],
-    "location_type": [
+    "centre_type": [
         ("INSTITUTION", "Institution"),
         ("POST_INSTITUTION", "Post Institution"),
         ("COMMUNITY", "Community"),
@@ -528,12 +538,22 @@ DIMENSION_VALUES = {
 
 # Tag Rules (replaces PROGRAMME_CENTERS + CENTRE_INTERVENTIONS)
 TAG_RULES = {
-    ("programme:OUTREACH", "location:SHANTISADAN"),
-    ("programme:OUTREACH", "location:KASTURBA"),
+    ("programme:OUTREACH", "centre:SHANTISADAN"),
+    ("programme:OUTREACH", "centre:KASTURBA"),
     # ...
-    ("location:SHANTISADAN", "session_type:LIFE_SKILL_EDUCATION"),
-    ("location:SHANTISADAN", "session_type:JOB_READINESS"),
+    ("centre:SHANTISADAN", "activity_type:LIFE_SKILL_EDUCATION"),
+    ("centre:SHANTISADAN", "activity_type:JOB_READINESS"),
     # ... all valid combinations
+}
+
+# Vocabulary (maps generic names to Kshamata's terminology)
+VOCABULARY = {
+    "activity": "Session",
+    "activity_type": "Session Template",
+    "participation": "Attendance",
+    "facilitator": "Facilitator",
+    "beneficiary": "Beneficiary",
+    "enrollment": "Enrollment",
 }
 ```
 
