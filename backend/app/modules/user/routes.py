@@ -17,6 +17,7 @@ from app.modules.user.schemas import (
     UserListResponse,
     UserProfileResponse,
     UserRoleUpdate,
+    UserUpdate,
 )
 from app.modules.user.service import UserService
 
@@ -116,6 +117,46 @@ def create_user(
         is_verified=user.is_verified,
         role_id=str(user.role_id) if user.role_id else None,
         role_name=role_name,
+    ).dump()
+
+
+@router.put(
+    "/{user_id}",
+    dependencies=[Depends(require_permissions("user:manage"))],
+)
+def update_user(
+    user_id: uuid.UUID,
+    data: UserUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Update a user's details (name, contact, role)."""
+    service = UserService(db)
+    user = service.update_user(
+        user_id,
+        current_user.organization_id,
+        first_name=data.first_name,
+        last_name=data.last_name,
+        country_code=data.country_code,
+        mobile_number=data.mobile_number,
+        role_id=uuid.UUID(data.role_id),
+    )
+    role_name = user.role.name if user.role else None
+    return UserListResponse(
+        id=str(user.id),
+        updated_at=user.updated_at,
+        first_name=user.first_name,
+        last_name=user.last_name,
+        country_code=user.country_code,
+        mobile_number=user.mobile_number,
+        is_verified=user.is_verified,
+        role_id=str(user.role_id) if user.role_id else None,
+        role_name=role_name,
+        center_ids=[str(a.center_id) for a in user.center_access],
+        programme_ids=[str(a.programme_id) for a in user.programme_access],
+        session_template_ids=[
+            str(a.session_template_id) for a in user.session_template_access
+        ],
     ).dump()
 
 

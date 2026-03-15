@@ -42,6 +42,16 @@ class UserRoleUpdate(BaseModel):
     role_id: str
 
 
+class UserUpdate(BaseModel):
+    """Schema for updating a user's details"""
+
+    first_name: str
+    last_name: str
+    country_code: str
+    mobile_number: str
+    role_id: str
+
+
 class UserCreate(BaseModel):
     """Schema for creating a new user (admin action)"""
 

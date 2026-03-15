@@ -141,6 +141,44 @@ class UserService:
             ],
         }
 
+    def update_user(
+        self,
+        user_id: uuid.UUID,
+        org_id: uuid.UUID,
+        first_name: str,
+        last_name: str,
+        country_code: str,
+        mobile_number: str,
+        role_id: uuid.UUID,
+    ) -> User:
+        """Update a user's details."""
+        user = self.db.query(User).filter_by(id=user_id, organization_id=org_id).first()
+        if not user:
+            raise NotFoundError("User not found")
+
+        # Verify role belongs to same org
+        role = self.db.query(Role).filter_by(id=role_id, organization_id=org_id).first()
+        if not role:
+            raise NotFoundError("Role not found")
+
+        # Check for duplicate mobile number (exclude current user)
+        existing = (
+            self.db.query(User)
+            .filter(User.mobile_number == mobile_number, User.id != user_id)
+            .first()
+        )
+        if existing:
+            raise ValidationError("A user with this mobile number already exists")
+
+        user.first_name = first_name
+        user.last_name = last_name
+        user.country_code = country_code
+        user.mobile_number = mobile_number
+        user.role_id = role_id
+        self.db.commit()
+        self.db.refresh(user)
+        return user
+
     def delete_user(self, user_id: uuid.UUID, org_id: uuid.UUID, current_user_id: uuid.UUID) -> None:
         """Delete a user from the organization."""
         if user_id == current_user_id:

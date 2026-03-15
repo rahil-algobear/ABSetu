@@ -90,7 +90,13 @@ export default function UsersPage() {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [accessModalOpen, setAccessModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserListItem | null>(null);
-  const [selectedRoleId, setSelectedRoleId] = useState("");
+  const [editForm, setEditForm] = useState({
+    first_name: "",
+    last_name: "",
+    country_code: "+91",
+    mobile_number: "",
+    role_id: "",
+  });
   const [createForm, setCreateForm] = useState({
     first_name: "",
     last_name: "",
@@ -144,16 +150,19 @@ export default function UsersPage() {
     },
   });
 
-  const updateRoleMutation = useMutation({
-    mutationFn: ({ userId, roleId }: { userId: string; roleId: string }) =>
-      userApi.updateRole(userId, roleId),
+  const updateUserMutation = useMutation({
+    mutationFn: ({ userId, data }: { userId: string; data: typeof editForm }) =>
+      userApi.update(userId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users"] });
       queryClient.invalidateQueries({ queryKey: ["roles"] });
       closeEditModal();
-      toast.success("Role updated");
+      toast.success("User updated");
     },
-    onError: () => toast.error("Failed to update role"),
+    onError: (err: Error & { response?: { data?: { message?: string } } }) => {
+      const msg = err.response?.data?.message || "Failed to update user";
+      toast.error(msg);
+    },
   });
 
   const updateAccessMutation = useMutation({
@@ -199,7 +208,13 @@ export default function UsersPage() {
 
   const openEdit = (user: UserListItem) => {
     setEditingUser(user);
-    setSelectedRoleId(user.role_id || "");
+    setEditForm({
+      first_name: user.first_name,
+      last_name: user.last_name,
+      country_code: user.country_code,
+      mobile_number: user.mobile_number,
+      role_id: user.role_id || "",
+    });
     setEditModalOpen(true);
   };
 
@@ -228,10 +243,10 @@ export default function UsersPage() {
 
   const handleEditSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingUser || !selectedRoleId) return;
-    updateRoleMutation.mutate({
+    if (!editingUser || !editForm.role_id) return;
+    updateUserMutation.mutate({
       userId: editingUser.id,
-      roleId: selectedRoleId,
+      data: editForm,
     });
   };
 
@@ -495,29 +510,72 @@ export default function UsersPage() {
         </form>
       </Dialog>
 
-      {/* Edit Role Modal */}
+      {/* Edit User Modal */}
       <Dialog
         open={editModalOpen}
         onClose={closeEditModal}
-        title="Change User Role"
+        title="Edit User"
       >
         {editingUser && (
-          <form onSubmit={handleEditSubmit} className="space-y-4">
-            <div className="bg-gray-50 rounded-lg p-3">
-              <p className="font-medium">
-                {editingUser.first_name} {editingUser.last_name}
-              </p>
-              <p className="text-sm text-gray-500">
-                {editingUser.country_code} {editingUser.mobile_number}
-              </p>
+          <form onSubmit={handleEditSubmit} className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="edit-first-name">First Name</Label>
+                <Input
+                  id="edit-first-name"
+                  value={editForm.first_name}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, first_name: e.target.value })
+                  }
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-last-name">Last Name</Label>
+                <Input
+                  id="edit-last-name"
+                  value={editForm.last_name}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, last_name: e.target.value })
+                  }
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-[80px_1fr] gap-3">
+              <div>
+                <Label htmlFor="edit-country-code">Code</Label>
+                <Input
+                  id="edit-country-code"
+                  value={editForm.country_code}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, country_code: e.target.value })
+                  }
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-mobile">Mobile Number</Label>
+                <Input
+                  id="edit-mobile"
+                  value={editForm.mobile_number}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, mobile_number: e.target.value })
+                  }
+                  required
+                />
+              </div>
             </div>
 
             <div>
-              <Label htmlFor="role-select">Role</Label>
+              <Label htmlFor="edit-role">Role</Label>
               <select
-                id="role-select"
-                value={selectedRoleId}
-                onChange={(e) => setSelectedRoleId(e.target.value)}
+                id="edit-role"
+                value={editForm.role_id}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, role_id: e.target.value })
+                }
                 className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
                 required
               >
@@ -535,7 +593,7 @@ export default function UsersPage() {
               <Button type="button" variant="outline" onClick={closeEditModal}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={!selectedRoleId}>
+              <Button type="submit" disabled={!editForm.role_id}>
                 Save
               </Button>
             </div>
