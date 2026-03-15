@@ -187,12 +187,14 @@ from app.core import models as _models  # noqa: F401
 from app.modules.auth.routes import router as auth_router
 from app.modules.user.routes import router as user_router
 from app.modules.organization.routes import router as org_router
+from app.modules.role.routes import router as role_router
 from app.modules.session.routes import router as session_router
 from app.modules.beneficiary.routes import router as beneficiary_router
 
 app.include_router(auth_router, prefix="/api", tags=["auth"])
 app.include_router(user_router, prefix="/api", tags=["user"])
 app.include_router(org_router, prefix="/api", tags=["organization"])
+app.include_router(role_router, prefix="/api", tags=["roles"])
 app.include_router(session_router, prefix="/api", tags=["sessions"])
 app.include_router(beneficiary_router, prefix="/api", tags=["beneficiaries"])
 

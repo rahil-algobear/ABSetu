@@ -20,6 +20,7 @@ import {
   Menu,
   X,
   UserCog,
+  Shield,
 } from "lucide-react";
 
 /* ── Settings dropdown items ── */
@@ -29,6 +30,8 @@ const settingsItems = [
   { href: "/admin/programmes", label: "Programmes", icon: Building2, permission: "programme:view" },
   { href: "/admin/facilitators", label: "Facilitators", icon: UserCog, permission: "facilitator:view" },
   { href: "/admin/beneficiaries", label: "Beneficiaries", icon: Users, permission: "beneficiary:view" },
+  { href: "/admin/roles", label: "Roles", icon: Shield, permission: "role:view" },
+  { href: "/admin/users", label: "Users", icon: Users, permission: "user:view" },
 ];
 
 /* ── NavDropdown ── */

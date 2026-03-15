@@ -150,6 +150,38 @@ export type EntityType =
 
 export type MetaFieldSchemas = Partial<Record<EntityType, MetaFieldDefinition[]>>;
 
+// --- Roles & Permissions ---
+
+export interface Permission {
+  id: string;
+  key: string;
+  description: string | null;
+  updated_at: number | null;
+}
+
+export interface Role {
+  id: string;
+  organization_id: string;
+  name: string;
+  is_default: boolean;
+  is_system: boolean;
+  permissions: Permission[];
+  user_count: number;
+  updated_at: number | null;
+}
+
+export interface UserListItem {
+  id: string;
+  first_name: string;
+  last_name: string;
+  country_code: string;
+  mobile_number: string;
+  is_verified: boolean;
+  role_id: string | null;
+  role_name: string | null;
+  updated_at: number | null;
+}
+
 // --- Beneficiaries ---
 
 export interface Beneficiary {
