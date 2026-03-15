@@ -78,8 +78,12 @@ downgrade:
 seed:
 	$(PYTHON) -m app.seeds.initial
 
-seed-kshamata:
-	$(PYTHON) -m app.seeds.kshamata
+seed-org:
+	@if [ -z "$(file)" ]; then \
+		echo "Error: Seed file required. Usage: make seed-org file=kshamata"; \
+		exit 1; \
+	fi
+	$(PYTHON) -m app.seeds.$(file)
 
 kill-server:
 	@echo "Killing server on port 8000..."
