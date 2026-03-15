@@ -58,6 +58,8 @@ class RoleService:
 
     def update(self, role_id: uuid.UUID, org_id: uuid.UUID, data: dict) -> Role:
         role = self.get_by_id(role_id, org_id)
+        if role.is_system:
+            raise ValidationError("Cannot modify a system role.")
         permission_ids = data.pop("permission_ids", None)
 
         if data.get("is_default"):
@@ -76,6 +78,8 @@ class RoleService:
 
     def delete(self, role_id: uuid.UUID, org_id: uuid.UUID) -> None:
         role = self.get_by_id(role_id, org_id)
+        if role.is_system:
+            raise ValidationError("Cannot delete a system role.")
 
         # Check if any users are assigned to this role
         from app.modules.auth.model import User

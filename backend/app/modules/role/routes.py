@@ -39,6 +39,7 @@ def _role_to_response(role) -> dict:
         organization_id=str(role.organization_id),
         name=role.name,
         is_default=role.is_default,
+        is_system=role.is_system,
         permissions=permissions,
         user_count=user_count,
     ).dump()

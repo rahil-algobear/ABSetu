@@ -30,6 +30,7 @@ class Role(BaseModel):
     )
     name = Column(String, nullable=False)
     is_default = Column(Boolean, nullable=False, default=False)
+    is_system = Column(Boolean, nullable=False, default=False)
 
     organization = relationship("Organization", back_populates="roles")
     role_permissions = relationship(

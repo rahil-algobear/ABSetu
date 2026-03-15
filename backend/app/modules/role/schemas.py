@@ -31,5 +31,6 @@ class RoleResponse(BaseResponseSchema):
     organization_id: str
     name: str
     is_default: bool
+    is_system: bool = False
     permissions: list[PermissionResponse] = []
     user_count: int = 0
