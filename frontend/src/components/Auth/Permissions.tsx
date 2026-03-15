@@ -10,9 +10,15 @@ import {
 import { authApi } from "@/services/api";
 import { useAuth } from "@/services/auth";
 
+interface UserProfile {
+  first_name: string;
+  last_name: string;
+}
+
 interface PermissionsContextType {
   permissions: string[];
   loading: boolean;
+  userProfile: UserProfile | null;
   can: (permission: string) => boolean;
   canAll: (permissions: string[]) => boolean;
   canAny: (permissions: string[]) => boolean;
@@ -21,6 +27,7 @@ interface PermissionsContextType {
 const PermissionsContext = createContext<PermissionsContextType>({
   permissions: [],
   loading: true,
+  userProfile: null,
   can: () => false,
   canAll: () => false,
   canAny: () => false,
@@ -29,11 +36,13 @@ const PermissionsContext = createContext<PermissionsContextType>({
 export function PermissionsProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated } = useAuth();
   const [permissions, setPermissions] = useState<string[]>([]);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!isAuthenticated) {
       setPermissions([]);
+      setUserProfile(null);
       setLoading(false);
       return;
     }
@@ -42,9 +51,14 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
       .getProfile()
       .then((profile) => {
         setPermissions(profile.permissions || []);
+        setUserProfile({
+          first_name: profile.first_name,
+          last_name: profile.last_name,
+        });
       })
       .catch(() => {
         setPermissions([]);
+        setUserProfile(null);
       })
       .finally(() => {
         setLoading(false);
@@ -57,7 +71,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
 
   return (
     <PermissionsContext.Provider
-      value={{ permissions, loading, can, canAll, canAny }}
+      value={{ permissions, loading, userProfile, can, canAll, canAny }}
     >
       {children}
     </PermissionsContext.Provider>

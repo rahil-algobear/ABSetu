@@ -12,9 +12,9 @@ export default function HomePage() {
   const handleStartPlanning = (e: React.MouseEvent) => {
     e.preventDefault();
     if (isAuthenticated) {
-      router.push('/places');
+      router.push('/dashboard');
     } else {
-      router.push('/login?redirect=/places');
+      router.push('/login?redirect=/dashboard');
     }
   };
 

@@ -11,7 +11,7 @@ export default function HomeClient() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      router.push('/places');
+      router.push('/dashboard');
     }
   }, [isAuthenticated, router]);
 

@@ -8,7 +8,6 @@ import {
   LoginResponse,
   OTPVerifyData,
   Organization,
-  Place,
   Programme,
   ProgrammeCenter,
   Session,
@@ -18,29 +17,6 @@ import {
   UserRegisterData,
   VerifyOTPResponse,
 } from '../types';
-
-export const placeApi = {
-  getPlaces: async () => {
-    const response = await authAxios.get<Place[]>('/places');
-    return response.data;
-  },
-  getPlace: async (id: string) => {
-    const response = await authAxios.get<Place>(`/places/${id}`);
-    return response.data;
-  },
-  createPlace: async (place: Omit<Place, 'id'>) => {
-    const response = await authAxios.post<Place>('/places', place);
-    return response.data;
-  },
-  updatePlace: async (id: string, place: Partial<Place>) => {
-    const response = await authAxios.put<Place>(`/places/${id}`, place);
-    return response.data;
-  },
-  deletePlace: async (id: string) => {
-    const response = await authAxios.delete(`/places/${id}`);
-    return response.data;
-  },
-};
 
 export const authApi = {
   register: async (data: UserRegisterData): Promise<LoginResponse> => {

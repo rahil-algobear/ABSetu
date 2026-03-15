@@ -152,38 +152,3 @@ export interface Enrollment {
   updated_at: number | null;
 }
 
-// --- Legacy (Places) ---
-
-export interface Place {
-  id: string;
-  name: string;
-  description: string;
-  image_url: string;
-  type: string;
-  latitude: number;
-  longitude: number;
-  tags: Tag[];
-  address: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface Tag {
-  id: string;
-  tag_type: TagType;
-  tag_value: string;
-}
-
-export interface TagType {
-  id: string;
-  name: string;
-  slug: string;
-  is_global: boolean;
-}
-
-export interface TagValue {
-  id: string;
-  name: string;
-  slug: string;
-  tag_type_id: string;
-}
