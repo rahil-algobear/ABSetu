@@ -2,6 +2,7 @@
 Common FastAPI Dependencies
 Reusable dependencies for authentication and authorization
 """
+
 import uuid
 from typing import Callable
 
@@ -51,11 +52,7 @@ def get_current_user(
         # Import here to avoid circular imports (dependencies ↔ models)
         from app.modules.auth.model import User
 
-        user = (
-            db.query(User)
-            .filter(User.id == uuid.UUID(user_id))
-            .first()
-        )
+        user = db.query(User).filter(User.id == uuid.UUID(user_id)).first()
 
         if user is None:
             raise UnauthorizedError("User not found or inactive")
@@ -79,11 +76,7 @@ def _get_user_permissions(user) -> set[str]:
     """
     if not user.role:
         return set()
-    return {
-        rp.permission.key
-        for rp in user.role.role_permissions
-        if rp.permission
-    }
+    return {rp.permission.key for rp in user.role.role_permissions if rp.permission}
 
 
 def require_permissions(*required_keys: str) -> Callable:
@@ -101,13 +94,12 @@ def require_permissions(*required_keys: str) -> Callable:
     Raises:
         ForbiddenError: If the user lacks any of the required permissions.
     """
+
     def _checker(current_user=Depends(get_current_user)):
         user_permissions = _get_user_permissions(current_user)
         missing = set(required_keys) - user_permissions
         if missing:
-            raise ForbiddenError(
-                f"Missing required permissions: {', '.join(sorted(missing))}"
-            )
+            raise ForbiddenError(f"Missing required permissions: {', '.join(sorted(missing))}")
         return current_user
 
     return _checker

@@ -11,7 +11,13 @@ from sqlalchemy import exists
 
 from app.common.exceptions import NotFoundError, ValidationError
 from app.modules.beneficiary.model import Beneficiary, Enrollment
-from app.modules.organization.model import Organization, Programme, ProgrammeCenter
+from app.modules.dimension.model import (
+    ActivityTag,
+    BeneficiaryTag,
+    DimensionValue,
+    EnrollmentTag,
+)
+from app.modules.organization.model import Organization
 
 
 class BeneficiaryService:
@@ -24,7 +30,6 @@ class BeneficiaryService:
         year_2 = datetime.now().strftime("%y")
         year_4 = datetime.now().strftime("%Y")
 
-        # Count existing beneficiaries for serial
         count = self.db.query(Beneficiary).filter_by(organization_id=org.id).count()
         serial = str(count + 1).zfill(3)
 
@@ -38,24 +43,16 @@ class BeneficiaryService:
     def list_by_org(
         self,
         org_id: uuid.UUID,
-        accessible_center_ids: list[uuid.UUID] | None = None,
-        accessible_programme_ids: list[uuid.UUID] | None = None,
+        accessible_dv_ids: list[uuid.UUID] | None = None,
     ) -> list[Beneficiary]:
         query = self.db.query(Beneficiary).filter_by(organization_id=org_id)
-        # If user has center or programme access restrictions, filter beneficiaries
-        # to those enrolled in accessible programme-centers
-        if accessible_center_ids is not None or accessible_programme_ids is not None:
-            pc_filter = self.db.query(ProgrammeCenter.id)
-            if accessible_center_ids is not None:
-                pc_filter = pc_filter.filter(ProgrammeCenter.center_id.in_(accessible_center_ids))
-            if accessible_programme_ids is not None:
-                pc_filter = pc_filter.filter(
-                    ProgrammeCenter.programme_id.in_(accessible_programme_ids)
-                )
+        # If user has dimension access restrictions, filter beneficiaries
+        # to those with at least one matching tag
+        if accessible_dv_ids:
             query = query.filter(
                 exists()
-                .where(Enrollment.beneficiary_id == Beneficiary.id)
-                .where(Enrollment.programme_center_id.in_(pc_filter.subquery()))
+                .where(BeneficiaryTag.beneficiary_id == Beneficiary.id)
+                .where(BeneficiaryTag.dimension_value_id.in_(accessible_dv_ids))
             )
         return query.order_by(Beneficiary.created_at.desc()).all()
 
@@ -67,7 +64,12 @@ class BeneficiaryService:
             raise NotFoundError("Beneficiary not found")
         return beneficiary
 
-    def create(self, org_id: uuid.UUID, data: dict) -> Beneficiary:
+    def create(
+        self,
+        org_id: uuid.UUID,
+        data: dict,
+        dimension_value_ids: list[str] | None = None,
+    ) -> Beneficiary:
         org = self.db.query(Organization).filter_by(id=org_id).first()
         if not org:
             raise NotFoundError("Organization not found")
@@ -80,6 +82,16 @@ class BeneficiaryService:
             meta=data.get("meta"),
         )
         self.db.add(beneficiary)
+        self.db.flush()
+
+        # Add dimension tags
+        for dv_id in dimension_value_ids or []:
+            tag = BeneficiaryTag(
+                beneficiary_id=beneficiary.id,
+                dimension_value_id=uuid.UUID(dv_id),
+            )
+            self.db.add(tag)
+
         self.db.commit()
         self.db.refresh(beneficiary)
         return beneficiary
@@ -106,15 +118,12 @@ class EnrollmentService:
             .all()
         )
 
-    def list_by_programme_center(self, programme_center_id: uuid.UUID) -> list[Enrollment]:
-        return (
-            self.db.query(Enrollment)
-            .filter_by(programme_center_id=programme_center_id)
-            .order_by(Enrollment.admission_date.desc())
-            .all()
-        )
-
-    def create(self, org_id: uuid.UUID, data: dict) -> Enrollment:
+    def create(
+        self,
+        org_id: uuid.UUID,
+        data: dict,
+        dimension_value_ids: list[str] | None = None,
+    ) -> Enrollment:
         # Verify beneficiary belongs to org
         beneficiary = (
             self.db.query(Beneficiary)
@@ -127,27 +136,24 @@ class EnrollmentService:
         if not beneficiary:
             raise ValidationError("Beneficiary not found in this organization")
 
-        # Verify programme_center belongs to org
-        pc = (
-            self.db.query(ProgrammeCenter)
-            .join(Programme)
-            .filter(
-                ProgrammeCenter.id == uuid.UUID(data["programme_center_id"]),
-                Programme.organization_id == org_id,
-            )
-            .first()
-        )
-        if not pc:
-            raise ValidationError("Programme-Center not found in this organization")
-
         enrollment = Enrollment(
+            organization_id=org_id,
             beneficiary_id=beneficiary.id,
-            programme_center_id=pc.id,
             admission_date=data["admission_date"],
             release_date=data.get("release_date"),
             meta=data.get("meta"),
         )
         self.db.add(enrollment)
+        self.db.flush()
+
+        # Add dimension tags
+        for dv_id in dimension_value_ids or []:
+            tag = EnrollmentTag(
+                enrollment_id=enrollment.id,
+                dimension_value_id=uuid.UUID(dv_id),
+            )
+            self.db.add(tag)
+
         self.db.commit()
         self.db.refresh(enrollment)
         return enrollment

@@ -2,6 +2,7 @@
 Token Helper for JWT operations
 Singleton helper class for creating and verifying JWT tokens
 """
+
 import jwt
 from datetime import datetime, timedelta, timezone
 from typing import Optional

@@ -1,8 +1,6 @@
 """
-Organization, Center, Programme routes
+Organization routes
 """
-
-import uuid
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
@@ -11,25 +9,13 @@ from app.core.database import get_db
 from app.common.dependencies import get_current_user, require_permissions
 from app.modules.auth.model import User
 from app.modules.organization.schemas import (
-    CenterCreate,
-    CenterResponse,
-    CenterUpdate,
     OrganizationResponse,
     OrganizationUpdate,
-    ProgrammeCenterCreate,
-    ProgrammeCenterResponse,
-    ProgrammeCreate,
-    ProgrammeResponse,
-    ProgrammeUpdate,
 )
 from app.modules.organization.service import (
-    CenterService,
     MetaFieldSchemaService,
     OrganizationService,
-    ProgrammeCenterService,
-    ProgrammeService,
 )
-from app.modules.user.service import UserService
 
 router = APIRouter(prefix="/organization", tags=["organization"])
 
@@ -63,233 +49,34 @@ def update_organization(
     return OrganizationResponse.dump_from_model(org)
 
 
-# --- Centers ---
-
-
-@router.get("/centers", dependencies=[Depends(require_permissions("center:view"))])
-def list_centers(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """List all centers for the user's organization, filtered by access."""
-    access = UserService.get_access_ids(current_user)
-    accessible = access["center_ids"] if access["center_ids"] else None
-    service = CenterService(db)
-    centers = service.list_by_org(current_user.organization_id, accessible_ids=accessible)
-    return [CenterResponse.dump_from_model(c) for c in centers]
-
-
-@router.get("/centers/{center_id}", dependencies=[Depends(require_permissions("center:view"))])
-def get_center(
-    center_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Get a specific center."""
-    service = CenterService(db)
-    center = service.get_by_id(center_id, current_user.organization_id)
-    return CenterResponse.dump_from_model(center)
-
-
-@router.post(
-    "/centers", dependencies=[Depends(require_permissions("center:manage"))], status_code=201
-)
-def create_center(
-    data: CenterCreate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Create a new center."""
-    service = CenterService(db)
-    center = service.create(
-        current_user.organization_id,
-        data.model_dump(exclude_none=True),
-    )
-    return CenterResponse.dump_from_model(center)
-
-
-@router.put("/centers/{center_id}", dependencies=[Depends(require_permissions("center:manage"))])
-def update_center(
-    center_id: uuid.UUID,
-    data: CenterUpdate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Update a center."""
-    service = CenterService(db)
-    center = service.update(
-        center_id,
-        current_user.organization_id,
-        data.model_dump(exclude_none=True),
-    )
-    return CenterResponse.dump_from_model(center)
-
-
-@router.delete("/centers/{center_id}", dependencies=[Depends(require_permissions("center:manage"))])
-def delete_center(
-    center_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Delete a center."""
-    service = CenterService(db)
-    service.delete(center_id, current_user.organization_id)
-    return {"message": "Center deleted"}
-
-
-# --- Programmes ---
-
-
-@router.get("/programmes", dependencies=[Depends(require_permissions("programme:view"))])
-def list_programmes(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """List all programmes for the user's organization, filtered by access."""
-    access = UserService.get_access_ids(current_user)
-    accessible = access["programme_ids"] if access["programme_ids"] else None
-    service = ProgrammeService(db)
-    programmes = service.list_by_org(current_user.organization_id, accessible_ids=accessible)
-    return [ProgrammeResponse.dump_from_model(p) for p in programmes]
-
-
-@router.get(
-    "/programmes/{programme_id}", dependencies=[Depends(require_permissions("programme:view"))]
-)
-def get_programme(
-    programme_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Get a specific programme."""
-    service = ProgrammeService(db)
-    programme = service.get_by_id(programme_id, current_user.organization_id)
-    return ProgrammeResponse.dump_from_model(programme)
-
-
-@router.post(
-    "/programmes", dependencies=[Depends(require_permissions("programme:manage"))], status_code=201
-)
-def create_programme(
-    data: ProgrammeCreate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Create a new programme."""
-    service = ProgrammeService(db)
-    programme = service.create(
-        current_user.organization_id,
-        data.model_dump(exclude_none=True),
-    )
-    return ProgrammeResponse.dump_from_model(programme)
-
-
-@router.put(
-    "/programmes/{programme_id}", dependencies=[Depends(require_permissions("programme:manage"))]
-)
-def update_programme(
-    programme_id: uuid.UUID,
-    data: ProgrammeUpdate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Update a programme."""
-    service = ProgrammeService(db)
-    programme = service.update(
-        programme_id,
-        current_user.organization_id,
-        data.model_dump(exclude_none=True),
-    )
-    return ProgrammeResponse.dump_from_model(programme)
-
-
-@router.delete(
-    "/programmes/{programme_id}", dependencies=[Depends(require_permissions("programme:manage"))]
-)
-def delete_programme(
-    programme_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Delete a programme."""
-    service = ProgrammeService(db)
-    service.delete(programme_id, current_user.organization_id)
-    return {"message": "Programme deleted"}
-
-
-# --- Programme-Centers ---
-
-
-@router.get("/programme-centers", dependencies=[Depends(require_permissions("programme:view"))])
-def list_programme_centers(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """List all programme-center assignments for the org, filtered by access."""
-    access = UserService.get_access_ids(current_user)
-    acc_centers = access["center_ids"] if access["center_ids"] else None
-    acc_programmes = access["programme_ids"] if access["programme_ids"] else None
-    service = ProgrammeCenterService(db)
-    pcs = service.list_by_org(
-        current_user.organization_id,
-        accessible_center_ids=acc_centers,
-        accessible_programme_ids=acc_programmes,
-    )
-    results = []
-    for pc in pcs:
-        resp = ProgrammeCenterResponse(
-            id=str(pc.id),
-            updated_at=pc.updated_at,
-            programme_id=str(pc.programme_id),
-            center_id=str(pc.center_id),
-            programme_name=pc.programme.name if pc.programme else None,
-            center_name=pc.center.name if pc.center else None,
-        )
-        results.append(resp.dump())
-    return results
-
-
-@router.post(
-    "/programme-centers",
-    dependencies=[Depends(require_permissions("programme:manage"))],
-    status_code=201,
-)
-def create_programme_center(
-    data: ProgrammeCenterCreate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Link a programme to a center."""
-    service = ProgrammeCenterService(db)
-    pc = service.create(
-        current_user.organization_id,
-        uuid.UUID(data.programme_id),
-        uuid.UUID(data.center_id),
-    )
-    return ProgrammeCenterResponse(
-        id=str(pc.id),
-        updated_at=pc.updated_at,
-        programme_id=str(pc.programme_id),
-        center_id=str(pc.center_id),
-    ).dump()
-
-
-@router.delete(
-    "/programme-centers/{pc_id}", dependencies=[Depends(require_permissions("programme:manage"))]
-)
-def delete_programme_center(
-    pc_id: uuid.UUID,
-    db: Session = Depends(get_db),
-):
-    """Unlink a programme from a center."""
-    service = ProgrammeCenterService(db)
-    service.delete(pc_id)
-    return {"message": "Programme-Center link removed"}
-
-
 # --- Meta Field Schemas ---
 
-VALID_ENTITY_TYPES = {"centre", "programme", "session_template", "facilitator", "beneficiary"}
+# Static entity types that always exist
+STATIC_ENTITY_TYPES = {
+    "activity_type",
+    "facilitator",
+    "beneficiary",
+    "enrollment",
+    "activity",
+    "participation",
+}
+
+
+def _validate_entity_type(entity_type: str, org_id, db: Session) -> None:
+    """Validate entity type — allow static types and dimension:{key} types."""
+    if entity_type in STATIC_ENTITY_TYPES:
+        return
+    if entity_type.startswith("dimension:"):
+        # Validate the dimension exists for this org
+        from app.modules.dimension.model import Dimension
+
+        dim_key = entity_type.split(":", 1)[1]
+        dim = db.query(Dimension).filter_by(organization_id=org_id, key=dim_key).first()
+        if dim:
+            return
+    from fastapi import HTTPException
+
+    raise HTTPException(status_code=400, detail=f"Invalid entity type: {entity_type}")
 
 
 @router.get(
@@ -302,10 +89,7 @@ def get_meta_field_schema(
     db: Session = Depends(get_db),
 ):
     """Get meta field schema for an entity type."""
-    if entity_type not in VALID_ENTITY_TYPES:
-        from fastapi import HTTPException
-
-        raise HTTPException(status_code=400, detail=f"Invalid entity type: {entity_type}")
+    _validate_entity_type(entity_type, current_user.organization_id, db)
     service = MetaFieldSchemaService(db)
     return service.get_schema(current_user.organization_id, entity_type)
 
@@ -334,9 +118,6 @@ def update_meta_field_schema(
     db: Session = Depends(get_db),
 ):
     """Update meta field schema for an entity type."""
-    if entity_type not in VALID_ENTITY_TYPES:
-        from fastapi import HTTPException
-
-        raise HTTPException(status_code=400, detail=f"Invalid entity type: {entity_type}")
+    _validate_entity_type(entity_type, current_user.organization_id, db)
     service = MetaFieldSchemaService(db)
     return service.update_schema(current_user.organization_id, entity_type, fields)

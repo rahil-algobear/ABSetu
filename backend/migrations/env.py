@@ -7,9 +7,15 @@ from alembic import context
 
 from app.core.config import settings
 from app.core.database import Base
-from app.modules.auth.model import User, OTP, RefreshToken, UserCenterAccess, UserProgrammeAccess, UserSessionTemplateAccess  # noqa: F401
-from app.modules.organization.model import Organization, Center, Programme, ProgrammeCenter  # noqa: F401
-from app.modules.session.model import SessionTemplate, Facilitator, Session, SessionFacilitator, Attendance  # noqa: F401
+from app.modules.auth.model import User, OTP, RefreshToken  # noqa: F401
+from app.modules.organization.model import Organization  # noqa: F401
+from app.modules.dimension.model import (  # noqa: F401
+    Dimension, DimensionValue, TagRule,
+    ActivityTag, BeneficiaryTag, EnrollmentTag, UserDimensionAccess,
+)
+from app.modules.activity.model import (  # noqa: F401
+    ActivityType, Facilitator, Activity, ActivityFacilitator, Participation,
+)
 from app.modules.beneficiary.model import Beneficiary, Enrollment  # noqa: F401
 from app.modules.role.model import Permission, Role, RolePermission  # noqa: F401
 

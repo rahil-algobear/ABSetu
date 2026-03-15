@@ -2,7 +2,7 @@
 Auth models: User, OTP, and RefreshToken
 """
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -32,80 +32,11 @@ class User(BaseModel):
 
     organization = relationship("Organization")
     role = relationship("Role", back_populates="users")
-    center_access = relationship(
-        "UserCenterAccess", back_populates="user", cascade="all, delete-orphan"
+    dimension_access = relationship(
+        "UserDimensionAccess",
+        back_populates="user",
+        cascade="all, delete-orphan",
     )
-    programme_access = relationship(
-        "UserProgrammeAccess", back_populates="user", cascade="all, delete-orphan"
-    )
-    session_template_access = relationship(
-        "UserSessionTemplateAccess", back_populates="user", cascade="all, delete-orphan"
-    )
-
-
-class UserCenterAccess(BaseModel):
-    __tablename__ = "user_center_access"
-    __table_args__ = (UniqueConstraint("user_id", "center_id", name="uq_user_center_access"),)
-
-    user_id = Column(
-        UUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-    center_id = Column(
-        UUID(as_uuid=True),
-        ForeignKey("centers.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-
-    user = relationship("User", back_populates="center_access")
-    center = relationship("Center")
-
-
-class UserProgrammeAccess(BaseModel):
-    __tablename__ = "user_programme_access"
-    __table_args__ = (UniqueConstraint("user_id", "programme_id", name="uq_user_programme_access"),)
-
-    user_id = Column(
-        UUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-    programme_id = Column(
-        UUID(as_uuid=True),
-        ForeignKey("programmes.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-
-    user = relationship("User", back_populates="programme_access")
-    programme = relationship("Programme")
-
-
-class UserSessionTemplateAccess(BaseModel):
-    __tablename__ = "user_session_template_access"
-    __table_args__ = (
-        UniqueConstraint("user_id", "session_template_id", name="uq_user_session_template_access"),
-    )
-
-    user_id = Column(
-        UUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-    session_template_id = Column(
-        UUID(as_uuid=True),
-        ForeignKey("session_templates.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-
-    user = relationship("User", back_populates="session_template_access")
-    session_template = relationship("SessionTemplate")
 
 
 class OTP(BaseModel):

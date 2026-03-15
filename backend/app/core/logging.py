@@ -1,6 +1,7 @@
 """
 Logging Configuration
 """
+
 import logging
 import sys
 from pathlib import Path

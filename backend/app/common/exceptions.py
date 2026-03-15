@@ -1,6 +1,7 @@
 """
 Custom Exceptions with centralized error messages
 """
+
 from http import HTTPStatus
 
 
@@ -55,9 +56,7 @@ class IntegrityError(ValidationError):
     """Database integrity error (foreign key constraints, unique violations, etc.)"""
 
     def __init__(self, message: str = ""):
-        super().__init__(
-            message=message or "The operation violates database constraints."
-        )
+        super().__init__(message=message or "The operation violates database constraints.")
 
 
 class UnauthorizedError(AppException):

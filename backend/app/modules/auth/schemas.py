@@ -1,10 +1,10 @@
 """
 Auth request and response schemas
 """
+
 from pydantic import BaseModel, Field
 
 from app.common.schemas.base_response import BaseResponseSchema
-
 
 # --- Request Schemas ---
 

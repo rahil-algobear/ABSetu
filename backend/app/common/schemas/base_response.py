@@ -2,6 +2,7 @@
 Base Response Schemas
 Common response serialization schemas for all modules
 """
+
 import uuid as _uuid
 from datetime import datetime
 from typing import Any
@@ -31,10 +32,7 @@ class BaseResponseSchema(BaseModel):
     def _coerce_uuids_and_timestamps(cls, data: Any) -> Any:
         """Convert UUID values to str and datetime to timestamps before field validation."""
         if isinstance(data, dict):
-            return {
-                k: str(v) if isinstance(v, _uuid.UUID) else v
-                for k, v in data.items()
-            }
+            return {k: str(v) if isinstance(v, _uuid.UUID) else v for k, v in data.items()}
         # ORM model with from_attributes — read declared fields and coerce
         if hasattr(data, "__dict__"):
             out: dict[str, Any] = {}

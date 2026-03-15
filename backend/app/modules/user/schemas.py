@@ -31,9 +31,7 @@ class UserListResponse(BaseResponseSchema):
     is_verified: bool
     role_id: str | None = None
     role_name: str | None = None
-    center_ids: list[str] = []
-    programme_ids: list[str] = []
-    session_template_ids: list[str] = []
+    dimension_value_ids: list[str] = []
 
 
 class UserRoleUpdate(BaseModel):
@@ -63,16 +61,12 @@ class UserCreate(BaseModel):
 
 
 class UserAccessUpdate(BaseModel):
-    """Schema for updating a user's access tags"""
+    """Schema for updating a user's dimension access"""
 
-    center_ids: list[str] = []
-    programme_ids: list[str] = []
-    session_template_ids: list[str] = []
+    dimension_value_ids: list[str] = []
 
 
 class UserAccessResponse(BaseModel):
-    """Response schema for user access tags"""
+    """Response schema for user dimension access"""
 
-    center_ids: list[str] = []
-    programme_ids: list[str] = []
-    session_template_ids: list[str] = []
+    dimension_value_ids: list[str] = []

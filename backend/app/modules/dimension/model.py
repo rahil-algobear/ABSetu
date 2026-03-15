@@ -1,0 +1,192 @@
+"""
+Dimension models: Dimension, DimensionValue, TagRule, UserDimensionAccess
+"""
+
+from sqlalchemy import Column, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.orm import relationship
+
+from app.common.models.base_model import BaseModel
+
+
+class Dimension(BaseModel):
+    __tablename__ = "dimensions"
+
+    organization_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    name = Column(String, nullable=False)
+    key = Column(String, nullable=False)
+    sort_order = Column(Integer, nullable=False, default=0)
+    is_system = Column(
+        String, nullable=True
+    )  # If set, indicates a system-managed dimension (e.g. "activity_type")
+
+    organization = relationship("Organization", back_populates="dimensions")
+    values = relationship(
+        "DimensionValue",
+        back_populates="dimension",
+        cascade="all, delete-orphan",
+        lazy="dynamic",
+    )
+
+    __table_args__ = (UniqueConstraint("organization_id", "key", name="uq_dimension_org_key"),)
+
+
+class DimensionValue(BaseModel):
+    __tablename__ = "dimension_values"
+
+    organization_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    dimension_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("dimensions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    name = Column(String, nullable=False)
+    code = Column(String, nullable=False)
+    sort_order = Column(Integer, nullable=False, default=0)
+    meta = Column(JSONB, nullable=True, default=dict)
+
+    dimension = relationship("Dimension", back_populates="values")
+    organization = relationship("Organization")
+
+    __table_args__ = (UniqueConstraint("dimension_id", "code", name="uq_dimension_value_code"),)
+
+
+class TagRule(BaseModel):
+    __tablename__ = "tag_rules"
+
+    organization_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    dimension_value_id_1 = Column(
+        UUID(as_uuid=True),
+        ForeignKey("dimension_values.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    dimension_value_id_2 = Column(
+        UUID(as_uuid=True),
+        ForeignKey("dimension_values.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    dimension_value_1 = relationship("DimensionValue", foreign_keys=[dimension_value_id_1])
+    dimension_value_2 = relationship("DimensionValue", foreign_keys=[dimension_value_id_2])
+
+    __table_args__ = (
+        UniqueConstraint(
+            "dimension_value_id_1",
+            "dimension_value_id_2",
+            name="uq_tag_rule_pair",
+        ),
+    )
+
+
+class ActivityTag(BaseModel):
+    __tablename__ = "activity_tags"
+
+    activity_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("activities.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    dimension_value_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("dimension_values.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    activity = relationship("Activity", back_populates="tags")
+    dimension_value = relationship("DimensionValue")
+
+    __table_args__ = (
+        UniqueConstraint("activity_id", "dimension_value_id", name="uq_activity_tag"),
+    )
+
+
+class BeneficiaryTag(BaseModel):
+    __tablename__ = "beneficiary_tags"
+
+    beneficiary_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("beneficiaries.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    dimension_value_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("dimension_values.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    beneficiary = relationship("Beneficiary", back_populates="tags")
+    dimension_value = relationship("DimensionValue")
+
+    __table_args__ = (
+        UniqueConstraint("beneficiary_id", "dimension_value_id", name="uq_beneficiary_tag"),
+    )
+
+
+class EnrollmentTag(BaseModel):
+    __tablename__ = "enrollment_tags"
+
+    enrollment_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("enrollments.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    dimension_value_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("dimension_values.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    enrollment = relationship("Enrollment", back_populates="tags")
+    dimension_value = relationship("DimensionValue")
+
+    __table_args__ = (
+        UniqueConstraint("enrollment_id", "dimension_value_id", name="uq_enrollment_tag"),
+    )
+
+
+class UserDimensionAccess(BaseModel):
+    __tablename__ = "user_dimension_access"
+
+    user_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    dimension_value_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("dimension_values.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    user = relationship("User", back_populates="dimension_access")
+    dimension_value = relationship("DimensionValue")
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "dimension_value_id", name="uq_user_dimension_access"),
+    )

@@ -1,36 +1,33 @@
 """
-Kshamata seed script: creates org, centres, programmes, session templates,
-and programme-center links based on the Kshamata organisational workflow chart.
+Kshamata seed script: creates org, dimensions (Location, Programme),
+activity types, tag rules, and admin user using the generic dimension system.
 
 Usage:
     cd backend
     python -m app.seeds.kshamata
 """
+
 import logging
 import sys
 
 from app.core.database import SessionLocal
-from app.modules.organization.model import (
-    Center,
-    Organization,
-    Programme,
-    ProgrammeCenter,
-)
-from app.modules.session.model import SessionTemplate
+from app.modules.organization.model import Organization
+from app.modules.dimension.model import Dimension, DimensionValue, TagRule
+from app.modules.activity.model import ActivityType
 from app.modules.auth.model import User
 from app.modules.role.model import Permission, Role, RolePermission
 from app.modules.beneficiary.model import Beneficiary, Enrollment  # noqa: F401
-from app.modules.session.model import (  # noqa: F401
+from app.modules.activity.model import (  # noqa: F401
+    Activity,
+    ActivityFacilitator,
     Facilitator,
-    Session,
-    SessionFacilitator,
-    Attendance,
+    Participation,
 )
 
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Admin user (mobile number)
+# Admin user
 # ---------------------------------------------------------------------------
 ADMIN_MOBILE = "9820833010"
 ADMIN_COUNTRY_CODE = "+91"
@@ -43,43 +40,43 @@ ORG_CODE = "KSHAMATA"
 ORG_LOGO_URL = "https://kshamata.org/wp-content/uploads/2022/06/revised-logo.png"
 
 # ---------------------------------------------------------------------------
-# Centres (code, name, address hint)
+# Dimension: Location (code, name)
 # ---------------------------------------------------------------------------
-CENTERS = [
+LOCATIONS = [
     # Institutions
-    ("SHANTISADAN", "ShantiSadan", "Institution"),
-    ("KASTURBA", "Kasturba", "Institution"),
-    ("NAVJEEVAN", "Navjeevan", "Institution"),
-    ("ULHASNAGAR_MH", "Ulhasnagar Minor Home", "Institution"),
-    ("BHIWANDI_MH", "Bhiwandi Minor Home", "Institution"),
-    ("BKN", "BKN", "Institution"),
-    ("DONGRI_MH", "Dongri Minor Home", "Institution"),
-    ("DEONAR_MH", "Deonar Minor Home", "Institution"),
+    ("SHANTISADAN", "ShantiSadan"),
+    ("KASTURBA", "Kasturba"),
+    ("NAVJEEVAN", "Navjeevan"),
+    ("ULHASNAGAR_MH", "Ulhasnagar Minor Home"),
+    ("BHIWANDI_MH", "Bhiwandi Minor Home"),
+    ("BKN", "BKN"),
+    ("DONGRI_MH", "Dongri Minor Home"),
+    ("DEONAR_MH", "Deonar Minor Home"),
     # Post Institutions
-    ("MAHARASHTRA", "Maharashtra", "Post Institution"),
+    ("MAHARASHTRA", "Maharashtra"),
     # Community
-    ("TURBHE", "Turbhe", "Community"),
-    ("KAMATHIPURA", "Kamathipura", "Community"),
-    ("SONAPUR", "Sonapur", "Community"),
-    ("BHIWANDI_COMM", "Bhiwandi", "Community"),
+    ("TURBHE", "Turbhe"),
+    ("KAMATHIPURA", "Kamathipura"),
+    ("SONAPUR", "Sonapur"),
+    ("BHIWANDI_COMM", "Bhiwandi"),
     # Shared across Transformation & Unlimited
-    ("THANE", "Thane", None),
-    ("MANKHURD", "Mankhurd", None),
+    ("THANE", "Thane"),
+    ("MANKHURD", "Mankhurd"),
 ]
 
 # ---------------------------------------------------------------------------
-# Programmes
+# Dimension: Programme
 # ---------------------------------------------------------------------------
 PROGRAMMES = [
-    "Kshamata Outreach Programme",
-    "Kshamata Transformation Programme",
-    "Kshamata Unlimited",
+    ("OUTREACH", "Kshamata Outreach Programme"),
+    ("TRANSFORMATION", "Kshamata Transformation Programme"),
+    ("UNLIMITED", "Kshamata Unlimited"),
 ]
 
 # ---------------------------------------------------------------------------
-# Session Templates (unique intervention names across all programmes)
+# Activity Types (formerly Session Templates)
 # ---------------------------------------------------------------------------
-SESSION_TEMPLATES = [
+ACTIVITY_TYPES = [
     "Life Skill Education",
     "Job Readiness",
     "Vocational Skill Training",
@@ -114,10 +111,10 @@ SESSION_TEMPLATES = [
 ]
 
 # ---------------------------------------------------------------------------
-# Programme → Centre mapping
+# Tag Rules: Programme → Location mapping
 # ---------------------------------------------------------------------------
-PROGRAMME_CENTERS = {
-    "Kshamata Outreach Programme": [
+PROGRAMME_LOCATIONS = {
+    "OUTREACH": [
         "SHANTISADAN",
         "KASTURBA",
         "NAVJEEVAN",
@@ -132,148 +129,13 @@ PROGRAMME_CENTERS = {
         "SONAPUR",
         "BHIWANDI_COMM",
     ],
-    "Kshamata Transformation Programme": [
+    "TRANSFORMATION": [
         "THANE",
     ],
-    "Kshamata Unlimited": [
+    "UNLIMITED": [
         "THANE",
         "MANKHURD",
     ],
-}
-
-# ---------------------------------------------------------------------------
-# Interventions matrix: which session templates run at which centres
-# Key = centre code, Value = list of session template names
-# ---------------------------------------------------------------------------
-CENTRE_INTERVENTIONS = {
-    # --- Institutions ---
-    "SHANTISADAN": [
-        "Life Skill Education",
-        "Job Readiness",
-        "Vocational Skill Training",
-        "Digital Literacy",
-        "Basic Literacy - Languages & Calculations",
-        "Financial Literacy",
-    ],
-    "KASTURBA": [
-        "Life Skill Education",
-        "Job Readiness",
-        "Vocational Skill Training",
-        "Basic Literacy - Languages & Calculations",
-        "Financial Literacy",
-        "Counselling",
-    ],
-    "NAVJEEVAN": [
-        "Life Skill Education",
-        "Job Readiness",
-        "Vocational Skill Training",
-        "Basic Literacy - Languages & Calculations",
-        "Financial Literacy",
-        "Counselling",
-    ],
-    "ULHASNAGAR_MH": [
-        "Life Skill Education",
-        "Vocational Skill Training",
-        "Basic Literacy - Languages & Calculations",
-        "Digital Literacy",
-    ],
-    "BHIWANDI_MH": [
-        "Life Skill Education",
-        "Vocational Skill Training",
-        "Basic Literacy - Languages & Calculations",
-        "Digital Literacy",
-    ],
-    "BKN": [
-        "Vocational Skill Training",
-    ],
-    "DONGRI_MH": [
-        "Vocational Skill Training",
-        "Job Readiness",
-    ],
-    "DEONAR_MH": [
-        "Life Skill Education",
-        "Vocational Skill Training",
-        "Basic Literacy - Languages & Calculations",
-        "Financial Literacy",
-    ],
-    # --- Post Institutions ---
-    "MAHARASHTRA": [
-        "Telephonic Call to Women Post Released",
-        "Home Visits",
-        "Institution Visits",
-        "Job Placement",
-        "Workplace Visits",
-        "Monthly Meeting with Women Participants",
-        "Physical Health & Nutrition",
-        "Counselling",
-        "Vocational Skill Training - Stitching, Mehandi",
-        "Self Help Group",
-        "Job Placement - Boxer",
-        "Day Care",
-    ],
-    # --- Community ---
-    "TURBHE": [
-        "Life Skill Education",
-        "Job Readiness",
-        "Micro Business Training",
-        "Basic Literacy - Languages & Calculations",
-        "Financial Literacy",
-        "Digital Literacy",
-        "Workplace Visits",
-        "SHG",
-        "Job Placement",
-    ],
-    "KAMATHIPURA": [
-        "Life Skill Education",
-        "Job Readiness",
-        "Financial Literacy",
-        "Micro Business Training",
-        "Institute Visits - Super 50",
-        "Job Placement",
-        "Workplace Visits",
-        "SHG",
-    ],
-    "SONAPUR": [
-        "Life Skill Education",
-        "Job Readiness",
-        "Micro Business Training",
-        "Institute Visits - Super 50",
-        "Job Placement",
-        "Workplace Visits",
-    ],
-    "BHIWANDI_COMM": [
-        "Life Skill Education",
-        "Job Readiness",
-        "Micro Business Training",
-        "Basic Literacy - Languages & Calculations",
-        "Financial Literacy",
-        "Digital Literacy",
-        "Physical Health & Nutrition",
-        "Counselling",
-        "Vocational Skill Training - Stitching, Mehandi",
-        "Home Visits",
-        "Institution Visits",
-        "Workplace Visits",
-        "Monthly Meeting with Women Participants",
-        "Self Help Group",
-        "Job Placement - Boxer",
-        "Day Care",
-    ],
-    # --- Transformation Programme & Unlimited (Thane shared) ---
-    "THANE": [
-        "Physical Health",
-        "Mental Health",
-        "Life Skill Education",
-        "Education",
-        "Skill Building",
-        "Job Readiness - Sessions / Visits",
-        "Visits",
-        "External Training",
-        "Mentoring",
-        "Job / OJT Placement",
-    ],
-    # --- Unlimited (no interventions visible in chart) ---
-    "MANKHURD": [],
 }
 
 
@@ -298,94 +160,109 @@ def seed():
             db.flush()
             print(f"Updated organization: {org.name} ({org.code})")
 
-        # 2. Centres
-        center_map = {}
-        for code, name, address in CENTERS:
-            center = (
-                db.query(Center)
-                .filter_by(organization_id=org.id, code=code)
-                .first()
+        # 2. Dimension: Location
+        location_dim = db.query(Dimension).filter_by(organization_id=org.id, key="location").first()
+        if not location_dim:
+            location_dim = Dimension(
+                organization_id=org.id,
+                name="Location",
+                key="location",
+                sort_order=0,
             )
-            if not center:
-                center = Center(
+            db.add(location_dim)
+            db.flush()
+        print(f"Ensured dimension: {location_dim.name}")
+
+        # 3. Dimension: Programme
+        programme_dim = (
+            db.query(Dimension).filter_by(organization_id=org.id, key="programme").first()
+        )
+        if not programme_dim:
+            programme_dim = Dimension(
+                organization_id=org.id,
+                name="Programme",
+                key="programme",
+                sort_order=1,
+            )
+            db.add(programme_dim)
+            db.flush()
+        print(f"Ensured dimension: {programme_dim.name}")
+
+        # 4. Location dimension values
+        location_map = {}
+        for idx, (code, name) in enumerate(LOCATIONS):
+            dv = db.query(DimensionValue).filter_by(dimension_id=location_dim.id, code=code).first()
+            if not dv:
+                dv = DimensionValue(
                     organization_id=org.id,
+                    dimension_id=location_dim.id,
                     name=name,
                     code=code,
-                    address=address,
+                    sort_order=idx,
                 )
-                db.add(center)
+                db.add(dv)
                 db.flush()
-            center_map[code] = center
-        print(f"Ensured {len(CENTERS)} centres exist")
+            location_map[code] = dv
+        print(f"Ensured {len(LOCATIONS)} location values")
 
-        # 3. Programmes
+        # 5. Programme dimension values
         programme_map = {}
-        for prog_name in PROGRAMMES:
-            programme = (
-                db.query(Programme)
-                .filter_by(organization_id=org.id, name=prog_name)
-                .first()
+        for idx, (code, name) in enumerate(PROGRAMMES):
+            dv = (
+                db.query(DimensionValue).filter_by(dimension_id=programme_dim.id, code=code).first()
             )
-            if not programme:
-                programme = Programme(
+            if not dv:
+                dv = DimensionValue(
                     organization_id=org.id,
-                    name=prog_name,
+                    dimension_id=programme_dim.id,
+                    name=name,
+                    code=code,
+                    sort_order=idx,
                 )
-                db.add(programme)
+                db.add(dv)
                 db.flush()
-            programme_map[prog_name] = programme
-        print(f"Ensured {len(PROGRAMMES)} programmes exist")
+            programme_map[code] = dv
+        print(f"Ensured {len(PROGRAMMES)} programme values")
 
-        # 4. Session Templates
-        template_map = {}
-        for tmpl_name in SESSION_TEMPLATES:
-            tmpl = (
-                db.query(SessionTemplate)
-                .filter_by(organization_id=org.id, name=tmpl_name)
-                .first()
-            )
-            if not tmpl:
-                tmpl = SessionTemplate(
+        # 6. Activity Types
+        for at_name in ACTIVITY_TYPES:
+            at = db.query(ActivityType).filter_by(organization_id=org.id, name=at_name).first()
+            if not at:
+                at = ActivityType(
                     organization_id=org.id,
-                    name=tmpl_name,
+                    name=at_name,
                 )
-                db.add(tmpl)
+                db.add(at)
                 db.flush()
-            template_map[tmpl_name] = tmpl
-        print(f"Ensured {len(SESSION_TEMPLATES)} session templates exist")
+        print(f"Ensured {len(ACTIVITY_TYPES)} activity types")
 
-        # 5. Programme-Centre links
-        pc_count = 0
-        pc_map = {}  # (programme_name, center_code) → ProgrammeCenter
-        for prog_name, center_codes in PROGRAMME_CENTERS.items():
-            programme = programme_map[prog_name]
-            for center_code in center_codes:
-                center = center_map[center_code]
-                pc = (
-                    db.query(ProgrammeCenter)
+        # 7. Tag Rules: Programme → Location
+        rule_count = 0
+        for prog_code, location_codes in PROGRAMME_LOCATIONS.items():
+            prog_dv = programme_map[prog_code]
+            for loc_code in location_codes:
+                loc_dv = location_map[loc_code]
+                existing = (
+                    db.query(TagRule)
                     .filter_by(
-                        programme_id=programme.id,
-                        center_id=center.id,
+                        dimension_value_id_1=prog_dv.id,
+                        dimension_value_id_2=loc_dv.id,
                     )
                     .first()
                 )
-                if not pc:
-                    pc = ProgrammeCenter(
-                        programme_id=programme.id,
-                        center_id=center.id,
+                if not existing:
+                    rule = TagRule(
+                        organization_id=org.id,
+                        dimension_value_id_1=prog_dv.id,
+                        dimension_value_id_2=loc_dv.id,
                     )
-                    db.add(pc)
-                    db.flush()
-                    pc_count += 1
-                pc_map[(prog_name, center_code)] = pc
-        print(f"Ensured programme-centre links ({pc_count} new)")
+                    db.add(rule)
+                    rule_count += 1
+        db.flush()
+        print(f"Ensured tag rules ({rule_count} new)")
 
-        # 6. Admin role (all permissions)
-        admin_role = (
-            db.query(Role)
-            .filter_by(organization_id=org.id, name="Admin")
-            .first()
-        )
+        # 8. Admin role (all permissions)
+        admin_role = db.query(Role).filter_by(organization_id=org.id, name="Admin").first()
         if not admin_role:
             admin_role = Role(
                 organization_id=org.id,
@@ -395,23 +272,16 @@ def seed():
             db.add(admin_role)
             db.flush()
 
-            # Attach all existing permissions
             all_perms = db.query(Permission).all()
             for perm in all_perms:
-                rp = RolePermission(
-                    role_id=admin_role.id, permission_id=perm.id
-                )
+                rp = RolePermission(role_id=admin_role.id, permission_id=perm.id)
                 db.add(rp)
             print(f"Created Admin role with {len(all_perms)} permissions")
         else:
             print("Admin role already exists")
 
-        # 7. Admin user
-        admin_user = (
-            db.query(User)
-            .filter_by(mobile_number=ADMIN_MOBILE)
-            .first()
-        )
+        # 9. Admin user
+        admin_user = db.query(User).filter_by(mobile_number=ADMIN_MOBILE).first()
         if not admin_user:
             admin_user = User(
                 first_name="Rahil",
@@ -432,21 +302,14 @@ def seed():
         db.commit()
 
         # Summary
-        total_interventions = sum(
-            len(v) for v in CENTRE_INTERVENTIONS.values()
-        )
+        total_rules = sum(len(v) for v in PROGRAMME_LOCATIONS.values())
         print(f"\nKshamata seed completed successfully!")
-        print(f"  Organisation : {ORG_NAME}")
-        print(f"  Centres      : {len(CENTERS)}")
-        print(f"  Programmes   : {len(PROGRAMMES)}")
-        print(f"  Templates    : {len(SESSION_TEMPLATES)}")
-        print(f"  Prog-Centres : {len(pc_map)}")
-        print(f"  Interventions: {total_interventions} (centre × template combos)")
-        print(
-            "\nNote: The CENTRE_INTERVENTIONS dict maps which session "
-            "templates are offered at each centre. Use this data to "
-            "pre-populate session records or guide the UI."
-        )
+        print(f"  Organisation   : {ORG_NAME}")
+        print(f"  Dimensions     : 2 (Location, Programme)")
+        print(f"  Locations      : {len(LOCATIONS)}")
+        print(f"  Programmes     : {len(PROGRAMMES)}")
+        print(f"  Activity Types : {len(ACTIVITY_TYPES)}")
+        print(f"  Tag Rules      : {total_rules} (programme × location combos)")
 
     except Exception as e:
         db.rollback()

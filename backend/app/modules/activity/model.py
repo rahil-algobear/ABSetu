@@ -1,6 +1,7 @@
 """
-Session models: SessionTemplate, Session, Facilitator, SessionFacilitator, Attendance
+Activity models: ActivityType, Activity, Facilitator, ActivityFacilitator, Participation
 """
+
 from sqlalchemy import Column, Date, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
@@ -8,8 +9,8 @@ from sqlalchemy.orm import relationship
 from app.common.models.base_model import BaseModel
 
 
-class SessionTemplate(BaseModel):
-    __tablename__ = "session_templates"
+class ActivityType(BaseModel):
+    __tablename__ = "activity_types"
 
     organization_id = Column(
         UUID(as_uuid=True),
@@ -21,10 +22,8 @@ class SessionTemplate(BaseModel):
     description = Column(Text, nullable=True)
     meta = Column(JSONB, nullable=True, default=dict)
 
-    organization = relationship("Organization", back_populates="session_templates")
-    sessions = relationship(
-        "Session", back_populates="session_template", lazy="dynamic"
-    )
+    organization = relationship("Organization", back_populates="activity_types")
+    activities = relationship("Activity", back_populates="activity_type", lazy="dynamic")
 
 
 class Facilitator(BaseModel):
@@ -41,23 +40,23 @@ class Facilitator(BaseModel):
     meta = Column(JSONB, nullable=True, default=dict)
 
     organization = relationship("Organization", back_populates="facilitators")
-    session_facilitators = relationship(
-        "SessionFacilitator", back_populates="facilitator", lazy="dynamic"
+    activity_facilitators = relationship(
+        "ActivityFacilitator", back_populates="facilitator", lazy="dynamic"
     )
 
 
-class Session(BaseModel):
-    __tablename__ = "sessions"
+class Activity(BaseModel):
+    __tablename__ = "activities"
 
-    session_template_id = Column(
+    organization_id = Column(
         UUID(as_uuid=True),
-        ForeignKey("session_templates.id", ondelete="CASCADE"),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    programme_center_id = Column(
+    activity_type_id = Column(
         UUID(as_uuid=True),
-        ForeignKey("programme_centers.id", ondelete="CASCADE"),
+        ForeignKey("activity_types.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
@@ -70,24 +69,25 @@ class Session(BaseModel):
     )
     meta = Column(JSONB, nullable=True, default=dict)
 
-    session_template = relationship("SessionTemplate", back_populates="sessions")
-    programme_center = relationship(
-        "ProgrammeCenter", back_populates="sessions"
+    activity_type = relationship("ActivityType", back_populates="activities")
+    activity_facilitators = relationship(
+        "ActivityFacilitator", back_populates="activity", lazy="joined"
     )
-    session_facilitators = relationship(
-        "SessionFacilitator", back_populates="session", lazy="joined"
-    )
-    attendances = relationship(
-        "Attendance", back_populates="session", lazy="dynamic"
+    participations = relationship("Participation", back_populates="activity", lazy="dynamic")
+    tags = relationship(
+        "ActivityTag",
+        back_populates="activity",
+        cascade="all, delete-orphan",
+        lazy="joined",
     )
 
 
-class SessionFacilitator(BaseModel):
-    __tablename__ = "session_facilitators"
+class ActivityFacilitator(BaseModel):
+    __tablename__ = "activity_facilitators"
 
-    session_id = Column(
+    activity_id = Column(
         UUID(as_uuid=True),
-        ForeignKey("sessions.id", ondelete="CASCADE"),
+        ForeignKey("activities.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
@@ -98,24 +98,20 @@ class SessionFacilitator(BaseModel):
         index=True,
     )
 
-    session = relationship("Session", back_populates="session_facilitators")
-    facilitator = relationship(
-        "Facilitator", back_populates="session_facilitators"
-    )
+    activity = relationship("Activity", back_populates="activity_facilitators")
+    facilitator = relationship("Facilitator", back_populates="activity_facilitators")
 
     __table_args__ = (
-        UniqueConstraint(
-            "session_id", "facilitator_id", name="uq_session_facilitator"
-        ),
+        UniqueConstraint("activity_id", "facilitator_id", name="uq_activity_facilitator"),
     )
 
 
-class Attendance(BaseModel):
-    __tablename__ = "attendances"
+class Participation(BaseModel):
+    __tablename__ = "participations"
 
-    session_id = Column(
+    activity_id = Column(
         UUID(as_uuid=True),
-        ForeignKey("sessions.id", ondelete="CASCADE"),
+        ForeignKey("activities.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
@@ -126,12 +122,11 @@ class Attendance(BaseModel):
         index=True,
     )
     status = Column(String, nullable=False, default="present")
+    meta = Column(JSONB, nullable=True, default=dict)
 
-    session = relationship("Session", back_populates="attendances")
-    beneficiary = relationship("Beneficiary", back_populates="attendances")
+    activity = relationship("Activity", back_populates="participations")
+    beneficiary = relationship("Beneficiary", back_populates="participations")
 
     __table_args__ = (
-        UniqueConstraint(
-            "session_id", "beneficiary_id", name="uq_session_beneficiary"
-        ),
+        UniqueConstraint("activity_id", "beneficiary_id", name="uq_activity_beneficiary"),
     )

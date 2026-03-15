@@ -1,6 +1,7 @@
 """
 Auth services for user registration, login, and OTP verification
 """
+
 import hashlib
 import logging
 import random
@@ -52,9 +53,7 @@ class OTPService:
         """Verify if the provided OTP is valid for the user."""
         try:
             otp_expiry_minutes = settings.OTP_EXPIRY_MINUTES or 5
-            expiry_time = datetime.now(timezone.utc) - timedelta(
-                minutes=otp_expiry_minutes
-            )
+            expiry_time = datetime.now(timezone.utc) - timedelta(minutes=otp_expiry_minutes)
 
             otp = (
                 self.db.query(OTP)
@@ -119,9 +118,7 @@ class AuthService:
         """
         raw_token = secrets.token_urlsafe(48)
         token_hash = self._hash_token(raw_token)
-        expires_at = datetime.now(timezone.utc) + timedelta(
-            days=settings.REFRESH_TOKEN_EXPIRE_DAYS
-        )
+        expires_at = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
 
         refresh_token = RefreshToken(
             user_id=user_id,
@@ -138,9 +135,7 @@ class AuthService:
 
     # ── Public API ───────────────────────────────────────────
 
-    def get_user_by_mobile(
-        self, country_code: str, mobile_number: str
-    ) -> User | None:
+    def get_user_by_mobile(self, country_code: str, mobile_number: str) -> User | None:
         """Get user by mobile number and country code."""
         return (
             self.db.query(User)
@@ -237,11 +232,7 @@ class AuthService:
         """
         token_hash = self._hash_token(raw_refresh_token)
 
-        stored_token = (
-            self.db.query(RefreshToken)
-            .filter_by(token_hash=token_hash)
-            .first()
-        )
+        stored_token = self.db.query(RefreshToken).filter_by(token_hash=token_hash).first()
 
         if not stored_token:
             raise ValueError("Invalid refresh token")
@@ -288,11 +279,7 @@ class AuthService:
         """Revoke a single refresh token (used for logout)."""
         token_hash = self._hash_token(raw_refresh_token)
 
-        stored_token = (
-            self.db.query(RefreshToken)
-            .filter_by(token_hash=token_hash)
-            .first()
-        )
+        stored_token = self.db.query(RefreshToken).filter_by(token_hash=token_hash).first()
 
         if stored_token and not stored_token.revoked:
             stored_token.revoked = True
@@ -301,8 +288,8 @@ class AuthService:
 
     def _revoke_all_user_tokens(self, user_id: uuid.UUID) -> None:
         """Revoke all refresh tokens for a user (security measure)."""
-        self.db.query(RefreshToken).filter_by(
-            user_id=user_id, revoked=False
-        ).update({"revoked": True})
+        self.db.query(RefreshToken).filter_by(user_id=user_id, revoked=False).update(
+            {"revoked": True}
+        )
         self.db.commit()
         logger.info("All refresh tokens revoked for user_id=%s", user_id)

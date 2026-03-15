@@ -1,6 +1,7 @@
 """
 Role and Permission services
 """
+
 import uuid
 
 from sqlalchemy.orm import Session
@@ -22,19 +23,10 @@ class RoleService:
         self.db = db
 
     def list_by_org(self, org_id: uuid.UUID) -> list[Role]:
-        return (
-            self.db.query(Role)
-            .filter_by(organization_id=org_id)
-            .order_by(Role.name)
-            .all()
-        )
+        return self.db.query(Role).filter_by(organization_id=org_id).order_by(Role.name).all()
 
     def get_by_id(self, role_id: uuid.UUID, org_id: uuid.UUID) -> Role:
-        role = (
-            self.db.query(Role)
-            .filter_by(id=role_id, organization_id=org_id)
-            .first()
-        )
+        role = self.db.query(Role).filter_by(id=role_id, organization_id=org_id).first()
         if not role:
             raise NotFoundError("Role not found")
         return role
@@ -84,22 +76,19 @@ class RoleService:
         # Check if any users are assigned to this role
         from app.modules.auth.model import User
 
-        user_count = (
-            self.db.query(User).filter_by(role_id=role_id).count()
-        )
+        user_count = self.db.query(User).filter_by(role_id=role_id).count()
         if user_count > 0:
             raise ValidationError(
-                f"Cannot delete role with {user_count} assigned user(s). "
-                "Reassign them first."
+                f"Cannot delete role with {user_count} assigned user(s). " "Reassign them first."
             )
 
         self.db.delete(role)
         self.db.commit()
 
     def _unset_defaults(self, org_id: uuid.UUID) -> None:
-        self.db.query(Role).filter_by(
-            organization_id=org_id, is_default=True
-        ).update({"is_default": False})
+        self.db.query(Role).filter_by(organization_id=org_id, is_default=True).update(
+            {"is_default": False}
+        )
 
     def _sync_permissions(self, role: Role, permission_ids: list[str]) -> None:
         # Remove existing
@@ -107,9 +96,7 @@ class RoleService:
 
         # Add new
         for pid in permission_ids:
-            perm = self.db.query(Permission).filter_by(
-                id=uuid.UUID(pid)
-            ).first()
+            perm = self.db.query(Permission).filter_by(id=uuid.UUID(pid)).first()
             if perm:
                 rp = RolePermission(role_id=role.id, permission_id=perm.id)
                 self.db.add(rp)

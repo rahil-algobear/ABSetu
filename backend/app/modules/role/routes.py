@@ -1,6 +1,7 @@
 """
 Role and Permission routes
 """
+
 import uuid
 
 from fastapi import APIRouter, Depends

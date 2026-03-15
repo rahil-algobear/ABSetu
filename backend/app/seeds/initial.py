@@ -5,6 +5,7 @@ Usage:
     cd backend
     python -m app.seeds.initial
 """
+
 import logging
 import sys
 
@@ -12,23 +13,22 @@ from app.core.database import SessionLocal
 from app.modules.organization.model import Organization
 from app.modules.role.model import Permission, Role, RolePermission
 from app.modules.auth.model import User
+
 # Import all models so SQLAlchemy can resolve relationship strings
-from app.modules.session.model import SessionTemplate, Facilitator, Session  # noqa: F401
+from app.modules.activity.model import ActivityType, Facilitator, Activity  # noqa: F401
 from app.modules.beneficiary.model import Beneficiary, Enrollment  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
-# All permission keys for Phase 1
+# All permission keys
 PERMISSIONS = [
     ("org:settings", "Manage organization settings"),
-    ("center:view", "View centers"),
-    ("center:manage", "Create/edit/delete centers"),
-    ("programme:view", "View programmes"),
-    ("programme:manage", "Create/edit/delete programmes"),
-    ("session_template:view", "View session templates"),
-    ("session_template:manage", "Create/edit/delete session templates"),
-    ("session:view", "View sessions"),
-    ("session:create", "Create sessions and mark attendance"),
+    ("dimension:view", "View dimensions and dimension values"),
+    ("dimension:manage", "Create/edit/delete dimensions and values"),
+    ("activity_type:view", "View activity types"),
+    ("activity_type:manage", "Create/edit/delete activity types"),
+    ("activity:view", "View activities"),
+    ("activity:create", "Create activities and record participation"),
     ("beneficiary:view", "View beneficiaries"),
     ("beneficiary:create", "Create beneficiaries"),
     ("beneficiary:edit", "Edit beneficiary details"),
@@ -46,11 +46,10 @@ PERMISSIONS = [
 
 # Team member gets view + limited create permissions
 TEAM_MEMBER_PERMISSIONS = [
-    "center:view",
-    "programme:view",
-    "session_template:view",
-    "session:view",
-    "session:create",
+    "dimension:view",
+    "activity_type:view",
+    "activity:view",
+    "activity:create",
     "beneficiary:view",
     "beneficiary:create",
     "beneficiary:edit",
@@ -91,11 +90,7 @@ def seed():
         print(f"Ensured {len(PERMISSIONS)} permissions exist")
 
         # 3. Create Admin role (all permissions)
-        admin_role = (
-            db.query(Role)
-            .filter_by(organization_id=org.id, name="Admin")
-            .first()
-        )
+        admin_role = db.query(Role).filter_by(organization_id=org.id, name="Admin").first()
         if not admin_role:
             admin_role = Role(
                 organization_id=org.id,
@@ -107,9 +102,7 @@ def seed():
             db.flush()
 
             for perm in permission_map.values():
-                rp = RolePermission(
-                    role_id=admin_role.id, permission_id=perm.id
-                )
+                rp = RolePermission(role_id=admin_role.id, permission_id=perm.id)
                 db.add(rp)
 
             print("Created Admin role with all permissions")
@@ -117,11 +110,7 @@ def seed():
             print("Admin role already exists")
 
         # 4. Create Team Member role (scoped permissions)
-        team_role = (
-            db.query(Role)
-            .filter_by(organization_id=org.id, name="Team Member")
-            .first()
-        )
+        team_role = db.query(Role).filter_by(organization_id=org.id, name="Team Member").first()
         if not team_role:
             team_role = Role(
                 organization_id=org.id,
@@ -133,9 +122,7 @@ def seed():
 
             for key in TEAM_MEMBER_PERMISSIONS:
                 perm = permission_map[key]
-                rp = RolePermission(
-                    role_id=team_role.id, permission_id=perm.id
-                )
+                rp = RolePermission(role_id=team_role.id, permission_id=perm.id)
                 db.add(rp)
 
             print("Created Team Member role with scoped permissions")
@@ -144,9 +131,7 @@ def seed():
 
         # 5. Create admin user (or assign role to existing)
         admin_mobile = "9999999999"
-        admin_user = (
-            db.query(User).filter_by(mobile_number=admin_mobile).first()
-        )
+        admin_user = db.query(User).filter_by(mobile_number=admin_mobile).first()
         if not admin_user:
             admin_user = User(
                 first_name="Admin",

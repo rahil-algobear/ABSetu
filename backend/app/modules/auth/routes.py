@@ -1,6 +1,7 @@
 """
 Auth FastAPI routes
 """
+
 import logging
 
 from fastapi import APIRouter, Depends, Request, status

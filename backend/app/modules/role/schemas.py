@@ -1,12 +1,13 @@
 """
 Role and Permission schemas
 """
+
 from pydantic import BaseModel, Field
 
 from app.common.schemas.base_response import BaseResponseSchema
 
-
 # --- Permission ---
+
 
 class PermissionResponse(BaseResponseSchema):
     key: str
@@ -14,6 +15,7 @@ class PermissionResponse(BaseResponseSchema):
 
 
 # --- Role ---
+
 
 class RoleCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)

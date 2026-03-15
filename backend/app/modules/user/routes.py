@@ -76,11 +76,7 @@ def list_users(
                 is_verified=u.is_verified,
                 role_id=str(u.role_id) if u.role_id else None,
                 role_name=role_name,
-                center_ids=[str(a.center_id) for a in u.center_access],
-                programme_ids=[str(a.programme_id) for a in u.programme_access],
-                session_template_ids=[
-                    str(a.session_template_id) for a in u.session_template_access
-                ],
+                dimension_value_ids=[str(a.dimension_value_id) for a in u.dimension_access],
             ).dump()
         )
     return results
@@ -152,11 +148,7 @@ def update_user(
         is_verified=user.is_verified,
         role_id=str(user.role_id) if user.role_id else None,
         role_name=role_name,
-        center_ids=[str(a.center_id) for a in user.center_access],
-        programme_ids=[str(a.programme_id) for a in user.programme_access],
-        session_template_ids=[
-            str(a.session_template_id) for a in user.session_template_access
-        ],
+        dimension_value_ids=[str(a.dimension_value_id) for a in user.dimension_access],
     ).dump()
 
 
@@ -215,7 +207,7 @@ def get_user_access(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Get a user's access tags."""
+    """Get a user's dimension access."""
     service = UserService(db)
     access = service.get_user_access(user_id, current_user.organization_id)
     return UserAccessResponse(**access).model_dump()
@@ -231,13 +223,11 @@ def update_user_access(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Update a user's access tags (bulk replace)."""
+    """Update a user's dimension access (bulk replace)."""
     service = UserService(db)
     access = service.update_user_access(
         user_id,
         current_user.organization_id,
-        center_ids=[uuid.UUID(cid) for cid in data.center_ids],
-        programme_ids=[uuid.UUID(pid) for pid in data.programme_ids],
-        session_template_ids=[uuid.UUID(stid) for stid in data.session_template_ids],
+        dimension_value_ids=[uuid.UUID(dv_id) for dv_id in data.dimension_value_ids],
     )
     return UserAccessResponse(**access).model_dump()

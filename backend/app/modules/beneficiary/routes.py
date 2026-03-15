@@ -14,17 +14,70 @@ from app.modules.beneficiary.schemas import (
     BeneficiaryCreate,
     BeneficiaryResponse,
     BeneficiaryUpdate,
+    DimensionTagInfo,
     EnrollmentCreate,
     EnrollmentResponse,
     EnrollmentUpdate,
 )
 from app.modules.beneficiary.service import BeneficiaryService, EnrollmentService
-from app.modules.user.service import UserService
+from app.modules.dimension.service import UserDimensionAccessService
 
 router = APIRouter(tags=["beneficiaries"])
 
 beneficiary_router = APIRouter(prefix="/beneficiaries")
 enrollment_router = APIRouter(prefix="/enrollments")
+
+
+def _build_beneficiary_response(b) -> dict:
+    tag_infos = []
+    for t in b.tags or []:
+        dv = t.dimension_value
+        if dv and dv.dimension:
+            tag_infos.append(
+                DimensionTagInfo(
+                    dimension_key=dv.dimension.key,
+                    dimension_name=dv.dimension.name,
+                    value_id=str(dv.id),
+                    value_name=dv.name,
+                    value_code=dv.code,
+                ).model_dump()
+            )
+    return BeneficiaryResponse(
+        id=str(b.id),
+        updated_at=b.updated_at,
+        organization_id=str(b.organization_id),
+        case_number=b.case_number,
+        name=b.name,
+        meta=b.meta,
+        tags=tag_infos,
+    ).dump()
+
+
+def _build_enrollment_response(e) -> dict:
+    tag_infos = []
+    for t in e.tags or []:
+        dv = t.dimension_value
+        if dv and dv.dimension:
+            tag_infos.append(
+                DimensionTagInfo(
+                    dimension_key=dv.dimension.key,
+                    dimension_name=dv.dimension.name,
+                    value_id=str(dv.id),
+                    value_name=dv.name,
+                    value_code=dv.code,
+                ).model_dump()
+            )
+    return EnrollmentResponse(
+        id=str(e.id),
+        updated_at=e.updated_at,
+        organization_id=str(e.organization_id),
+        beneficiary_id=str(e.beneficiary_id),
+        admission_date=e.admission_date,
+        release_date=e.release_date,
+        meta=e.meta,
+        beneficiary_name=e.beneficiary.name if e.beneficiary else None,
+        tags=tag_infos,
+    ).dump()
 
 
 # --- Beneficiaries ---
@@ -35,14 +88,16 @@ def list_beneficiaries(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    access = UserService.get_access_ids(current_user)
+    access_service = UserDimensionAccessService(db)
+    dv_ids = access_service.get_access_value_ids(current_user.id)
+    accessible = dv_ids if dv_ids else None
+
     service = BeneficiaryService(db)
     beneficiaries = service.list_by_org(
         current_user.organization_id,
-        accessible_center_ids=access["center_ids"] if access["center_ids"] else None,
-        accessible_programme_ids=access["programme_ids"] if access["programme_ids"] else None,
+        accessible_dv_ids=accessible,
     )
-    return [BeneficiaryResponse.dump_from_model(b) for b in beneficiaries]
+    return [_build_beneficiary_response(b) for b in beneficiaries]
 
 
 @beneficiary_router.get(
@@ -55,7 +110,7 @@ def get_beneficiary(
 ):
     service = BeneficiaryService(db)
     beneficiary = service.get_by_id(beneficiary_id, current_user.organization_id)
-    return BeneficiaryResponse.dump_from_model(beneficiary)
+    return _build_beneficiary_response(beneficiary)
 
 
 @beneficiary_router.post(
@@ -69,9 +124,10 @@ def create_beneficiary(
     service = BeneficiaryService(db)
     beneficiary = service.create(
         current_user.organization_id,
-        data.model_dump(exclude_none=True),
+        data.model_dump(exclude={"dimension_value_ids"}),
+        dimension_value_ids=data.dimension_value_ids,
     )
-    return BeneficiaryResponse.dump_from_model(beneficiary)
+    return _build_beneficiary_response(beneficiary)
 
 
 @beneficiary_router.put(
@@ -89,7 +145,7 @@ def update_beneficiary(
         current_user.organization_id,
         data.model_dump(exclude_none=True),
     )
-    return BeneficiaryResponse.dump_from_model(beneficiary)
+    return _build_beneficiary_response(beneficiary)
 
 
 # --- Enrollments ---
@@ -104,30 +160,7 @@ def list_enrollments_by_beneficiary(
 ):
     service = EnrollmentService(db)
     enrollments = service.list_by_beneficiary(beneficiary_id)
-    results = []
-    for e in enrollments:
-        resp = EnrollmentResponse(
-            id=str(e.id),
-            updated_at=e.updated_at,
-            beneficiary_id=str(e.beneficiary_id),
-            programme_center_id=str(e.programme_center_id),
-            admission_date=e.admission_date,
-            release_date=e.release_date,
-            meta=e.meta,
-            beneficiary_name=e.beneficiary.name if e.beneficiary else None,
-            programme_name=(
-                e.programme_center.programme.name
-                if e.programme_center and e.programme_center.programme
-                else None
-            ),
-            center_name=(
-                e.programme_center.center.name
-                if e.programme_center and e.programme_center.center
-                else None
-            ),
-        )
-        results.append(resp.dump())
-    return results
+    return [_build_enrollment_response(e) for e in enrollments]
 
 
 @enrollment_router.post(
@@ -141,17 +174,10 @@ def create_enrollment(
     service = EnrollmentService(db)
     enrollment = service.create(
         current_user.organization_id,
-        data.model_dump(),
+        data.model_dump(exclude={"dimension_value_ids"}),
+        dimension_value_ids=data.dimension_value_ids,
     )
-    return EnrollmentResponse(
-        id=str(enrollment.id),
-        updated_at=enrollment.updated_at,
-        beneficiary_id=str(enrollment.beneficiary_id),
-        programme_center_id=str(enrollment.programme_center_id),
-        admission_date=enrollment.admission_date,
-        release_date=enrollment.release_date,
-        meta=enrollment.meta,
-    ).dump()
+    return _build_enrollment_response(enrollment)
 
 
 @enrollment_router.put(
@@ -167,15 +193,7 @@ def update_enrollment(
         enrollment_id,
         data.model_dump(exclude_none=True),
     )
-    return EnrollmentResponse(
-        id=str(enrollment.id),
-        updated_at=enrollment.updated_at,
-        beneficiary_id=str(enrollment.beneficiary_id),
-        programme_center_id=str(enrollment.programme_center_id),
-        admission_date=enrollment.admission_date,
-        release_date=enrollment.release_date,
-        meta=enrollment.meta,
-    ).dump()
+    return _build_enrollment_response(enrollment)
 
 
 router.include_router(beneficiary_router)

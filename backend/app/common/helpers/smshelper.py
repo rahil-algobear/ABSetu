@@ -1,6 +1,7 @@
 """
 SMS Helper utilities for OTP and SMS operations
 """
+
 import logging
 
 from app.core.config import settings
@@ -50,13 +51,9 @@ class SMSHelper:
                     logger.error(f"Failed to initialize Twilio: {e}")
                     self.use_live_sms = False
             else:
-                logger.debug(
-                    "SMSHelper initialized in development mode (console output)"
-                )
+                logger.debug("SMSHelper initialized in development mode (console output)")
 
-    def send_otp(
-        self, country_code: str, mobile_number: str, otp_code: str
-    ) -> bool:
+    def send_otp(self, country_code: str, mobile_number: str, otp_code: str) -> bool:
         """
         Send OTP via SMS or print to console in development mode.
 
@@ -75,9 +72,7 @@ class SMSHelper:
         # Production mode: send via Twilio
         try:
             logger.info(f"Sending OTP via SMS to {to_number}")
-            self.twilio_client.messages.create(
-                body=message, from_=self.from_number, to=to_number
-            )
+            self.twilio_client.messages.create(body=message, from_=self.from_number, to=to_number)
             return True
         except Exception as e:
             logger.error(f"Twilio error sending to {to_number}: {e}")
