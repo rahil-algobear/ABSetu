@@ -45,7 +45,7 @@ export default function MainLayout({
               <div className="flex flex-col items-center sm:items-start gap-2">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Contact</p>
                 <a href="mailto:rahil@algobear.in" className="text-gray-400 hover:text-gray-600 transition-colors">rahil@algobear.in</a>
-                <a href="https://algobear.in" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-600 transition-colors">algobear.in</a>
+                <a href="tel:+919322006489" className="text-gray-400 hover:text-gray-600 transition-colors">+91-9322006489</a>
               </div>
             </div>
           </div>
