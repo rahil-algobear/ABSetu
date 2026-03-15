@@ -78,6 +78,9 @@ downgrade:
 seed:
 	$(PYTHON) -m app.seeds.initial
 
+seed-kshamata:
+	$(PYTHON) -m app.seeds.kshamata
+
 kill-server:
 	@echo "Killing server on port 8000..."
 	@if lsof -ti:8000 > /dev/null 2>&1; then \
