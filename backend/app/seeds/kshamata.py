@@ -57,11 +57,9 @@ CENTERS = [
     ("KAMATHIPURA", "Kamathipura", "Community"),
     ("SONAPUR", "Sonapur", "Community"),
     ("BHIWANDI_COMM", "Bhiwandi", "Community"),
-    # Transformation Programme
-    ("THANE_TP", "Thane", "Transformation Programme"),
-    # Unlimited
-    ("THANE_UL", "Thane (Unlimited)", "Kshamata Unlimited"),
-    ("MANKHURD", "Mankhurd", "Kshamata Unlimited"),
+    # Shared across Transformation & Unlimited
+    ("THANE", "Thane", None),
+    ("MANKHURD", "Mankhurd", None),
 ]
 
 # ---------------------------------------------------------------------------
@@ -130,10 +128,10 @@ PROGRAMME_CENTERS = {
         "BHIWANDI_COMM",
     ],
     "Kshamata Transformation Programme": [
-        "THANE_TP",
+        "THANE",
     ],
     "Kshamata Unlimited": [
-        "THANE_UL",
+        "THANE",
         "MANKHURD",
     ],
 }
@@ -256,8 +254,8 @@ CENTRE_INTERVENTIONS = {
         "Job Placement - Boxer",
         "Day Care",
     ],
-    # --- Transformation Programme ---
-    "THANE_TP": [
+    # --- Transformation Programme & Unlimited (Thane shared) ---
+    "THANE": [
         "Physical Health",
         "Mental Health",
         "Life Skill Education",
@@ -270,7 +268,6 @@ CENTRE_INTERVENTIONS = {
         "Job / OJT Placement",
     ],
     # --- Unlimited (no interventions visible in chart) ---
-    "THANE_UL": [],
     "MANKHURD": [],
 }
 
