@@ -410,6 +410,7 @@ There is no separate admin panel. The frontend is one app — what a user sees i
 - Notifications/alerts
 - Beneficiary self-service
 - Advanced analytics/dashboards
+- Multi-org user access (single user account linked to multiple NGOs with org-switching)
 
 ---
 

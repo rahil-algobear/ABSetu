@@ -17,10 +17,8 @@ from app.modules.organization.model import (
     ProgrammeCenter,
 )
 from app.modules.session.model import SessionTemplate
-
-# Import all models so SQLAlchemy can resolve relationship strings
-from app.modules.auth.model import User  # noqa: F401
-from app.modules.role.model import Role, Permission, RolePermission  # noqa: F401
+from app.modules.auth.model import User
+from app.modules.role.model import Permission, Role, RolePermission
 from app.modules.beneficiary.model import Beneficiary, Enrollment  # noqa: F401
 from app.modules.session.model import (  # noqa: F401
     Facilitator,
@@ -30,6 +28,12 @@ from app.modules.session.model import (  # noqa: F401
 )
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Admin user (mobile number)
+# ---------------------------------------------------------------------------
+ADMIN_MOBILE = "9820833010"
+ADMIN_COUNTRY_CODE = "+91"
 
 # ---------------------------------------------------------------------------
 # Organisation
@@ -370,6 +374,55 @@ def seed():
                     pc_count += 1
                 pc_map[(prog_name, center_code)] = pc
         print(f"Ensured programme-centre links ({pc_count} new)")
+
+        # 6. Admin role (all permissions)
+        admin_role = (
+            db.query(Role)
+            .filter_by(organization_id=org.id, name="Admin")
+            .first()
+        )
+        if not admin_role:
+            admin_role = Role(
+                organization_id=org.id,
+                name="Admin",
+                is_default=False,
+            )
+            db.add(admin_role)
+            db.flush()
+
+            # Attach all existing permissions
+            all_perms = db.query(Permission).all()
+            for perm in all_perms:
+                rp = RolePermission(
+                    role_id=admin_role.id, permission_id=perm.id
+                )
+                db.add(rp)
+            print(f"Created Admin role with {len(all_perms)} permissions")
+        else:
+            print("Admin role already exists")
+
+        # 7. Admin user
+        admin_user = (
+            db.query(User)
+            .filter_by(mobile_number=ADMIN_MOBILE)
+            .first()
+        )
+        if not admin_user:
+            admin_user = User(
+                first_name="Rahil",
+                last_name="Admin",
+                country_code=ADMIN_COUNTRY_CODE,
+                mobile_number=ADMIN_MOBILE,
+                is_verified=True,
+                organization_id=org.id,
+                role_id=admin_role.id,
+            )
+            db.add(admin_user)
+            print(f"Created admin user: {ADMIN_COUNTRY_CODE} {ADMIN_MOBILE}")
+        else:
+            admin_user.organization_id = org.id
+            admin_user.role_id = admin_role.id
+            print(f"Updated existing user to Kshamata admin: {ADMIN_MOBILE}")
 
         db.commit()
 
