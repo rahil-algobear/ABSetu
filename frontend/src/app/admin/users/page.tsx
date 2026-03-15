@@ -263,17 +263,9 @@ export default function UsersPage() {
     }
   };
 
-  const getAccessSummary = (user: UserListItem) => {
-    const parts: string[] = [];
-    const c = user.center_ids?.length || 0;
-    const p = user.programme_ids?.length || 0;
-    const t = user.session_template_ids?.length || 0;
-    if (c === 0 && p === 0 && t === 0) return "Full access";
-    if (c > 0) parts.push(`${c} center${c > 1 ? "s" : ""}`);
-    if (p > 0) parts.push(`${p} prog${p > 1 ? "s" : ""}`);
-    if (t > 0) parts.push(`${t} tmpl${t > 1 ? "s" : ""}`);
-    return parts.join(", ");
-  };
+  const centerMap = new Map(centers.map((c) => [c.id, c.name]));
+  const programmeMap = new Map(programmes.map((p) => [p.id, p.name]));
+  const templateMap = new Map(sessionTemplates.map((t) => [t.id, t.name]));
 
   return (
     <>
@@ -298,7 +290,9 @@ export default function UsersPage() {
               <TableHead>Name</TableHead>
               <TableHead>Mobile</TableHead>
               <TableHead>Role</TableHead>
-              <TableHead>Access</TableHead>
+              <TableHead>Centers</TableHead>
+              <TableHead>Programmes</TableHead>
+              <TableHead>Templates</TableHead>
               <TableHead className="w-24">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -326,9 +320,43 @@ export default function UsersPage() {
                   )}
                 </TableCell>
                 <TableCell>
-                  <span className="text-xs text-gray-500">
-                    {getAccessSummary(user)}
-                  </span>
+                  <div className="flex flex-wrap gap-1">
+                    {user.center_ids?.length ? (
+                      user.center_ids.map((id) => (
+                        <span key={id} className="inline-block text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">
+                          {centerMap.get(id) || "Unknown"}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-xs text-gray-400">All</span>
+                    )}
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <div className="flex flex-wrap gap-1">
+                    {user.programme_ids?.length ? (
+                      user.programme_ids.map((id) => (
+                        <span key={id} className="inline-block text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded-full">
+                          {programmeMap.get(id) || "Unknown"}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-xs text-gray-400">All</span>
+                    )}
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <div className="flex flex-wrap gap-1">
+                    {user.session_template_ids?.length ? (
+                      user.session_template_ids.map((id) => (
+                        <span key={id} className="inline-block text-xs bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full">
+                          {templateMap.get(id) || "Unknown"}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-xs text-gray-400">All</span>
+                    )}
+                  </div>
                 </TableCell>
                 <TableCell>
                   <Can permission="user:manage">
