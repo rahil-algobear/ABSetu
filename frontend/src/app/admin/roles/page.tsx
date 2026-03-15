@@ -173,6 +173,11 @@ export default function RolesPage() {
                   <div className="flex items-center gap-2">
                     <Shield className="h-4 w-4 text-purple-500" />
                     {role.name}
+                    {role.is_system && (
+                      <span className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">
+                        System
+                      </span>
+                    )}
                     {role.is_default && (
                       <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">
                         Default
@@ -193,27 +198,29 @@ export default function RolesPage() {
                 </TableCell>
                 <TableCell>
                   <Can permission="role:manage">
-                    <div className="flex gap-1">
-                      <button
-                        onClick={() => openEdit(role)}
-                        className="text-gray-400 hover:text-purple-600"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => {
-                          if (
-                            confirm(
-                              `Delete role "${role.name}"? This cannot be undone.`
+                    {!role.is_system && (
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => openEdit(role)}
+                          className="text-gray-400 hover:text-purple-600"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (
+                              confirm(
+                                `Delete role "${role.name}"? This cannot be undone.`
+                              )
                             )
-                          )
-                            deleteMutation.mutate(role.id);
-                        }}
-                        className="text-gray-400 hover:text-red-500"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
+                              deleteMutation.mutate(role.id);
+                          }}
+                          className="text-gray-400 hover:text-red-500"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    )}
                   </Can>
                 </TableCell>
               </TableRow>

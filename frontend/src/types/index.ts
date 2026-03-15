@@ -163,6 +163,7 @@ export interface Role {
   organization_id: string;
   name: string;
   is_default: boolean;
+  is_system: boolean;
   permissions: Permission[];
   user_count: number;
   updated_at: number | null;

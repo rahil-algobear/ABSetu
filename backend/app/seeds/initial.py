@@ -101,6 +101,7 @@ def seed():
                 organization_id=org.id,
                 name="Admin",
                 is_default=False,
+                is_system=True,
             )
             db.add(admin_role)
             db.flush()
