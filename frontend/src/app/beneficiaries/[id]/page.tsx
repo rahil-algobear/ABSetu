@@ -2,10 +2,12 @@
 
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { beneficiaryApi, enrollmentApi } from "@/services/api";
+import { beneficiaryApi, enrollmentApi, metaFieldSchemaApi } from "@/services/api";
+import { MetaFieldDefinition } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageLayout } from "@/components/ui/page-layout";
 import { Badge } from "@/components/ui/badge";
+import { MetaFieldDisplay } from "@/components/DynamicMetaForm";
 
 export default function BeneficiaryDetailPage() {
   const params = useParams();
@@ -19,6 +21,11 @@ export default function BeneficiaryDetailPage() {
   const { data: enrollments = [] } = useQuery({
     queryKey: ["enrollments", id],
     queryFn: () => enrollmentApi.listByBeneficiary(id),
+  });
+
+  const { data: metaFields = [] } = useQuery<MetaFieldDefinition[]>({
+    queryKey: ["meta-field-schemas", "beneficiary"],
+    queryFn: () => metaFieldSchemaApi.get("beneficiary"),
   });
 
   if (isLoading) return <PageLayout className="p-4"><p>Loading...</p></PageLayout>;
@@ -35,14 +42,10 @@ export default function BeneficiaryDetailPage() {
             <CardTitle className="text-lg">Details</CardTitle>
           </CardHeader>
           <CardContent>
-            <dl className="grid grid-cols-2 gap-2 text-sm">
-              {Object.entries(beneficiary.meta).map(([key, value]) => (
-                <div key={key}>
-                  <dt className="text-gray-500 capitalize">{key.replace(/_/g, " ")}</dt>
-                  <dd className="font-medium">{String(value)}</dd>
-                </div>
-              ))}
-            </dl>
+            <MetaFieldDisplay
+              fields={metaFields}
+              values={beneficiary.meta}
+            />
           </CardContent>
         </Card>
       )}

@@ -4,8 +4,11 @@ import {
   Beneficiary,
   Center,
   Enrollment,
+  EntityType,
   Facilitator,
   LoginResponse,
+  MetaFieldDefinition,
+  MetaFieldSchemas,
   OTPVerifyData,
   Organization,
   Programme,
@@ -76,6 +79,28 @@ export const organizationApi = {
   },
   update: async (data: Partial<Organization>): Promise<Organization> => {
     const response = await authAxios.put<Organization>('/organization/', data);
+    return response.data;
+  },
+};
+
+// --- Meta Field Schemas ---
+
+export const metaFieldSchemaApi = {
+  getAll: async (): Promise<MetaFieldSchemas> => {
+    const response = await authAxios.get<MetaFieldSchemas>('/organization/meta-field-schemas');
+    return response.data;
+  },
+  get: async (entityType: EntityType): Promise<MetaFieldDefinition[]> => {
+    const response = await authAxios.get<MetaFieldDefinition[]>(
+      `/organization/meta-field-schemas/${entityType}`
+    );
+    return response.data;
+  },
+  update: async (entityType: EntityType, fields: MetaFieldDefinition[]): Promise<MetaFieldDefinition[]> => {
+    const response = await authAxios.put<MetaFieldDefinition[]>(
+      `/organization/meta-field-schemas/${entityType}`,
+      fields
+    );
     return response.data;
   },
 };

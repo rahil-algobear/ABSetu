@@ -2,11 +2,15 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { beneficiaryApi } from "@/services/api";
+import { beneficiaryApi, metaFieldSchemaApi } from "@/services/api";
+import { MetaFieldDefinition } from "@/types";
 import { Can } from "@/components/Auth/Permissions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent } from "@/components/ui/card";
+import { Dialog } from "@/components/ui/dialog";
+import { DynamicMetaForm } from "@/components/DynamicMetaForm";
 import { PageLayout } from "@/components/ui/page-layout";
 import { Plus, Search } from "lucide-react";
 import Link from "next/link";
@@ -16,11 +20,17 @@ export default function BeneficiariesPage() {
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
+  const [metaValues, setMetaValues] = useState<Record<string, unknown>>({});
   const queryClient = useQueryClient();
 
   const { data: beneficiaries = [], isLoading } = useQuery({
     queryKey: ["beneficiaries"],
     queryFn: beneficiaryApi.list,
+  });
+
+  const { data: metaFields = [] } = useQuery<MetaFieldDefinition[]>({
+    queryKey: ["meta-field-schemas", "beneficiary"],
+    queryFn: () => metaFieldSchemaApi.get("beneficiary"),
   });
 
   const createMutation = useMutation({
@@ -29,6 +39,7 @@ export default function BeneficiariesPage() {
       queryClient.invalidateQueries({ queryKey: ["beneficiaries"] });
       setShowCreate(false);
       setNewName("");
+      setMetaValues({});
       toast.success("Beneficiary created");
     },
     onError: () => toast.error("Failed to create beneficiary"),
@@ -61,38 +72,51 @@ export default function BeneficiariesPage() {
         />
       </div>
 
-      {showCreate && (
-        <Card className="mb-4">
-          <CardContent className="pt-4">
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (newName.trim()) {
-                  createMutation.mutate({ name: newName.trim() });
-                }
-              }}
-              className="flex gap-2"
+      <Dialog
+        open={showCreate}
+        onClose={() => setShowCreate(false)}
+        title="Add Beneficiary"
+      >
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (newName.trim()) {
+              const meta = Object.keys(metaValues).length > 0 ? metaValues : undefined;
+              createMutation.mutate({ name: newName.trim(), meta });
+            }
+          }}
+          className="space-y-3"
+        >
+          <div>
+            <Label htmlFor="name">Name</Label>
+            <Input
+              id="name"
+              placeholder="Beneficiary name"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              autoFocus
+              required
+            />
+          </div>
+          <DynamicMetaForm
+            fields={metaFields}
+            values={metaValues}
+            onChange={setMetaValues}
+          />
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowCreate(false)}
             >
-              <Input
-                placeholder="Beneficiary name"
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                autoFocus
-              />
-              <Button type="submit" disabled={createMutation.isPending}>
-                Save
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setShowCreate(false)}
-              >
-                Cancel
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-      )}
+              Cancel
+            </Button>
+            <Button type="submit" disabled={createMutation.isPending}>
+              Create
+            </Button>
+          </div>
+        </form>
+      </Dialog>
 
       {isLoading ? (
         <p className="text-gray-500">Loading...</p>

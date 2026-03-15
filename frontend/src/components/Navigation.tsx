@@ -23,8 +23,10 @@ import {
 /* ── Settings dropdown items ── */
 
 const settingsItems = [
-  { href: "/admin", label: "Admin", icon: Building2, permission: "center:view" },
-  { href: "/beneficiaries", label: "Beneficiaries", icon: Users, permission: "beneficiary:view" },
+  { href: "/admin/centres", label: "Centres", icon: Building2, permission: "center:view" },
+  { href: "/admin/programmes", label: "Programmes", icon: Building2, permission: "programme:view" },
+  { href: "/admin/facilitators", label: "Facilitators", icon: UserCog, permission: "facilitator:view" },
+  { href: "/admin/beneficiaries", label: "Beneficiaries", icon: Users, permission: "beneficiary:view" },
 ];
 
 /* ── NavDropdown ── */

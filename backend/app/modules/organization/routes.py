@@ -23,6 +23,7 @@ from app.modules.organization.schemas import (
 )
 from app.modules.organization.service import (
     CenterService,
+    MetaFieldSchemaService,
     OrganizationService,
     ProgrammeCenterService,
     ProgrammeService,
@@ -253,3 +254,58 @@ def delete_programme_center(
     service = ProgrammeCenterService(db)
     service.delete(pc_id)
     return {"message": "Programme-Center link removed"}
+
+
+# --- Meta Field Schemas ---
+
+VALID_ENTITY_TYPES = {"centre", "programme", "session_template", "facilitator", "beneficiary"}
+
+
+@router.get(
+    "/meta-field-schemas/{entity_type}",
+    dependencies=[Depends(require_permissions("org:settings"))],
+)
+def get_meta_field_schema(
+    entity_type: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get meta field schema for an entity type."""
+    if entity_type not in VALID_ENTITY_TYPES:
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=400, detail=f"Invalid entity type: {entity_type}")
+    service = MetaFieldSchemaService(db)
+    return service.get_schema(current_user.organization_id, entity_type)
+
+
+@router.get(
+    "/meta-field-schemas",
+    dependencies=[Depends(require_permissions("org:settings"))],
+)
+def get_all_meta_field_schemas(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get all meta field schemas for the organization."""
+    service = MetaFieldSchemaService(db)
+    return service.get_all_schemas(current_user.organization_id)
+
+
+@router.put(
+    "/meta-field-schemas/{entity_type}",
+    dependencies=[Depends(require_permissions("org:settings"))],
+)
+def update_meta_field_schema(
+    entity_type: str,
+    fields: list[dict],
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Update meta field schema for an entity type."""
+    if entity_type not in VALID_ENTITY_TYPES:
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=400, detail=f"Invalid entity type: {entity_type}")
+    service = MetaFieldSchemaService(db)
+    return service.update_schema(current_user.organization_id, entity_type, fields)

@@ -128,6 +128,27 @@ export interface Attendance {
   updated_at: number | null;
 }
 
+// --- Meta Field Definitions ---
+
+export type MetaFieldType = "text" | "number" | "date" | "select" | "multiselect" | "boolean";
+
+export interface MetaFieldDefinition {
+  key: string;
+  label: string;
+  type: MetaFieldType;
+  required?: boolean;
+  options?: string[]; // for select/multiselect
+}
+
+export type EntityType =
+  | "centre"
+  | "programme"
+  | "session_template"
+  | "facilitator"
+  | "beneficiary";
+
+export type MetaFieldSchemas = Partial<Record<EntityType, MetaFieldDefinition[]>>;
+
 // --- Beneficiaries ---
 
 export interface Beneficiary {
