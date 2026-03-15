@@ -1,7 +1,7 @@
 """add logo_url to organizations
 
 Revision ID: a1b2c3d4e5f6
-Revises: de0fa48f754a
+Revises: 7ae33a79fe7a
 Create Date: 2026-03-15 12:00:00.000000
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = 'a1b2c3d4e5f6'
-down_revision: Union[str, None] = 'de0fa48f754a'
+down_revision: Union[str, None] = '7ae33a79fe7a'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
