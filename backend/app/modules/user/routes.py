@@ -150,6 +150,21 @@ def update_user_role(
     ).dump()
 
 
+@router.delete(
+    "/{user_id}",
+    dependencies=[Depends(require_permissions("user:manage"))],
+    status_code=204,
+)
+def delete_user(
+    user_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Delete a user from the organization."""
+    service = UserService(db)
+    service.delete_user(user_id, current_user.organization_id, current_user.id)
+
+
 @router.get(
     "/{user_id}/access",
     dependencies=[Depends(require_permissions("user:manage"))],

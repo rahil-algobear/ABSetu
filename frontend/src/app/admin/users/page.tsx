@@ -23,7 +23,7 @@ import {
   TableHead,
   TableCell,
 } from "@/components/ui/page-table";
-import { Plus, Pencil, Phone, Shield } from "lucide-react";
+import { Plus, Pencil, Phone, Shield, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
 
 function AccessCheckboxSection({
@@ -170,6 +170,15 @@ export default function UsersPage() {
       toast.success("Access updated");
     },
     onError: () => toast.error("Failed to update access"),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: userApi.delete,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+      toast.success("User deleted");
+    },
+    onError: () => toast.error("Failed to delete user"),
   });
 
   const openCreate = () => {
@@ -374,6 +383,16 @@ export default function UsersPage() {
                         title="Manage access"
                       >
                         <Shield className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (confirm(`Delete ${user.first_name} ${user.last_name}?`))
+                            deleteMutation.mutate(user.id);
+                        }}
+                        className="text-gray-400 hover:text-red-500"
+                        title="Delete user"
+                      >
+                        <Trash2 className="h-4 w-4" />
                       </button>
                     </div>
                   </Can>

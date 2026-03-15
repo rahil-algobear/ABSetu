@@ -141,6 +141,18 @@ class UserService:
             ],
         }
 
+    def delete_user(self, user_id: uuid.UUID, org_id: uuid.UUID, current_user_id: uuid.UUID) -> None:
+        """Delete a user from the organization."""
+        if user_id == current_user_id:
+            raise ValidationError("You cannot delete yourself")
+
+        user = self.db.query(User).filter_by(id=user_id, organization_id=org_id).first()
+        if not user:
+            raise NotFoundError("User not found")
+
+        self.db.delete(user)
+        self.db.commit()
+
     @staticmethod
     def get_access_ids(user: User) -> dict:
         """Extract access IDs from a user object (for use in filtering)."""

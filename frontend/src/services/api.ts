@@ -341,6 +341,10 @@ export const userApi = {
     const response = await authAxios.put<UserAccess>(`/user/${userId}/access`, data);
     return response.data;
   },
+  delete: async (id: string) => {
+    const response = await authAxios.delete(`/user/${id}`);
+    return response.data;
+  },
 };
 
 // --- Enrollments ---
