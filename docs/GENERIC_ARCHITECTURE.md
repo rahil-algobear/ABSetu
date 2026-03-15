@@ -69,8 +69,8 @@ Unique constraint: `(organization_id, key)`
 **Kshamata example:**
 | name | key |
 |------|-----|
-| Centre | centre |
-| Centre Type | centre_type |
+| Location | location |
+| Location Type | location_type |
 | Programme | programme |
 
 ---
@@ -93,7 +93,7 @@ Values within a dimension.
 
 Unique constraint: `(dimension_id, code)`
 
-**Kshamata example (Centre dimension):**
+**Kshamata example (Location dimension):**
 | name | code | meta |
 |------|------|------|
 | ShantiSadan | SHANTISADAN | `{"address": "Institution"}` |
@@ -126,21 +126,21 @@ Unique constraint: `(dimension_value_id_1, dimension_value_id_2)` — order is n
 
 **Kshamata examples:**
 
-Programme ↔ Centre rules (replaces `programme_centers`):
+Programme ↔ Location rules (replaces `programme_centers`):
 | dimension_value_1 | dimension_value_2 |
 |--------------------|-------------------|
-| Programme:Outreach | Centre:ShantiSadan |
-| Programme:Outreach | Centre:Kasturba |
-| Programme:Transformation | Centre:Thane |
-| Programme:Unlimited | Centre:Thane |
-| Programme:Unlimited | Centre:Mankhurd |
+| Programme:Outreach | Location:ShantiSadan |
+| Programme:Outreach | Location:Kasturba |
+| Programme:Transformation | Location:Thane |
+| Programme:Unlimited | Location:Thane |
+| Programme:Unlimited | Location:Mankhurd |
 
-Centre ↔ ActivityType rules (replaces `CENTRE_INTERVENTIONS`):
+Location ↔ ActivityType rules (replaces `CENTRE_INTERVENTIONS`):
 | dimension_value_1 | dimension_value_2 |
 |--------------------|-------------------|
-| Centre:ShantiSadan | ActivityType:Life Skill Education |
-| Centre:ShantiSadan | ActivityType:Job Readiness |
-| Centre:ShantiSadan | ActivityType:Vocational Skill Training |
+| Location:ShantiSadan | ActivityType:Life Skill Education |
+| Location:ShantiSadan | ActivityType:Job Readiness |
+| Location:ShantiSadan | ActivityType:Vocational Skill Training |
 | ... | ... |
 
 > **Note on ActivityType in tag rules:** ActivityType remains a first-class table (`activity_types`), but for tag rule purposes we create a system-managed "Activity Type" dimension whose values mirror the `activity_types` table. This lets `tag_rules` work with a single mechanism (dimension_value ↔ dimension_value) without special-casing activity types. When an activity type is created/deleted, the corresponding dimension value is synced automatically.
@@ -162,7 +162,7 @@ Unique constraint: `(activity_id, dimension_value_id)`
 **Example — a Life Skill Education session at ShantiSadan:**
 | activity_id | dimension_value_id |
 |-------------|--------------------|
-| act-001 | Centre:ShantiSadan |
+| act-001 | Location:ShantiSadan |
 | act-001 | Programme:Outreach |
 
 ---
@@ -210,8 +210,8 @@ Unique constraint: `(user_id, dimension_value_id)`
 **Example — field worker scoped to ShantiSadan + Outreach:**
 | user_id | dimension_value_id |
 |---------|--------------------|
-| worker-001 | Centre:ShantiSadan |
-| worker-001 | Centre:Kasturba |
+| worker-001 | Location:ShantiSadan |
+| worker-001 | Location:Kasturba |
 | worker-001 | Programme:Outreach |
 
 **Access logic:** When querying sessions for a user, filter to sessions whose tags are a subset of the user's dimension access. Admin users with no access restrictions see everything.
@@ -314,9 +314,9 @@ Centres | Programmes | Programme-Centres | Session Templates | Facilitators | Be
 
 Each dimension the org has created becomes its own settings tab/page. Tab labels come from the dimension name. For Kshamata this renders as:
 ```
-Centres | Programmes | Tag Rules | Session Templates | Facilitators | Beneficiaries | Roles | Users | Custom Fields
+Locations | Programmes | Tag Rules | Session Templates | Facilitators | Beneficiaries | Roles | Users | Custom Fields
 ```
-> "Centres" because that's what Kshamata named their location dimension. "Session Templates" via vocabulary mapping of "Activity Types". Looks nearly identical to today.
+> "Locations" because that's what Kshamata named their dimension. "Session Templates" via vocabulary mapping of "Activity Types". Looks nearly identical to today.
 
 For a different NGO with dimensions "Region", "Project", "Funder":
 ```
@@ -338,7 +338,7 @@ A separate admin page (or section within org settings) allows creating new dimen
 Matrix view showing valid combinations between two selected dimensions.
 
 ```
-Dimension: [Centre ▼]  ×  Dimension: [Activity Type ▼]
+Dimension: [Location ▼]  ×  Dimension: [Activity Type ▼]
 
                     Life Skill  Job Ready  Vocational  Digital Lit  ...
 ShantiSadan            ✓           ✓          ✓           ✓
@@ -350,12 +350,12 @@ Admin selects two dimensions from dropdowns, then toggles checkboxes in the matr
 
 ### Activity Creation Form
 
-Dynamically renders one dropdown per dimension (filtered by user's access scope). Selection cascading via tag rules — choosing a Centre filters Programme to valid options, which filters Activity Type to valid options.
+Dynamically renders one dropdown per dimension (filtered by user's access scope). Selection cascading via tag rules — choosing a Location filters Programme to valid options, which filters Activity Type to valid options.
 
 ```
-[Centre dropdown]         → filtered by UserDimensionAccess
-[Programme dropdown]      → filtered by tag_rules(selected centre)
-[Activity Type dropdown]  → filtered by tag_rules(selected centre)
+[Location dropdown]       → filtered by UserDimensionAccess
+[Programme dropdown]      → filtered by tag_rules(selected location)
+[Activity Type dropdown]  → filtered by tag_rules(selected location)
 [Date picker]
 [Facilitator dropdown]
 [Participation checklist] → beneficiaries filtered by matching tags
@@ -511,20 +511,20 @@ Since we don't need backward compatibility:
 ```python
 # Dimensions (key, name — name is what appears in the UI/settings tabs)
 DIMENSIONS = [
-    ("centre", "Centre"),
-    ("centre_type", "Centre Type"),
+    ("location", "Location"),
+    ("location_type", "Location Type"),
     ("programme", "Programme"),
 ]
 
 # Dimension Values
 DIMENSION_VALUES = {
-    "centre": [
+    "location": [
         ("SHANTISADAN", "ShantiSadan"),
         ("KASTURBA", "Kasturba"),
         ("NAVJEEVAN", "Navjeevan"),
-        # ... all 15 centres
+        # ... all 15 locations
     ],
-    "centre_type": [
+    "location_type": [
         ("INSTITUTION", "Institution"),
         ("POST_INSTITUTION", "Post Institution"),
         ("COMMUNITY", "Community"),
@@ -538,11 +538,11 @@ DIMENSION_VALUES = {
 
 # Tag Rules (replaces PROGRAMME_CENTERS + CENTRE_INTERVENTIONS)
 TAG_RULES = {
-    ("programme:OUTREACH", "centre:SHANTISADAN"),
-    ("programme:OUTREACH", "centre:KASTURBA"),
+    ("programme:OUTREACH", "location:SHANTISADAN"),
+    ("programme:OUTREACH", "location:KASTURBA"),
     # ...
-    ("centre:SHANTISADAN", "activity_type:LIFE_SKILL_EDUCATION"),
-    ("centre:SHANTISADAN", "activity_type:JOB_READINESS"),
+    ("location:SHANTISADAN", "activity_type:LIFE_SKILL_EDUCATION"),
+    ("location:SHANTISADAN", "activity_type:JOB_READINESS"),
     # ... all valid combinations
 }
 
