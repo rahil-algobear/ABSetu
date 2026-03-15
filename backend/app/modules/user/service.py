@@ -1,12 +1,18 @@
 """
 User services for profile operations
 """
+
 import uuid
 
 from sqlalchemy.orm import Session
 
 from app.common.exceptions import NotFoundError, ValidationError
-from app.modules.auth.model import User
+from app.modules.auth.model import (
+    User,
+    UserCenterAccess,
+    UserProgrammeAccess,
+    UserSessionTemplateAccess,
+)
 from app.modules.role.model import Role
 
 
@@ -32,24 +38,14 @@ class UserService:
             .all()
         )
 
-    def update_role(
-        self, user_id: uuid.UUID, org_id: uuid.UUID, role_id: uuid.UUID
-    ) -> User:
+    def update_role(self, user_id: uuid.UUID, org_id: uuid.UUID, role_id: uuid.UUID) -> User:
         """Update a user's role."""
-        user = (
-            self.db.query(User)
-            .filter_by(id=user_id, organization_id=org_id)
-            .first()
-        )
+        user = self.db.query(User).filter_by(id=user_id, organization_id=org_id).first()
         if not user:
             raise NotFoundError("User not found")
 
         # Verify role belongs to same org
-        role = (
-            self.db.query(Role)
-            .filter_by(id=role_id, organization_id=org_id)
-            .first()
-        )
+        role = self.db.query(Role).filter_by(id=role_id, organization_id=org_id).first()
         if not role:
             raise NotFoundError("Role not found")
 
@@ -69,20 +65,12 @@ class UserService:
     ) -> User:
         """Create a new user within the organization."""
         # Check for duplicate mobile number
-        existing = (
-            self.db.query(User)
-            .filter_by(mobile_number=mobile_number)
-            .first()
-        )
+        existing = self.db.query(User).filter_by(mobile_number=mobile_number).first()
         if existing:
             raise ValidationError("A user with this mobile number already exists")
 
         # Verify role belongs to same org
-        role = (
-            self.db.query(Role)
-            .filter_by(id=role_id, organization_id=org_id)
-            .first()
-        )
+        role = self.db.query(Role).filter_by(id=role_id, organization_id=org_id).first()
         if not role:
             raise NotFoundError("Role not found")
 
@@ -99,3 +87,74 @@ class UserService:
         self.db.commit()
         self.db.refresh(user)
         return user
+
+    def get_user_access(self, user_id: uuid.UUID, org_id: uuid.UUID) -> dict:
+        """Get a user's access tags."""
+        user = self.db.query(User).filter_by(id=user_id, organization_id=org_id).first()
+        if not user:
+            raise NotFoundError("User not found")
+
+        return {
+            "center_ids": [str(a.center_id) for a in user.center_access],
+            "programme_ids": [str(a.programme_id) for a in user.programme_access],
+            "session_template_ids": [
+                str(a.session_template_id) for a in user.session_template_access
+            ],
+        }
+
+    def update_user_access(
+        self,
+        user_id: uuid.UUID,
+        org_id: uuid.UUID,
+        center_ids: list[uuid.UUID],
+        programme_ids: list[uuid.UUID],
+        session_template_ids: list[uuid.UUID],
+    ) -> dict:
+        """Bulk-replace a user's access tags."""
+        user = self.db.query(User).filter_by(id=user_id, organization_id=org_id).first()
+        if not user:
+            raise NotFoundError("User not found")
+
+        # Replace center access
+        self.db.query(UserCenterAccess).filter_by(user_id=user_id).delete()
+        for cid in center_ids:
+            self.db.add(UserCenterAccess(user_id=user_id, center_id=cid))
+
+        # Replace programme access
+        self.db.query(UserProgrammeAccess).filter_by(user_id=user_id).delete()
+        for pid in programme_ids:
+            self.db.add(UserProgrammeAccess(user_id=user_id, programme_id=pid))
+
+        # Replace session template access
+        self.db.query(UserSessionTemplateAccess).filter_by(user_id=user_id).delete()
+        for stid in session_template_ids:
+            self.db.add(UserSessionTemplateAccess(user_id=user_id, session_template_id=stid))
+
+        self.db.commit()
+        self.db.refresh(user)
+
+        return {
+            "center_ids": [str(a.center_id) for a in user.center_access],
+            "programme_ids": [str(a.programme_id) for a in user.programme_access],
+            "session_template_ids": [
+                str(a.session_template_id) for a in user.session_template_access
+            ],
+        }
+
+    @staticmethod
+    def get_access_ids(user: User) -> dict:
+        """Extract access IDs from a user object (for use in filtering)."""
+        return {
+            "center_ids": [a.center_id for a in user.center_access],
+            "programme_ids": [a.programme_id for a in user.programme_access],
+            "session_template_ids": [a.session_template_id for a in user.session_template_access],
+        }
+
+    @staticmethod
+    def has_full_access(user: User) -> bool:
+        """Check if user has no access restrictions (admin-level)."""
+        has_centers = len(user.center_access) > 0
+        has_programmes = len(user.programme_access) > 0
+        has_templates = len(user.session_template_access) > 0
+        # If no access tags at all, user has full access (unrestricted)
+        return not has_centers and not has_programmes and not has_templates

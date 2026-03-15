@@ -1,6 +1,13 @@
 """Import all models so SQLAlchemy can resolve string-based relationships."""
 
-from app.modules.auth.model import OTP, RefreshToken, User, UserCenterAssignment  # noqa: F401
+from app.modules.auth.model import (  # noqa: F401
+    OTP,
+    RefreshToken,
+    User,
+    UserCenterAccess,
+    UserProgrammeAccess,
+    UserSessionTemplateAccess,
+)
 from app.modules.organization.model import (  # noqa: F401
     Center,
     Organization,

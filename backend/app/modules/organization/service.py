@@ -1,6 +1,7 @@
 """
 Organization, Center, Programme services
 """
+
 import uuid
 
 from sqlalchemy.orm import Session
@@ -33,15 +34,16 @@ class CenterService:
     def __init__(self, db: Session):
         self.db = db
 
-    def list_by_org(self, org_id: uuid.UUID) -> list[Center]:
-        return self.db.query(Center).filter_by(organization_id=org_id).all()
+    def list_by_org(
+        self, org_id: uuid.UUID, accessible_ids: list[uuid.UUID] | None = None
+    ) -> list[Center]:
+        query = self.db.query(Center).filter_by(organization_id=org_id)
+        if accessible_ids is not None:
+            query = query.filter(Center.id.in_(accessible_ids))
+        return query.all()
 
     def get_by_id(self, center_id: uuid.UUID, org_id: uuid.UUID) -> Center:
-        center = (
-            self.db.query(Center)
-            .filter_by(id=center_id, organization_id=org_id)
-            .first()
-        )
+        center = self.db.query(Center).filter_by(id=center_id, organization_id=org_id).first()
         if not center:
             raise NotFoundError("Center not found")
         return center
@@ -72,14 +74,17 @@ class ProgrammeService:
     def __init__(self, db: Session):
         self.db = db
 
-    def list_by_org(self, org_id: uuid.UUID) -> list[Programme]:
-        return self.db.query(Programme).filter_by(organization_id=org_id).all()
+    def list_by_org(
+        self, org_id: uuid.UUID, accessible_ids: list[uuid.UUID] | None = None
+    ) -> list[Programme]:
+        query = self.db.query(Programme).filter_by(organization_id=org_id)
+        if accessible_ids is not None:
+            query = query.filter(Programme.id.in_(accessible_ids))
+        return query.all()
 
     def get_by_id(self, programme_id: uuid.UUID, org_id: uuid.UUID) -> Programme:
         programme = (
-            self.db.query(Programme)
-            .filter_by(id=programme_id, organization_id=org_id)
-            .first()
+            self.db.query(Programme).filter_by(id=programme_id, organization_id=org_id).first()
         )
         if not programme:
             raise NotFoundError("Programme not found")
@@ -111,31 +116,34 @@ class ProgrammeCenterService:
     def __init__(self, db: Session):
         self.db = db
 
-    def list_by_org(self, org_id: uuid.UUID) -> list[ProgrammeCenter]:
-        return (
+    def list_by_org(
+        self,
+        org_id: uuid.UUID,
+        accessible_center_ids: list[uuid.UUID] | None = None,
+        accessible_programme_ids: list[uuid.UUID] | None = None,
+    ) -> list[ProgrammeCenter]:
+        query = (
             self.db.query(ProgrammeCenter)
             .join(Programme, ProgrammeCenter.programme_id == Programme.id)
             .filter(Programme.organization_id == org_id)
-            .all()
         )
+        if accessible_center_ids is not None:
+            query = query.filter(ProgrammeCenter.center_id.in_(accessible_center_ids))
+        if accessible_programme_ids is not None:
+            query = query.filter(ProgrammeCenter.programme_id.in_(accessible_programme_ids))
+        return query.all()
 
     def create(
         self, org_id: uuid.UUID, programme_id: uuid.UUID, center_id: uuid.UUID
     ) -> ProgrammeCenter:
         # Verify both belong to same org
         programme = (
-            self.db.query(Programme)
-            .filter_by(id=programme_id, organization_id=org_id)
-            .first()
+            self.db.query(Programme).filter_by(id=programme_id, organization_id=org_id).first()
         )
         if not programme:
             raise ValidationError("Programme not found in this organization")
 
-        center = (
-            self.db.query(Center)
-            .filter_by(id=center_id, organization_id=org_id)
-            .first()
-        )
+        center = self.db.query(Center).filter_by(id=center_id, organization_id=org_id).first()
         if not center:
             raise ValidationError("Center not found in this organization")
 
@@ -184,9 +192,7 @@ class MetaFieldSchemaService:
         meta = org.meta or {}
         return meta.get("meta_field_schemas", {})
 
-    def update_schema(
-        self, org_id: uuid.UUID, entity_type: str, fields: list[dict]
-    ) -> list[dict]:
+    def update_schema(self, org_id: uuid.UUID, entity_type: str, fields: list[dict]) -> list[dict]:
         org = self._get_org(org_id)
         meta = dict(org.meta) if org.meta else {}
         schemas = dict(meta.get("meta_field_schemas", {}))

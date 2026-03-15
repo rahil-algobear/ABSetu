@@ -2,8 +2,14 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { userApi, roleApi } from "@/services/api";
-import { UserListItem, Role } from "@/types";
+import {
+  userApi,
+  roleApi,
+  centerApi,
+  programmeApi,
+  sessionTemplateApi,
+} from "@/services/api";
+import { UserListItem, Role, Center, Programme, SessionTemplate } from "@/types";
 import { Can } from "@/components/Auth/Permissions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,13 +23,72 @@ import {
   TableHead,
   TableCell,
 } from "@/components/ui/page-table";
-import { Plus, Pencil, Phone } from "lucide-react";
+import { Plus, Pencil, Phone, Shield } from "lucide-react";
 import toast from "react-hot-toast";
+
+function AccessCheckboxSection({
+  title,
+  items,
+  selectedIds,
+  onToggle,
+  onToggleAll,
+  getId,
+  getLabel,
+}: {
+  title: string;
+  items: { id: string; name: string }[];
+  selectedIds: Set<string>;
+  onToggle: (id: string) => void;
+  onToggleAll: () => void;
+  getId: (item: { id: string; name: string }) => string;
+  getLabel: (item: { id: string; name: string }) => string;
+}) {
+  const allSelected = items.length > 0 && items.every((i) => selectedIds.has(getId(i)));
+  const noneSelected = items.every((i) => !selectedIds.has(getId(i)));
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <label className="text-sm font-medium">{title}</label>
+        <button
+          type="button"
+          onClick={onToggleAll}
+          className="text-xs text-purple-600 hover:text-purple-800"
+        >
+          {allSelected ? "Clear All" : "Select All"}
+        </button>
+      </div>
+      {items.length === 0 ? (
+        <p className="text-xs text-gray-400 py-2">No {title.toLowerCase()} available</p>
+      ) : (
+        <div className="space-y-1 max-h-36 overflow-y-auto border rounded-md p-2">
+          {items.map((item) => (
+            <label key={getId(item)} className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={selectedIds.has(getId(item))}
+                onChange={() => onToggle(getId(item))}
+                className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+              />
+              {getLabel(item)}
+            </label>
+          ))}
+        </div>
+      )}
+      <p className="text-xs text-gray-400 mt-1">
+        {noneSelected
+          ? "No restriction — user sees all"
+          : `${selectedIds.size} of ${items.length} selected`}
+      </p>
+    </div>
+  );
+}
 
 export default function UsersPage() {
   const queryClient = useQueryClient();
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
+  const [accessModalOpen, setAccessModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserListItem | null>(null);
   const [selectedRoleId, setSelectedRoleId] = useState("");
   const [createForm, setCreateForm] = useState({
@@ -34,6 +99,12 @@ export default function UsersPage() {
     role_id: "",
   });
 
+  // Access modal state
+  const [accessUser, setAccessUser] = useState<UserListItem | null>(null);
+  const [selectedCenterIds, setSelectedCenterIds] = useState<Set<string>>(new Set());
+  const [selectedProgrammeIds, setSelectedProgrammeIds] = useState<Set<string>>(new Set());
+  const [selectedTemplateIds, setSelectedTemplateIds] = useState<Set<string>>(new Set());
+
   const { data: users = [], isLoading } = useQuery({
     queryKey: ["users"],
     queryFn: userApi.list,
@@ -42,6 +113,21 @@ export default function UsersPage() {
   const { data: roles = [] } = useQuery<Role[]>({
     queryKey: ["roles"],
     queryFn: roleApi.list,
+  });
+
+  const { data: centers = [] } = useQuery<Center[]>({
+    queryKey: ["centers"],
+    queryFn: centerApi.list,
+  });
+
+  const { data: programmes = [] } = useQuery<Programme[]>({
+    queryKey: ["programmes"],
+    queryFn: programmeApi.list,
+  });
+
+  const { data: sessionTemplates = [] } = useQuery<SessionTemplate[]>({
+    queryKey: ["sessionTemplates"],
+    queryFn: sessionTemplateApi.list,
   });
 
   const createMutation = useMutation({
@@ -68,6 +154,22 @@ export default function UsersPage() {
       toast.success("Role updated");
     },
     onError: () => toast.error("Failed to update role"),
+  });
+
+  const updateAccessMutation = useMutation({
+    mutationFn: ({
+      userId,
+      data,
+    }: {
+      userId: string;
+      data: { center_ids: string[]; programme_ids: string[]; session_template_ids: string[] };
+    }) => userApi.updateAccess(userId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+      closeAccessModal();
+      toast.success("Access updated");
+    },
+    onError: () => toast.error("Failed to update access"),
   });
 
   const openCreate = () => {
@@ -97,6 +199,19 @@ export default function UsersPage() {
     setEditingUser(null);
   };
 
+  const openAccess = (user: UserListItem) => {
+    setAccessUser(user);
+    setSelectedCenterIds(new Set(user.center_ids || []));
+    setSelectedProgrammeIds(new Set(user.programme_ids || []));
+    setSelectedTemplateIds(new Set(user.session_template_ids || []));
+    setAccessModalOpen(true);
+  };
+
+  const closeAccessModal = () => {
+    setAccessModalOpen(false);
+    setAccessUser(null);
+  };
+
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
     createMutation.mutate(createForm);
@@ -109,6 +224,55 @@ export default function UsersPage() {
       userId: editingUser.id,
       roleId: selectedRoleId,
     });
+  };
+
+  const handleAccessSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!accessUser) return;
+    updateAccessMutation.mutate({
+      userId: accessUser.id,
+      data: {
+        center_ids: Array.from(selectedCenterIds),
+        programme_ids: Array.from(selectedProgrammeIds),
+        session_template_ids: Array.from(selectedTemplateIds),
+      },
+    });
+  };
+
+  const toggleId = (
+    set: Set<string>,
+    setter: React.Dispatch<React.SetStateAction<Set<string>>>,
+    id: string
+  ) => {
+    const next = new Set(set);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setter(next);
+  };
+
+  const toggleAll = (
+    items: { id: string }[],
+    set: Set<string>,
+    setter: React.Dispatch<React.SetStateAction<Set<string>>>
+  ) => {
+    const allSelected = items.every((i) => set.has(i.id));
+    if (allSelected) {
+      setter(new Set());
+    } else {
+      setter(new Set(items.map((i) => i.id)));
+    }
+  };
+
+  const getAccessSummary = (user: UserListItem) => {
+    const parts: string[] = [];
+    const c = user.center_ids?.length || 0;
+    const p = user.programme_ids?.length || 0;
+    const t = user.session_template_ids?.length || 0;
+    if (c === 0 && p === 0 && t === 0) return "Full access";
+    if (c > 0) parts.push(`${c} center${c > 1 ? "s" : ""}`);
+    if (p > 0) parts.push(`${p} prog${p > 1 ? "s" : ""}`);
+    if (t > 0) parts.push(`${t} tmpl${t > 1 ? "s" : ""}`);
+    return parts.join(", ");
   };
 
   return (
@@ -134,7 +298,8 @@ export default function UsersPage() {
               <TableHead>Name</TableHead>
               <TableHead>Mobile</TableHead>
               <TableHead>Role</TableHead>
-              <TableHead className="w-20">Actions</TableHead>
+              <TableHead>Access</TableHead>
+              <TableHead className="w-24">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -161,13 +326,28 @@ export default function UsersPage() {
                   )}
                 </TableCell>
                 <TableCell>
+                  <span className="text-xs text-gray-500">
+                    {getAccessSummary(user)}
+                  </span>
+                </TableCell>
+                <TableCell>
                   <Can permission="user:manage">
-                    <button
-                      onClick={() => openEdit(user)}
-                      className="text-gray-400 hover:text-purple-600"
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => openEdit(user)}
+                        className="text-gray-400 hover:text-purple-600"
+                        title="Change role"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => openAccess(user)}
+                        className="text-gray-400 hover:text-purple-600"
+                        title="Manage access"
+                      >
+                        <Shield className="h-4 w-4" />
+                      </button>
+                    </div>
                   </Can>
                 </TableCell>
               </TableRow>
@@ -311,6 +491,67 @@ export default function UsersPage() {
               <Button type="submit" disabled={!selectedRoleId}>
                 Save
               </Button>
+            </div>
+          </form>
+        )}
+      </Dialog>
+
+      {/* Manage Access Modal */}
+      <Dialog
+        open={accessModalOpen}
+        onClose={closeAccessModal}
+        title="Manage Access"
+      >
+        {accessUser && (
+          <form onSubmit={handleAccessSubmit} className="space-y-4">
+            <div className="bg-gray-50 rounded-lg p-3">
+              <p className="font-medium">
+                {accessUser.first_name} {accessUser.last_name}
+              </p>
+              <p className="text-sm text-gray-500">
+                {accessUser.role_name || "No role"}
+              </p>
+            </div>
+
+            <p className="text-xs text-gray-500">
+              Select which entities this user can access. Leave a section empty for unrestricted access to that entity type.
+            </p>
+
+            <AccessCheckboxSection
+              title="Centers"
+              items={centers}
+              selectedIds={selectedCenterIds}
+              onToggle={(id) => toggleId(selectedCenterIds, setSelectedCenterIds, id)}
+              onToggleAll={() => toggleAll(centers, selectedCenterIds, setSelectedCenterIds)}
+              getId={(i) => i.id}
+              getLabel={(i) => i.name}
+            />
+
+            <AccessCheckboxSection
+              title="Programmes"
+              items={programmes}
+              selectedIds={selectedProgrammeIds}
+              onToggle={(id) => toggleId(selectedProgrammeIds, setSelectedProgrammeIds, id)}
+              onToggleAll={() => toggleAll(programmes, selectedProgrammeIds, setSelectedProgrammeIds)}
+              getId={(i) => i.id}
+              getLabel={(i) => i.name}
+            />
+
+            <AccessCheckboxSection
+              title="Session Templates"
+              items={sessionTemplates}
+              selectedIds={selectedTemplateIds}
+              onToggle={(id) => toggleId(selectedTemplateIds, setSelectedTemplateIds, id)}
+              onToggleAll={() => toggleAll(sessionTemplates, selectedTemplateIds, setSelectedTemplateIds)}
+              getId={(i) => i.id}
+              getLabel={(i) => i.name}
+            />
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" onClick={closeAccessModal}>
+                Cancel
+              </Button>
+              <Button type="submit">Save Access</Button>
             </div>
           </form>
         )}

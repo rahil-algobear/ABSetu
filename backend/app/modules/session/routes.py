@@ -1,6 +1,7 @@
 """
 Session, SessionTemplate, Facilitator, Attendance routes
 """
+
 import uuid
 
 from fastapi import APIRouter, Depends
@@ -28,6 +29,7 @@ from app.modules.session.service import (
     SessionService,
     SessionTemplateService,
 )
+from app.modules.user.service import UserService
 
 router = APIRouter(tags=["sessions"])
 
@@ -42,12 +44,16 @@ def list_session_templates(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    access = UserService.get_access_ids(current_user)
+    accessible = access["session_template_ids"] if access["session_template_ids"] else None
     service = SessionTemplateService(db)
-    templates = service.list_by_org(current_user.organization_id)
+    templates = service.list_by_org(current_user.organization_id, accessible_ids=accessible)
     return [SessionTemplateResponse.dump_from_model(t) for t in templates]
 
 
-@template_router.get("/{template_id}", dependencies=[Depends(require_permissions("session_template:view"))])
+@template_router.get(
+    "/{template_id}", dependencies=[Depends(require_permissions("session_template:view"))]
+)
 def get_session_template(
     template_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
@@ -58,7 +64,9 @@ def get_session_template(
     return SessionTemplateResponse.dump_from_model(template)
 
 
-@template_router.post("/", dependencies=[Depends(require_permissions("session_template:manage"))], status_code=201)
+@template_router.post(
+    "/", dependencies=[Depends(require_permissions("session_template:manage"))], status_code=201
+)
 def create_session_template(
     data: SessionTemplateCreate,
     current_user: User = Depends(get_current_user),
@@ -72,7 +80,9 @@ def create_session_template(
     return SessionTemplateResponse.dump_from_model(template)
 
 
-@template_router.put("/{template_id}", dependencies=[Depends(require_permissions("session_template:manage"))])
+@template_router.put(
+    "/{template_id}", dependencies=[Depends(require_permissions("session_template:manage"))]
+)
 def update_session_template(
     template_id: uuid.UUID,
     data: SessionTemplateUpdate,
@@ -81,13 +91,16 @@ def update_session_template(
 ):
     service = SessionTemplateService(db)
     template = service.update(
-        template_id, current_user.organization_id,
+        template_id,
+        current_user.organization_id,
         data.model_dump(exclude_none=True),
     )
     return SessionTemplateResponse.dump_from_model(template)
 
 
-@template_router.delete("/{template_id}", dependencies=[Depends(require_permissions("session_template:manage"))])
+@template_router.delete(
+    "/{template_id}", dependencies=[Depends(require_permissions("session_template:manage"))]
+)
 def delete_session_template(
     template_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
@@ -113,7 +126,9 @@ def list_facilitators(
     return [FacilitatorResponse.dump_from_model(f) for f in facilitators]
 
 
-@facilitator_router.get("/{facilitator_id}", dependencies=[Depends(require_permissions("facilitator:view"))])
+@facilitator_router.get(
+    "/{facilitator_id}", dependencies=[Depends(require_permissions("facilitator:view"))]
+)
 def get_facilitator(
     facilitator_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
@@ -124,7 +139,9 @@ def get_facilitator(
     return FacilitatorResponse.dump_from_model(facilitator)
 
 
-@facilitator_router.post("/", dependencies=[Depends(require_permissions("facilitator:manage"))], status_code=201)
+@facilitator_router.post(
+    "/", dependencies=[Depends(require_permissions("facilitator:manage"))], status_code=201
+)
 def create_facilitator(
     data: FacilitatorCreate,
     current_user: User = Depends(get_current_user),
@@ -138,7 +155,9 @@ def create_facilitator(
     return FacilitatorResponse.dump_from_model(facilitator)
 
 
-@facilitator_router.put("/{facilitator_id}", dependencies=[Depends(require_permissions("facilitator:manage"))])
+@facilitator_router.put(
+    "/{facilitator_id}", dependencies=[Depends(require_permissions("facilitator:manage"))]
+)
 def update_facilitator(
     facilitator_id: uuid.UUID,
     data: FacilitatorUpdate,
@@ -147,13 +166,16 @@ def update_facilitator(
 ):
     service = FacilitatorService(db)
     facilitator = service.update(
-        facilitator_id, current_user.organization_id,
+        facilitator_id,
+        current_user.organization_id,
         data.model_dump(exclude_none=True),
     )
     return FacilitatorResponse.dump_from_model(facilitator)
 
 
-@facilitator_router.delete("/{facilitator_id}", dependencies=[Depends(require_permissions("facilitator:manage"))])
+@facilitator_router.delete(
+    "/{facilitator_id}", dependencies=[Depends(require_permissions("facilitator:manage"))]
+)
 def delete_facilitator(
     facilitator_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
@@ -174,8 +196,16 @@ def list_sessions(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    access = UserService.get_access_ids(current_user)
     service = SessionService(db)
-    sessions = service.list_by_org(current_user.organization_id)
+    sessions = service.list_by_org(
+        current_user.organization_id,
+        accessible_center_ids=access["center_ids"] if access["center_ids"] else None,
+        accessible_programme_ids=access["programme_ids"] if access["programme_ids"] else None,
+        accessible_template_ids=(
+            access["session_template_ids"] if access["session_template_ids"] else None
+        ),
+    )
     results = []
     for s in sessions:
         facilitators = [
@@ -245,7 +275,9 @@ def get_session(
     ).dump()
 
 
-@session_router.post("/", dependencies=[Depends(require_permissions("session:create"))], status_code=201)
+@session_router.post(
+    "/", dependencies=[Depends(require_permissions("session:create"))], status_code=201
+)
 def create_session(
     data: SessionCreate,
     current_user: User = Depends(get_current_user),
@@ -324,7 +356,9 @@ def update_session(
     ).dump()
 
 
-@session_router.delete("/{session_id}", dependencies=[Depends(require_permissions("session:create"))])
+@session_router.delete(
+    "/{session_id}", dependencies=[Depends(require_permissions("session:create"))]
+)
 def delete_session(
     session_id: uuid.UUID,
     db: Session = Depends(get_db),
@@ -337,7 +371,9 @@ def delete_session(
 # --- Attendance ---
 
 
-@session_router.get("/{session_id}/attendance", dependencies=[Depends(require_permissions("session:view"))])
+@session_router.get(
+    "/{session_id}/attendance", dependencies=[Depends(require_permissions("session:view"))]
+)
 def get_attendance(
     session_id: uuid.UUID,
     db: Session = Depends(get_db),
@@ -358,7 +394,11 @@ def get_attendance(
     return results
 
 
-@session_router.post("/{session_id}/attendance", dependencies=[Depends(require_permissions("session:create"))], status_code=201)
+@session_router.post(
+    "/{session_id}/attendance",
+    dependencies=[Depends(require_permissions("session:create"))],
+    status_code=201,
+)
 def mark_attendance(
     session_id: uuid.UUID,
     data: AttendanceBulkCreate,

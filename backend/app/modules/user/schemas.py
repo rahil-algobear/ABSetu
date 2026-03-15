@@ -1,6 +1,7 @@
 """
 User response schemas
 """
+
 from pydantic import BaseModel
 
 from app.common.schemas.base_response import BaseResponseSchema
@@ -30,6 +31,9 @@ class UserListResponse(BaseResponseSchema):
     is_verified: bool
     role_id: str | None = None
     role_name: str | None = None
+    center_ids: list[str] = []
+    programme_ids: list[str] = []
+    session_template_ids: list[str] = []
 
 
 class UserRoleUpdate(BaseModel):
@@ -46,3 +50,19 @@ class UserCreate(BaseModel):
     country_code: str
     mobile_number: str
     role_id: str
+
+
+class UserAccessUpdate(BaseModel):
+    """Schema for updating a user's access tags"""
+
+    center_ids: list[str] = []
+    programme_ids: list[str] = []
+    session_template_ids: list[str] = []
+
+
+class UserAccessResponse(BaseModel):
+    """Response schema for user access tags"""
+
+    center_ids: list[str] = []
+    programme_ids: list[str] = []
+    session_template_ids: list[str] = []

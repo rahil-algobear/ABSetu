@@ -1,6 +1,7 @@
 """
 User FastAPI routes
 """
+
 import uuid
 
 from fastapi import APIRouter, Depends
@@ -10,6 +11,8 @@ from app.core.database import get_db
 from app.common.dependencies import get_current_user, require_permissions
 from app.modules.auth.model import User
 from app.modules.user.schemas import (
+    UserAccessResponse,
+    UserAccessUpdate,
     UserCreate,
     UserListResponse,
     UserProfileResponse,
@@ -29,9 +32,7 @@ def get_profile(current_user: User = Depends(get_current_user)):
     if current_user.role:
         role_name = current_user.role.name
         permissions = [
-            rp.permission.key
-            for rp in current_user.role.role_permissions
-            if rp.permission
+            rp.permission.key for rp in current_user.role.role_permissions if rp.permission
         ]
 
     return UserProfileResponse(
@@ -74,6 +75,11 @@ def list_users(
                 is_verified=u.is_verified,
                 role_id=str(u.role_id) if u.role_id else None,
                 role_name=role_name,
+                center_ids=[str(a.center_id) for a in u.center_access],
+                programme_ids=[str(a.programme_id) for a in u.programme_access],
+                session_template_ids=[
+                    str(a.session_template_id) for a in u.session_template_access
+                ],
             ).dump()
         )
     return results
@@ -142,3 +148,40 @@ def update_user_role(
         role_id=str(user.role_id) if user.role_id else None,
         role_name=role_name,
     ).dump()
+
+
+@router.get(
+    "/{user_id}/access",
+    dependencies=[Depends(require_permissions("user:manage"))],
+)
+def get_user_access(
+    user_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get a user's access tags."""
+    service = UserService(db)
+    access = service.get_user_access(user_id, current_user.organization_id)
+    return UserAccessResponse(**access).model_dump()
+
+
+@router.put(
+    "/{user_id}/access",
+    dependencies=[Depends(require_permissions("user:manage"))],
+)
+def update_user_access(
+    user_id: uuid.UUID,
+    data: UserAccessUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Update a user's access tags (bulk replace)."""
+    service = UserService(db)
+    access = service.update_user_access(
+        user_id,
+        current_user.organization_id,
+        center_ids=[uuid.UUID(cid) for cid in data.center_ids],
+        programme_ids=[uuid.UUID(pid) for pid in data.programme_ids],
+        session_template_ids=[uuid.UUID(stid) for stid in data.session_template_ids],
+    )
+    return UserAccessResponse(**access).model_dump()

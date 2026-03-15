@@ -179,7 +179,16 @@ export interface UserListItem {
   is_verified: boolean;
   role_id: string | null;
   role_name: string | null;
+  center_ids: string[];
+  programme_ids: string[];
+  session_template_ids: string[];
   updated_at: number | null;
+}
+
+export interface UserAccess {
+  center_ids: string[];
+  programme_ids: string[];
+  session_template_ids: string[];
 }
 
 // --- Beneficiaries ---

@@ -1,6 +1,7 @@
 """
 Beneficiary and Enrollment routes
 """
+
 import uuid
 
 from fastapi import APIRouter, Depends
@@ -18,6 +19,7 @@ from app.modules.beneficiary.schemas import (
     EnrollmentUpdate,
 )
 from app.modules.beneficiary.service import BeneficiaryService, EnrollmentService
+from app.modules.user.service import UserService
 
 router = APIRouter(tags=["beneficiaries"])
 
@@ -33,12 +35,19 @@ def list_beneficiaries(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    access = UserService.get_access_ids(current_user)
     service = BeneficiaryService(db)
-    beneficiaries = service.list_by_org(current_user.organization_id)
+    beneficiaries = service.list_by_org(
+        current_user.organization_id,
+        accessible_center_ids=access["center_ids"] if access["center_ids"] else None,
+        accessible_programme_ids=access["programme_ids"] if access["programme_ids"] else None,
+    )
     return [BeneficiaryResponse.dump_from_model(b) for b in beneficiaries]
 
 
-@beneficiary_router.get("/{beneficiary_id}", dependencies=[Depends(require_permissions("beneficiary:view"))])
+@beneficiary_router.get(
+    "/{beneficiary_id}", dependencies=[Depends(require_permissions("beneficiary:view"))]
+)
 def get_beneficiary(
     beneficiary_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
@@ -49,7 +58,9 @@ def get_beneficiary(
     return BeneficiaryResponse.dump_from_model(beneficiary)
 
 
-@beneficiary_router.post("/", dependencies=[Depends(require_permissions("beneficiary:create"))], status_code=201)
+@beneficiary_router.post(
+    "/", dependencies=[Depends(require_permissions("beneficiary:create"))], status_code=201
+)
 def create_beneficiary(
     data: BeneficiaryCreate,
     current_user: User = Depends(get_current_user),
@@ -63,7 +74,9 @@ def create_beneficiary(
     return BeneficiaryResponse.dump_from_model(beneficiary)
 
 
-@beneficiary_router.put("/{beneficiary_id}", dependencies=[Depends(require_permissions("beneficiary:edit"))])
+@beneficiary_router.put(
+    "/{beneficiary_id}", dependencies=[Depends(require_permissions("beneficiary:edit"))]
+)
 def update_beneficiary(
     beneficiary_id: uuid.UUID,
     data: BeneficiaryUpdate,
@@ -72,7 +85,8 @@ def update_beneficiary(
 ):
     service = BeneficiaryService(db)
     beneficiary = service.update(
-        beneficiary_id, current_user.organization_id,
+        beneficiary_id,
+        current_user.organization_id,
         data.model_dump(exclude_none=True),
     )
     return BeneficiaryResponse.dump_from_model(beneficiary)
@@ -81,7 +95,9 @@ def update_beneficiary(
 # --- Enrollments ---
 
 
-@enrollment_router.get("/beneficiary/{beneficiary_id}", dependencies=[Depends(require_permissions("enrollment:view"))])
+@enrollment_router.get(
+    "/beneficiary/{beneficiary_id}", dependencies=[Depends(require_permissions("enrollment:view"))]
+)
 def list_enrollments_by_beneficiary(
     beneficiary_id: uuid.UUID,
     db: Session = Depends(get_db),
@@ -114,7 +130,9 @@ def list_enrollments_by_beneficiary(
     return results
 
 
-@enrollment_router.post("/", dependencies=[Depends(require_permissions("enrollment:manage"))], status_code=201)
+@enrollment_router.post(
+    "/", dependencies=[Depends(require_permissions("enrollment:manage"))], status_code=201
+)
 def create_enrollment(
     data: EnrollmentCreate,
     current_user: User = Depends(get_current_user),
@@ -136,7 +154,9 @@ def create_enrollment(
     ).dump()
 
 
-@enrollment_router.put("/{enrollment_id}", dependencies=[Depends(require_permissions("enrollment:manage"))])
+@enrollment_router.put(
+    "/{enrollment_id}", dependencies=[Depends(require_permissions("enrollment:manage"))]
+)
 def update_enrollment(
     enrollment_id: uuid.UUID,
     data: EnrollmentUpdate,

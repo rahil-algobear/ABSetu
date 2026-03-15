@@ -1,6 +1,7 @@
 """
 Session, SessionTemplate, Facilitator, Attendance services
 """
+
 import uuid
 
 from sqlalchemy.orm import Session, joinedload
@@ -20,20 +21,17 @@ class SessionTemplateService:
     def __init__(self, db: Session):
         self.db = db
 
-    def list_by_org(self, org_id: uuid.UUID) -> list[SessionTemplate]:
-        return (
-            self.db.query(SessionTemplate)
-            .filter_by(organization_id=org_id)
-            .all()
-        )
+    def list_by_org(
+        self, org_id: uuid.UUID, accessible_ids: list[uuid.UUID] | None = None
+    ) -> list[SessionTemplate]:
+        query = self.db.query(SessionTemplate).filter_by(organization_id=org_id)
+        if accessible_ids is not None:
+            query = query.filter(SessionTemplate.id.in_(accessible_ids))
+        return query.all()
 
-    def get_by_id(
-        self, template_id: uuid.UUID, org_id: uuid.UUID
-    ) -> SessionTemplate:
+    def get_by_id(self, template_id: uuid.UUID, org_id: uuid.UUID) -> SessionTemplate:
         template = (
-            self.db.query(SessionTemplate)
-            .filter_by(id=template_id, organization_id=org_id)
-            .first()
+            self.db.query(SessionTemplate).filter_by(id=template_id, organization_id=org_id).first()
         )
         if not template:
             raise NotFoundError("Session template not found")
@@ -46,9 +44,7 @@ class SessionTemplateService:
         self.db.refresh(template)
         return template
 
-    def update(
-        self, template_id: uuid.UUID, org_id: uuid.UUID, data: dict
-    ) -> SessionTemplate:
+    def update(self, template_id: uuid.UUID, org_id: uuid.UUID, data: dict) -> SessionTemplate:
         template = self.get_by_id(template_id, org_id)
         for key, value in data.items():
             if value is not None:
@@ -68,19 +64,11 @@ class FacilitatorService:
         self.db = db
 
     def list_by_org(self, org_id: uuid.UUID) -> list[Facilitator]:
-        return (
-            self.db.query(Facilitator)
-            .filter_by(organization_id=org_id)
-            .all()
-        )
+        return self.db.query(Facilitator).filter_by(organization_id=org_id).all()
 
-    def get_by_id(
-        self, facilitator_id: uuid.UUID, org_id: uuid.UUID
-    ) -> Facilitator:
+    def get_by_id(self, facilitator_id: uuid.UUID, org_id: uuid.UUID) -> Facilitator:
         facilitator = (
-            self.db.query(Facilitator)
-            .filter_by(id=facilitator_id, organization_id=org_id)
-            .first()
+            self.db.query(Facilitator).filter_by(id=facilitator_id, organization_id=org_id).first()
         )
         if not facilitator:
             raise NotFoundError("Facilitator not found")
@@ -93,9 +81,7 @@ class FacilitatorService:
         self.db.refresh(facilitator)
         return facilitator
 
-    def update(
-        self, facilitator_id: uuid.UUID, org_id: uuid.UUID, data: dict
-    ) -> Facilitator:
+    def update(self, facilitator_id: uuid.UUID, org_id: uuid.UUID, data: dict) -> Facilitator:
         facilitator = self.get_by_id(facilitator_id, org_id)
         for key, value in data.items():
             if value is not None:
@@ -114,20 +100,30 @@ class SessionService:
     def __init__(self, db: Session):
         self.db = db
 
-    def list_by_org(self, org_id: uuid.UUID) -> list[SessionModel]:
-        return (
+    def list_by_org(
+        self,
+        org_id: uuid.UUID,
+        accessible_center_ids: list[uuid.UUID] | None = None,
+        accessible_programme_ids: list[uuid.UUID] | None = None,
+        accessible_template_ids: list[uuid.UUID] | None = None,
+    ) -> list[SessionModel]:
+        query = (
             self.db.query(SessionModel)
             .join(ProgrammeCenter)
             .join(Programme)
             .filter(Programme.organization_id == org_id)
-            .options(
+        )
+        if accessible_center_ids is not None:
+            query = query.filter(ProgrammeCenter.center_id.in_(accessible_center_ids))
+        if accessible_programme_ids is not None:
+            query = query.filter(ProgrammeCenter.programme_id.in_(accessible_programme_ids))
+        if accessible_template_ids is not None:
+            query = query.filter(SessionModel.session_template_id.in_(accessible_template_ids))
+        return (
+            query.options(
                 joinedload(SessionModel.session_template),
-                joinedload(SessionModel.programme_center).joinedload(
-                    ProgrammeCenter.programme
-                ),
-                joinedload(SessionModel.programme_center).joinedload(
-                    ProgrammeCenter.center
-                ),
+                joinedload(SessionModel.programme_center).joinedload(ProgrammeCenter.programme),
+                joinedload(SessionModel.programme_center).joinedload(ProgrammeCenter.center),
                 joinedload(SessionModel.session_facilitators).joinedload(
                     SessionFacilitator.facilitator
                 ),
@@ -141,12 +137,8 @@ class SessionService:
             self.db.query(SessionModel)
             .options(
                 joinedload(SessionModel.session_template),
-                joinedload(SessionModel.programme_center).joinedload(
-                    ProgrammeCenter.programme
-                ),
-                joinedload(SessionModel.programme_center).joinedload(
-                    ProgrammeCenter.center
-                ),
+                joinedload(SessionModel.programme_center).joinedload(ProgrammeCenter.programme),
+                joinedload(SessionModel.programme_center).joinedload(ProgrammeCenter.center),
                 joinedload(SessionModel.session_facilitators).joinedload(
                     SessionFacilitator.facilitator
                 ),
@@ -203,9 +195,7 @@ class SessionService:
 
         # Add facilitators
         for fid in facilitator_ids:
-            sf = SessionFacilitator(
-                session_id=session.id, facilitator_id=uuid.UUID(fid)
-            )
+            sf = SessionFacilitator(session_id=session.id, facilitator_id=uuid.UUID(fid))
             self.db.add(sf)
 
         self.db.commit()
@@ -232,19 +222,11 @@ class AttendanceService:
         self.db = db
 
     def list_by_session(self, session_id: uuid.UUID) -> list[Attendance]:
-        return (
-            self.db.query(Attendance)
-            .filter_by(session_id=session_id)
-            .all()
-        )
+        return self.db.query(Attendance).filter_by(session_id=session_id).all()
 
-    def bulk_create(
-        self, session_id: uuid.UUID, records: list[dict]
-    ) -> list[Attendance]:
+    def bulk_create(self, session_id: uuid.UUID, records: list[dict]) -> list[Attendance]:
         # Verify session exists
-        session = (
-            self.db.query(SessionModel).filter_by(id=session_id).first()
-        )
+        session = self.db.query(SessionModel).filter_by(id=session_id).first()
         if not session:
             raise NotFoundError("Session not found")
 

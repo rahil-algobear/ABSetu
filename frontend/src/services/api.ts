@@ -17,6 +17,7 @@ import {
   Role,
   Session,
   SessionTemplate,
+  UserAccess,
   UserListItem,
   UserLoginData,
   UserProfileResponse,
@@ -330,6 +331,14 @@ export const userApi = {
   },
   updateRole: async (userId: string, roleId: string): Promise<UserListItem> => {
     const response = await authAxios.put<UserListItem>(`/user/${userId}/role`, { role_id: roleId });
+    return response.data;
+  },
+  getAccess: async (userId: string): Promise<UserAccess> => {
+    const response = await authAxios.get<UserAccess>(`/user/${userId}/access`);
+    return response.data;
+  },
+  updateAccess: async (userId: string, data: UserAccess): Promise<UserAccess> => {
+    const response = await authAxios.put<UserAccess>(`/user/${userId}/access`, data);
     return response.data;
   },
 };

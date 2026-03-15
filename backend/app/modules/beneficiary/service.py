@@ -1,10 +1,13 @@
 """
 Beneficiary and Enrollment services
 """
+
 import uuid
 from datetime import datetime
 
 from sqlalchemy.orm import Session
+
+from sqlalchemy import exists
 
 from app.common.exceptions import NotFoundError, ValidationError
 from app.modules.beneficiary.model import Beneficiary, Enrollment
@@ -22,11 +25,7 @@ class BeneficiaryService:
         year_4 = datetime.now().strftime("%Y")
 
         # Count existing beneficiaries for serial
-        count = (
-            self.db.query(Beneficiary)
-            .filter_by(organization_id=org.id)
-            .count()
-        )
+        count = self.db.query(Beneficiary).filter_by(organization_id=org.id).count()
         serial = str(count + 1).zfill(3)
 
         return (
@@ -36,21 +35,33 @@ class BeneficiaryService:
             .replace("{SERIAL}", serial)
         )
 
-    def list_by_org(self, org_id: uuid.UUID) -> list[Beneficiary]:
-        return (
-            self.db.query(Beneficiary)
-            .filter_by(organization_id=org_id)
-            .order_by(Beneficiary.created_at.desc())
-            .all()
-        )
+    def list_by_org(
+        self,
+        org_id: uuid.UUID,
+        accessible_center_ids: list[uuid.UUID] | None = None,
+        accessible_programme_ids: list[uuid.UUID] | None = None,
+    ) -> list[Beneficiary]:
+        query = self.db.query(Beneficiary).filter_by(organization_id=org_id)
+        # If user has center or programme access restrictions, filter beneficiaries
+        # to those enrolled in accessible programme-centers
+        if accessible_center_ids is not None or accessible_programme_ids is not None:
+            pc_filter = self.db.query(ProgrammeCenter.id)
+            if accessible_center_ids is not None:
+                pc_filter = pc_filter.filter(ProgrammeCenter.center_id.in_(accessible_center_ids))
+            if accessible_programme_ids is not None:
+                pc_filter = pc_filter.filter(
+                    ProgrammeCenter.programme_id.in_(accessible_programme_ids)
+                )
+            query = query.filter(
+                exists()
+                .where(Enrollment.beneficiary_id == Beneficiary.id)
+                .where(Enrollment.programme_center_id.in_(pc_filter.subquery()))
+            )
+        return query.order_by(Beneficiary.created_at.desc()).all()
 
-    def get_by_id(
-        self, beneficiary_id: uuid.UUID, org_id: uuid.UUID
-    ) -> Beneficiary:
+    def get_by_id(self, beneficiary_id: uuid.UUID, org_id: uuid.UUID) -> Beneficiary:
         beneficiary = (
-            self.db.query(Beneficiary)
-            .filter_by(id=beneficiary_id, organization_id=org_id)
-            .first()
+            self.db.query(Beneficiary).filter_by(id=beneficiary_id, organization_id=org_id).first()
         )
         if not beneficiary:
             raise NotFoundError("Beneficiary not found")
@@ -73,9 +84,7 @@ class BeneficiaryService:
         self.db.refresh(beneficiary)
         return beneficiary
 
-    def update(
-        self, beneficiary_id: uuid.UUID, org_id: uuid.UUID, data: dict
-    ) -> Beneficiary:
+    def update(self, beneficiary_id: uuid.UUID, org_id: uuid.UUID, data: dict) -> Beneficiary:
         beneficiary = self.get_by_id(beneficiary_id, org_id)
         for key, value in data.items():
             if value is not None:
@@ -89,9 +98,7 @@ class EnrollmentService:
     def __init__(self, db: Session):
         self.db = db
 
-    def list_by_beneficiary(
-        self, beneficiary_id: uuid.UUID
-    ) -> list[Enrollment]:
+    def list_by_beneficiary(self, beneficiary_id: uuid.UUID) -> list[Enrollment]:
         return (
             self.db.query(Enrollment)
             .filter_by(beneficiary_id=beneficiary_id)
@@ -99,9 +106,7 @@ class EnrollmentService:
             .all()
         )
 
-    def list_by_programme_center(
-        self, programme_center_id: uuid.UUID
-    ) -> list[Enrollment]:
+    def list_by_programme_center(self, programme_center_id: uuid.UUID) -> list[Enrollment]:
         return (
             self.db.query(Enrollment)
             .filter_by(programme_center_id=programme_center_id)
@@ -147,12 +152,8 @@ class EnrollmentService:
         self.db.refresh(enrollment)
         return enrollment
 
-    def update(
-        self, enrollment_id: uuid.UUID, data: dict
-    ) -> Enrollment:
-        enrollment = (
-            self.db.query(Enrollment).filter_by(id=enrollment_id).first()
-        )
+    def update(self, enrollment_id: uuid.UUID, data: dict) -> Enrollment:
+        enrollment = self.db.query(Enrollment).filter_by(id=enrollment_id).first()
         if not enrollment:
             raise NotFoundError("Enrollment not found")
 

@@ -1,6 +1,7 @@
 """
 Organization, Center, Programme routes
 """
+
 import uuid
 
 from fastapi import APIRouter, Depends
@@ -28,6 +29,7 @@ from app.modules.organization.service import (
     ProgrammeCenterService,
     ProgrammeService,
 )
+from app.modules.user.service import UserService
 
 router = APIRouter(prefix="/organization", tags=["organization"])
 
@@ -69,9 +71,11 @@ def list_centers(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """List all centers for the user's organization."""
+    """List all centers for the user's organization, filtered by access."""
+    access = UserService.get_access_ids(current_user)
+    accessible = access["center_ids"] if access["center_ids"] else None
     service = CenterService(db)
-    centers = service.list_by_org(current_user.organization_id)
+    centers = service.list_by_org(current_user.organization_id, accessible_ids=accessible)
     return [CenterResponse.dump_from_model(c) for c in centers]
 
 
@@ -87,7 +91,9 @@ def get_center(
     return CenterResponse.dump_from_model(center)
 
 
-@router.post("/centers", dependencies=[Depends(require_permissions("center:manage"))], status_code=201)
+@router.post(
+    "/centers", dependencies=[Depends(require_permissions("center:manage"))], status_code=201
+)
 def create_center(
     data: CenterCreate,
     current_user: User = Depends(get_current_user),
@@ -112,7 +118,8 @@ def update_center(
     """Update a center."""
     service = CenterService(db)
     center = service.update(
-        center_id, current_user.organization_id,
+        center_id,
+        current_user.organization_id,
         data.model_dump(exclude_none=True),
     )
     return CenterResponse.dump_from_model(center)
@@ -138,13 +145,17 @@ def list_programmes(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """List all programmes for the user's organization."""
+    """List all programmes for the user's organization, filtered by access."""
+    access = UserService.get_access_ids(current_user)
+    accessible = access["programme_ids"] if access["programme_ids"] else None
     service = ProgrammeService(db)
-    programmes = service.list_by_org(current_user.organization_id)
+    programmes = service.list_by_org(current_user.organization_id, accessible_ids=accessible)
     return [ProgrammeResponse.dump_from_model(p) for p in programmes]
 
 
-@router.get("/programmes/{programme_id}", dependencies=[Depends(require_permissions("programme:view"))])
+@router.get(
+    "/programmes/{programme_id}", dependencies=[Depends(require_permissions("programme:view"))]
+)
 def get_programme(
     programme_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
@@ -156,7 +167,9 @@ def get_programme(
     return ProgrammeResponse.dump_from_model(programme)
 
 
-@router.post("/programmes", dependencies=[Depends(require_permissions("programme:manage"))], status_code=201)
+@router.post(
+    "/programmes", dependencies=[Depends(require_permissions("programme:manage"))], status_code=201
+)
 def create_programme(
     data: ProgrammeCreate,
     current_user: User = Depends(get_current_user),
@@ -171,7 +184,9 @@ def create_programme(
     return ProgrammeResponse.dump_from_model(programme)
 
 
-@router.put("/programmes/{programme_id}", dependencies=[Depends(require_permissions("programme:manage"))])
+@router.put(
+    "/programmes/{programme_id}", dependencies=[Depends(require_permissions("programme:manage"))]
+)
 def update_programme(
     programme_id: uuid.UUID,
     data: ProgrammeUpdate,
@@ -181,13 +196,16 @@ def update_programme(
     """Update a programme."""
     service = ProgrammeService(db)
     programme = service.update(
-        programme_id, current_user.organization_id,
+        programme_id,
+        current_user.organization_id,
         data.model_dump(exclude_none=True),
     )
     return ProgrammeResponse.dump_from_model(programme)
 
 
-@router.delete("/programmes/{programme_id}", dependencies=[Depends(require_permissions("programme:manage"))])
+@router.delete(
+    "/programmes/{programme_id}", dependencies=[Depends(require_permissions("programme:manage"))]
+)
 def delete_programme(
     programme_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
@@ -207,9 +225,16 @@ def list_programme_centers(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """List all programme-center assignments for the org."""
+    """List all programme-center assignments for the org, filtered by access."""
+    access = UserService.get_access_ids(current_user)
+    acc_centers = access["center_ids"] if access["center_ids"] else None
+    acc_programmes = access["programme_ids"] if access["programme_ids"] else None
     service = ProgrammeCenterService(db)
-    pcs = service.list_by_org(current_user.organization_id)
+    pcs = service.list_by_org(
+        current_user.organization_id,
+        accessible_center_ids=acc_centers,
+        accessible_programme_ids=acc_programmes,
+    )
     results = []
     for pc in pcs:
         resp = ProgrammeCenterResponse(
@@ -224,7 +249,11 @@ def list_programme_centers(
     return results
 
 
-@router.post("/programme-centers", dependencies=[Depends(require_permissions("programme:manage"))], status_code=201)
+@router.post(
+    "/programme-centers",
+    dependencies=[Depends(require_permissions("programme:manage"))],
+    status_code=201,
+)
 def create_programme_center(
     data: ProgrammeCenterCreate,
     current_user: User = Depends(get_current_user),
@@ -245,7 +274,9 @@ def create_programme_center(
     ).dump()
 
 
-@router.delete("/programme-centers/{pc_id}", dependencies=[Depends(require_permissions("programme:manage"))])
+@router.delete(
+    "/programme-centers/{pc_id}", dependencies=[Depends(require_permissions("programme:manage"))]
+)
 def delete_programme_center(
     pc_id: uuid.UUID,
     db: Session = Depends(get_db),
