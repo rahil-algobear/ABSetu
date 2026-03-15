@@ -2,10 +2,11 @@
 Base Response Schemas
 Common response serialization schemas for all modules
 """
+import uuid as _uuid
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 
 class BaseResponseSchema(BaseModel):
@@ -13,6 +14,7 @@ class BaseResponseSchema(BaseModel):
     Base response schema.
     - Excludes created_at by default
     - Converts datetime to Unix timestamp
+    - Automatically converts UUID values to strings
     - Supports dump() with include/exclude patterns
 
     Child classes can override `_exclude` or `_include` class variables.
@@ -24,6 +26,29 @@ class BaseResponseSchema(BaseModel):
     _exclude: dict[str, Any] | None = None
     _include: set[str] | None = None
 
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_uuids_and_timestamps(cls, data: Any) -> Any:
+        """Convert UUID values to str and datetime to timestamps before field validation."""
+        if isinstance(data, dict):
+            return {
+                k: str(v) if isinstance(v, _uuid.UUID) else v
+                for k, v in data.items()
+            }
+        # ORM model with from_attributes — read declared fields and coerce
+        if hasattr(data, "__dict__"):
+            out: dict[str, Any] = {}
+            for name in cls.model_fields:
+                val = getattr(data, name, None)
+                if isinstance(val, _uuid.UUID):
+                    out[name] = str(val)
+                elif isinstance(val, datetime):
+                    out[name] = val.timestamp()
+                else:
+                    out[name] = val
+            return out
+        return data
+
     @classmethod
     def convert_datetime_to_timestamp(cls, v):
         """Convert datetime to timestamp, handling None."""
@@ -31,14 +56,6 @@ class BaseResponseSchema(BaseModel):
             return None
         if isinstance(v, datetime):
             return v.timestamp()
-        return v
-
-    @field_validator("id", mode="before")
-    @classmethod
-    def convert_id_to_str(cls, v):
-        """Convert UUID (or any non-str) to string for serialization."""
-        if v is not None:
-            return str(v)
         return v
 
     @field_validator("updated_at", mode="before")
