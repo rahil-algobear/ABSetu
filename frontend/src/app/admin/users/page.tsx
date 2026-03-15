@@ -104,6 +104,9 @@ export default function UsersPage() {
     mobile_number: "",
     role_id: "",
   });
+  const [createCenterIds, setCreateCenterIds] = useState<Set<string>>(new Set());
+  const [createProgrammeIds, setCreateProgrammeIds] = useState<Set<string>>(new Set());
+  const [createTemplateIds, setCreateTemplateIds] = useState<Set<string>>(new Set());
 
   // Access modal state
   const [accessUser, setAccessUser] = useState<UserListItem | null>(null);
@@ -137,7 +140,18 @@ export default function UsersPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: userApi.create,
+    mutationFn: async (data: typeof createForm) => {
+      const user = await userApi.create(data);
+      const hasAccess = createCenterIds.size > 0 || createProgrammeIds.size > 0 || createTemplateIds.size > 0;
+      if (hasAccess) {
+        await userApi.updateAccess(user.id, {
+          center_ids: Array.from(createCenterIds),
+          programme_ids: Array.from(createProgrammeIds),
+          session_template_ids: Array.from(createTemplateIds),
+        });
+      }
+      return user;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users"] });
       queryClient.invalidateQueries({ queryKey: ["roles"] });
@@ -199,6 +213,9 @@ export default function UsersPage() {
       mobile_number: "",
       role_id: defaultRole?.id || "",
     });
+    setCreateCenterIds(new Set());
+    setCreateProgrammeIds(new Set());
+    setCreateTemplateIds(new Set());
     setCreateModalOpen(true);
   };
 
@@ -500,6 +517,40 @@ export default function UsersPage() {
               ))}
             </select>
           </div>
+
+          <p className="text-xs text-gray-500 pt-1">
+            Restrict access to specific entities. Leave empty for full access.
+          </p>
+
+          <AccessCheckboxSection
+            title="Centers"
+            items={centers}
+            selectedIds={createCenterIds}
+            onToggle={(id) => toggleId(createCenterIds, setCreateCenterIds, id)}
+            onToggleAll={() => toggleAll(centers, createCenterIds, setCreateCenterIds)}
+            getId={(i) => i.id}
+            getLabel={(i) => i.name}
+          />
+
+          <AccessCheckboxSection
+            title="Programmes"
+            items={programmes}
+            selectedIds={createProgrammeIds}
+            onToggle={(id) => toggleId(createProgrammeIds, setCreateProgrammeIds, id)}
+            onToggleAll={() => toggleAll(programmes, createProgrammeIds, setCreateProgrammeIds)}
+            getId={(i) => i.id}
+            getLabel={(i) => i.name}
+          />
+
+          <AccessCheckboxSection
+            title="Session Templates"
+            items={sessionTemplates}
+            selectedIds={createTemplateIds}
+            onToggle={(id) => toggleId(createTemplateIds, setCreateTemplateIds, id)}
+            onToggleAll={() => toggleAll(sessionTemplates, createTemplateIds, setCreateTemplateIds)}
+            getId={(i) => i.id}
+            getLabel={(i) => i.name}
+          />
 
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={closeCreateModal}>
