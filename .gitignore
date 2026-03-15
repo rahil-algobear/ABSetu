@@ -19,6 +19,9 @@ node_modules/
 dist/
 build/
 
+# Claude Code
+.claude/
+
 # VSCode
 # .vscode/
 
