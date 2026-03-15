@@ -4,6 +4,7 @@ import "../styles/globals.css";
 import { usePathname } from 'next/navigation';
 import { useAuth } from '../services/auth';
 import Image from "next/image";
+import { LayoutDashboard, CalendarDays, Mail, Phone } from "lucide-react";
 import Navigation from "./Navigation";
 
 export default function MainLayout({
@@ -39,13 +40,13 @@ export default function MainLayout({
             <div className="flex flex-col sm:flex-row gap-8 sm:gap-16 text-sm">
               <div className="flex flex-col items-center sm:items-start gap-2">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Product</p>
-                <a href="/dashboard" className="text-gray-400 hover:text-gray-600 transition-colors">Dashboard</a>
-                <a href="/sessions" className="text-gray-400 hover:text-gray-600 transition-colors">Sessions</a>
+                <a href="/dashboard" className="flex items-center gap-1.5 text-gray-400 hover:text-gray-600 transition-colors"><LayoutDashboard size={14} />Dashboard</a>
+                <a href="/sessions" className="flex items-center gap-1.5 text-gray-400 hover:text-gray-600 transition-colors"><CalendarDays size={14} />Sessions</a>
               </div>
               <div className="flex flex-col items-center sm:items-start gap-2">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Contact</p>
-                <a href="mailto:rahil@algobear.in" className="text-gray-400 hover:text-gray-600 transition-colors">rahil@algobear.in</a>
-                <a href="tel:+919322006489" className="text-gray-400 hover:text-gray-600 transition-colors">+91-9322006489</a>
+                <a href="mailto:rahil@algobear.in" className="flex items-center gap-1.5 text-gray-400 hover:text-gray-600 transition-colors"><Mail size={14} />rahil@algobear.in</a>
+                <a href="tel:+919322006489" className="flex items-center gap-1.5 text-gray-400 hover:text-gray-600 transition-colors"><Phone size={14} />+91-9322006489</a>
               </div>
             </div>
           </div>
