@@ -323,12 +323,12 @@ export default function UsersPage() {
                   <div className="flex flex-wrap gap-1">
                     {user.center_ids?.length ? (
                       user.center_ids.map((id) => (
-                        <span key={id} className="inline-block text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">
+                        <span key={id} className="inline-block text-sm bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">
                           {centerMap.get(id) || "Unknown"}
                         </span>
                       ))
                     ) : (
-                      <span className="text-xs text-gray-400">All</span>
+                      <span className="text-sm text-gray-400">All</span>
                     )}
                   </div>
                 </TableCell>
@@ -336,12 +336,12 @@ export default function UsersPage() {
                   <div className="flex flex-wrap gap-1">
                     {user.programme_ids?.length ? (
                       user.programme_ids.map((id) => (
-                        <span key={id} className="inline-block text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded-full">
+                        <span key={id} className="inline-block text-sm bg-green-50 text-green-700 px-2 py-0.5 rounded-full">
                           {programmeMap.get(id) || "Unknown"}
                         </span>
                       ))
                     ) : (
-                      <span className="text-xs text-gray-400">All</span>
+                      <span className="text-sm text-gray-400">All</span>
                     )}
                   </div>
                 </TableCell>
@@ -349,12 +349,12 @@ export default function UsersPage() {
                   <div className="flex flex-wrap gap-1">
                     {user.session_template_ids?.length ? (
                       user.session_template_ids.map((id) => (
-                        <span key={id} className="inline-block text-xs bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full">
+                        <span key={id} className="inline-block text-sm bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full">
                           {templateMap.get(id) || "Unknown"}
                         </span>
                       ))
                     ) : (
-                      <span className="text-xs text-gray-400">All</span>
+                      <span className="text-sm text-gray-400">All</span>
                     )}
                   </div>
                 </TableCell>
