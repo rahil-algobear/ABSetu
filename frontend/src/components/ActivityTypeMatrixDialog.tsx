@@ -85,7 +85,7 @@ export function ActivityTypeMatrixDialog({ open, onClose }: ActivityTypeMatrixDi
 
   const { data: activityTypes = [] } = useQuery<ActivityType[]>({
     queryKey: ["activity-types"],
-    queryFn: activityTypeApi.list,
+    queryFn: () => activityTypeApi.list(),
     enabled: open,
   });
 

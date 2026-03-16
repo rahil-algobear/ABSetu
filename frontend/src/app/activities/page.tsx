@@ -63,7 +63,7 @@ export default function ActivitiesPage() {
 
   const { data: activityTypes = [] } = useQuery({
     queryKey: ["activity-types"],
-    queryFn: activityTypeApi.list,
+    queryFn: () => activityTypeApi.list(),
   });
 
   const { data: dimensions = [] } = useQuery<Dimension[]>({

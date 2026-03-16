@@ -34,7 +34,7 @@ export default function ActivityTypesPage() {
 
   const { data: types = [], isLoading } = useQuery({
     queryKey: ["activity-types"],
-    queryFn: activityTypeApi.list,
+    queryFn: () => activityTypeApi.list(),
   });
 
   const { data: categories = [] } = useQuery({
