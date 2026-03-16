@@ -1,5 +1,5 @@
 """
-Dimension models: Dimension, DimensionValue, TagRule, UserDimensionAccess
+Dimension models: Dimension, DimensionValue, DimensionValueLink, UserDimensionAccess
 """
 
 from sqlalchemy import Column, ForeignKey, Integer, String, Text, UniqueConstraint
@@ -62,8 +62,8 @@ class DimensionValue(BaseModel):
     __table_args__ = (UniqueConstraint("dimension_id", "code", name="uq_dimension_value_code"),)
 
 
-class TagRule(BaseModel):
-    __tablename__ = "tag_rules"
+class DimensionValueLink(BaseModel):
+    __tablename__ = "dimension_value_links"
 
     organization_id = Column(
         UUID(as_uuid=True),
@@ -91,7 +91,7 @@ class TagRule(BaseModel):
         UniqueConstraint(
             "dimension_value_id_1",
             "dimension_value_id_2",
-            name="uq_tag_rule_pair",
+            name="uq_dimension_value_link_pair",
         ),
     )
 

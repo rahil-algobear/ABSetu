@@ -9,8 +9,8 @@ import {
   TransitionChild,
 } from "@headlessui/react";
 import { useQuery } from "@tanstack/react-query";
-import { dimensionApi, tagRuleApi, activityTypeApi } from "@/services/api";
-import { Dimension, DimensionValue, TagRule, ActivityType } from "@/types";
+import { dimensionApi, dimensionValueLinkApi, activityTypeApi } from "@/services/api";
+import { Dimension, DimensionValue, DimensionValueLink, ActivityType } from "@/types";
 import { useVocabulary } from "@/hooks/useVocabulary";
 import { X, GripVertical } from "lucide-react";
 
@@ -77,9 +77,9 @@ export function ActivityTypeMatrixDialog({ open, onClose }: ActivityTypeMatrixDi
     enabled: open && !!systemDimension,
   });
 
-  const { data: allTagRules = [] } = useQuery<TagRule[]>({
-    queryKey: ["tag-rules-all"],
-    queryFn: () => tagRuleApi.list(),
+  const { data: allDimensionValueLinks = [] } = useQuery<DimensionValueLink[]>({
+    queryKey: ["dimension-value-links-all"],
+    queryFn: () => dimensionValueLinkApi.list(),
     enabled: open,
   });
 
@@ -89,18 +89,18 @@ export function ActivityTypeMatrixDialog({ open, onClose }: ActivityTypeMatrixDi
     enabled: open,
   });
 
-  // Bidirectional rule lookup: dvId → Set<connected dvId>
-  const ruleMap = useMemo(() => {
+  // Bidirectional link lookup: dvId → Set<connected dvId>
+  const linkMap = useMemo(() => {
     const map = new Map<string, Set<string>>();
-    for (const rule of allTagRules) {
-      const { dimension_value_id_1: id1, dimension_value_id_2: id2 } = rule;
+    for (const link of allDimensionValueLinks) {
+      const { dimension_value_id_1: id1, dimension_value_id_2: id2 } = link;
       if (!map.has(id1)) map.set(id1, new Set());
       if (!map.has(id2)) map.set(id2, new Set());
       map.get(id1)!.add(id2);
       map.get(id2)!.add(id1);
     }
     return map;
-  }, [allTagRules]);
+  }, [allDimensionValueLinks]);
 
   // Map system dv id → activity type (matched by name)
   const sysDvToActivityType = useMemo(() => {
@@ -127,7 +127,7 @@ export function ActivityTypeMatrixDialog({ open, onClose }: ActivityTypeMatrixDi
       if (ancestorDvIds.length === 0) return [];
       const result: ActivityType[] = [];
       for (const sysDv of systemDvs) {
-        const conn = ruleMap.get(sysDv.id);
+        const conn = linkMap.get(sysDv.id);
         if (!conn) continue;
         if (ancestorDvIds.every((pid) => conn.has(pid))) {
           const at = sysDvToActivityType.get(sysDv.id);
@@ -164,7 +164,7 @@ export function ActivityTypeMatrixDialog({ open, onClose }: ActivityTypeMatrixDi
       const matchingDvs = ancestorDvIds.length === 0
         ? dvs
         : dvs.filter((dv) => {
-            const connected = ruleMap.get(dv.id);
+            const connected = linkMap.get(dv.id);
             if (!connected) return false;
             return ancestorDvIds.every((pid) => connected.has(pid));
           });
@@ -204,12 +204,12 @@ export function ActivityTypeMatrixDialog({ open, onClose }: ActivityTypeMatrixDi
         const orphans = targetDvs.filter((tdv) => {
           // Must connect to all ancestors
           if (ancestorDvIds.length > 0) {
-            const conn = ruleMap.get(tdv.id);
+            const conn = linkMap.get(tdv.id);
             if (!conn || !ancestorDvIds.every((pid) => conn.has(pid)))
               return false;
           }
           // Must NOT connect to any value in skipped levels
-          const conn = ruleMap.get(tdv.id);
+          const conn = linkMap.get(tdv.id);
           if (!conn) return true;
           for (const sid of skippedDvIds) {
             if (conn.has(sid)) return false;
@@ -287,7 +287,7 @@ export function ActivityTypeMatrixDialog({ open, onClose }: ActivityTypeMatrixDi
     }
 
     return { headerRows: rows, leafColumns: leaves };
-  }, [orderedDimensions, allDvsByDim, systemDvs, ruleMap, sysDvToActivityType]);
+  }, [orderedDimensions, allDvsByDim, systemDvs, linkMap, sysDvToActivityType]);
 
   // Drag and drop for dimension chip reordering
   const dragItem = useRef<number | null>(null);
@@ -383,10 +383,10 @@ export function ActivityTypeMatrixDialog({ open, onClose }: ActivityTypeMatrixDi
                   {!hasData ? (
                     <div className="text-center py-12 text-gray-500">
                       <p className="text-sm">
-                        No {vPlural("activity_type").toLowerCase()} with tag rule connections found.
+                        No {vPlural("activity_type").toLowerCase()} with dimension link connections found.
                       </p>
                       <p className="text-xs mt-1 text-gray-400">
-                        Create tag rules between dimensions and {vPlural("activity_type").toLowerCase()} to see the matrix.
+                        Create dimension links between dimensions and {vPlural("activity_type").toLowerCase()} to see the matrix.
                       </p>
                     </div>
                   ) : (

@@ -1,5 +1,5 @@
 """
-Dimension, DimensionValue, TagRule services
+Dimension, DimensionValue, DimensionValueLink services
 """
 
 import uuid
@@ -10,7 +10,7 @@ from app.common.exceptions import NotFoundError, ValidationError
 from app.modules.dimension.model import (
     Dimension,
     DimensionValue,
-    TagRule,
+    DimensionValueLink,
     UserDimensionAccess,
 )
 
@@ -104,7 +104,7 @@ class DimensionValueService:
         self.db.commit()
 
 
-class TagRuleService:
+class DimensionValueLinkService:
     def __init__(self, db: Session):
         self.db = db
 
@@ -113,11 +113,10 @@ class TagRuleService:
         org_id: uuid.UUID,
         dimension_id_1: uuid.UUID | None = None,
         dimension_id_2: uuid.UUID | None = None,
-    ) -> list[TagRule]:
-        query = self.db.query(TagRule).filter_by(organization_id=org_id)
+    ) -> list[DimensionValueLink]:
+        query = self.db.query(DimensionValueLink).filter_by(organization_id=org_id)
 
         if dimension_id_1 and dimension_id_2:
-            # Get values for each dimension to filter rules
             vals_1 = (
                 self.db.query(DimensionValue.id).filter_by(dimension_id=dimension_id_1).subquery()
             )
@@ -129,24 +128,25 @@ class TagRuleService:
             query = query.filter(
                 or_(
                     and_(
-                        TagRule.dimension_value_id_1.in_(vals_1),
-                        TagRule.dimension_value_id_2.in_(vals_2),
+                        DimensionValueLink.dimension_value_id_1.in_(vals_1),
+                        DimensionValueLink.dimension_value_id_2.in_(vals_2),
                     ),
                     and_(
-                        TagRule.dimension_value_id_1.in_(vals_2),
-                        TagRule.dimension_value_id_2.in_(vals_1),
+                        DimensionValueLink.dimension_value_id_1.in_(vals_2),
+                        DimensionValueLink.dimension_value_id_2.in_(vals_1),
                     ),
                 )
             )
         return query.all()
 
-    def create(self, org_id: uuid.UUID, dv_id_1: uuid.UUID, dv_id_2: uuid.UUID) -> TagRule:
-        # Normalize order (smaller UUID first) to prevent duplicates
+    def create(
+        self, org_id: uuid.UUID, dv_id_1: uuid.UUID, dv_id_2: uuid.UUID
+    ) -> DimensionValueLink:
         if str(dv_id_1) > str(dv_id_2):
             dv_id_1, dv_id_2 = dv_id_2, dv_id_1
 
         existing = (
-            self.db.query(TagRule)
+            self.db.query(DimensionValueLink)
             .filter_by(
                 dimension_value_id_1=dv_id_1,
                 dimension_value_id_2=dv_id_2,
@@ -154,23 +154,23 @@ class TagRuleService:
             .first()
         )
         if existing:
-            raise ValidationError("This tag rule already exists")
+            raise ValidationError("This dimension value link already exists")
 
-        rule = TagRule(
+        link = DimensionValueLink(
             organization_id=org_id,
             dimension_value_id_1=dv_id_1,
             dimension_value_id_2=dv_id_2,
         )
-        self.db.add(rule)
+        self.db.add(link)
         self.db.commit()
-        self.db.refresh(rule)
-        return rule
+        self.db.refresh(link)
+        return link
 
-    def delete(self, rule_id: uuid.UUID) -> None:
-        rule = self.db.query(TagRule).filter_by(id=rule_id).first()
-        if not rule:
-            raise NotFoundError("Tag rule not found")
-        self.db.delete(rule)
+    def delete(self, link_id: uuid.UUID) -> None:
+        link = self.db.query(DimensionValueLink).filter_by(id=link_id).first()
+        if not link:
+            raise NotFoundError("Dimension value link not found")
+        self.db.delete(link)
         self.db.commit()
 
     def bulk_sync(
@@ -179,37 +179,31 @@ class TagRuleService:
         dimension_id_1: uuid.UUID,
         dimension_id_2: uuid.UUID,
         pairs: list[tuple[uuid.UUID, uuid.UUID]],
-    ) -> list[TagRule]:
-        """Sync tag rules: add missing, remove stale."""
-        # Normalize all pairs
+    ) -> list[DimensionValueLink]:
+        """Sync dimension value links: add missing, remove stale."""
         normalized = set()
         for a, b in pairs:
             if str(a) > str(b):
                 a, b = b, a
             normalized.add((a, b))
 
-        # Get existing rules between these dimensions
-        existing_rules = self.list_by_org(org_id, dimension_id_1, dimension_id_2)
+        existing_links = self.list_by_org(org_id, dimension_id_1, dimension_id_2)
         existing_pairs = {
-            (r.dimension_value_id_1, r.dimension_value_id_2): r for r in existing_rules
+            (r.dimension_value_id_1, r.dimension_value_id_2): r for r in existing_links
         }
 
-        # Delete rules not in the new set
-        for pair, rule in existing_pairs.items():
+        for pair, link in existing_pairs.items():
             if pair not in normalized:
-                self.db.delete(rule)
+                self.db.delete(link)
 
-        # Add new rules
-        new_rules = []
         for a, b in normalized:
             if (a, b) not in existing_pairs:
-                rule = TagRule(
+                link = DimensionValueLink(
                     organization_id=org_id,
                     dimension_value_id_1=a,
                     dimension_value_id_2=b,
                 )
-                self.db.add(rule)
-                new_rules.append(rule)
+                self.db.add(link)
 
         self.db.commit()
         return self.list_by_org(org_id, dimension_id_1, dimension_id_2)

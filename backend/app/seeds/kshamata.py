@@ -1,7 +1,7 @@
 """
 Kshamata seed script: creates org, dimensions (Programme, Project, Location,
-Activity Type [system-managed]), activity types, tag rules, vocabulary, and
-admin user using the generic dimension system.
+Activity Type [system-managed]), activity types, dimension value links, vocabulary,
+and admin user using the generic dimension system.
 
 Usage:
     cd backend
@@ -13,7 +13,7 @@ import sys
 
 from app.core.database import SessionLocal
 from app.modules.organization.model import Organization
-from app.modules.dimension.model import Dimension, DimensionValue, TagRule
+from app.modules.dimension.model import Dimension, DimensionValue, DimensionValueLink
 from app.modules.activity.model import ActivityType
 from app.modules.auth.model import User
 from app.modules.role.model import Permission, Role, RolePermission
@@ -136,7 +136,7 @@ ACTIVITY_TYPES = [
 ]
 
 # ---------------------------------------------------------------------------
-# Tag Rules
+# Dimension Value Links
 # ---------------------------------------------------------------------------
 
 # Programme → Project (only Outreach has projects)
@@ -425,14 +425,14 @@ def _ensure_values(db, org, dimension, values_list):
     return value_map
 
 
-def _ensure_tag_rules(db, org, mapping, source_map, target_map):
+def _ensure_dimension_value_links(db, org, mapping, source_map, target_map):
     count = 0
     for src_code, target_codes in mapping.items():
         src_dv = source_map[src_code]
         for tgt_code in target_codes:
             tgt_dv = target_map[tgt_code]
             existing = (
-                db.query(TagRule)
+                db.query(DimensionValueLink)
                 .filter_by(
                     dimension_value_id_1=src_dv.id,
                     dimension_value_id_2=tgt_dv.id,
@@ -442,7 +442,7 @@ def _ensure_tag_rules(db, org, mapping, source_map, target_map):
             if not existing:
                 # Also check reverse
                 existing = (
-                    db.query(TagRule)
+                    db.query(DimensionValueLink)
                     .filter_by(
                         dimension_value_id_1=tgt_dv.id,
                         dimension_value_id_2=src_dv.id,
@@ -450,45 +450,45 @@ def _ensure_tag_rules(db, org, mapping, source_map, target_map):
                     .first()
                 )
             if not existing:
-                rule = TagRule(
+                link = DimensionValueLink(
                     organization_id=org.id,
                     dimension_value_id_1=src_dv.id,
                     dimension_value_id_2=tgt_dv.id,
                 )
-                db.add(rule)
+                db.add(link)
                 count += 1
     db.flush()
     return count
 
 
-def _remove_stale_programme_at_rules(db, programme_map, at_dv_map, valid_mapping):
-    """Remove Programme↔ActivityType tag rules for programmes not in valid_mapping."""
+def _remove_stale_programme_at_links(db, programme_map, at_dv_map, valid_mapping):
+    """Remove Programme↔ActivityType dimension value links for programmes not in valid_mapping."""
     all_at_dv_ids = {dv.id for dv in at_dv_map.values()}
     removed = 0
     for prog_code, prog_dv in programme_map.items():
         if prog_code in valid_mapping:
             continue
-        # This programme should have NO AT rules — remove any that exist
+        # This programme should have NO AT links — remove any that exist
         stale = (
-            db.query(TagRule)
+            db.query(DimensionValueLink)
             .filter(
                 (
-                    (TagRule.dimension_value_id_1 == prog_dv.id)
-                    & (TagRule.dimension_value_id_2.in_(all_at_dv_ids))
+                    (DimensionValueLink.dimension_value_id_1 == prog_dv.id)
+                    & (DimensionValueLink.dimension_value_id_2.in_(all_at_dv_ids))
                 )
                 | (
-                    (TagRule.dimension_value_id_2 == prog_dv.id)
-                    & (TagRule.dimension_value_id_1.in_(all_at_dv_ids))
+                    (DimensionValueLink.dimension_value_id_2 == prog_dv.id)
+                    & (DimensionValueLink.dimension_value_id_1.in_(all_at_dv_ids))
                 )
             )
             .all()
         )
-        for rule in stale:
-            db.delete(rule)
+        for link in stale:
+            db.delete(link)
             removed += 1
     if removed:
         db.flush()
-        print(f"  Removed {removed} stale programme↔activity-type tag rules")
+        print(f"  Removed {removed} stale programme↔activity-type dimension value links")
 
 
 def seed():
@@ -566,32 +566,32 @@ def seed():
             at_dv_map[at_name] = dv
         print(f"  Ensured {len(ACTIVITY_TYPES)} activity types + dimension values")
 
-        # 5. Tag Rules
-        new_rules = 0
+        # 5. Dimension Value Links
+        new_links = 0
         # Programme ↔ Project
-        new_rules += _ensure_tag_rules(
+        new_links += _ensure_dimension_value_links(
             db, org, PROGRAMME_PROJECTS, programme_map, project_map
         )
         # Project ↔ Location
-        new_rules += _ensure_tag_rules(
+        new_links += _ensure_dimension_value_links(
             db, org, PROJECT_LOCATIONS, project_map, location_map
         )
         # Programme ↔ Location
-        new_rules += _ensure_tag_rules(
+        new_links += _ensure_dimension_value_links(
             db, org, PROGRAMME_LOCATIONS, programme_map, location_map
         )
         # Location ↔ Activity Type
-        new_rules += _ensure_tag_rules(
+        new_links += _ensure_dimension_value_links(
             db, org, LOCATION_ACTIVITY_TYPES, location_map, at_dv_map
         )
         # Programme ↔ Activity Type (explicit mapping — avoids issues when
         # locations are shared between programmes)
-        new_rules += _ensure_tag_rules(
+        new_links += _ensure_dimension_value_links(
             db, org, PROGRAMME_ACTIVITY_TYPES, programme_map, at_dv_map
         )
-        # Clean up stale Programme↔ActivityType rules for programmes not
+        # Clean up stale Programme↔ActivityType links for programmes not
         # in the explicit mapping (e.g. UNLIMITED has no interventions)
-        _remove_stale_programme_at_rules(
+        _remove_stale_programme_at_links(
             db, programme_map, at_dv_map, PROGRAMME_ACTIVITY_TYPES
         )
         # Project ↔ Activity Type (derived: union of activity types across
@@ -602,10 +602,10 @@ def seed():
             for loc_code in loc_codes:
                 at_set.update(LOCATION_ACTIVITY_TYPES.get(loc_code, []))
             project_activity_types[proj_code] = list(at_set)
-        new_rules += _ensure_tag_rules(
+        new_links += _ensure_dimension_value_links(
             db, org, project_activity_types, project_map, at_dv_map
         )
-        print(f"  Ensured tag rules ({new_rules} new)")
+        print(f"  Ensured dimension value links ({new_links} new)")
 
         # 6. Admin role (all permissions — always syncs missing ones)
         admin_role = db.query(Role).filter_by(organization_id=org.id, name="Admin").first()
@@ -660,12 +660,12 @@ def seed():
         db.commit()
 
         # Summary
-        total_loc_at_rules = sum(len(v) for v in LOCATION_ACTIVITY_TYPES.values())
-        total_rules = (
+        total_loc_at_links = sum(len(v) for v in LOCATION_ACTIVITY_TYPES.values())
+        total_links = (
             sum(len(v) for v in PROGRAMME_PROJECTS.values())
             + sum(len(v) for v in PROJECT_LOCATIONS.values())
             + sum(len(v) for v in PROGRAMME_LOCATIONS.values())
-            + total_loc_at_rules
+            + total_loc_at_links
         )
         print(f"\nKshamata seed completed successfully!")
         print(f"  Organisation        : {ORG_NAME}")
@@ -675,11 +675,11 @@ def seed():
         print(f"  Projects            : {len(PROJECTS)}")
         print(f"  Locations           : {len(LOCATIONS)}")
         print(f"  Activity Types      : {len(ACTIVITY_TYPES)}")
-        print(f"  Tag Rules           : {total_rules} combos")
+        print(f"  Dimension Links     : {total_links} combos")
         print(f"    Programme↔Project : {sum(len(v) for v in PROGRAMME_PROJECTS.values())}")
         print(f"    Project↔Location  : {sum(len(v) for v in PROJECT_LOCATIONS.values())}")
         print(f"    Programme↔Location: {sum(len(v) for v in PROGRAMME_LOCATIONS.values())}")
-        print(f"    Location↔Activity : {total_loc_at_rules}")
+        print(f"    Location↔Activity : {total_loc_at_links}")
 
     except Exception as e:
         db.rollback()

@@ -1,5 +1,5 @@
 """
-Dimension, DimensionValue, TagRule schemas
+Dimension, DimensionValue, DimensionValueLink schemas
 """
 
 from typing import Any
@@ -58,24 +58,24 @@ class DimensionValueResponse(BaseResponseSchema):
     dimension_key: str | None = None
 
 
-# --- TagRule ---
+# --- DimensionValueLink ---
 
 
-class TagRuleCreate(BaseModel):
+class DimensionValueLinkCreate(BaseModel):
     dimension_value_id_1: str
     dimension_value_id_2: str
 
 
-class TagRuleBulkSync(BaseModel):
-    """Bulk sync tag rules between two dimensions.
-    Provide the full list of valid pairs; rules not in the list are deleted."""
+class DimensionValueLinkBulkSync(BaseModel):
+    """Bulk sync dimension value links between two dimensions.
+    Provide the full list of valid pairs; links not in the list are deleted."""
 
     dimension_id_1: str
     dimension_id_2: str
     pairs: list[tuple[str, str]]  # List of (value_id_1, value_id_2)
 
 
-class TagRuleResponse(BaseResponseSchema):
+class DimensionValueLinkResponse(BaseResponseSchema):
     organization_id: str
     dimension_value_id_1: str
     dimension_value_id_2: str

@@ -15,7 +15,7 @@ import {
   Participation,
   Permission,
   Role,
-  TagRule,
+  DimensionValueLink,
   UserAccess,
   UserListItem,
   UserLoginData,
@@ -150,26 +150,26 @@ export const dimensionApi = {
   },
 };
 
-// --- Tag Rules ---
+// --- Dimension Value Links ---
 
-export const tagRuleApi = {
-  list: async (dimensionId1?: string, dimensionId2?: string): Promise<TagRule[]> => {
+export const dimensionValueLinkApi = {
+  list: async (dimensionId1?: string, dimensionId2?: string): Promise<DimensionValueLink[]> => {
     const params = new URLSearchParams();
     if (dimensionId1) params.set('dimension_id_1', dimensionId1);
     if (dimensionId2) params.set('dimension_id_2', dimensionId2);
-    const response = await authAxios.get<TagRule[]>(`/tag-rules/?${params.toString()}`);
+    const response = await authAxios.get<DimensionValueLink[]>(`/dimension-value-links/?${params.toString()}`);
     return response.data;
   },
-  create: async (data: { dimension_value_id_1: string; dimension_value_id_2: string }): Promise<TagRule> => {
-    const response = await authAxios.post<TagRule>('/tag-rules/', data);
+  create: async (data: { dimension_value_id_1: string; dimension_value_id_2: string }): Promise<DimensionValueLink> => {
+    const response = await authAxios.post<DimensionValueLink>('/dimension-value-links/', data);
     return response.data;
   },
   delete: async (id: string) => {
-    const response = await authAxios.delete(`/tag-rules/${id}`);
+    const response = await authAxios.delete(`/dimension-value-links/${id}`);
     return response.data;
   },
-  bulkSync: async (data: { dimension_id_1: string; dimension_id_2: string; pairs: [string, string][] }): Promise<TagRule[]> => {
-    const response = await authAxios.post<TagRule[]>('/tag-rules/bulk', data);
+  bulkSync: async (data: { dimension_id_1: string; dimension_id_2: string; pairs: [string, string][] }): Promise<DimensionValueLink[]> => {
+    const response = await authAxios.post<DimensionValueLink[]>('/dimension-value-links/bulk', data);
     return response.data;
   },
 };

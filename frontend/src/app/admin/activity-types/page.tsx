@@ -2,8 +2,8 @@
 
 import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { activityTypeApi, metaFieldSchemaApi, dimensionApi, tagRuleApi } from "@/services/api";
-import { ActivityType, MetaFieldDefinition, Dimension, DimensionValue, TagRule } from "@/types";
+import { activityTypeApi, metaFieldSchemaApi, dimensionApi, dimensionValueLinkApi } from "@/services/api";
+import { ActivityType, MetaFieldDefinition, Dimension, DimensionValue, DimensionValueLink } from "@/types";
 import { Can } from "@/components/Auth/Permissions";
 import { useVocabulary } from "@/hooks/useVocabulary";
 import { Button } from "@/components/ui/button";
@@ -76,10 +76,10 @@ export default function ActivityTypesPage() {
     enabled: nonSystemDimensions.length > 0,
   });
 
-  // Load all tag rules (unfiltered)
-  const { data: allTagRules = [] } = useQuery<TagRule[]>({
-    queryKey: ["tag-rules-all"],
-    queryFn: () => tagRuleApi.list(),
+  // Load all dimension value links (unfiltered)
+  const { data: allDimensionValueLinks = [] } = useQuery<DimensionValueLink[]>({
+    queryKey: ["dimension-value-links-all"],
+    queryFn: () => dimensionValueLinkApi.list(),
   });
 
   // Build map: activity type name → system dimension value id
@@ -95,8 +95,8 @@ export default function ActivityTypesPage() {
   const systemDvToConnected = useMemo(() => {
     const map = new Map<string, Set<string>>();
     const systemDvIds = new Set(systemDvs.map((dv) => dv.id));
-    for (const rule of allTagRules) {
-      const { dimension_value_id_1: id1, dimension_value_id_2: id2 } = rule;
+    for (const link of allDimensionValueLinks) {
+      const { dimension_value_id_1: id1, dimension_value_id_2: id2 } = link;
       if (systemDvIds.has(id1) && !systemDvIds.has(id2)) {
         if (!map.has(id1)) map.set(id1, new Set());
         map.get(id1)!.add(id2);
@@ -107,7 +107,7 @@ export default function ActivityTypesPage() {
       }
     }
     return map;
-  }, [allTagRules, systemDvs]);
+  }, [allDimensionValueLinks, systemDvs]);
 
   const dvMap = useMemo(
     () => new Map(allNonSystemDvs.map((dv) => [dv.id, dv])),
@@ -119,7 +119,7 @@ export default function ActivityTypesPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["activity-types"] });
       queryClient.invalidateQueries({ queryKey: ["dimension-values"] });
-      queryClient.invalidateQueries({ queryKey: ["tag-rules-all"] });
+      queryClient.invalidateQueries({ queryKey: ["dimension-value-links-all"] });
       closeModal();
       toast.success(`${v("activity_type")} created`);
     },
@@ -132,7 +132,7 @@ export default function ActivityTypesPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["activity-types"] });
       queryClient.invalidateQueries({ queryKey: ["dimension-values"] });
-      queryClient.invalidateQueries({ queryKey: ["tag-rules-all"] });
+      queryClient.invalidateQueries({ queryKey: ["dimension-value-links-all"] });
       closeModal();
       toast.success(`${v("activity_type")} updated`);
     },
@@ -144,7 +144,7 @@ export default function ActivityTypesPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["activity-types"] });
       queryClient.invalidateQueries({ queryKey: ["dimension-values"] });
-      queryClient.invalidateQueries({ queryKey: ["tag-rules-all"] });
+      queryClient.invalidateQueries({ queryKey: ["dimension-value-links-all"] });
       toast.success(`${v("activity_type")} deleted`);
     },
     onError: () => toast.error("Failed to delete"),

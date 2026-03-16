@@ -7,9 +7,9 @@ import {
   activityTypeApi,
   dimensionApi,
   facilitatorApi,
-  tagRuleApi,
+  dimensionValueLinkApi,
 } from "@/services/api";
-import { Dimension, DimensionValue, TagRule } from "@/types";
+import { Dimension, DimensionValue, DimensionValueLink } from "@/types";
 import { Can } from "@/components/Auth/Permissions";
 import { useVocabulary } from "@/hooks/useVocabulary";
 import { Button } from "@/components/ui/button";
@@ -34,7 +34,7 @@ function getFilteredValues(
   targetDimValues: DimensionValue[],
   selectedByDim: Record<string, string>, // dimId → selected dvId
   targetDimId: string,
-  tagRules: TagRule[],
+  dimensionValueLinks: DimensionValueLink[],
 ): DimensionValue[] {
   // Collect selections from OTHER dimensions (not the target)
   const otherSelections = Object.entries(selectedByDim)
@@ -45,17 +45,17 @@ function getFilteredValues(
     return targetDimValues;
   }
 
-  // Build a set of (dv1, dv2) pairs from rules for fast lookup
-  const rulePairs = new Set<string>();
-  for (const rule of tagRules) {
-    rulePairs.add(`${rule.dimension_value_id_1}:${rule.dimension_value_id_2}`);
-    rulePairs.add(`${rule.dimension_value_id_2}:${rule.dimension_value_id_1}`);
+  // Build a set of (dv1, dv2) pairs from links for fast lookup
+  const linkPairs = new Set<string>();
+  for (const link of dimensionValueLinks) {
+    linkPairs.add(`${link.dimension_value_id_1}:${link.dimension_value_id_2}`);
+    linkPairs.add(`${link.dimension_value_id_2}:${link.dimension_value_id_1}`);
   }
 
-  // A target value is allowed if it has a rule with EVERY other selection
+  // A target value is allowed if it has a link with EVERY other selection
   return targetDimValues.filter((dv) =>
     otherSelections.every(
-      (selectedId) => rulePairs.has(`${dv.id}:${selectedId}`)
+      (selectedId) => linkPairs.has(`${dv.id}:${selectedId}`)
     )
   );
 }
@@ -97,10 +97,10 @@ export default function ActivitiesPage() {
     enabled: dimensions.length > 0,
   });
 
-  // Load all tag rules (used for cascading filters)
-  const { data: tagRules = [] } = useQuery<TagRule[]>({
-    queryKey: ["tag-rules-all"],
-    queryFn: () => tagRuleApi.list(),
+  // Load all dimension value links (used for cascading filters)
+  const { data: dimensionValueLinks = [] } = useQuery<DimensionValueLink[]>({
+    queryKey: ["dimension-value-links-all"],
+    queryFn: () => dimensionValueLinkApi.list(),
   });
 
   // Non-system dimensions shown as selectable dropdowns
@@ -151,7 +151,7 @@ export default function ActivitiesPage() {
       atDimValues,
       selectedByDim,
       atDimension.id,
-      tagRules
+      dimensionValueLinks
     );
     const allowedNames = new Set(filteredDvs.map((dv) => dv.name));
 
@@ -159,7 +159,7 @@ export default function ActivitiesPage() {
     if (Object.keys(selectedByDim).length === 0) return activityTypes;
 
     return activityTypes.filter((at) => allowedNames.has(at.name));
-  }, [activityTypes, atDimension, allDimensionValues, selectedByDim, tagRules]);
+  }, [activityTypes, atDimension, allDimensionValues, selectedByDim, dimensionValueLinks]);
 
   const createMutation = useMutation({
     mutationFn: activityApi.create,
@@ -212,7 +212,7 @@ export default function ActivitiesPage() {
                   dimValues,
                   selectedByDim,
                   dim.id,
-                  tagRules
+                  dimensionValueLinks
                 );
                 const currentSelection =
                   formData.dimension_value_ids.find((id) =>

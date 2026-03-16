@@ -1,5 +1,5 @@
 """
-Dimension, DimensionValue, TagRule routes
+Dimension, DimensionValue, DimensionValueLink routes
 """
 
 import uuid
@@ -15,23 +15,23 @@ from app.modules.dimension.schemas import (
     DimensionResponse,
     DimensionUpdate,
     DimensionValueCreate,
+    DimensionValueLinkBulkSync,
+    DimensionValueLinkCreate,
+    DimensionValueLinkResponse,
     DimensionValueResponse,
     DimensionValueUpdate,
-    TagRuleBulkSync,
-    TagRuleCreate,
-    TagRuleResponse,
 )
 from app.modules.dimension.service import (
     DimensionService,
+    DimensionValueLinkService,
     DimensionValueService,
-    TagRuleService,
     UserDimensionAccessService,
 )
 
 router = APIRouter(tags=["dimensions"])
 
 dimension_router = APIRouter(prefix="/dimensions")
-tag_rule_router = APIRouter(prefix="/tag-rules")
+dv_link_router = APIRouter(prefix="/dimension-value-links")
 
 
 # --- Dimensions ---
@@ -165,7 +165,6 @@ def create_dimension_value(
     db: Session = Depends(get_db),
 ):
     """Create a new dimension value."""
-    # Verify dimension belongs to org
     dim_service = DimensionService(db)
     dim_service.get_by_id(dimension_id, current_user.organization_id)
 
@@ -217,26 +216,26 @@ def delete_dimension_value(
     return {"message": "Dimension value deleted"}
 
 
-# --- Tag Rules ---
+# --- Dimension Value Links ---
 
 
-@tag_rule_router.get("/", dependencies=[Depends(require_permissions("dimension:view"))])
-def list_tag_rules(
+@dv_link_router.get("/", dependencies=[Depends(require_permissions("dimension:view"))])
+def list_dimension_value_links(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     dimension_id_1: uuid.UUID | None = Query(None),
     dimension_id_2: uuid.UUID | None = Query(None),
 ):
-    """List tag rules, optionally filtered by dimension pair."""
-    service = TagRuleService(db)
-    rules = service.list_by_org(
+    """List dimension value links, optionally filtered by dimension pair."""
+    service = DimensionValueLinkService(db)
+    links = service.list_by_org(
         current_user.organization_id,
         dimension_id_1=dimension_id_1,
         dimension_id_2=dimension_id_2,
     )
     results = []
-    for r in rules:
-        resp = TagRuleResponse(
+    for r in links:
+        resp = DimensionValueLinkResponse(
             id=str(r.id),
             updated_at=r.updated_at,
             organization_id=str(r.organization_id),
@@ -261,75 +260,75 @@ def list_tag_rules(
     return results
 
 
-@tag_rule_router.post(
+@dv_link_router.post(
     "/",
     dependencies=[Depends(require_permissions("dimension:manage"))],
     status_code=201,
 )
-def create_tag_rule(
-    data: TagRuleCreate,
+def create_dimension_value_link(
+    data: DimensionValueLinkCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Create a tag rule."""
-    service = TagRuleService(db)
-    rule = service.create(
+    """Create a dimension value link."""
+    service = DimensionValueLinkService(db)
+    link = service.create(
         current_user.organization_id,
         uuid.UUID(data.dimension_value_id_1),
         uuid.UUID(data.dimension_value_id_2),
     )
-    return TagRuleResponse(
-        id=str(rule.id),
-        updated_at=rule.updated_at,
-        organization_id=str(rule.organization_id),
-        dimension_value_id_1=str(rule.dimension_value_id_1),
-        dimension_value_id_2=str(rule.dimension_value_id_2),
+    return DimensionValueLinkResponse(
+        id=str(link.id),
+        updated_at=link.updated_at,
+        organization_id=str(link.organization_id),
+        dimension_value_id_1=str(link.dimension_value_id_1),
+        dimension_value_id_2=str(link.dimension_value_id_2),
     ).dump()
 
 
-@tag_rule_router.delete(
-    "/{rule_id}",
+@dv_link_router.delete(
+    "/{link_id}",
     dependencies=[Depends(require_permissions("dimension:manage"))],
 )
-def delete_tag_rule(
-    rule_id: uuid.UUID,
+def delete_dimension_value_link(
+    link_id: uuid.UUID,
     db: Session = Depends(get_db),
 ):
-    """Delete a tag rule."""
-    service = TagRuleService(db)
-    service.delete(rule_id)
-    return {"message": "Tag rule deleted"}
+    """Delete a dimension value link."""
+    service = DimensionValueLinkService(db)
+    service.delete(link_id)
+    return {"message": "Dimension value link deleted"}
 
 
-@tag_rule_router.post(
+@dv_link_router.post(
     "/bulk",
     dependencies=[Depends(require_permissions("dimension:manage"))],
 )
-def bulk_sync_tag_rules(
-    data: TagRuleBulkSync,
+def bulk_sync_dimension_value_links(
+    data: DimensionValueLinkBulkSync,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Bulk sync tag rules between two dimensions (for matrix UI)."""
-    service = TagRuleService(db)
-    rules = service.bulk_sync(
+    """Bulk sync dimension value links between two dimensions (for matrix UI)."""
+    service = DimensionValueLinkService(db)
+    links = service.bulk_sync(
         current_user.organization_id,
         uuid.UUID(data.dimension_id_1),
         uuid.UUID(data.dimension_id_2),
         [(uuid.UUID(a), uuid.UUID(b)) for a, b in data.pairs],
     )
     return [
-        TagRuleResponse(
+        DimensionValueLinkResponse(
             id=str(r.id),
             updated_at=r.updated_at,
             organization_id=str(r.organization_id),
             dimension_value_id_1=str(r.dimension_value_id_1),
             dimension_value_id_2=str(r.dimension_value_id_2),
         ).dump()
-        for r in rules
+        for r in links
     ]
 
 
 # Include sub-routers
 router.include_router(dimension_router)
-router.include_router(tag_rule_router)
+router.include_router(dv_link_router)

@@ -12,7 +12,7 @@ from app.modules.dimension.model import (  # noqa: F401
     Dimension,
     DimensionValue,
     EnrollmentTag,
-    TagRule,
+    DimensionValueLink,
     UserDimensionAccess,
 )
 from app.modules.activity.model import (  # noqa: F401

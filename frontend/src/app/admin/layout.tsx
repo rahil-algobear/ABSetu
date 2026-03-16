@@ -45,7 +45,7 @@ export default function AdminLayout({
     }));
 
   const staticTabs = [
-    { href: "/admin/tag-rules", label: "Tag Rules", icon: Link2, permission: "dimension:view" },
+    { href: "/admin/dimension-linking", label: "Dimension Linking", icon: Link2, permission: "dimension:view" },
     { href: "/admin/activity-types", label: vPlural("activity_type"), icon: ClipboardList, permission: "activity_type:view" },
     { href: "/admin/facilitators", label: vPlural("facilitator"), icon: UserCheck, permission: "facilitator:view" },
     { href: "/admin/beneficiaries", label: vPlural("beneficiary"), icon: Users, permission: "beneficiary:view" },

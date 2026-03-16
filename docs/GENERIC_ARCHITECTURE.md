@@ -22,7 +22,7 @@ Replace hardcoded organizational entities (Center, Programme, ProgrammeCenter) w
 |-------|-------------|
 | `centers` | `dimensions` + `dimension_values` |
 | `programmes` | `dimensions` + `dimension_values` |
-| `programme_centers` | `tag_rules` |
+| `programme_centers` | `dimension_value_links` |
 | `user_center_access` | `user_dimension_access` |
 | `user_programme_access` | `user_dimension_access` |
 | `user_session_template_access` | `user_dimension_access` |
@@ -69,7 +69,7 @@ Org-defined grouping axes. Each org creates the dimensions that match how they w
 
 Unique constraint: `(organization_id, key)`
 
-> **System dimensions:** When `is_system = "activity_type"`, the dimension's values are automatically synced from the `activity_types` table. This allows activity types to participate in tag rules using the same dimension_value ↔ dimension_value mechanism. The seeder creates this dimension and keeps it in sync; the frontend hides system dimensions from the settings dimension tabs.
+> **System dimensions:** When `is_system = "activity_type"`, the dimension's values are automatically synced from the `activity_types` table. This allows activity types to participate in dimension value links using the same dimension_value ↔ dimension_value mechanism. The seeder creates this dimension and keeps it in sync; the frontend hides system dimensions from the settings dimension tabs.
 
 **Kshamata example:**
 | name | key | is_system |
@@ -125,7 +125,7 @@ Unique constraint: `(dimension_id, code)`
 
 ---
 
-#### `tag_rules` ✅
+#### `dimension_value_links` ✅
 
 Defines which dimension values are valid together. Replaces `programme_centers` join table AND the `CENTRE_INTERVENTIONS` mapping.
 
@@ -158,9 +158,9 @@ Location ↔ ActivityType rules (replaces `CENTRE_INTERVENTIONS`):
 | Location:ShantiSadan | ActivityType:Vocational Skill Training |
 | ... | ... |
 
-> **Note on ActivityType in tag rules:** ActivityType remains a first-class table (`activity_types`), but for tag rule purposes we create a system-managed dimension (with `is_system = "activity_type"`) whose values mirror the `activity_types` table. This lets `tag_rules` work with a single mechanism (dimension_value ↔ dimension_value) without special-casing activity types. The seeder creates this dimension and syncs values automatically. The dimension name is org-specific (e.g. "Intervention" for Kshamata).
+> **Note on ActivityType in dimension value links:** ActivityType remains a first-class table (`activity_types`), but for dimension linking purposes we create a system-managed dimension (with `is_system = "activity_type"`) whose values mirror the `activity_types` table. This lets `dimension_value_links` work with a single mechanism (dimension_value ↔ dimension_value) without special-casing activity types. The seeder creates this dimension and syncs values automatically. The dimension name is org-specific (e.g. "Intervention" for Kshamata).
 >
-> **Programme ↔ ActivityType rules:** The seeder uses an explicit `PROGRAMME_ACTIVITY_TYPES` mapping to define which activity types belong to each programme, along with a `_remove_stale_programme_at_rules()` function to clean up rules for programmes that should have no activity types (e.g. Kshamata Unlimited).
+> **Programme ↔ ActivityType rules:** The seeder uses an explicit `PROGRAMME_ACTIVITY_TYPES` mapping to define which activity types belong to each programme, along with a `_remove_stale_programme_at_links()` function to clean up rules for programmes that should have no activity types (e.g. Kshamata Unlimited).
 
 ---
 
@@ -270,7 +270,7 @@ Tags are now in `enrollment_tags`.
 
 **Added:**
 - `dimension:view` — view dimensions and their values
-- `dimension:manage` — create/edit/delete dimensions, values, and tag rules
+- `dimension:manage` — create/edit/delete dimensions, values, and dimension value links
 - `activity_type:view` — view activity types (formerly session templates)
 - `activity_type:manage` — create/edit/delete activity types
 - `activity:view` — view activities (formerly sessions)
@@ -326,18 +326,18 @@ Centres | Programmes | Programme-Centres | Session Templates | Facilitators | Be
 
 **New tabs (dynamically generated from org dimensions + static entities):**
 ```
-{Dimension 1} | {Dimension 2} | ... | Tag Rules | Activity Types | Facilitators | Beneficiaries | Roles | Users | Custom Fields
+{Dimension 1} | {Dimension 2} | ... | Dimension Linking | Activity Types | Facilitators | Beneficiaries | Roles | Users | Custom Fields
 ```
 
 Each dimension the org has created becomes its own settings tab/page. Tab labels come from the dimension name. For Kshamata this renders as:
 ```
-Locations | Programmes | Tag Rules | Session Templates | Facilitators | Beneficiaries | Roles | Users | Custom Fields
+Locations | Programmes | Dimension Linking | Session Templates | Facilitators | Beneficiaries | Roles | Users | Custom Fields
 ```
 > "Locations" because that's what Kshamata named their dimension. "Session Templates" via vocabulary mapping of "Activity Types". Looks nearly identical to today.
 
 For a different NGO with dimensions "Region", "Project", "Funder":
 ```
-Regions | Projects | Funders | Tag Rules | Activity Types | Facilitators | Beneficiaries | Roles | Users | Custom Fields
+Regions | Projects | Funders | Dimension Linking | Activity Types | Facilitators | Beneficiaries | Roles | Users | Custom Fields
 ```
 
 ### Dimension Settings Pages (`/admin/dimensions/{dimension_key}`) ✅
@@ -350,7 +350,7 @@ Admin can:
 
 > **Note:** Creating new dimensions themselves is currently done via seeder/API only. No admin UI for creating dimensions yet.
 
-### Tag Rules Page (`/admin/tag-rules`) ✅
+### Dimension Linking Page (`/admin/dimension-linking`) ✅
 
 Matrix view showing valid combinations between two selected dimensions.
 
@@ -367,7 +367,7 @@ Admin selects two dimensions from dropdowns, then toggles checkboxes in the matr
 
 ### Activity Type Matrix Dialog ✅
 
-A "View Matrix" button (on both Tag Rules and Activity Types pages) opens a near-fullscreen dialog showing the complete dimension hierarchy with activity types as leaf columns.
+A "View Matrix" button (on both Dimension Linking and Activity Types pages) opens a near-fullscreen dialog showing the complete dimension hierarchy with activity types as leaf columns.
 
 Features:
 - **Drag-and-drop dimension reordering** — chips at the top let admins reorder which dimension is the top-level grouping
@@ -380,12 +380,12 @@ Component: `src/components/ActivityTypeMatrixDialog.tsx`
 
 ### Activity Creation Form ✅
 
-Dynamically renders one dropdown per dimension (filtered by user's access scope). Selection cascading via tag rules — choosing a Location filters Programme to valid options, which filters Activity Type to valid options.
+Dynamically renders one dropdown per dimension (filtered by user's access scope). Selection cascading via dimension value links — choosing a Location filters Programme to valid options, which filters Activity Type to valid options.
 
 ```
 [Location dropdown]       → filtered by UserDimensionAccess
-[Programme dropdown]      → filtered by tag_rules(selected location)
-[Activity Type dropdown]  → filtered by tag_rules(selected location)
+[Programme dropdown]      → filtered by dimension_value_links(selected location)
+[Activity Type dropdown]  → filtered by dimension_value_links(selected location)
 [Date picker]
 [Facilitator dropdown]
 [Participation checklist] → beneficiaries filtered by matching tags
@@ -397,7 +397,7 @@ Dynamically renders one dropdown per dimension (filtered by user's access scope)
 ### Activity Types Page ✅
 
 Shows all activity types in a table with:
-- **Dimension columns** — each non-system dimension gets a column showing which dimension values the activity type is connected to (via tag rules), displayed as blue pills/badges
+- **Dimension columns** — each non-system dimension gets a column showing which dimension values the activity type is connected to (via dimension value links), displayed as blue pills/badges
 - **View Matrix** button — opens the ActivityTypeMatrixDialog
 
 ### Custom Fields Page (`/admin/meta-fields`) ✅
@@ -430,11 +430,11 @@ POST   /api/dimensions/{id}/values              → create value
 PUT    /api/dimensions/{id}/values/{value_id}   → update value
 DELETE /api/dimensions/{id}/values/{value_id}   → delete value
 
-# Tag Rules
-GET    /api/tag-rules                           → list rules (filterable by dimension pair)
-POST   /api/tag-rules                           → create rule
-DELETE /api/tag-rules/{id}                      → delete rule
-POST   /api/tag-rules/bulk                      → bulk create/delete (for matrix UI)
+# Dimension Linking
+GET    /api/dimension-value-links                           → list links (filterable by dimension pair)
+POST   /api/dimension-value-links                           → create link
+DELETE /api/dimension-value-links/{id}                      → delete link
+POST   /api/dimension-value-links/bulk                      → bulk sync links (for matrix UI)
 
 # User Dimension Access
 GET    /api/users/{id}/access                   → list user's dimension access
@@ -483,15 +483,15 @@ PUT    /api/organization/meta-field-schemas/{entity_type}
 
 ```
 app/modules/dimension/
-├── model.py       # Dimension, DimensionValue, TagRule, ActivityTag, BeneficiaryTag,
+├── model.py       # Dimension, DimensionValue, DimensionValueLink, ActivityTag, BeneficiaryTag,
 │                  #   EnrollmentTag, UserDimensionAccess (all tagging in one module)
 ├── schemas.py     # Request/response schemas
-├── service.py     # DimensionService, DimensionValueService, TagRuleService,
+├── service.py     # DimensionService, DimensionValueService, DimensionValueLinkService,
 │                  #   UserDimensionAccessService
-└── routes.py      # /api/dimensions, /api/tag-rules endpoints
+└── routes.py      # /api/dimensions, /api/dimension-value-links endpoints
 ```
 
-> **Note:** The originally planned separate `app/modules/tagging/` module was not created. All tag models (`ActivityTag`, `BeneficiaryTag`, `EnrollmentTag`, `UserDimensionAccess`) live in the dimension module alongside `TagRule` since they're closely related. User access endpoints are in the user module routes.
+> **Note:** The originally planned separate `app/modules/tagging/` module was not created. All tag models (`ActivityTag`, `BeneficiaryTag`, `EnrollmentTag`, `UserDimensionAccess`) live in the dimension module alongside `DimensionValueLink` since they're closely related. User access endpoints are in the user module routes.
 
 ### Module: `app/modules/activity/`
 
@@ -552,8 +552,8 @@ VOCABULARY = {
 Key seeder features:
 - `_ensure_dimension()` — idempotent, updates name/sort_order on re-seed
 - `_ensure_dimension_value()` — idempotent by code within dimension
-- `_ensure_tag_rule()` — normalized pair ordering, skip duplicates
-- `_remove_stale_programme_at_rules()` — cleans up Programme↔ActivityType rules for programmes not in `PROGRAMME_ACTIVITY_TYPES` (e.g. Unlimited)
+- `_ensure_dimension_value_links()` — normalized pair ordering, skip duplicates
+- `_remove_stale_programme_at_links()` — cleans up Programme↔ActivityType rules for programmes not in `PROGRAMME_ACTIVITY_TYPES` (e.g. Unlimited)
 
 ---
 
@@ -651,10 +651,10 @@ Both seed scripts have been updated:
 ### `app/seeds/kshamata.py` ✅
 - Dimensions + DimensionValues replace old Center/Programme/ProgrammeCenter creation
 - ActivityTypes replace SessionTemplates
-- TagRules replace PROGRAMME_CENTERS + CENTRE_INTERVENTIONS mappings
+- DimensionValueLinks replace PROGRAMME_CENTERS + CENTRE_INTERVENTIONS mappings
 - System dimension (`is_system="activity_type"`) created with auto-synced values
 - Explicit `PROGRAMME_ACTIVITY_TYPES` mapping for Programme↔ActivityType rules
-- `_remove_stale_programme_at_rules()` cleans up stale data on re-seed
+- `_remove_stale_programme_at_links()` cleans up stale data on re-seed
 - Vocabulary config set in org meta
 - Meta field schemas for dimensions (e.g., address field on Location values)
 
@@ -666,7 +666,7 @@ Both seed scripts have been updated:
 Organization
   ├── Dimensions
   │     └── DimensionValues (with per-dimension custom fields via meta)
-  │           └── TagRules (valid combinations between values)
+  │           └── DimensionValueLinks (valid combinations between values)
   ├── ActivityTypes (formerly SessionTemplates)
   ├── Activities (formerly Sessions)
   │     ├── ActivityTags → DimensionValues
