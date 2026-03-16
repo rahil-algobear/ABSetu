@@ -96,9 +96,9 @@ def seed():
         if stale_perms:
             stale_ids = [p.id for p in stale_perms]
             stale_keys = [p.key for p in stale_perms]
-            db.query(RolePermission).filter(
-                RolePermission.permission_id.in_(stale_ids)
-            ).delete(synchronize_session="fetch")
+            db.query(RolePermission).filter(RolePermission.permission_id.in_(stale_ids)).delete(
+                synchronize_session="fetch"
+            )
             db.query(Permission).filter(Permission.id.in_(stale_ids)).delete(
                 synchronize_session="fetch"
             )
