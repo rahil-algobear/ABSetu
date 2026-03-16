@@ -2,14 +2,15 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { activityCategoryApi } from "@/services/api";
-import { ActivityCategory } from "@/types";
+import { activityCategoryApi, entityTypeApi } from "@/services/api";
+import { ActivityCategory, EntityType } from "@/types";
 import { Can } from "@/components/Auth/Permissions";
 import { useVocabulary } from "@/hooks/useVocabulary";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog } from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
 import {
   Table,
   TableHeader,
@@ -18,8 +19,36 @@ import {
   TableHead,
   TableCell,
 } from "@/components/ui/page-table";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Pencil, Trash2, GripVertical } from "lucide-react";
 import toast from "react-hot-toast";
+
+interface SectionConfig {
+  key: string;
+  label: string;
+  participant_source: string;
+  selection_mode: string;
+  min_count?: number | null;
+  max_count?: number | null;
+  capture_status: boolean;
+  statuses: string[];
+  default_status?: string | null;
+}
+
+const emptySectionConfig: SectionConfig = {
+  key: "",
+  label: "",
+  participant_source: "",
+  selection_mode: "multi_select",
+  capture_status: false,
+  statuses: [],
+  default_status: null,
+};
+
+const SELECTION_MODES = [
+  { value: "multi_select", label: "Multi-select (checkboxes)" },
+  { value: "enrolled_checklist", label: "Enrolled checklist (attendance)" },
+  { value: "single_select", label: "Single select" },
+];
 
 export default function ActivityCategoriesPage() {
   const queryClient = useQueryClient();
@@ -27,11 +56,26 @@ export default function ActivityCategoriesPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<ActivityCategory | null>(null);
   const [form, setForm] = useState({ name: "", key: "" });
+  const [sections, setSections] = useState<SectionConfig[]>([]);
 
   const { data: categories = [], isLoading } = useQuery({
     queryKey: ["activity-categories"],
     queryFn: activityCategoryApi.list,
   });
+
+  const { data: entityTypes = [] } = useQuery<EntityType[]>({
+    queryKey: ["entity-types"],
+    queryFn: entityTypeApi.list,
+  });
+
+  // Build participant source options from entity types + "user"
+  const participantSources = [
+    ...entityTypes.map((et) => ({
+      value: `entity_type:${et.key}`,
+      label: et.name,
+    })),
+    { value: "user", label: "Users (staff)" },
+  ];
 
   const createMutation = useMutation({
     mutationFn: activityCategoryApi.create,
@@ -66,12 +110,20 @@ export default function ActivityCategoriesPage() {
   const openCreate = () => {
     setEditing(null);
     setForm({ name: "", key: "" });
+    setSections([]);
     setModalOpen(true);
   };
 
   const openEdit = (item: ActivityCategory) => {
     setEditing(item);
     setForm({ name: item.name, key: item.key });
+    setSections(
+      (item.sections as SectionConfig[] | null)?.map((s) => ({
+        ...emptySectionConfig,
+        ...s,
+        statuses: s.statuses || [],
+      })) || []
+    );
     setModalOpen(true);
   };
 
@@ -82,14 +134,36 @@ export default function ActivityCategoriesPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const cleanedSections = sections.map((s) => ({
+      ...s,
+      statuses: s.capture_status ? s.statuses : [],
+      default_status: s.capture_status ? s.default_status : null,
+    }));
+
     if (editing) {
       updateMutation.mutate({
         id: editing.id,
-        data: { name: form.name },
+        data: { name: form.name, sections: cleanedSections },
       });
     } else {
-      createMutation.mutate({ name: form.name, key: form.key });
+      createMutation.mutate({
+        name: form.name,
+        key: form.key,
+        sections: cleanedSections,
+      });
     }
+  };
+
+  const addSection = () => {
+    setSections([...sections, { ...emptySectionConfig }]);
+  };
+
+  const updateSection = (index: number, updates: Partial<SectionConfig>) => {
+    setSections(sections.map((s, i) => (i === index ? { ...s, ...updates } : s)));
+  };
+
+  const removeSection = (index: number) => {
+    setSections(sections.filter((_, i) => i !== index));
   };
 
   return (
@@ -103,6 +177,11 @@ export default function ActivityCategoriesPage() {
           </Button>
         </Can>
       </div>
+
+      <p className="text-sm text-gray-500 mb-4">
+        Activity categories define the structure of a session — which participant
+        sections appear, what selection mode to use, and whether to capture attendance status.
+      </p>
 
       {isLoading ? (
         <p className="text-gray-500 text-sm">Loading...</p>
@@ -121,9 +200,24 @@ export default function ActivityCategoriesPage() {
           <TableBody>
             {categories.map((cat) => (
               <TableRow key={cat.id}>
-                <TableCell>{cat.name}</TableCell>
-                <TableCell className="text-gray-500">{cat.key}</TableCell>
-                <TableCell>{cat.sections?.length || 0} sections</TableCell>
+                <TableCell className="font-medium">{cat.name}</TableCell>
+                <TableCell className="text-gray-500 text-sm font-mono">{cat.key}</TableCell>
+                <TableCell>
+                  {(cat.sections as SectionConfig[] | null)?.length ? (
+                    <div className="flex flex-wrap gap-1">
+                      {(cat.sections as SectionConfig[]).map((s) => (
+                        <span
+                          key={s.key}
+                          className="inline-block text-xs bg-purple-50 text-purple-700 px-2 py-0.5 rounded-full"
+                        >
+                          {s.label}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-gray-400 text-sm">No sections</span>
+                  )}
+                </TableCell>
                 <TableCell>
                   <Can permission="activity_type:manage">
                     <div className="flex gap-1">
@@ -155,29 +249,170 @@ export default function ActivityCategoriesPage() {
         open={modalOpen}
         onClose={closeModal}
         title={editing ? `Edit ${v("activity_category")}` : `Add ${v("activity_category")}`}
+        className="max-w-2xl"
       >
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <div>
-            <Label htmlFor="name">Name</Label>
-            <Input
-              id="name"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              required
-            />
-          </div>
-          {!editing && (
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label htmlFor="key">Key</Label>
+              <Label htmlFor="name">Name</Label>
               <Input
-                id="key"
-                value={form.key}
-                onChange={(e) => setForm({ ...form, key: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "_") })}
+                id="name"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
                 required
-                placeholder="e.g. sessions"
               />
             </div>
-          )}
+            {!editing && (
+              <div>
+                <Label htmlFor="key">Key</Label>
+                <Input
+                  id="key"
+                  value={form.key}
+                  onChange={(e) => setForm({ ...form, key: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "_") })}
+                  required
+                  placeholder="e.g. sessions"
+                  className="font-mono text-sm"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Sections builder */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <Label className="text-sm font-semibold">Participant Sections</Label>
+              <Button type="button" size="sm" variant="outline" onClick={addSection}>
+                <Plus className="h-3 w-3 mr-1" />
+                Add Section
+              </Button>
+            </div>
+
+            {sections.length === 0 ? (
+              <p className="text-gray-400 text-sm border rounded-md p-4 text-center">
+                No sections yet. Add a section to define how participants are recorded.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {sections.map((section, idx) => (
+                  <div key={idx} className="border rounded-lg p-3 space-y-3 bg-gray-50">
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center gap-1 text-gray-400">
+                        <GripVertical className="h-4 w-4" />
+                        <span className="text-xs font-medium">Section {idx + 1}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeSection(idx)}
+                        className="text-gray-400 hover:text-red-500"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label className="text-xs">Label</Label>
+                        <Input
+                          value={section.label}
+                          onChange={(e) => {
+                            const label = e.target.value;
+                            const key = section.key || label.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
+                            updateSection(idx, { label, key });
+                          }}
+                          placeholder="e.g. Beneficiaries"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Key</Label>
+                        <Input
+                          value={section.key}
+                          onChange={(e) => updateSection(idx, { key: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "_") })}
+                          placeholder="auto-generated"
+                          className="font-mono text-sm"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label className="text-xs">Participant Source</Label>
+                        <select
+                          className="w-full border rounded-md p-2 text-sm"
+                          value={section.participant_source}
+                          onChange={(e) => updateSection(idx, { participant_source: e.target.value })}
+                          required
+                        >
+                          <option value="">Select source...</option>
+                          {participantSources.map((ps) => (
+                            <option key={ps.value} value={ps.value}>{ps.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <Label className="text-xs">Selection Mode</Label>
+                        <select
+                          className="w-full border rounded-md p-2 text-sm"
+                          value={section.selection_mode}
+                          onChange={(e) => updateSection(idx, { selection_mode: e.target.value })}
+                        >
+                          {SELECTION_MODES.map((m) => (
+                            <option key={m.value} value={m.value}>{m.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={section.capture_status}
+                          onCheckedChange={(checked) => updateSection(idx, {
+                            capture_status: checked,
+                            statuses: checked && section.statuses.length === 0 ? ["present", "absent"] : section.statuses,
+                            default_status: checked && !section.default_status ? "present" : section.default_status,
+                          })}
+                        />
+                        <Label className="text-xs">Capture attendance status</Label>
+                      </div>
+
+                      {section.capture_status && (
+                        <div className="grid grid-cols-2 gap-3 pl-6">
+                          <div>
+                            <Label className="text-xs">
+                              Statuses <span className="text-gray-400 font-normal">(comma-separated)</span>
+                            </Label>
+                            <Input
+                              value={section.statuses.join(", ")}
+                              onChange={(e) => updateSection(idx, {
+                                statuses: e.target.value.split(",").map((s) => s.trim()).filter(Boolean),
+                              })}
+                              placeholder="present, absent"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs">Default Status</Label>
+                            <select
+                              className="w-full border rounded-md p-2 text-sm"
+                              value={section.default_status || ""}
+                              onChange={(e) => updateSection(idx, { default_status: e.target.value || null })}
+                            >
+                              <option value="">None</option>
+                              {section.statuses.map((st) => (
+                                <option key={st} value={st}>{st}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={closeModal}>
               Cancel
