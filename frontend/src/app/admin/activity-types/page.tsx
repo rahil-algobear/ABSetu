@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { activityTypeApi, dimensionApi, metaFieldSchemaApi } from "@/services/api";
-import { ActivityType, Dimension, DimensionValue, MetaFieldDefinition } from "@/types";
+import { ActivityType, ActivityTypeAccess, Dimension, DimensionValue, MetaFieldDefinition } from "@/types";
 import { Can } from "@/components/Auth/Permissions";
 import { useVocabulary } from "@/hooks/useVocabulary";
 import { Button } from "@/components/ui/button";
@@ -64,6 +64,23 @@ export default function ActivityTypesPage() {
     },
     enabled: dimensions.length > 0,
   });
+
+  const { data: allAccess = [] } = useQuery<ActivityTypeAccess[]>({
+    queryKey: ["activity-type-access"],
+    queryFn: activityTypeApi.listAllAccess,
+  });
+
+  // Map: activity_type_id → Set of dimension_value_ids
+  const accessByType = new Map<string, Set<string>>();
+  for (const entry of allAccess) {
+    accessByType.set(entry.activity_type_id, new Set(entry.dimension_value_ids));
+  }
+
+  // Map dimension value id → DimensionValue for badge rendering
+  const dvMap = new Map<string, DimensionValue>();
+  for (const dv of allDimensionValues) {
+    dvMap.set(dv.id, dv);
+  }
 
   // Group dimension values by dimension
   const dvsByDimension = selectableDimensions.map((dim) => ({
@@ -226,6 +243,9 @@ export default function ActivityTypesPage() {
               {metaFields.map((f) => (
                 <TableHead key={f.key}>{f.label}</TableHead>
               ))}
+              {selectableDimensions.map((dim) => (
+                <TableHead key={dim.id}>{dim.name}</TableHead>
+              ))}
               <TableHead className="w-24">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -241,6 +261,27 @@ export default function ActivityTypesPage() {
                     <MetaFieldDisplay fields={[f]} values={at.meta || {}} />
                   </TableCell>
                 ))}
+                {selectableDimensions.map((dim) => {
+                  const atAccess = accessByType.get(at.id) ?? new Set<string>();
+                  const values = Array.from(atAccess)
+                    .map((id) => dvMap.get(id))
+                    .filter((dv): dv is DimensionValue => dv?.dimension_id === dim.id);
+                  return (
+                    <TableCell key={dim.id}>
+                      <div className="flex flex-wrap gap-1">
+                        {values.length ? (
+                          values.map((dv) => (
+                            <span key={dv.id} className="inline-block text-sm bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">
+                              {dv.name}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-sm text-gray-400">All</span>
+                        )}
+                      </div>
+                    </TableCell>
+                  );
+                })}
                 <TableCell>
                   <Can permission="activity_type:manage">
                     <div className="flex items-center gap-2">
