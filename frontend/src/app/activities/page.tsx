@@ -6,7 +6,6 @@ import {
   activityApi,
   activityTypeApi,
   dimensionApi,
-  facilitatorApi,
   dimensionValueLinkApi,
 } from "@/services/api";
 import { Dimension, DimensionValue, DimensionValueLink } from "@/types";
@@ -24,19 +23,13 @@ import toast from "react-hot-toast";
 /**
  * Given a set of tag rules and the currently selected dimension value IDs,
  * return the filtered list of allowed values for a target dimension.
- *
- * Logic: for each *other* dimension that has a selection, find tag rules
- * linking that selection to values in the target dimension. A target value
- * is allowed only if it has a rule with every selected value from other dims.
- * If no other dimension has a selection, all values are allowed.
  */
 function getFilteredValues(
   targetDimValues: DimensionValue[],
-  selectedByDim: Record<string, string>, // dimId → selected dvId
+  selectedByDim: Record<string, string>,
   targetDimId: string,
   dimensionValueLinks: DimensionValueLink[],
 ): DimensionValue[] {
-  // Collect selections from OTHER dimensions (not the target)
   const otherSelections = Object.entries(selectedByDim)
     .filter(([dimId, dvId]) => dimId !== targetDimId && dvId)
     .map(([, dvId]) => dvId);
@@ -45,14 +38,12 @@ function getFilteredValues(
     return targetDimValues;
   }
 
-  // Build a set of (dv1, dv2) pairs from links for fast lookup
   const linkPairs = new Set<string>();
   for (const link of dimensionValueLinks) {
     linkPairs.add(`${link.dimension_value_id_1}:${link.dimension_value_id_2}`);
     linkPairs.add(`${link.dimension_value_id_2}:${link.dimension_value_id_1}`);
   }
 
-  // A target value is allowed if it has a link with EVERY other selection
   return targetDimValues.filter((dv) =>
     otherSelections.every(
       (selectedId) => linkPairs.has(`${dv.id}:${selectedId}`)
@@ -78,11 +69,6 @@ export default function ActivitiesPage() {
   const { data: dimensions = [] } = useQuery<Dimension[]>({
     queryKey: ["dimensions"],
     queryFn: dimensionApi.list,
-  });
-
-  const { data: facilitators = [] } = useQuery({
-    queryKey: ["facilitators"],
-    queryFn: facilitatorApi.list,
   });
 
   // Load all dimension values
@@ -119,7 +105,6 @@ export default function ActivitiesPage() {
     activity_type_id: "",
     date: new Date().toISOString().split("T")[0],
     notes: "",
-    facilitator_ids: [] as string[],
     dimension_value_ids: [] as string[],
   });
 
@@ -170,7 +155,6 @@ export default function ActivitiesPage() {
         activity_type_id: "",
         date: new Date().toISOString().split("T")[0],
         notes: "",
-        facilitator_ids: [],
         dimension_value_ids: [],
       });
       toast.success(`${v("activity")} created`);
@@ -281,27 +265,6 @@ export default function ActivitiesPage() {
               </div>
 
               <div>
-                <label className="text-sm font-medium">{vPlural("facilitator")}</label>
-                <div className="mt-1 space-y-1 max-h-32 overflow-y-auto border rounded-md p-2">
-                  {facilitators.map((f) => (
-                    <label key={f.id} className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={formData.facilitator_ids.includes(f.id)}
-                        onChange={(e) => {
-                          const ids = e.target.checked
-                            ? [...formData.facilitator_ids, f.id]
-                            : formData.facilitator_ids.filter((id) => id !== f.id);
-                          setFormData({ ...formData, facilitator_ids: ids });
-                        }}
-                      />
-                      {f.name}
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              <div>
                 <label className="text-sm font-medium">Notes</label>
                 <Input
                   placeholder="Optional notes..."
@@ -354,10 +317,8 @@ export default function ActivitiesPage() {
                     </div>
                     <div className="text-right">
                       <p className="text-sm font-medium">{a.date}</p>
-                      {a.facilitators.length > 0 && (
-                        <p className="text-xs text-gray-500">
-                          {a.facilitators.map((f) => f.name).join(", ")}
-                        </p>
+                      {a.category_name && (
+                        <p className="text-xs text-gray-500">{a.category_name}</p>
                       )}
                     </div>
                   </div>

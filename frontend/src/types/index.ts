@@ -96,23 +96,15 @@ export interface DimensionValueLink {
   updated_at: number | null;
 }
 
-// --- Activities ---
+// --- Entity Types & Entities ---
 
-export interface ActivityType {
+export interface EntityType {
   id: string;
   organization_id: string;
   name: string;
-  description: string | null;
-  meta: Record<string, unknown> | null;
-  updated_at: number | null;
-}
-
-export interface Facilitator {
-  id: string;
-  organization_id: string;
-  name: string;
-  contact: string | null;
-  meta: Record<string, unknown> | null;
+  key: string;
+  config: Record<string, unknown> | null;
+  sort_order: number;
   updated_at: number | null;
 }
 
@@ -124,6 +116,42 @@ export interface DimensionTagInfo {
   value_code: string;
 }
 
+export interface Entity {
+  id: string;
+  organization_id: string;
+  entity_type_id: string;
+  case_number: string | null;
+  name: string;
+  meta: Record<string, unknown> | null;
+  entity_type_name: string | null;
+  entity_type_key: string | null;
+  tags: DimensionTagInfo[];
+  updated_at: number | null;
+}
+
+// --- Activity Categories & Types ---
+
+export interface ActivityCategory {
+  id: string;
+  organization_id: string;
+  name: string;
+  key: string;
+  sections: Record<string, unknown>[] | null;
+  sort_order: number;
+  updated_at: number | null;
+}
+
+export interface ActivityType {
+  id: string;
+  organization_id: string;
+  category_id: string | null;
+  name: string;
+  description: string | null;
+  meta: Record<string, unknown> | null;
+  category_name: string | null;
+  updated_at: number | null;
+}
+
 export interface Activity {
   id: string;
   organization_id: string;
@@ -133,18 +161,20 @@ export interface Activity {
   created_by: string | null;
   meta: Record<string, unknown> | null;
   type_name: string | null;
-  facilitators: Facilitator[];
+  category_name: string | null;
   tags: DimensionTagInfo[];
   updated_at: number | null;
 }
 
-export interface Participation {
+export interface ActivityParticipant {
   id: string;
   activity_id: string;
-  beneficiary_id: string;
-  status: string;
+  participant_type: string; // "entity" or "user"
+  participant_id: string;
+  section_key: string;
+  status: string | null;
   meta: Record<string, unknown> | null;
-  beneficiary_name: string | null;
+  participant_name: string | null;
   updated_at: number | null;
 }
 
@@ -160,7 +190,7 @@ export interface MetaFieldDefinition {
   options?: string[]; // for select/multiselect
 }
 
-export type EntityType = string; // dynamic: "activity_type" | "facilitator" | "beneficiary" | "enrollment" | "activity" | "participation" | "dimension:{key}"
+export type MetaEntityType = string; // dynamic key for meta field schemas: "entity:{key}" | "enrollment" | "activity" | etc.
 
 export type MetaFieldSchemas = Partial<Record<string, MetaFieldDefinition[]>>;
 
@@ -201,26 +231,16 @@ export interface UserAccess {
   dimension_value_ids: string[];
 }
 
-// --- Beneficiaries ---
-
-export interface Beneficiary {
-  id: string;
-  organization_id: string;
-  case_number: string;
-  name: string;
-  meta: Record<string, unknown> | null;
-  tags: DimensionTagInfo[];
-  updated_at: number | null;
-}
+// --- Enrollments ---
 
 export interface Enrollment {
   id: string;
   organization_id: string;
-  beneficiary_id: string;
+  entity_id: string;
   admission_date: string;
   release_date: string | null;
   meta: Record<string, unknown> | null;
-  beneficiary_name: string | null;
+  entity_name: string | null;
   tags: DimensionTagInfo[];
   updated_at: number | null;
 }

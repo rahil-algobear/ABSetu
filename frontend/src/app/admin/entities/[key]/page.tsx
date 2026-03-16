@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { beneficiaryApi, metaFieldSchemaApi } from "@/services/api";
-import { Beneficiary, MetaFieldDefinition } from "@/types";
+import { entityApi, entityTypeApi, metaFieldSchemaApi } from "@/services/api";
+import { Entity, MetaFieldDefinition } from "@/types";
 import { Can } from "@/components/Auth/Permissions";
+import { useVocabulary } from "@/hooks/useVocabulary";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,43 +24,56 @@ import { Plus, Pencil, Search } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 
-export default function BeneficiariesSettingsPage() {
+export default function EntityTypeEntitiesPage() {
+  const { key } = useParams<{ key: string }>();
   const queryClient = useQueryClient();
+  const { v } = useVocabulary();
   const [modalOpen, setModalOpen] = useState(false);
-  const [editing, setEditing] = useState<Beneficiary | null>(null);
+  const [editing, setEditing] = useState<Entity | null>(null);
   const [form, setForm] = useState({ name: "" });
   const [metaValues, setMetaValues] = useState<Record<string, unknown>>({});
   const [search, setSearch] = useState("");
 
-  const { data: beneficiaries = [], isLoading } = useQuery({
-    queryKey: ["beneficiaries"],
-    queryFn: beneficiaryApi.list,
+  // Find the entity type by key
+  const { data: entityTypes = [] } = useQuery({
+    queryKey: ["entity-types"],
+    queryFn: entityTypeApi.list,
   });
 
+  const entityType = entityTypes.find((et) => et.key === key);
+
+  const { data: entities = [], isLoading } = useQuery({
+    queryKey: ["entities", entityType?.id],
+    queryFn: () => entityApi.list(entityType?.id),
+    enabled: !!entityType,
+  });
+
+  // Use entity-type-specific meta fields if available, fallback to generic
+  const metaSchemaKey = `entity:${key}`;
   const { data: metaFields = [] } = useQuery<MetaFieldDefinition[]>({
-    queryKey: ["meta-field-schemas", "beneficiary"],
-    queryFn: () => metaFieldSchemaApi.get("beneficiary"),
+    queryKey: ["meta-field-schemas", metaSchemaKey],
+    queryFn: () => metaFieldSchemaApi.get(metaSchemaKey),
   });
 
   const createMutation = useMutation({
-    mutationFn: beneficiaryApi.create,
+    mutationFn: entityApi.create,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["beneficiaries"] });
+      queryClient.invalidateQueries({ queryKey: ["entities"] });
       closeModal();
-      toast.success("Beneficiary created");
+      toast.success(`${entityType?.name || v("entity")} created`);
     },
-    onError: () => toast.error("Failed to create beneficiary"),
+    onError: () => toast.error(`Failed to create`),
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<Beneficiary> }) =>
-      beneficiaryApi.update(id, data),
+    mutationFn: ({ id, data }: { id: string; data: Parameters<typeof entityApi.update>[1] }) =>
+      entityApi.update(id, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["beneficiaries"] });
+      queryClient.invalidateQueries({ queryKey: ["entities"] });
       closeModal();
-      toast.success("Beneficiary updated");
+      toast.success(`${entityType?.name || v("entity")} updated`);
     },
-    onError: () => toast.error("Failed to update beneficiary"),
+    onError: () => toast.error(`Failed to update`),
   });
 
   const openCreate = () => {
@@ -68,7 +83,7 @@ export default function BeneficiariesSettingsPage() {
     setModalOpen(true);
   };
 
-  const openEdit = (item: Beneficiary) => {
+  const openEdit = (item: Entity) => {
     setEditing(item);
     setForm({ name: item.name });
     setMetaValues(item.meta || {});
@@ -86,27 +101,35 @@ export default function BeneficiariesSettingsPage() {
     if (editing) {
       updateMutation.mutate({
         id: editing.id,
-        data: { ...form, meta: meta || null },
+        data: { name: form.name, meta: meta || null },
       });
     } else {
-      createMutation.mutate({ ...form, meta });
+      createMutation.mutate({
+        entity_type_id: entityType!.id,
+        name: form.name,
+        meta,
+      });
     }
   };
 
-  const filtered = beneficiaries.filter(
-    (b) =>
-      b.name.toLowerCase().includes(search.toLowerCase()) ||
-      b.case_number.toLowerCase().includes(search.toLowerCase())
+  const filtered = entities.filter(
+    (e) =>
+      e.name.toLowerCase().includes(search.toLowerCase()) ||
+      (e.case_number || "").toLowerCase().includes(search.toLowerCase())
   );
+
+  const typeName = entityType?.name || key;
+  const config = (entityType?.config || {}) as Record<string, boolean>;
+  const hasCaseNumber = config.case_number_enabled;
 
   return (
     <>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold">Beneficiaries</h2>
-        <Can permission="beneficiary:create">
+        <h2 className="text-lg font-semibold">{typeName}</h2>
+        <Can permission="entity:create">
           <Button size="sm" onClick={openCreate}>
             <Plus className="h-4 w-4 mr-1" />
-            Add Beneficiary
+            Add {typeName}
           </Button>
         </Can>
       </div>
@@ -114,7 +137,7 @@ export default function BeneficiariesSettingsPage() {
       <div className="relative mb-4">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
         <Input
-          placeholder="Search by name or case number..."
+          placeholder={`Search ${typeName.toLowerCase()}...`}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="pl-10"
@@ -124,13 +147,13 @@ export default function BeneficiariesSettingsPage() {
       {isLoading ? (
         <p className="text-gray-500 text-sm">Loading...</p>
       ) : filtered.length === 0 ? (
-        <p className="text-gray-500 text-sm">No beneficiaries found.</p>
+        <p className="text-gray-500 text-sm">No {typeName.toLowerCase()} found.</p>
       ) : (
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>Name</TableHead>
-              <TableHead>Case No.</TableHead>
+              {hasCaseNumber && <TableHead>Case No.</TableHead>}
               {metaFields.map((f) => (
                 <TableHead key={f.key}>{f.label}</TableHead>
               ))}
@@ -138,28 +161,28 @@ export default function BeneficiariesSettingsPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filtered.map((b) => (
-              <TableRow key={b.id}>
+            {filtered.map((e) => (
+              <TableRow key={e.id}>
                 <TableCell>
                   <Link
-                    href={`/beneficiaries/${b.id}`}
+                    href={`/entities/${e.id}`}
                     className="text-purple-600 hover:underline"
                   >
-                    {b.name}
+                    {e.name}
                   </Link>
                 </TableCell>
-                <TableCell>{b.case_number}</TableCell>
+                {hasCaseNumber && <TableCell>{e.case_number || "—"}</TableCell>}
                 {metaFields.map((f) => (
                   <TableCell key={f.key}>
-                    {b.meta?.[f.key] !== undefined
-                      ? String(b.meta[f.key])
+                    {e.meta?.[f.key] !== undefined
+                      ? String(e.meta[f.key])
                       : "—"}
                   </TableCell>
                 ))}
                 <TableCell>
-                  <Can permission="beneficiary:edit">
+                  <Can permission="entity:edit">
                     <button
-                      onClick={() => openEdit(b)}
+                      onClick={() => openEdit(e)}
                       className="text-gray-400 hover:text-purple-600"
                     >
                       <Pencil className="h-4 w-4" />
@@ -175,7 +198,7 @@ export default function BeneficiariesSettingsPage() {
       <Dialog
         open={modalOpen}
         onClose={closeModal}
-        title={editing ? "Edit Beneficiary" : "Add Beneficiary"}
+        title={editing ? `Edit ${typeName}` : `Add ${typeName}`}
       >
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>

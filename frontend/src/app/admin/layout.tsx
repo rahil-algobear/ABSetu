@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { PageLayout } from "@/components/ui/page-layout";
 import { usePermissions } from "@/components/Auth/Permissions";
-import { dimensionApi } from "@/services/api";
+import { dimensionApi, entityTypeApi } from "@/services/api";
 import { cn } from "@/utils/cn";
 import { useVocabulary } from "@/hooks/useVocabulary";
 import {
@@ -34,7 +34,13 @@ export default function AdminLayout({
     staleTime: 5 * 60 * 1000,
   });
 
-  // Build tabs: one per non-system dimension + static tabs
+  const { data: entityTypes = [] } = useQuery({
+    queryKey: ["entity-types"],
+    queryFn: entityTypeApi.list,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Build tabs: one per non-system dimension
   const dimensionTabs = dimensions
     .filter((d) => !d.is_system)
     .map((d) => ({
@@ -44,17 +50,25 @@ export default function AdminLayout({
       permission: "dimension:view",
     }));
 
+  // Build tabs: one per entity type (like dimensions)
+  const entityTypeTabs = entityTypes.map((et) => ({
+    href: `/admin/entities/${et.key}`,
+    label: et.name,
+    icon: Users,
+    permission: "entity:view",
+  }));
+
   const staticTabs = [
     { href: "/admin/dimension-linking", label: "Dimension Linking", icon: Link2, permission: "dimension:view" },
+    { href: "/admin/entity-types", label: vPlural("entity_type"), icon: UserCheck, permission: "entity_type:view" },
+    { href: "/admin/activity-categories", label: vPlural("activity_category"), icon: ClipboardList, permission: "activity_type:view" },
     { href: "/admin/activity-types", label: vPlural("activity_type"), icon: ClipboardList, permission: "activity_type:view" },
-    { href: "/admin/facilitators", label: vPlural("facilitator"), icon: UserCheck, permission: "facilitator:view" },
-    { href: "/admin/beneficiaries", label: vPlural("beneficiary"), icon: Users, permission: "beneficiary:view" },
     { href: "/admin/roles", label: "Roles", icon: Shield, permission: "role:view" },
     { href: "/admin/users", label: "Users", icon: Users, permission: "user:view" },
     { href: "/admin/meta-fields", label: "Custom Fields", icon: SlidersHorizontal, permission: "org:settings" },
   ];
 
-  const allTabs = [...dimensionTabs, ...staticTabs];
+  const allTabs = [...dimensionTabs, ...entityTypeTabs, ...staticTabs];
   const visibleTabs = allTabs.filter((tab) => can(tab.permission));
 
   // Check if user has permission for the current page

@@ -194,9 +194,10 @@ export default function Navigation() {
 
   const settingsItems = [
     { href: "/admin/dimensions", label: "Dimensions", icon: Building2, permission: "dimension:view" },
+    { href: "/admin/entity-types", label: vPlural("entity_type"), icon: UserCog, permission: "entity_type:view" },
+    { href: "/admin/entities", label: vPlural("entity"), icon: Users, permission: "entity:view" },
+    { href: "/admin/activity-categories", label: vPlural("activity_category"), icon: Building2, permission: "activity_type:view" },
     { href: "/admin/activity-types", label: vPlural("activity_type"), icon: Building2, permission: "activity_type:view" },
-    { href: "/admin/facilitators", label: vPlural("facilitator"), icon: UserCog, permission: "facilitator:view" },
-    { href: "/admin/beneficiaries", label: vPlural("beneficiary"), icon: Users, permission: "beneficiary:view" },
     { href: "/admin/roles", label: "Roles", icon: Shield, permission: "role:view" },
     { href: "/admin/users", label: "Users", icon: Users, permission: "user:view" },
   ];

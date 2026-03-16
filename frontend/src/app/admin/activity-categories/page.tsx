@@ -2,14 +2,14 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { facilitatorApi, metaFieldSchemaApi } from "@/services/api";
-import { Facilitator, MetaFieldDefinition } from "@/types";
+import { activityCategoryApi } from "@/services/api";
+import { ActivityCategory } from "@/types";
 import { Can } from "@/components/Auth/Permissions";
+import { useVocabulary } from "@/hooks/useVocabulary";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog } from "@/components/ui/dialog";
-import { DynamicMetaForm } from "@/components/DynamicMetaForm";
 import {
   Table,
   TableHeader,
@@ -21,63 +21,57 @@ import {
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
 
-export default function FacilitatorsPage() {
+export default function ActivityCategoriesPage() {
   const queryClient = useQueryClient();
+  const { v, vPlural } = useVocabulary();
   const [modalOpen, setModalOpen] = useState(false);
-  const [editing, setEditing] = useState<Facilitator | null>(null);
-  const [form, setForm] = useState({ name: "", contact: "" });
-  const [metaValues, setMetaValues] = useState<Record<string, unknown>>({});
+  const [editing, setEditing] = useState<ActivityCategory | null>(null);
+  const [form, setForm] = useState({ name: "", key: "" });
 
-  const { data: facilitators = [], isLoading } = useQuery({
-    queryKey: ["facilitators"],
-    queryFn: facilitatorApi.list,
-  });
-
-  const { data: metaFields = [] } = useQuery<MetaFieldDefinition[]>({
-    queryKey: ["meta-field-schemas", "facilitator"],
-    queryFn: () => metaFieldSchemaApi.get("facilitator"),
+  const { data: categories = [], isLoading } = useQuery({
+    queryKey: ["activity-categories"],
+    queryFn: activityCategoryApi.list,
   });
 
   const createMutation = useMutation({
-    mutationFn: facilitatorApi.create,
+    mutationFn: activityCategoryApi.create,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["facilitators"] });
+      queryClient.invalidateQueries({ queryKey: ["activity-categories"] });
       closeModal();
-      toast.success("Facilitator created");
+      toast.success(`${v("activity_category")} created`);
     },
-    onError: () => toast.error("Failed to create facilitator"),
+    onError: () => toast.error(`Failed to create ${v("activity_category").toLowerCase()}`),
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<Facilitator> }) =>
-      facilitatorApi.update(id, data),
+    mutationFn: ({ id, data }: { id: string; data: Parameters<typeof activityCategoryApi.update>[1] }) =>
+      activityCategoryApi.update(id, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["facilitators"] });
+      queryClient.invalidateQueries({ queryKey: ["activity-categories"] });
       closeModal();
-      toast.success("Facilitator updated");
+      toast.success(`${v("activity_category")} updated`);
     },
-    onError: () => toast.error("Failed to update facilitator"),
+    onError: () => toast.error(`Failed to update ${v("activity_category").toLowerCase()}`),
   });
 
   const deleteMutation = useMutation({
-    mutationFn: facilitatorApi.delete,
+    mutationFn: activityCategoryApi.delete,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["facilitators"] });
-      toast.success("Facilitator deleted");
+      queryClient.invalidateQueries({ queryKey: ["activity-categories"] });
+      toast.success(`${v("activity_category")} deleted`);
     },
+    onError: () => toast.error("Failed to delete — it may have activity types"),
   });
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ name: "", contact: "" });
-    setMetaValues({});
+    setForm({ name: "", key: "" });
     setModalOpen(true);
   };
 
-  const openEdit = (item: Facilitator) => {
+  const openEdit = (item: ActivityCategory) => {
     setEditing(item);
-    setForm({ name: item.name, contact: item.contact || "" });
-    setMetaValues(item.meta || {});
+    setForm({ name: item.name, key: item.key });
     setModalOpen(true);
   };
 
@@ -88,70 +82,61 @@ export default function FacilitatorsPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const meta = Object.keys(metaValues).length > 0 ? metaValues : undefined;
     if (editing) {
       updateMutation.mutate({
         id: editing.id,
-        data: { ...form, meta: meta || null },
+        data: { name: form.name },
       });
     } else {
-      createMutation.mutate({ ...form, meta });
+      createMutation.mutate({ name: form.name, key: form.key });
     }
   };
 
   return (
     <>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold">Facilitators</h2>
-        <Can permission="facilitator:manage">
+        <h2 className="text-lg font-semibold">{vPlural("activity_category")}</h2>
+        <Can permission="activity_type:manage">
           <Button size="sm" onClick={openCreate}>
             <Plus className="h-4 w-4 mr-1" />
-            Add Facilitator
+            Add {v("activity_category")}
           </Button>
         </Can>
       </div>
 
       {isLoading ? (
         <p className="text-gray-500 text-sm">Loading...</p>
-      ) : facilitators.length === 0 ? (
-        <p className="text-gray-500 text-sm">No facilitators yet.</p>
+      ) : categories.length === 0 ? (
+        <p className="text-gray-500 text-sm">No {vPlural("activity_category").toLowerCase()} yet.</p>
       ) : (
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>Name</TableHead>
-              <TableHead>Contact</TableHead>
-              {metaFields.map((f) => (
-                <TableHead key={f.key}>{f.label}</TableHead>
-              ))}
+              <TableHead>Key</TableHead>
+              <TableHead>Sections</TableHead>
               <TableHead className="w-20">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {facilitators.map((f) => (
-              <TableRow key={f.id}>
-                <TableCell>{f.name}</TableCell>
-                <TableCell>{f.contact || "—"}</TableCell>
-                {metaFields.map((mf) => (
-                  <TableCell key={mf.key}>
-                    {f.meta?.[mf.key] !== undefined
-                      ? String(f.meta[mf.key])
-                      : "—"}
-                  </TableCell>
-                ))}
+            {categories.map((cat) => (
+              <TableRow key={cat.id}>
+                <TableCell>{cat.name}</TableCell>
+                <TableCell className="text-gray-500">{cat.key}</TableCell>
+                <TableCell>{cat.sections?.length || 0} sections</TableCell>
                 <TableCell>
-                  <Can permission="facilitator:manage">
+                  <Can permission="activity_type:manage">
                     <div className="flex gap-1">
                       <button
-                        onClick={() => openEdit(f)}
+                        onClick={() => openEdit(cat)}
                         className="text-gray-400 hover:text-purple-600"
                       >
                         <Pencil className="h-4 w-4" />
                       </button>
                       <button
                         onClick={() => {
-                          if (confirm("Delete this facilitator?"))
-                            deleteMutation.mutate(f.id);
+                          if (confirm(`Delete this ${v("activity_category").toLowerCase()}?`))
+                            deleteMutation.mutate(cat.id);
                         }}
                         className="text-gray-400 hover:text-red-500"
                       >
@@ -169,7 +154,7 @@ export default function FacilitatorsPage() {
       <Dialog
         open={modalOpen}
         onClose={closeModal}
-        title={editing ? "Edit Facilitator" : "Add Facilitator"}
+        title={editing ? `Edit ${v("activity_category")}` : `Add ${v("activity_category")}`}
       >
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>
@@ -181,19 +166,18 @@ export default function FacilitatorsPage() {
               required
             />
           </div>
-          <div>
-            <Label htmlFor="contact">Contact</Label>
-            <Input
-              id="contact"
-              value={form.contact}
-              onChange={(e) => setForm({ ...form, contact: e.target.value })}
-            />
-          </div>
-          <DynamicMetaForm
-            fields={metaFields}
-            values={metaValues}
-            onChange={setMetaValues}
-          />
+          {!editing && (
+            <div>
+              <Label htmlFor="key">Key</Label>
+              <Input
+                id="key"
+                value={form.key}
+                onChange={(e) => setForm({ ...form, key: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "_") })}
+                required
+                placeholder="e.g. sessions"
+              />
+            </div>
+          )}
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={closeModal}>
               Cancel

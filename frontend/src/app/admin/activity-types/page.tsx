@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { activityTypeApi, metaFieldSchemaApi, dimensionApi, dimensionValueLinkApi } from "@/services/api";
+import { activityTypeApi, activityCategoryApi, metaFieldSchemaApi, dimensionApi, dimensionValueLinkApi } from "@/services/api";
 import { ActivityType, MetaFieldDefinition, Dimension, DimensionValue, DimensionValueLink } from "@/types";
 import { Can } from "@/components/Auth/Permissions";
 import { useVocabulary } from "@/hooks/useVocabulary";
@@ -29,12 +29,17 @@ export default function ActivityTypesPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [matrixOpen, setMatrixOpen] = useState(false);
   const [editing, setEditing] = useState<ActivityType | null>(null);
-  const [form, setForm] = useState({ name: "", description: "" });
+  const [form, setForm] = useState({ name: "", description: "", category_id: "" });
   const [metaValues, setMetaValues] = useState<Record<string, unknown>>({});
 
   const { data: types = [], isLoading } = useQuery({
     queryKey: ["activity-types"],
     queryFn: activityTypeApi.list,
+  });
+
+  const { data: categories = [] } = useQuery({
+    queryKey: ["activity-categories"],
+    queryFn: activityCategoryApi.list,
   });
 
   const { data: metaFields = [] } = useQuery<MetaFieldDefinition[]>({
@@ -152,14 +157,14 @@ export default function ActivityTypesPage() {
 
   const openAdd = () => {
     setEditing(null);
-    setForm({ name: "", description: "" });
+    setForm({ name: "", description: "", category_id: "" });
     setMetaValues({});
     setModalOpen(true);
   };
 
   const openEdit = (at: ActivityType) => {
     setEditing(at);
-    setForm({ name: at.name, description: at.description || "" });
+    setForm({ name: at.name, description: at.description || "", category_id: at.category_id || "" });
     setMetaValues(at.meta || {});
     setModalOpen(true);
   };
@@ -172,10 +177,16 @@ export default function ActivityTypesPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const meta = Object.keys(metaValues).length > 0 ? metaValues : undefined;
+    const data = {
+      name: form.name,
+      description: form.description || undefined,
+      category_id: form.category_id || undefined,
+      meta,
+    };
     if (editing) {
-      updateMutation.mutate({ id: editing.id, data: { ...form, meta } as Partial<ActivityType> });
+      updateMutation.mutate({ id: editing.id, data: data as Partial<ActivityType> });
     } else {
-      createMutation.mutate({ ...form, meta });
+      createMutation.mutate(data);
     }
   };
 
@@ -208,6 +219,7 @@ export default function ActivityTypesPage() {
           <TableHeader>
             <TableRow>
               <TableHead>Name</TableHead>
+              <TableHead>Category</TableHead>
               <TableHead>Description</TableHead>
               {nonSystemDimensions.map((dim) => (
                 <TableHead key={dim.id}>{vDim(dim)}</TableHead>
@@ -225,6 +237,9 @@ export default function ActivityTypesPage() {
               return (
                 <TableRow key={at.id}>
                   <TableCell className="font-medium">{at.name}</TableCell>
+                  <TableCell className="text-gray-500 text-sm">
+                    {at.category_name || "—"}
+                  </TableCell>
                   <TableCell className="text-gray-500 text-sm">
                     {at.description || "—"}
                   </TableCell>
@@ -300,6 +315,20 @@ export default function ActivityTypesPage() {
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               required
             />
+          </div>
+          <div>
+            <Label htmlFor="at-category">{v("activity_category")}</Label>
+            <select
+              id="at-category"
+              className="w-full mt-1 border rounded-md p-2 text-sm"
+              value={form.category_id}
+              onChange={(e) => setForm({ ...form, category_id: e.target.value })}
+            >
+              <option value="">None</option>
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.id}>{cat.name}</option>
+              ))}
+            </select>
           </div>
           <div>
             <Label htmlFor="at-desc">Description</Label>
