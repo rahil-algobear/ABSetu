@@ -1219,7 +1219,141 @@ function renderActivityForm(activityType) {
 
 ---
 
-## Change 4: Settings Navigation Updates
+## Change 4: Enrollments
+
+Enrollments link an entity to a set of dimension values for a period of time. They determine **who shows up in the `enrolled_checklist`** when creating an activity. Not yet built — clean start with the v2 model.
+
+### Who can be enrolled?
+
+Only entity types with `can_enroll: true` in their config. For Kshamata: beneficiaries yes, facilitators no. An org tracking children and caregivers might enable enrollment for both.
+
+### Tables
+
+#### `enrollments`
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID | PK |
+| `entity_id` | UUID | FK → entities, NOT NULL |
+| `organization_id` | UUID | FK → organizations, NOT NULL |
+| `admission_date` | Date | When enrolled |
+| `release_date` | Date | Nullable — null means still active |
+| `meta` | JSONB | Custom fields from form field schemas (`"enrollment"`) |
+| `created_at` | Timestamp | From BaseModel |
+| `updated_at` | Timestamp | From BaseModel |
+
+A single entity can have multiple enrollments — different dimension value combinations (different programmes/locations), or re-enrollment after release.
+
+#### `enrollment_tags`
+
+Links the enrollment to specific dimension values.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID | PK |
+| `enrollment_id` | UUID | FK → enrollments, NOT NULL |
+| `dimension_value_id` | UUID | FK → dimension_values, NOT NULL |
+
+Unique constraint: `(enrollment_id, dimension_value_id)`
+
+**Example — Amit enrolled at ShantiSadan in Outreach programme:**
+| enrollment_id | dimension_value_id |
+|---------------|--------------------|
+| enr-001 | Location:ShantiSadan |
+| enr-001 | Programme:Outreach |
+
+### How enrolled_checklist works
+
+When a field worker creates an activity and selects dimension values (e.g. Location:ShantiSadan + Programme:Outreach), the enrolled checklist section queries for entities whose active enrollments match **all** the selected dimension values:
+
+```sql
+SELECT e.*
+FROM entities e
+JOIN enrollments en ON en.entity_id = e.id
+  AND en.release_date IS NULL  -- still active
+JOIN enrollment_tags et ON et.enrollment_id = en.id
+WHERE e.entity_type_id = :beneficiary_type_id
+  AND et.dimension_value_id IN (:selected_dimension_value_ids)
+GROUP BY e.id
+HAVING COUNT(DISTINCT et.dimension_value_id) = :number_of_selected_dimensions
+```
+
+Only entities enrolled under **all** the selected dimension values appear in the checklist.
+
+### API Endpoints
+
+```
+POST   /api/enrollments                     → create (entity_id + dimension_value_ids[] + dates + meta)
+GET    /api/enrollments                     → list (filterable by entity, dimension values, active/released)
+PUT    /api/enrollments/{id}                → update (change dates, meta)
+PUT    /api/enrollments/{id}/release        → set release_date (end enrollment)
+```
+
+### Frontend
+
+**Two entry points for managing enrollments:**
+
+#### 1. Entity profile page → "Enrollments" tab
+
+Shows this entity's enrollment history. Admin can add, edit, or release enrollments.
+
+```
+┌─ Amit — Enrollments ─────────────────────────────────┐
+│                                                       │
+│  ● Active                                    [+ New]  │
+│  ┌───────────────────────────────────────────────┐    │
+│  │ ShantiSadan · Outreach                        │    │
+│  │ Admitted: Jan 1, 2025                         │    │
+│  │ Status: Active                    [Release]   │    │
+│  └───────────────────────────────────────────────┘    │
+│                                                       │
+│  ○ Released                                           │
+│  ┌───────────────────────────────────────────────┐    │
+│  │ Kasturba · Transformation                     │    │
+│  │ Admitted: Mar 15, 2024 → Released: Dec 1, 2024│    │
+│  └───────────────────────────────────────────────┘    │
+│                                                       │
+└───────────────────────────────────────────────────────┘
+```
+
+#### 2. Enrollment form (from profile or standalone)
+
+```
+┌─ New Enrollment ─────────────────────────────┐
+│                                               │
+│  Entity: [Amit]  (pre-filled if from profile) │
+│                                               │
+│  [Location dropdown: ShantiSadan ▼]           │
+│  [Programme dropdown: Outreach ▼]             │
+│  ... (one dropdown per dimension, cascading    │
+│       via tag rules)                          │
+│                                               │
+│  Admission Date: [2025-01-01]                 │
+│  Release Date:   [          ]  (leave blank   │
+│                    for active enrollment)      │
+│                                               │
+│  ── Form Fields (from "enrollment" schema) ── │
+│  Referral Source: [___________]               │
+│  Notes:          [___________]               │
+│                                               │
+│                          [Cancel] [Enroll]    │
+└───────────────────────────────────────────────┘
+```
+
+Dimension dropdowns cascade via tag rules, same as the activity form. The enrollment form respects `UserDimensionAccess` — a field worker scoped to ShantiSadan can only enroll entities there.
+
+### Permissions
+
+| Key | Description |
+|-----|-------------|
+| `enrollment:view` | View enrollments |
+| `enrollment:manage` | Create, edit, release enrollments |
+
+These are unchanged from v1.
+
+---
+
+## Change 5: Settings Navigation Updates
 
 ### New/Modified Settings Pages
 
