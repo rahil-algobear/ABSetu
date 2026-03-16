@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { organizationApi } from "@/services/api";
+import { useAuth } from "@/services/auth";
 
 /**
  * Default vocabulary — generic terms used when no org-level override exists.
@@ -36,10 +37,12 @@ const DEFAULTS_PLURAL: Record<string, string> = {
  *   vPlural("activity")  // → "Sessions" (for Kshamata)
  */
 export function useVocabulary() {
+  const { isAuthenticated } = useAuth();
   const { data: org } = useQuery({
     queryKey: ["organization"],
     queryFn: organizationApi.get,
     staleTime: 5 * 60 * 1000,
+    enabled: isAuthenticated,
   });
 
   const vocab: Record<string, string> =
