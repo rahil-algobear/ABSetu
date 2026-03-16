@@ -19,13 +19,12 @@ interface ActivityTypeMatrixDialogProps {
   onClose: () => void;
 }
 
-type PathNode = {
-  dimValue: DimensionValue;
-  children: PathNode[];
+type HeaderCell = { label: string; colSpan: number; key: string };
+
+type LeafColumn = {
+  path: (DimensionValue | null)[]; // one per dimension, null if skipped
   activityTypes: ActivityType[];
 };
-
-type HeaderCell = { label: string; colSpan: number; key: string };
 
 export function ActivityTypeMatrixDialog({ open, onClose }: ActivityTypeMatrixDialogProps) {
   const { vPlural } = useVocabulary();
@@ -58,7 +57,6 @@ export function ActivityTypeMatrixDialog({ open, onClose }: ActivityTypeMatrixDi
     return validOrder.map((id) => nonSystemDimensions.find((d) => d.id === id)!);
   }, [nonSystemDimensions, dimensionOrder]);
 
-  // Load all dimension values grouped by dimension
   const { data: allDvsByDim = {} } = useQuery<Record<string, DimensionValue[]>>({
     queryKey: ["all-dvs-by-dim", nonSystemDimensions.map((d) => d.id).join(",")],
     queryFn: async () => {
@@ -73,7 +71,6 @@ export function ActivityTypeMatrixDialog({ open, onClose }: ActivityTypeMatrixDi
     enabled: open && nonSystemDimensions.length > 0,
   });
 
-  // Load system dimension values (correspond 1:1 with activity types by name)
   const { data: systemDvs = [] } = useQuery<DimensionValue[]>({
     queryKey: ["dimension-values", systemDimension?.id],
     queryFn: () => dimensionApi.listValues(systemDimension!.id),
@@ -119,97 +116,107 @@ export function ActivityTypeMatrixDialog({ open, onClose }: ActivityTypeMatrixDi
     return map;
   }, [systemDvs, activityTypes]);
 
-  // Build the hierarchical column tree and header rows
-  const { headerRows, leafGroups } = useMemo(() => {
+  // Build leaf columns and header rows
+  const { headerRows, leafColumns } = useMemo(() => {
     if (orderedDimensions.length === 0 || systemDvs.length === 0) {
-      return { headerRows: [], leafGroups: [] };
+      return { headerRows: [], leafColumns: [] };
     }
 
-    // Build tree: each node is a real dimension value.
-    // Leaf nodes (last dimension) carry activityTypes directly.
-    function buildTree(dimIndex: number, parentDvIds: string[]): PathNode[] {
+    // Find activity types connected to ALL non-null dimension values in a path
+    function findActivityTypes(ancestorDvIds: string[]): ActivityType[] {
+      if (ancestorDvIds.length === 0) return [];
+      const result: ActivityType[] = [];
+      for (const sysDv of systemDvs) {
+        const conn = ruleMap.get(sysDv.id);
+        if (!conn) continue;
+        if (ancestorDvIds.every((pid) => conn.has(pid))) {
+          const at = sysDvToActivityType.get(sysDv.id);
+          if (at) result.push(at);
+        }
+      }
+      return result;
+    }
+
+    // Build leaf columns recursively, allowing null gaps when a dimension
+    // has no matching values for a path.
+    function buildLeaves(
+      dimIndex: number,
+      pathSoFar: (DimensionValue | null)[],
+      ancestorDvIds: string[]
+    ): LeafColumn[] {
+      if (dimIndex >= orderedDimensions.length) {
+        // Past last dimension: check for matching activity types
+        const ats = findActivityTypes(ancestorDvIds);
+        if (ats.length > 0) {
+          return [{ path: [...pathSoFar], activityTypes: ats }];
+        }
+        // Even if no ATs, include the column if we have ancestor dvIds
+        // (programme exists but has no interventions yet)
+        if (ancestorDvIds.length > 0) {
+          return [{ path: [...pathSoFar], activityTypes: [] }];
+        }
+        return [];
+      }
+
       const dim = orderedDimensions[dimIndex];
       const dvs = allDvsByDim[dim.id] || [];
-      const isLastDim = dimIndex === orderedDimensions.length - 1;
-      const nodes: PathNode[] = [];
 
-      for (const dv of dvs) {
-        // This dv must be connected to every parent dv in the path
-        if (parentDvIds.length > 0) {
-          const connected = ruleMap.get(dv.id);
-          if (!connected || !parentDvIds.every((pid) => connected.has(pid))) {
-            continue;
-          }
-        }
+      // Find values at this level connected to all ancestor dvIds
+      const matchingDvs = ancestorDvIds.length === 0
+        ? dvs // First level: all values
+        : dvs.filter((dv) => {
+            const connected = ruleMap.get(dv.id);
+            if (!connected) return false;
+            return ancestorDvIds.every((pid) => connected.has(pid));
+          });
 
-        const pathSoFar = [...parentDvIds, dv.id];
-
-        if (isLastDim) {
-          // Leaf: find activity types connected to ALL dvIds in the full path
-          const matchingAts: ActivityType[] = [];
-          for (const sysDv of systemDvs) {
-            const conn = ruleMap.get(sysDv.id);
-            if (!conn) continue;
-            if (pathSoFar.every((pid) => conn.has(pid))) {
-              const at = sysDvToActivityType.get(sysDv.id);
-              if (at) matchingAts.push(at);
-            }
-          }
-          if (matchingAts.length > 0) {
-            nodes.push({ dimValue: dv, children: [], activityTypes: matchingAts });
-          }
-        } else {
-          // Intermediate: recurse deeper
-          const children = buildTree(dimIndex + 1, pathSoFar);
-          if (children.length > 0) {
-            nodes.push({ dimValue: dv, children, activityTypes: [] });
-          }
-        }
+      if (matchingDvs.length > 0) {
+        // Normal case: values found at this level
+        return matchingDvs.flatMap((dv) =>
+          buildLeaves(
+            dimIndex + 1,
+            [...pathSoFar, dv],
+            [...ancestorDvIds, dv.id]
+          )
+        );
+      } else {
+        // Gap: no values at this level. Skip dimension (null in path).
+        return buildLeaves(
+          dimIndex + 1,
+          [...pathSoFar, null],
+          ancestorDvIds
+        );
       }
-
-      return nodes;
     }
 
-    const tree = buildTree(0, []);
+    const leaves = buildLeaves(0, [], []);
 
-    // Count leaf columns under a node (each leaf = 1 column)
-    function countLeaves(node: PathNode): number {
-      if (node.children.length === 0) return 1;
-      return node.children.reduce((sum, c) => sum + countLeaves(c), 0);
-    }
-
-    // Collect header rows: one row per dimension level
+    // Build header rows from leaf paths
     const rows: HeaderCell[][] = [];
-    function collectHeaders(nodes: PathNode[], depth: number) {
-      if (!rows[depth]) rows[depth] = [];
-      for (const node of nodes) {
-        const span = countLeaves(node);
-        rows[depth].push({
-          label: node.dimValue.name,
+    for (let dimIndex = 0; dimIndex < orderedDimensions.length; dimIndex++) {
+      const row: HeaderCell[] = [];
+      let col = 0;
+      while (col < leaves.length) {
+        const value = leaves[col].path[dimIndex];
+        // Find consecutive leaves with the same value (by id) at this level
+        let span = 1;
+        while (
+          col + span < leaves.length &&
+          leaves[col + span].path[dimIndex]?.id === value?.id
+        ) {
+          span++;
+        }
+        row.push({
+          label: value?.name || "",
           colSpan: span,
-          key: node.dimValue.id,
+          key: value?.id || `gap-${dimIndex}-${col}`,
         });
-        if (node.children.length > 0) {
-          collectHeaders(node.children, depth + 1);
-        }
+        col += span;
       }
+      rows.push(row);
     }
-    collectHeaders(tree, 0);
 
-    // Collect leaf activity type groups (one group per leaf column)
-    const leaves: ActivityType[][] = [];
-    function collectLeaves(nodes: PathNode[]) {
-      for (const node of nodes) {
-        if (node.children.length === 0) {
-          leaves.push(node.activityTypes);
-        } else {
-          collectLeaves(node.children);
-        }
-      }
-    }
-    collectLeaves(tree);
-
-    return { headerRows: rows, leafGroups: leaves };
+    return { headerRows: rows, leafColumns: leaves };
   }, [orderedDimensions, allDvsByDim, systemDvs, ruleMap, sysDvToActivityType]);
 
   // Drag and drop for dimension chip reordering
@@ -236,7 +243,7 @@ export function ActivityTypeMatrixDialog({ open, onClose }: ActivityTypeMatrixDi
     dragOverItem.current = null;
   }, [dimensionOrder, orderedDimensions]);
 
-  const hasData = leafGroups.length > 0;
+  const hasData = leafColumns.length > 0;
 
   return (
     <Transition show={open} as={Fragment}>
@@ -319,7 +326,6 @@ export function ActivityTypeMatrixDialog({ open, onClose }: ActivityTypeMatrixDi
                           {/* One header row per dimension level */}
                           {headerRows.map((row, rowIndex) => (
                             <tr key={rowIndex}>
-                              {/* Left label: dimension name */}
                               <th className="px-3 py-2 text-left font-medium text-gray-500 bg-gray-50 border border-gray-200 whitespace-nowrap sticky left-0 z-10">
                                 {orderedDimensions[rowIndex]?.name || ""}
                               </th>
@@ -327,7 +333,11 @@ export function ActivityTypeMatrixDialog({ open, onClose }: ActivityTypeMatrixDi
                                 <th
                                   key={cell.key}
                                   colSpan={cell.colSpan}
-                                  className="px-3 py-2 text-center font-medium text-gray-700 bg-gray-50 border border-gray-200 whitespace-nowrap"
+                                  className={`px-3 py-2 text-center font-medium border border-gray-200 whitespace-nowrap ${
+                                    cell.label
+                                      ? "text-gray-700 bg-gray-50"
+                                      : "bg-gray-25"
+                                  }`}
                                 >
                                   {cell.label}
                                 </th>
@@ -335,25 +345,29 @@ export function ActivityTypeMatrixDialog({ open, onClose }: ActivityTypeMatrixDi
                             </tr>
                           ))}
 
-                          {/* Activity type names — one column per leaf, types listed vertically */}
+                          {/* Activity type names — one column per leaf */}
                           <tr>
                             <th className="px-3 py-2 text-left font-medium text-gray-500 bg-purple-50 border border-gray-200 sticky left-0 z-10">
                               {vPlural("activity_type")}
                             </th>
-                            {leafGroups.map((group, colIndex) => (
+                            {leafColumns.map((leaf, colIndex) => (
                               <td
                                 key={colIndex}
                                 className="px-2 py-3 text-center border border-gray-200 bg-purple-50 align-top"
                               >
                                 <div className="flex flex-col gap-1">
-                                  {group.map((at) => (
-                                    <span
-                                      key={at.id}
-                                      className="inline-block text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded whitespace-nowrap"
-                                    >
-                                      {at.name}
-                                    </span>
-                                  ))}
+                                  {leaf.activityTypes.length > 0 ? (
+                                    leaf.activityTypes.map((at) => (
+                                      <span
+                                        key={at.id}
+                                        className="inline-block text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded whitespace-nowrap"
+                                      >
+                                        {at.name}
+                                      </span>
+                                    ))
+                                  ) : (
+                                    <span className="text-xs text-gray-400">—</span>
+                                  )}
                                 </div>
                               </td>
                             ))}

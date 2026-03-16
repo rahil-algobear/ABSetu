@@ -323,6 +323,55 @@ LOCATION_ACTIVITY_TYPES = {
         "Mentoring",
         "Job / OJT Placement",
     ],
+    # MANKHURD: no interventions yet
+}
+
+# ---------------------------------------------------------------------------
+# Programme → Activity Types (explicit, authoritative)
+# Derived automatically where possible, but explicit config avoids issues
+# when locations are shared between programmes (e.g. THANE is shared by
+# TRANSFORMATION and UNLIMITED, but only TRANSFORMATION has interventions).
+# ---------------------------------------------------------------------------
+PROGRAMME_ACTIVITY_TYPES = {
+    "OUTREACH": [
+        # Institutions
+        "Life Skill Education",
+        "Job Readiness",
+        "Vocational Skill Training",
+        "Digital Literacy",
+        "Basic Literacy - Languages & Calculations",
+        "Financial Literacy",
+        "Counselling",
+        # Post Institutions
+        "Telephonic Call to Women Post Released",
+        "Home Visits",
+        "Institution Visits",
+        "Job Placement",
+        "Workplace Visits",
+        "Monthly Meeting with Women Participants",
+        # Community
+        "Micro Business Training",
+        "Institute Visits - Super 50",
+        "Physical Health & Nutrition",
+        "Vocational Skill Training - Stitching, Mehandi",
+        "Self Help Group",
+        "Job Placement - Boxer",
+        "Day Care",
+        "SHG",
+    ],
+    "TRANSFORMATION": [
+        "Physical Health",
+        "Mental Health",
+        "Life Skill Education",
+        "Education",
+        "Skill Building",
+        "Job Readiness - Sessions / Visits",
+        "Visits",
+        "External Training",
+        "Mentoring",
+        "Job / OJT Placement",
+    ],
+    # UNLIMITED: no interventions per spreadsheet
 }
 
 
@@ -410,6 +459,36 @@ def _ensure_tag_rules(db, org, mapping, source_map, target_map):
                 count += 1
     db.flush()
     return count
+
+
+def _remove_stale_programme_at_rules(db, programme_map, at_dv_map, valid_mapping):
+    """Remove Programme↔ActivityType tag rules for programmes not in valid_mapping."""
+    all_at_dv_ids = {dv.id for dv in at_dv_map.values()}
+    removed = 0
+    for prog_code, prog_dv in programme_map.items():
+        if prog_code in valid_mapping:
+            continue
+        # This programme should have NO AT rules — remove any that exist
+        stale = (
+            db.query(TagRule)
+            .filter(
+                (
+                    (TagRule.dimension_value_id_1 == prog_dv.id)
+                    & (TagRule.dimension_value_id_2.in_(all_at_dv_ids))
+                )
+                | (
+                    (TagRule.dimension_value_id_2 == prog_dv.id)
+                    & (TagRule.dimension_value_id_1.in_(all_at_dv_ids))
+                )
+            )
+            .all()
+        )
+        for rule in stale:
+            db.delete(rule)
+            removed += 1
+    if removed:
+        db.flush()
+        print(f"  Removed {removed} stale programme↔activity-type tag rules")
 
 
 def seed():
@@ -505,16 +584,15 @@ def seed():
         new_rules += _ensure_tag_rules(
             db, org, LOCATION_ACTIVITY_TYPES, location_map, at_dv_map
         )
-        # Programme ↔ Activity Type (derived: union of activity types across
-        # all locations belonging to each programme)
-        programme_activity_types = {}
-        for prog_code, loc_codes in PROGRAMME_LOCATIONS.items():
-            at_set = set()
-            for loc_code in loc_codes:
-                at_set.update(LOCATION_ACTIVITY_TYPES.get(loc_code, []))
-            programme_activity_types[prog_code] = list(at_set)
+        # Programme ↔ Activity Type (explicit mapping — avoids issues when
+        # locations are shared between programmes)
         new_rules += _ensure_tag_rules(
-            db, org, programme_activity_types, programme_map, at_dv_map
+            db, org, PROGRAMME_ACTIVITY_TYPES, programme_map, at_dv_map
+        )
+        # Clean up stale Programme↔ActivityType rules for programmes not
+        # in the explicit mapping (e.g. UNLIMITED has no interventions)
+        _remove_stale_programme_at_rules(
+            db, programme_map, at_dv_map, PROGRAMME_ACTIVITY_TYPES
         )
         # Project ↔ Activity Type (derived: union of activity types across
         # all locations belonging to each project)
