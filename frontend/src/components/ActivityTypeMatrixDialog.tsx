@@ -191,25 +191,36 @@ export function ActivityTypeMatrixDialog({ open, onClose }: ActivityTypeMatrixDi
 
     const leaves = buildLeaves(0, [], []);
 
-    // Build header rows from leaf paths
+    // Build header rows from leaf paths.
+    // Only merge consecutive cells when BOTH the current dimension value
+    // AND all ancestor dimension values are the same — prevents merging
+    // "Thane" across different programmes.
     const rows: HeaderCell[][] = [];
     for (let dimIndex = 0; dimIndex < orderedDimensions.length; dimIndex++) {
       const row: HeaderCell[] = [];
       let col = 0;
       while (col < leaves.length) {
         const value = leaves[col].path[dimIndex];
-        // Find consecutive leaves with the same value (by id) at this level
         let span = 1;
-        while (
-          col + span < leaves.length &&
-          leaves[col + span].path[dimIndex]?.id === value?.id
-        ) {
+        while (col + span < leaves.length) {
+          const next = leaves[col + span];
+          // Same value at this level?
+          if (next.path[dimIndex]?.id !== value?.id) break;
+          // Same ancestors at all levels above?
+          let ancestorsSame = true;
+          for (let a = 0; a < dimIndex; a++) {
+            if (next.path[a]?.id !== leaves[col].path[a]?.id) {
+              ancestorsSame = false;
+              break;
+            }
+          }
+          if (!ancestorsSame) break;
           span++;
         }
         row.push({
           label: value?.name || "",
           colSpan: span,
-          key: value?.id || `gap-${dimIndex}-${col}`,
+          key: value?.id ? `${value.id}-${col}` : `gap-${dimIndex}-${col}`,
         });
         col += span;
       }
