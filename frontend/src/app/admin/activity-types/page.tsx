@@ -276,7 +276,7 @@ export default function ActivityTypesPage() {
                             </span>
                           ))
                         ) : (
-                          <span className="text-sm text-gray-400">All</span>
+                          <span className="text-sm text-gray-400">—</span>
                         )}
                       </div>
                     </TableCell>
