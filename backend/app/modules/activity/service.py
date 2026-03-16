@@ -14,12 +14,66 @@ from app.modules.activity.model import (
     Facilitator,
     Participation,
 )
-from app.modules.dimension.model import ActivityTag, DimensionValue, UserDimensionAccess
+from app.modules.dimension.model import (
+    ActivityTag,
+    Dimension,
+    DimensionValue,
+    UserDimensionAccess,
+)
+
+
+def _make_at_code(name: str) -> str:
+    """Convert activity type name to a dimension value code."""
+    return name.upper().replace(" ", "_").replace("-", "_").replace("/", "_").replace(",", "")
 
 
 class ActivityTypeService:
     def __init__(self, db: Session):
         self.db = db
+
+    def _get_system_dimension(self, org_id: uuid.UUID) -> Dimension | None:
+        """Get the system-managed 'activity_type' dimension for the org."""
+        return (
+            self.db.query(Dimension)
+            .filter_by(organization_id=org_id, is_system="activity_type")
+            .first()
+        )
+
+    def _sync_dimension_value(self, org_id: uuid.UUID, name: str) -> None:
+        """Create or update a mirrored dimension value for an activity type."""
+        dim = self._get_system_dimension(org_id)
+        if not dim:
+            return
+        code = _make_at_code(name)
+        dv = self.db.query(DimensionValue).filter_by(dimension_id=dim.id, code=code).first()
+        if not dv:
+            max_order = (
+                self.db.query(DimensionValue.sort_order)
+                .filter_by(dimension_id=dim.id)
+                .order_by(DimensionValue.sort_order.desc())
+                .first()
+            )
+            next_order = (max_order[0] + 1) if max_order else 0
+            dv = DimensionValue(
+                organization_id=org_id,
+                dimension_id=dim.id,
+                name=name,
+                code=code,
+                sort_order=next_order,
+            )
+            self.db.add(dv)
+        else:
+            dv.name = name  # keep name in sync
+
+    def _delete_dimension_value(self, org_id: uuid.UUID, name: str) -> None:
+        """Remove the mirrored dimension value for a deleted activity type."""
+        dim = self._get_system_dimension(org_id)
+        if not dim:
+            return
+        code = _make_at_code(name)
+        dv = self.db.query(DimensionValue).filter_by(dimension_id=dim.id, code=code).first()
+        if dv:
+            self.db.delete(dv)
 
     def list_by_org(
         self, org_id: uuid.UUID, accessible_ids: list[uuid.UUID] | None = None
@@ -38,21 +92,29 @@ class ActivityTypeService:
     def create(self, org_id: uuid.UUID, data: dict) -> ActivityType:
         at = ActivityType(organization_id=org_id, **data)
         self.db.add(at)
+        self.db.flush()
+        self._sync_dimension_value(org_id, at.name)
         self.db.commit()
         self.db.refresh(at)
         return at
 
     def update(self, type_id: uuid.UUID, org_id: uuid.UUID, data: dict) -> ActivityType:
         at = self.get_by_id(type_id, org_id)
+        old_name = at.name
         for key, value in data.items():
             if value is not None:
                 setattr(at, key, value)
+        # If name changed, update the mirrored dimension value
+        if "name" in data and data["name"] != old_name:
+            self._delete_dimension_value(org_id, old_name)
+            self._sync_dimension_value(org_id, at.name)
         self.db.commit()
         self.db.refresh(at)
         return at
 
     def delete(self, type_id: uuid.UUID, org_id: uuid.UUID) -> None:
         at = self.get_by_id(type_id, org_id)
+        self._delete_dimension_value(org_id, at.name)
         self.db.delete(at)
         self.db.commit()
 

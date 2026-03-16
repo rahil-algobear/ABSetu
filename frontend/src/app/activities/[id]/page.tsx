@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { activityApi, beneficiaryApi } from "@/services/api";
 import { Can } from "@/components/Auth/Permissions";
+import { useVocabulary } from "@/hooks/useVocabulary";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +16,7 @@ export default function ActivityDetailPage() {
   const params = useParams();
   const id = params.id as string;
   const queryClient = useQueryClient();
+  const { v } = useVocabulary();
   const [showParticipation, setShowParticipation] = useState(false);
   const [participationMap, setParticipationMap] = useState<Record<string, string>>({});
 
@@ -68,18 +70,20 @@ export default function ActivityDetailPage() {
   return (
     <PageLayout className="p-4">
       <h1 className="text-2xl font-bold mb-1">{activity.type_name}</h1>
-      <div className="flex gap-1 mb-1">
-        {activity.tags.map((tag) => (
-          <Badge key={tag.value_id} variant="secondary">
-            {tag.dimension_name}: {tag.value_name}
-          </Badge>
-        ))}
+      <div className="flex gap-1 mb-1 flex-wrap">
+        {activity.tags
+          .filter((tag) => tag.dimension_key !== "activity_type")
+          .map((tag) => (
+            <Badge key={tag.value_id} variant="secondary">
+              {tag.dimension_name}: {tag.value_name}
+            </Badge>
+          ))}
       </div>
       <p className="text-gray-500 mb-4">{activity.date}</p>
 
       {activity.facilitators.length > 0 && (
         <div className="mb-4">
-          <span className="text-sm text-gray-500">Facilitators: </span>
+          <span className="text-sm text-gray-500">{v("facilitator")}s: </span>
           {activity.facilitators.map((f) => (
             <Badge key={f.id} variant="secondary" className="mr-1">
               {f.name}
@@ -94,10 +98,10 @@ export default function ActivityDetailPage() {
 
       <Card>
         <CardHeader className="flex-row items-center justify-between">
-          <CardTitle className="text-lg">Participation</CardTitle>
+          <CardTitle className="text-lg">{v("participation")}</CardTitle>
           <Can permission="activity:create">
             <Button size="sm" onClick={openParticipation}>
-              Mark Participation
+              Mark {v("participation")}
             </Button>
           </Can>
         </CardHeader>

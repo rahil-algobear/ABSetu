@@ -9,6 +9,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import Image from "next/image";
 import { clsx } from "clsx";
+import { useVocabulary } from "@/hooks/useVocabulary";
 import {
   LayoutDashboard,
   CalendarDays,
@@ -22,17 +23,6 @@ import {
   UserCog,
   Shield,
 } from "lucide-react";
-
-/* ── Settings dropdown items ── */
-
-const settingsItems = [
-  { href: "/admin/dimensions", label: "Dimensions", icon: Building2, permission: "dimension:view" },
-  { href: "/admin/activity-types", label: "Activity Types", icon: Building2, permission: "activity_type:view" },
-  { href: "/admin/facilitators", label: "Facilitators", icon: UserCog, permission: "facilitator:view" },
-  { href: "/admin/beneficiaries", label: "Beneficiaries", icon: Users, permission: "beneficiary:view" },
-  { href: "/admin/roles", label: "Roles", icon: Shield, permission: "role:view" },
-  { href: "/admin/users", label: "Users", icon: Users, permission: "user:view" },
-];
 
 /* ── NavDropdown ── */
 
@@ -193,6 +183,7 @@ export default function Navigation() {
   const pathname = usePathname();
   const router = useRouter();
   const { can } = usePermissions();
+  const { vPlural } = useVocabulary();
 
   const { data: org } = useQuery({
     queryKey: ["organization"],
@@ -200,6 +191,15 @@ export default function Navigation() {
     enabled: isAuthenticated,
     staleTime: 5 * 60 * 1000,
   });
+
+  const settingsItems = [
+    { href: "/admin/dimensions", label: "Dimensions", icon: Building2, permission: "dimension:view" },
+    { href: "/admin/activity-types", label: vPlural("activity_type"), icon: Building2, permission: "activity_type:view" },
+    { href: "/admin/facilitators", label: vPlural("facilitator"), icon: UserCog, permission: "facilitator:view" },
+    { href: "/admin/beneficiaries", label: vPlural("beneficiary"), icon: Users, permission: "beneficiary:view" },
+    { href: "/admin/roles", label: "Roles", icon: Shield, permission: "role:view" },
+    { href: "/admin/users", label: "Users", icon: Users, permission: "user:view" },
+  ];
 
   // Close mobile menu on navigation
   useEffect(() => {
@@ -321,7 +321,7 @@ export default function Navigation() {
                     )}
                   >
                     <CalendarDays size={15} />
-                    Activities
+                    {vPlural("activity")}
                   </Link>
                 </Can>
 

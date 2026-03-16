@@ -1,6 +1,7 @@
 """
-Kshamata seed script: creates org, dimensions (Programme, Project, Location),
-activity types, tag rules, and admin user using the generic dimension system.
+Kshamata seed script: creates org, dimensions (Programme, Project, Location,
+Activity Type [system-managed]), activity types, tag rules, vocabulary, and
+admin user using the generic dimension system.
 
 Usage:
     cd backend
@@ -38,6 +39,18 @@ ADMIN_COUNTRY_CODE = "+91"
 ORG_NAME = "Kshamata"
 ORG_CODE = "KSHAMATA"
 ORG_LOGO_URL = "https://kshamata.org/wp-content/uploads/2022/06/revised-logo.png"
+
+# ---------------------------------------------------------------------------
+# Vocabulary mapping — org-level UI label overrides
+# ---------------------------------------------------------------------------
+VOCABULARY = {
+    "activity": "Session",
+    "activity_type": "Session Template",
+    "participation": "Attendance",
+    "facilitator": "Facilitator",
+    "beneficiary": "Beneficiary",
+    "enrollment": "Enrollment",
+}
 
 # ---------------------------------------------------------------------------
 # Dimension: Programme
@@ -165,8 +178,142 @@ PROGRAMME_LOCATIONS = {
     ],
 }
 
+# Location → Activity Types (from the master spreadsheet)
+LOCATION_ACTIVITY_TYPES = {
+    "SHANTISADAN": [
+        "Life Skill Education",
+        "Job Readiness",
+        "Vocational Skill Training",
+        "Digital Literacy",
+        "Basic Literacy - Languages & Calculations",
+        "Financial Literacy",
+    ],
+    "KASTURBA": [
+        "Life Skill Education",
+        "Job Readiness",
+        "Vocational Skill Training",
+        "Basic Literacy - Languages & Calculations",
+        "Financial Literacy",
+        "Counselling",
+    ],
+    "NAVJEEVAN": [
+        "Life Skill Education",
+        "Job Readiness",
+        "Vocational Skill Training",
+        "Basic Literacy - Languages & Calculations",
+        "Financial Literacy",
+        "Counselling",
+    ],
+    "ULHASNAGAR_MH": [
+        "Life Skill Education",
+        "Vocational Skill Training",
+        "Basic Literacy - Languages & Calculations",
+        "Digital Literacy",
+    ],
+    "BHIWANDI_MH": [
+        "Life Skill Education",
+        "Vocational Skill Training",
+        "Basic Literacy - Languages & Calculations",
+        "Digital Literacy",
+    ],
+    "BKN": [
+        "Vocational Skill Training",
+    ],
+    "DONGRI_MH": [
+        "Vocational Skill Training",
+    ],
+    "DEONAR_MH": [
+        "Life Skill Education",
+        "Job Readiness",
+        "Vocational Skill Training",
+        "Basic Literacy - Languages & Calculations",
+        "Financial Literacy",
+    ],
+    "MAHARASHTRA": [
+        "Telephonic Call to Women Post Released",
+        "Home Visits",
+        "Institution Visits",
+        "Job Placement",
+        "Workplace Visits",
+        "Monthly Meeting with Women Participants",
+    ],
+    "TURBHE": [
+        "Life Skill Education",
+        "Job Readiness",
+        "Micro Business Training",
+        "Basic Literacy - Languages & Calculations",
+        "Financial Literacy",
+        "Digital Literacy",
+        "Physical Health & Nutrition",
+        "Counselling",
+        "Vocational Skill Training - Stitching, Mehandi",
+        "Home Visits",
+        "Institution Visits",
+        "Workplace Visits",
+        "Monthly Meeting with Women Participants",
+        "Self Help Group",
+        "Job Placement - Boxer",
+        "Day Care",
+    ],
+    "KAMATHIPURA": [
+        "Life Skill Education",
+        "Job Readiness",
+        "Financial Literacy",
+        "Micro Business Training",
+        "Institute Visits - Super 50",
+        "Job Placement",
+        "Workplace Visits",
+        "SHG",
+    ],
+    "SONAPUR": [
+        "Life Skill Education",
+        "Job Readiness",
+        "Financial Literacy",
+        "Micro Business Training",
+        "Institute Visits - Super 50",
+        "Job Placement",
+        "Workplace Visits",
+        "SHG",
+    ],
+    "BHIWANDI_COMM": [
+        "Life Skill Education",
+        "Job Readiness",
+        "Micro Business Training",
+        "Basic Literacy - Languages & Calculations",
+        "Financial Literacy",
+        "Digital Literacy",
+        "Physical Health & Nutrition",
+        "Counselling",
+        "Vocational Skill Training - Stitching, Mehandi",
+        "Home Visits",
+        "Institution Visits",
+        "Workplace Visits",
+        "Monthly Meeting with Women Participants",
+        "Self Help Group",
+        "Job Placement - Boxer",
+        "Day Care",
+    ],
+    "THANE": [
+        "Physical Health",
+        "Mental Health",
+        "Life Skill Education",
+        "Education",
+        "Skill Building",
+        "Job Readiness - Sessions / Visits",
+        "Visits",
+        "External Training",
+        "Mentoring",
+        "Job / OJT Placement",
+    ],
+}
 
-def _ensure_dimension(db, org, key, name, sort_order):
+
+def _make_at_code(name: str) -> str:
+    """Convert activity type name to a dimension value code."""
+    return name.upper().replace(" ", "_").replace("-", "_").replace("/", "_").replace(",", "")
+
+
+def _ensure_dimension(db, org, key, name, sort_order, is_system=None):
     dim = db.query(Dimension).filter_by(organization_id=org.id, key=key).first()
     if not dim:
         dim = Dimension(
@@ -174,10 +321,14 @@ def _ensure_dimension(db, org, key, name, sort_order):
             name=name,
             key=key,
             sort_order=sort_order,
+            is_system=is_system,
         )
         db.add(dim)
         db.flush()
-    print(f"  Ensured dimension: {dim.name}")
+    elif is_system and not dim.is_system:
+        dim.is_system = is_system
+        db.flush()
+    print(f"  Ensured dimension: {dim.name}" + (" [system]" if dim.is_system else ""))
     return dim
 
 
@@ -219,6 +370,16 @@ def _ensure_tag_rules(db, org, mapping, source_map, target_map):
                 .first()
             )
             if not existing:
+                # Also check reverse
+                existing = (
+                    db.query(TagRule)
+                    .filter_by(
+                        dimension_value_id_1=tgt_dv.id,
+                        dimension_value_id_2=src_dv.id,
+                    )
+                    .first()
+                )
+            if not existing:
                 rule = TagRule(
                     organization_id=org.id,
                     dimension_value_id_1=src_dv.id,
@@ -241,6 +402,7 @@ def seed():
                 code=ORG_CODE,
                 case_number_format="{ORG_CODE}-{YY}-{SERIAL}",
                 logo_url=ORG_LOGO_URL,
+                meta={"vocabulary": VOCABULARY},
             )
             db.add(org)
             db.flush()
@@ -248,6 +410,10 @@ def seed():
         else:
             org.name = ORG_NAME
             org.logo_url = ORG_LOGO_URL
+            # Merge vocabulary into existing meta
+            meta = org.meta or {}
+            meta["vocabulary"] = VOCABULARY
+            org.meta = meta
             db.flush()
             print(f"Updated organization: {org.name} ({org.code})")
 
@@ -255,14 +421,18 @@ def seed():
         programme_dim = _ensure_dimension(db, org, "programme", "Programme", 0)
         project_dim = _ensure_dimension(db, org, "project", "Project", 1)
         location_dim = _ensure_dimension(db, org, "location", "Location", 2)
+        at_dim = _ensure_dimension(
+            db, org, "activity_type", "Session Template", 3, is_system="activity_type"
+        )
 
         # 3. Dimension values
         programme_map = _ensure_values(db, org, programme_dim, PROGRAMMES)
         project_map = _ensure_values(db, org, project_dim, PROJECTS)
         location_map = _ensure_values(db, org, location_dim, LOCATIONS)
 
-        # 4. Activity Types
-        for at_name in ACTIVITY_TYPES:
+        # 4. Activity Types + mirrored dimension values
+        at_dv_map = {}  # activity type name → dimension value
+        for idx, at_name in enumerate(ACTIVITY_TYPES):
             at = (
                 db.query(ActivityType)
                 .filter_by(organization_id=org.id, name=at_name)
@@ -275,7 +445,26 @@ def seed():
                 )
                 db.add(at)
                 db.flush()
-        print(f"  Ensured {len(ACTIVITY_TYPES)} activity types")
+
+            # Mirror as dimension value in the system Activity Type dimension
+            at_code = _make_at_code(at_name)
+            dv = (
+                db.query(DimensionValue)
+                .filter_by(dimension_id=at_dim.id, code=at_code)
+                .first()
+            )
+            if not dv:
+                dv = DimensionValue(
+                    organization_id=org.id,
+                    dimension_id=at_dim.id,
+                    name=at_name,
+                    code=at_code,
+                    sort_order=idx,
+                )
+                db.add(dv)
+                db.flush()
+            at_dv_map[at_name] = dv
+        print(f"  Ensured {len(ACTIVITY_TYPES)} activity types + dimension values")
 
         # 5. Tag Rules
         new_rules = 0
@@ -290,6 +479,10 @@ def seed():
         # Programme ↔ Location (Transformation, Unlimited — no project layer)
         new_rules += _ensure_tag_rules(
             db, org, PROGRAMME_LOCATIONS, programme_map, location_map
+        )
+        # Location ↔ Activity Type
+        new_rules += _ensure_tag_rules(
+            db, org, LOCATION_ACTIVITY_TYPES, location_map, at_dv_map
         )
         print(f"  Ensured tag rules ({new_rules} new)")
 
@@ -334,19 +527,26 @@ def seed():
         db.commit()
 
         # Summary
+        total_loc_at_rules = sum(len(v) for v in LOCATION_ACTIVITY_TYPES.values())
         total_rules = (
             sum(len(v) for v in PROGRAMME_PROJECTS.values())
             + sum(len(v) for v in PROJECT_LOCATIONS.values())
             + sum(len(v) for v in PROGRAMME_LOCATIONS.values())
+            + total_loc_at_rules
         )
         print(f"\nKshamata seed completed successfully!")
-        print(f"  Organisation   : {ORG_NAME}")
-        print(f"  Dimensions     : 3 (Programme, Project, Location)")
-        print(f"  Programmes     : {len(PROGRAMMES)}")
-        print(f"  Projects       : {len(PROJECTS)}")
-        print(f"  Locations      : {len(LOCATIONS)}")
-        print(f"  Activity Types : {len(ACTIVITY_TYPES)}")
-        print(f"  Tag Rules      : {total_rules} combos")
+        print(f"  Organisation        : {ORG_NAME}")
+        print(f"  Vocabulary          : {len(VOCABULARY)} term overrides")
+        print(f"  Dimensions          : 4 (Programme, Project, Location, Activity Type [system])")
+        print(f"  Programmes          : {len(PROGRAMMES)}")
+        print(f"  Projects            : {len(PROJECTS)}")
+        print(f"  Locations           : {len(LOCATIONS)}")
+        print(f"  Activity Types      : {len(ACTIVITY_TYPES)}")
+        print(f"  Tag Rules           : {total_rules} combos")
+        print(f"    Programme↔Project : {sum(len(v) for v in PROGRAMME_PROJECTS.values())}")
+        print(f"    Project↔Location  : {sum(len(v) for v in PROJECT_LOCATIONS.values())}")
+        print(f"    Programme↔Location: {sum(len(v) for v in PROGRAMME_LOCATIONS.values())}")
+        print(f"    Location↔Activity : {total_loc_at_rules}")
 
     except Exception as e:
         db.rollback()

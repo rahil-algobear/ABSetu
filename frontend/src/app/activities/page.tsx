@@ -1,15 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   activityApi,
   activityTypeApi,
   dimensionApi,
   facilitatorApi,
+  tagRuleApi,
 } from "@/services/api";
-import { Dimension, DimensionValue } from "@/types";
+import { Dimension, DimensionValue, TagRule } from "@/types";
 import { Can } from "@/components/Auth/Permissions";
+import { useVocabulary } from "@/hooks/useVocabulary";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,9 +21,49 @@ import { Plus } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 
+/**
+ * Given a set of tag rules and the currently selected dimension value IDs,
+ * return the filtered list of allowed values for a target dimension.
+ *
+ * Logic: for each *other* dimension that has a selection, find tag rules
+ * linking that selection to values in the target dimension. A target value
+ * is allowed only if it has a rule with every selected value from other dims.
+ * If no other dimension has a selection, all values are allowed.
+ */
+function getFilteredValues(
+  targetDimValues: DimensionValue[],
+  selectedByDim: Record<string, string>, // dimId → selected dvId
+  targetDimId: string,
+  tagRules: TagRule[],
+): DimensionValue[] {
+  // Collect selections from OTHER dimensions (not the target)
+  const otherSelections = Object.entries(selectedByDim)
+    .filter(([dimId, dvId]) => dimId !== targetDimId && dvId)
+    .map(([, dvId]) => dvId);
+
+  if (otherSelections.length === 0) {
+    return targetDimValues;
+  }
+
+  // Build a set of (dv1, dv2) pairs from rules for fast lookup
+  const rulePairs = new Set<string>();
+  for (const rule of tagRules) {
+    rulePairs.add(`${rule.dimension_value_id_1}:${rule.dimension_value_id_2}`);
+    rulePairs.add(`${rule.dimension_value_id_2}:${rule.dimension_value_id_1}`);
+  }
+
+  // A target value is allowed if it has a rule with EVERY other selection
+  return targetDimValues.filter((dv) =>
+    otherSelections.every(
+      (selectedId) => rulePairs.has(`${dv.id}:${selectedId}`)
+    )
+  );
+}
+
 export default function ActivitiesPage() {
   const [showCreate, setShowCreate] = useState(false);
   const queryClient = useQueryClient();
+  const { v, vPlural } = useVocabulary();
 
   const { data: activities = [], isLoading } = useQuery({
     queryKey: ["activities"],
@@ -43,12 +85,7 @@ export default function ActivitiesPage() {
     queryFn: facilitatorApi.list,
   });
 
-  // Load dimension values for each dimension
-  const dimensionValuesQueries = dimensions.map((d) => ({
-    dimension: d,
-    queryKey: ["dimension-values", d.id],
-  }));
-
+  // Load all dimension values
   const { data: allDimensionValues = [] } = useQuery<DimensionValue[]>({
     queryKey: ["all-dimension-values", dimensions.map((d) => d.id).join(",")],
     queryFn: async () => {
@@ -60,6 +97,24 @@ export default function ActivitiesPage() {
     enabled: dimensions.length > 0,
   });
 
+  // Load all tag rules (used for cascading filters)
+  const { data: tagRules = [] } = useQuery<TagRule[]>({
+    queryKey: ["tag-rules-all"],
+    queryFn: () => tagRuleApi.list(),
+  });
+
+  // Non-system dimensions shown as selectable dropdowns
+  const selectableDimensions = useMemo(
+    () => dimensions.filter((d) => !d.is_system),
+    [dimensions]
+  );
+
+  // The system Activity Type dimension (if it exists)
+  const atDimension = useMemo(
+    () => dimensions.find((d) => d.is_system === "activity_type"),
+    [dimensions]
+  );
+
   const [formData, setFormData] = useState({
     activity_type_id: "",
     date: new Date().toISOString().split("T")[0],
@@ -67,6 +122,44 @@ export default function ActivitiesPage() {
     facilitator_ids: [] as string[],
     dimension_value_ids: [] as string[],
   });
+
+  // Track selection per dimension for cascading logic
+  const selectedByDim = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const dim of dimensions) {
+      const dimValues = allDimensionValues.filter(
+        (dv) => dv.dimension_id === dim.id
+      );
+      const selected = formData.dimension_value_ids.find((id) =>
+        dimValues.some((dv) => dv.id === id)
+      );
+      if (selected) {
+        map[dim.id] = selected;
+      }
+    }
+    return map;
+  }, [dimensions, allDimensionValues, formData.dimension_value_ids]);
+
+  // Filter activity types based on tag rules with selected dimension values
+  const filteredActivityTypes = useMemo(() => {
+    if (!atDimension) return activityTypes;
+
+    const atDimValues = allDimensionValues.filter(
+      (dv) => dv.dimension_id === atDimension.id
+    );
+    const filteredDvs = getFilteredValues(
+      atDimValues,
+      selectedByDim,
+      atDimension.id,
+      tagRules
+    );
+    const allowedNames = new Set(filteredDvs.map((dv) => dv.name));
+
+    // If no filtering applied (no selections), return all
+    if (Object.keys(selectedByDim).length === 0) return activityTypes;
+
+    return activityTypes.filter((at) => allowedNames.has(at.name));
+  }, [activityTypes, atDimension, allDimensionValues, selectedByDim, tagRules]);
 
   const createMutation = useMutation({
     mutationFn: activityApi.create,
@@ -80,19 +173,19 @@ export default function ActivitiesPage() {
         facilitator_ids: [],
         dimension_value_ids: [],
       });
-      toast.success("Activity created");
+      toast.success(`${v("activity")} created`);
     },
-    onError: () => toast.error("Failed to create activity"),
+    onError: () => toast.error(`Failed to create ${v("activity").toLowerCase()}`),
   });
 
   return (
     <PageLayout className="p-4">
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold">Activities</h1>
+        <h1 className="text-2xl font-bold">{vPlural("activity")}</h1>
         <Can permission="activity:create">
           <Button size="sm" onClick={() => setShowCreate(true)}>
             <Plus className="h-4 w-4 mr-1" />
-            New Activity
+            New {v("activity")}
           </Button>
         </Can>
       </div>
@@ -100,7 +193,7 @@ export default function ActivitiesPage() {
       {showCreate && (
         <Card className="mb-4">
           <CardHeader>
-            <CardTitle className="text-lg">Create Activity</CardTitle>
+            <CardTitle className="text-lg">Create {v("activity")}</CardTitle>
           </CardHeader>
           <CardContent>
             <form
@@ -110,40 +203,27 @@ export default function ActivitiesPage() {
               }}
               className="space-y-3"
             >
-              <div>
-                <label className="text-sm font-medium">Activity Type</label>
-                <select
-                  className="w-full mt-1 border rounded-md p-2 text-sm"
-                  value={formData.activity_type_id}
-                  onChange={(e) =>
-                    setFormData({ ...formData, activity_type_id: e.target.value })
-                  }
-                  required
-                >
-                  <option value="">Select...</option>
-                  {activityTypes.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Dimension selectors */}
-              {dimensions.map((dim) => {
+              {/* Dimension selectors (non-system only) — cascading */}
+              {selectableDimensions.map((dim) => {
                 const dimValues = allDimensionValues.filter(
                   (dv) => dv.dimension_id === dim.id
                 );
+                const filtered = getFilteredValues(
+                  dimValues,
+                  selectedByDim,
+                  dim.id,
+                  tagRules
+                );
+                const currentSelection =
+                  formData.dimension_value_ids.find((id) =>
+                    dimValues.some((dv) => dv.id === id)
+                  ) || "";
                 return (
                   <div key={dim.id}>
                     <label className="text-sm font-medium">{dim.name}</label>
                     <select
                       className="w-full mt-1 border rounded-md p-2 text-sm"
-                      value={
-                        formData.dimension_value_ids.find((id) =>
-                          dimValues.some((dv) => dv.id === id)
-                        ) || ""
-                      }
+                      value={currentSelection}
                       onChange={(e) => {
                         const newId = e.target.value;
                         const otherIds = formData.dimension_value_ids.filter(
@@ -158,7 +238,7 @@ export default function ActivitiesPage() {
                       }}
                     >
                       <option value="">Select {dim.name}...</option>
-                      {dimValues.map((dv) => (
+                      {filtered.map((dv) => (
                         <option key={dv.id} value={dv.id}>
                           {dv.name}
                         </option>
@@ -167,6 +247,26 @@ export default function ActivitiesPage() {
                   </div>
                 );
               })}
+
+              {/* Activity Type — filtered by tag rules */}
+              <div>
+                <label className="text-sm font-medium">{v("activity_type")}</label>
+                <select
+                  className="w-full mt-1 border rounded-md p-2 text-sm"
+                  value={formData.activity_type_id}
+                  onChange={(e) =>
+                    setFormData({ ...formData, activity_type_id: e.target.value })
+                  }
+                  required
+                >
+                  <option value="">Select...</option>
+                  {filteredActivityTypes.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
               <div>
                 <label className="text-sm font-medium">Date</label>
@@ -181,7 +281,7 @@ export default function ActivitiesPage() {
               </div>
 
               <div>
-                <label className="text-sm font-medium">Facilitators</label>
+                <label className="text-sm font-medium">{vPlural("facilitator")}</label>
                 <div className="mt-1 space-y-1 max-h-32 overflow-y-auto border rounded-md p-2">
                   {facilitators.map((f) => (
                     <label key={f.id} className="flex items-center gap-2 text-sm">
@@ -232,7 +332,7 @@ export default function ActivitiesPage() {
       {isLoading ? (
         <p className="text-gray-500">Loading...</p>
       ) : activities.length === 0 ? (
-        <p className="text-gray-500">No activities yet.</p>
+        <p className="text-gray-500">No {vPlural("activity").toLowerCase()} yet.</p>
       ) : (
         <div className="space-y-2">
           {activities.map((a) => (
@@ -242,12 +342,14 @@ export default function ActivitiesPage() {
                   <div className="flex justify-between items-center">
                     <div>
                       <p className="font-medium">{a.type_name}</p>
-                      <div className="flex gap-1 mt-0.5">
-                        {a.tags.map((tag) => (
-                          <Badge key={tag.value_id} variant="secondary" className="text-xs">
-                            {tag.value_name}
-                          </Badge>
-                        ))}
+                      <div className="flex gap-1 mt-0.5 flex-wrap">
+                        {a.tags
+                          .filter((tag) => tag.dimension_key !== "activity_type")
+                          .map((tag) => (
+                            <Badge key={tag.value_id} variant="secondary" className="text-xs">
+                              {tag.value_name}
+                            </Badge>
+                          ))}
                       </div>
                     </div>
                     <div className="text-right">

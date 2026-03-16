@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { activityTypeApi, metaFieldSchemaApi } from "@/services/api";
 import { ActivityType, MetaFieldDefinition } from "@/types";
 import { Can } from "@/components/Auth/Permissions";
+import { useVocabulary } from "@/hooks/useVocabulary";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,6 +24,7 @@ import toast from "react-hot-toast";
 
 export default function ActivityTypesPage() {
   const queryClient = useQueryClient();
+  const { v, vPlural } = useVocabulary();
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<ActivityType | null>(null);
   const [form, setForm] = useState({ name: "", description: "" });
@@ -43,7 +45,7 @@ export default function ActivityTypesPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["activity-types"] });
       closeModal();
-      toast.success("Activity type created");
+      toast.success(`${v("activity_type")} created`);
     },
     onError: () => toast.error("Failed to create"),
   });
@@ -54,7 +56,7 @@ export default function ActivityTypesPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["activity-types"] });
       closeModal();
-      toast.success("Activity type updated");
+      toast.success(`${v("activity_type")} updated`);
     },
     onError: () => toast.error("Failed to update"),
   });
@@ -63,7 +65,7 @@ export default function ActivityTypesPage() {
     mutationFn: activityTypeApi.delete,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["activity-types"] });
-      toast.success("Activity type deleted");
+      toast.success(`${v("activity_type")} deleted`);
     },
     onError: () => toast.error("Failed to delete"),
   });
@@ -100,7 +102,7 @@ export default function ActivityTypesPage() {
   return (
     <>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold">Activity Types</h2>
+        <h2 className="text-lg font-semibold">{vPlural("activity_type")}</h2>
         <Can permission="activity_type:manage">
           <Button size="sm" onClick={openAdd}>
             <Plus className="h-4 w-4 mr-1" />
@@ -112,7 +114,7 @@ export default function ActivityTypesPage() {
       {isLoading ? (
         <p className="text-gray-500 text-sm">Loading...</p>
       ) : types.length === 0 ? (
-        <p className="text-gray-500 text-sm">No activity types yet.</p>
+        <p className="text-gray-500 text-sm">No {vPlural("activity_type").toLowerCase()} yet.</p>
       ) : (
         <Table>
           <TableHeader>
@@ -167,7 +169,7 @@ export default function ActivityTypesPage() {
       <Dialog
         open={modalOpen}
         onClose={closeModal}
-        title={editing ? "Edit Activity Type" : "Add Activity Type"}
+        title={editing ? `Edit ${v("activity_type")}` : `Add ${v("activity_type")}`}
       >
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>

@@ -7,6 +7,7 @@ import { PageLayout } from "@/components/ui/page-layout";
 import { usePermissions } from "@/components/Auth/Permissions";
 import { dimensionApi } from "@/services/api";
 import { cn } from "@/utils/cn";
+import { useVocabulary } from "@/hooks/useVocabulary";
 import {
   Layers,
   ClipboardList,
@@ -25,6 +26,7 @@ export default function AdminLayout({
 }) {
   const pathname = usePathname();
   const { can, loading } = usePermissions();
+  const { vPlural } = useVocabulary();
 
   const { data: dimensions = [] } = useQuery({
     queryKey: ["dimensions"],
@@ -32,20 +34,21 @@ export default function AdminLayout({
     staleTime: 5 * 60 * 1000,
   });
 
-  // Build tabs: one per dimension + static tabs
-  const dimensionTabs = dimensions.map((d) => ({
-    href: `/admin/dimensions/${d.key}`,
-    label: d.name,
-    icon: Layers,
-    permission: "dimension:view",
-    dimensionId: d.id,
-  }));
+  // Build tabs: one per non-system dimension + static tabs
+  const dimensionTabs = dimensions
+    .filter((d) => !d.is_system)
+    .map((d) => ({
+      href: `/admin/dimensions/${d.key}`,
+      label: d.name,
+      icon: Layers,
+      permission: "dimension:view",
+    }));
 
   const staticTabs = [
     { href: "/admin/tag-rules", label: "Tag Rules", icon: Link2, permission: "dimension:view" },
-    { href: "/admin/activity-types", label: "Activity Types", icon: ClipboardList, permission: "activity_type:view" },
-    { href: "/admin/facilitators", label: "Facilitators", icon: UserCheck, permission: "facilitator:view" },
-    { href: "/admin/beneficiaries", label: "Beneficiaries", icon: Users, permission: "beneficiary:view" },
+    { href: "/admin/activity-types", label: vPlural("activity_type"), icon: ClipboardList, permission: "activity_type:view" },
+    { href: "/admin/facilitators", label: vPlural("facilitator"), icon: UserCheck, permission: "facilitator:view" },
+    { href: "/admin/beneficiaries", label: vPlural("beneficiary"), icon: Users, permission: "beneficiary:view" },
     { href: "/admin/roles", label: "Roles", icon: Shield, permission: "role:view" },
     { href: "/admin/users", label: "Users", icon: Users, permission: "user:view" },
     { href: "/admin/meta-fields", label: "Custom Fields", icon: SlidersHorizontal, permission: "org:settings" },
