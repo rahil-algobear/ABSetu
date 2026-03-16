@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { metaFieldSchemaApi, dimensionApi } from "@/services/api";
+import { metaFieldSchemaApi, dimensionApi, entityTypeApi } from "@/services/api";
 import {
   MetaFieldDefinition,
   MetaFieldSchemas,
@@ -28,11 +28,8 @@ import { useVocabulary } from "@/hooks/useVocabulary";
 
 const STATIC_ENTITY_KEYS = [
   "activity_type",
-  "facilitator",
-  "beneficiary",
   "enrollment",
   "activity",
-  "participation",
 ];
 
 const FIELD_TYPES: { value: MetaFieldType; label: string }[] = [
@@ -55,7 +52,7 @@ const emptyField: MetaFieldDefinition = {
 export default function MetaFieldsPage() {
   const queryClient = useQueryClient();
   const { vPlural, vDim } = useVocabulary();
-  const [selectedEntity, setSelectedEntity] = useState<string>("beneficiary");
+  const [selectedEntity, setSelectedEntity] = useState<string>("activity");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [fieldForm, setFieldForm] = useState<MetaFieldDefinition>({ ...emptyField });
@@ -66,8 +63,17 @@ export default function MetaFieldsPage() {
     queryFn: dimensionApi.list,
   });
 
-  // Build the full entity type list: static + dimension:{key}
+  const { data: entityTypesList = [] } = useQuery({
+    queryKey: ["entity-types"],
+    queryFn: entityTypeApi.list,
+  });
+
+  // Build the full entity type list: entity types + static + dimensions
   const entityTypes = [
+    ...entityTypesList.map((et) => ({
+      value: `entity:${et.key}`,
+      label: et.name,
+    })),
     ...STATIC_ENTITY_KEYS.map((key) => ({
       value: key,
       label: vPlural(key),
