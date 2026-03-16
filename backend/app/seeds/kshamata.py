@@ -1,5 +1,5 @@
 """
-Kshamata seed script: creates org, dimensions (Location, Programme),
+Kshamata seed script: creates org, dimensions (Programme, Project, Location),
 activity types, tag rules, and admin user using the generic dimension system.
 
 Usage:
@@ -40,7 +40,25 @@ ORG_CODE = "KSHAMATA"
 ORG_LOGO_URL = "https://kshamata.org/wp-content/uploads/2022/06/revised-logo.png"
 
 # ---------------------------------------------------------------------------
-# Dimension: Location (code, name)
+# Dimension: Programme
+# ---------------------------------------------------------------------------
+PROGRAMMES = [
+    ("OUTREACH", "Kshamata Outreach Programme"),
+    ("TRANSFORMATION", "Kshamata Transformation Programme"),
+    ("UNLIMITED", "Kshamata Unlimited"),
+]
+
+# ---------------------------------------------------------------------------
+# Dimension: Project
+# ---------------------------------------------------------------------------
+PROJECTS = [
+    ("INSTITUTIONS", "Institutions"),
+    ("POST_INSTITUTIONS", "Post Institutions"),
+    ("COMMUNITY", "Community"),
+]
+
+# ---------------------------------------------------------------------------
+# Dimension: Location
 # ---------------------------------------------------------------------------
 LOCATIONS = [
     # Institutions
@@ -59,24 +77,16 @@ LOCATIONS = [
     ("KAMATHIPURA", "Kamathipura"),
     ("SONAPUR", "Sonapur"),
     ("BHIWANDI_COMM", "Bhiwandi"),
-    # Shared across Transformation & Unlimited
+    # Transformation & Unlimited
     ("THANE", "Thane"),
     ("MANKHURD", "Mankhurd"),
 ]
 
 # ---------------------------------------------------------------------------
-# Dimension: Programme
-# ---------------------------------------------------------------------------
-PROGRAMMES = [
-    ("OUTREACH", "Kshamata Outreach Programme"),
-    ("TRANSFORMATION", "Kshamata Transformation Programme"),
-    ("UNLIMITED", "Kshamata Unlimited"),
-]
-
-# ---------------------------------------------------------------------------
-# Activity Types (formerly Session Templates)
+# Activity Types (Interventions from the master sheet)
 # ---------------------------------------------------------------------------
 ACTIVITY_TYPES = [
+    # Common across Institutions
     "Life Skill Education",
     "Job Readiness",
     "Vocational Skill Training",
@@ -84,21 +94,23 @@ ACTIVITY_TYPES = [
     "Basic Literacy - Languages & Calculations",
     "Financial Literacy",
     "Counselling",
+    # Post Institutions
     "Telephonic Call to Women Post Released",
     "Home Visits",
     "Institution Visits",
     "Job Placement",
     "Workplace Visits",
     "Monthly Meeting with Women Participants",
+    # Community
+    "Micro Business Training",
+    "Institute Visits - Super 50",
     "Physical Health & Nutrition",
     "Vocational Skill Training - Stitching, Mehandi",
     "Self Help Group",
     "Job Placement - Boxer",
     "Day Care",
-    "Micro Business Training",
-    "Institute Visits - Super 50",
     "SHG",
-    # Transformation Programme specific
+    # Transformation Programme
     "Physical Health",
     "Mental Health",
     "Education",
@@ -111,10 +123,17 @@ ACTIVITY_TYPES = [
 ]
 
 # ---------------------------------------------------------------------------
-# Tag Rules: Programme → Location mapping
+# Tag Rules
 # ---------------------------------------------------------------------------
-PROGRAMME_LOCATIONS = {
-    "OUTREACH": [
+
+# Programme → Project (only Outreach has projects)
+PROGRAMME_PROJECTS = {
+    "OUTREACH": ["INSTITUTIONS", "POST_INSTITUTIONS", "COMMUNITY"],
+}
+
+# Project → Location
+PROJECT_LOCATIONS = {
+    "INSTITUTIONS": [
         "SHANTISADAN",
         "KASTURBA",
         "NAVJEEVAN",
@@ -123,12 +142,20 @@ PROGRAMME_LOCATIONS = {
         "BKN",
         "DONGRI_MH",
         "DEONAR_MH",
+    ],
+    "POST_INSTITUTIONS": [
         "MAHARASHTRA",
+    ],
+    "COMMUNITY": [
         "TURBHE",
         "KAMATHIPURA",
         "SONAPUR",
         "BHIWANDI_COMM",
     ],
+}
+
+# Programme → Location (for programmes without projects)
+PROGRAMME_LOCATIONS = {
     "TRANSFORMATION": [
         "THANE",
     ],
@@ -137,6 +164,70 @@ PROGRAMME_LOCATIONS = {
         "MANKHURD",
     ],
 }
+
+
+def _ensure_dimension(db, org, key, name, sort_order):
+    dim = db.query(Dimension).filter_by(organization_id=org.id, key=key).first()
+    if not dim:
+        dim = Dimension(
+            organization_id=org.id,
+            name=name,
+            key=key,
+            sort_order=sort_order,
+        )
+        db.add(dim)
+        db.flush()
+    print(f"  Ensured dimension: {dim.name}")
+    return dim
+
+
+def _ensure_values(db, org, dimension, values_list):
+    value_map = {}
+    for idx, (code, name) in enumerate(values_list):
+        dv = (
+            db.query(DimensionValue)
+            .filter_by(dimension_id=dimension.id, code=code)
+            .first()
+        )
+        if not dv:
+            dv = DimensionValue(
+                organization_id=org.id,
+                dimension_id=dimension.id,
+                name=name,
+                code=code,
+                sort_order=idx,
+            )
+            db.add(dv)
+            db.flush()
+        value_map[code] = dv
+    print(f"  Ensured {len(values_list)} {dimension.name.lower()} values")
+    return value_map
+
+
+def _ensure_tag_rules(db, org, mapping, source_map, target_map):
+    count = 0
+    for src_code, target_codes in mapping.items():
+        src_dv = source_map[src_code]
+        for tgt_code in target_codes:
+            tgt_dv = target_map[tgt_code]
+            existing = (
+                db.query(TagRule)
+                .filter_by(
+                    dimension_value_id_1=src_dv.id,
+                    dimension_value_id_2=tgt_dv.id,
+                )
+                .first()
+            )
+            if not existing:
+                rule = TagRule(
+                    organization_id=org.id,
+                    dimension_value_id_1=src_dv.id,
+                    dimension_value_id_2=tgt_dv.id,
+                )
+                db.add(rule)
+                count += 1
+    db.flush()
+    return count
 
 
 def seed():
@@ -160,73 +251,23 @@ def seed():
             db.flush()
             print(f"Updated organization: {org.name} ({org.code})")
 
-        # 2. Dimension: Location
-        location_dim = db.query(Dimension).filter_by(organization_id=org.id, key="location").first()
-        if not location_dim:
-            location_dim = Dimension(
-                organization_id=org.id,
-                name="Location",
-                key="location",
-                sort_order=0,
-            )
-            db.add(location_dim)
-            db.flush()
-        print(f"Ensured dimension: {location_dim.name}")
+        # 2. Dimensions
+        programme_dim = _ensure_dimension(db, org, "programme", "Programme", 0)
+        project_dim = _ensure_dimension(db, org, "project", "Project", 1)
+        location_dim = _ensure_dimension(db, org, "location", "Location", 2)
 
-        # 3. Dimension: Programme
-        programme_dim = (
-            db.query(Dimension).filter_by(organization_id=org.id, key="programme").first()
-        )
-        if not programme_dim:
-            programme_dim = Dimension(
-                organization_id=org.id,
-                name="Programme",
-                key="programme",
-                sort_order=1,
-            )
-            db.add(programme_dim)
-            db.flush()
-        print(f"Ensured dimension: {programme_dim.name}")
+        # 3. Dimension values
+        programme_map = _ensure_values(db, org, programme_dim, PROGRAMMES)
+        project_map = _ensure_values(db, org, project_dim, PROJECTS)
+        location_map = _ensure_values(db, org, location_dim, LOCATIONS)
 
-        # 4. Location dimension values
-        location_map = {}
-        for idx, (code, name) in enumerate(LOCATIONS):
-            dv = db.query(DimensionValue).filter_by(dimension_id=location_dim.id, code=code).first()
-            if not dv:
-                dv = DimensionValue(
-                    organization_id=org.id,
-                    dimension_id=location_dim.id,
-                    name=name,
-                    code=code,
-                    sort_order=idx,
-                )
-                db.add(dv)
-                db.flush()
-            location_map[code] = dv
-        print(f"Ensured {len(LOCATIONS)} location values")
-
-        # 5. Programme dimension values
-        programme_map = {}
-        for idx, (code, name) in enumerate(PROGRAMMES):
-            dv = (
-                db.query(DimensionValue).filter_by(dimension_id=programme_dim.id, code=code).first()
-            )
-            if not dv:
-                dv = DimensionValue(
-                    organization_id=org.id,
-                    dimension_id=programme_dim.id,
-                    name=name,
-                    code=code,
-                    sort_order=idx,
-                )
-                db.add(dv)
-                db.flush()
-            programme_map[code] = dv
-        print(f"Ensured {len(PROGRAMMES)} programme values")
-
-        # 6. Activity Types
+        # 4. Activity Types
         for at_name in ACTIVITY_TYPES:
-            at = db.query(ActivityType).filter_by(organization_id=org.id, name=at_name).first()
+            at = (
+                db.query(ActivityType)
+                .filter_by(organization_id=org.id, name=at_name)
+                .first()
+            )
             if not at:
                 at = ActivityType(
                     organization_id=org.id,
@@ -234,34 +275,25 @@ def seed():
                 )
                 db.add(at)
                 db.flush()
-        print(f"Ensured {len(ACTIVITY_TYPES)} activity types")
+        print(f"  Ensured {len(ACTIVITY_TYPES)} activity types")
 
-        # 7. Tag Rules: Programme → Location
-        rule_count = 0
-        for prog_code, location_codes in PROGRAMME_LOCATIONS.items():
-            prog_dv = programme_map[prog_code]
-            for loc_code in location_codes:
-                loc_dv = location_map[loc_code]
-                existing = (
-                    db.query(TagRule)
-                    .filter_by(
-                        dimension_value_id_1=prog_dv.id,
-                        dimension_value_id_2=loc_dv.id,
-                    )
-                    .first()
-                )
-                if not existing:
-                    rule = TagRule(
-                        organization_id=org.id,
-                        dimension_value_id_1=prog_dv.id,
-                        dimension_value_id_2=loc_dv.id,
-                    )
-                    db.add(rule)
-                    rule_count += 1
-        db.flush()
-        print(f"Ensured tag rules ({rule_count} new)")
+        # 5. Tag Rules
+        new_rules = 0
+        # Programme ↔ Project
+        new_rules += _ensure_tag_rules(
+            db, org, PROGRAMME_PROJECTS, programme_map, project_map
+        )
+        # Project ↔ Location
+        new_rules += _ensure_tag_rules(
+            db, org, PROJECT_LOCATIONS, project_map, location_map
+        )
+        # Programme ↔ Location (Transformation, Unlimited — no project layer)
+        new_rules += _ensure_tag_rules(
+            db, org, PROGRAMME_LOCATIONS, programme_map, location_map
+        )
+        print(f"  Ensured tag rules ({new_rules} new)")
 
-        # 8. Admin role (all permissions)
+        # 6. Admin role (all permissions)
         admin_role = db.query(Role).filter_by(organization_id=org.id, name="Admin").first()
         if not admin_role:
             admin_role = Role(
@@ -276,11 +308,11 @@ def seed():
             for perm in all_perms:
                 rp = RolePermission(role_id=admin_role.id, permission_id=perm.id)
                 db.add(rp)
-            print(f"Created Admin role with {len(all_perms)} permissions")
+            print(f"  Created Admin role with {len(all_perms)} permissions")
         else:
-            print("Admin role already exists")
+            print("  Admin role already exists")
 
-        # 9. Admin user
+        # 7. Admin user
         admin_user = db.query(User).filter_by(mobile_number=ADMIN_MOBILE).first()
         if not admin_user:
             admin_user = User(
@@ -293,23 +325,28 @@ def seed():
                 role_id=admin_role.id,
             )
             db.add(admin_user)
-            print(f"Created admin user: {ADMIN_COUNTRY_CODE} {ADMIN_MOBILE}")
+            print(f"  Created admin user: {ADMIN_COUNTRY_CODE} {ADMIN_MOBILE}")
         else:
             admin_user.organization_id = org.id
             admin_user.role_id = admin_role.id
-            print(f"Updated existing user to Kshamata admin: {ADMIN_MOBILE}")
+            print(f"  Updated existing user to Kshamata admin: {ADMIN_MOBILE}")
 
         db.commit()
 
         # Summary
-        total_rules = sum(len(v) for v in PROGRAMME_LOCATIONS.values())
+        total_rules = (
+            sum(len(v) for v in PROGRAMME_PROJECTS.values())
+            + sum(len(v) for v in PROJECT_LOCATIONS.values())
+            + sum(len(v) for v in PROGRAMME_LOCATIONS.values())
+        )
         print(f"\nKshamata seed completed successfully!")
         print(f"  Organisation   : {ORG_NAME}")
-        print(f"  Dimensions     : 2 (Location, Programme)")
-        print(f"  Locations      : {len(LOCATIONS)}")
+        print(f"  Dimensions     : 3 (Programme, Project, Location)")
         print(f"  Programmes     : {len(PROGRAMMES)}")
+        print(f"  Projects       : {len(PROJECTS)}")
+        print(f"  Locations      : {len(LOCATIONS)}")
         print(f"  Activity Types : {len(ACTIVITY_TYPES)}")
-        print(f"  Tag Rules      : {total_rules} (programme × location combos)")
+        print(f"  Tag Rules      : {total_rules} combos")
 
     except Exception as e:
         db.rollback()
