@@ -167,8 +167,26 @@ PROJECT_LOCATIONS = {
     ],
 }
 
-# Programme → Location (for programmes without projects)
+# Programme → Location
 PROGRAMME_LOCATIONS = {
+    "OUTREACH": [
+        # Institutions
+        "SHANTISADAN",
+        "KASTURBA",
+        "NAVJEEVAN",
+        "ULHASNAGAR_MH",
+        "BHIWANDI_MH",
+        "BKN",
+        "DONGRI_MH",
+        "DEONAR_MH",
+        # Post Institutions
+        "MAHARASHTRA",
+        # Community
+        "TURBHE",
+        "KAMATHIPURA",
+        "SONAPUR",
+        "BHIWANDI_COMM",
+    ],
     "TRANSFORMATION": [
         "THANE",
     ],
@@ -476,7 +494,7 @@ def seed():
         new_rules += _ensure_tag_rules(
             db, org, PROJECT_LOCATIONS, project_map, location_map
         )
-        # Programme ↔ Location (Transformation, Unlimited — no project layer)
+        # Programme ↔ Location
         new_rules += _ensure_tag_rules(
             db, org, PROGRAMME_LOCATIONS, programme_map, location_map
         )
