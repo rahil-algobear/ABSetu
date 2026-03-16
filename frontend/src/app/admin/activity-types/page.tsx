@@ -243,19 +243,20 @@ export default function ActivityTypesPage() {
                 ))}
                 <TableCell>
                   <Can permission="activity_type:manage">
-                    <div className="flex gap-1">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => openEdit(at)}
+                        className="text-gray-400 hover:text-purple-600"
+                        title="Edit activity type"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
                       <button
                         onClick={() => openAccess(at)}
                         className="text-gray-400 hover:text-purple-600"
                         title="Manage access"
                       >
                         <Shield className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => openEdit(at)}
-                        className="text-gray-400 hover:text-purple-600"
-                      >
-                        <Pencil className="h-4 w-4" />
                       </button>
                       <button
                         onClick={() => {
