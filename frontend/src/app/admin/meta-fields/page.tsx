@@ -24,15 +24,15 @@ import {
 } from "@/components/ui/page-table";
 import { Plus, Pencil, Trash2, GripVertical } from "lucide-react";
 import toast from "react-hot-toast";
+import { useVocabulary } from "@/hooks/useVocabulary";
 
-// Static entity types
-const STATIC_ENTITY_TYPES = [
-  { value: "activity_type", label: "Activity Types" },
-  { value: "facilitator", label: "Facilitators" },
-  { value: "beneficiary", label: "Beneficiaries" },
-  { value: "enrollment", label: "Enrollments" },
-  { value: "activity", label: "Activities" },
-  { value: "participation", label: "Participations" },
+const STATIC_ENTITY_KEYS = [
+  "activity_type",
+  "facilitator",
+  "beneficiary",
+  "enrollment",
+  "activity",
+  "participation",
 ];
 
 const FIELD_TYPES: { value: MetaFieldType; label: string }[] = [
@@ -54,6 +54,7 @@ const emptyField: MetaFieldDefinition = {
 
 export default function MetaFieldsPage() {
   const queryClient = useQueryClient();
+  const { vPlural } = useVocabulary();
   const [selectedEntity, setSelectedEntity] = useState<string>("beneficiary");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
@@ -67,7 +68,10 @@ export default function MetaFieldsPage() {
 
   // Build the full entity type list: static + dimension:{key}
   const entityTypes = [
-    ...STATIC_ENTITY_TYPES,
+    ...STATIC_ENTITY_KEYS.map((key) => ({
+      value: key,
+      label: vPlural(key),
+    })),
     ...dimensions.map((d) => ({
       value: `dimension:${d.key}`,
       label: d.name,
