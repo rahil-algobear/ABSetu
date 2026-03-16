@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/page-table";
 import { Plus, Pencil, Trash2, Shield, Check } from "lucide-react";
 import toast from "react-hot-toast";
+import { useVocabulary } from "@/hooks/useVocabulary";
 
 // Group permission keys by area for better UX
 function groupPermissions(permissions: Permission[]) {
@@ -31,7 +32,17 @@ function groupPermissions(permissions: Permission[]) {
   return groups;
 }
 
+// Fallback labels for permission areas that aren't in vocabulary
+const AREA_LABELS: Record<string, string> = {
+  org: "Organization",
+  dimension: "Dimensions",
+  role: "Roles",
+  user: "Users",
+  reports: "Reports",
+};
+
 export default function RolesPage() {
+  const { vPlural } = useVocabulary();
   const queryClient = useQueryClient();
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Role | null>(null);
@@ -285,7 +296,7 @@ export default function RolesPage() {
                           <Check className="h-2.5 w-2.5 text-white" />
                         )}
                       </div>
-                      {area}
+                      {AREA_LABELS[area] || vPlural(area)}
                     </button>
                     <div className="space-y-1.5 ml-5">
                       {perms.map((p) => (
