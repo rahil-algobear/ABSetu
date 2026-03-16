@@ -206,17 +206,17 @@ export function SettingsSidebar({
       {/* Sidebar panel */}
       <aside
         className={cn(
-          // Mobile: slide-in drawer
-          "fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 shadow-lg transition-transform duration-200 ease-in-out lg:shadow-none",
-          // Desktop: static positioned
-          "lg:relative lg:z-0 lg:transition-none",
-          // Visibility
-          open
-            ? "translate-x-0"
-            : "-translate-x-full lg:-translate-x-full"
+          // Mobile: fixed slide-in drawer
+          "fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 shadow-lg transition-transform duration-200 ease-in-out",
+          // Desktop: relative in flex layout, smooth width transition
+          "lg:relative lg:z-0 lg:shadow-none lg:translate-x-0 lg:transition-[width] lg:duration-200",
+          // Mobile visibility (translate)
+          open ? "translate-x-0" : "-translate-x-full",
+          // Desktop visibility (width collapse so main content fills the space)
+          open ? "lg:w-64" : "lg:w-0 lg:border-r-0 lg:overflow-hidden"
         )}
       >
-        {sidebarContent}
+        <div className="w-64">{sidebarContent}</div>
       </aside>
     </>
   );
