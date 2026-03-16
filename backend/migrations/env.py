@@ -11,12 +11,13 @@ from app.modules.auth.model import User, OTP, RefreshToken  # noqa: F401
 from app.modules.organization.model import Organization  # noqa: F401
 from app.modules.dimension.model import (  # noqa: F401
     Dimension, DimensionValue, DimensionValueLink,
-    ActivityTag, BeneficiaryTag, EnrollmentTag, UserDimensionAccess,
+    ActivityTag, EntityTag, EnrollmentTag, UserDimensionAccess,
 )
 from app.modules.activity.model import (  # noqa: F401
-    ActivityType, Facilitator, Activity, ActivityFacilitator, Participation,
+    ActivityCategory, ActivityType, Activity, ActivityParticipant,
 )
-from app.modules.beneficiary.model import Beneficiary, Enrollment  # noqa: F401
+from app.modules.beneficiary.model import Enrollment  # noqa: F401
+from app.modules.entity.model import EntityType, Entity  # noqa: F401
 from app.modules.role.model import Permission, Role, RolePermission  # noqa: F401
 
 # this is the Alembic Config object, which provides
