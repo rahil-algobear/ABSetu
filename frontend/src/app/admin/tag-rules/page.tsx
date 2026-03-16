@@ -5,10 +5,13 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { dimensionApi, tagRuleApi } from "@/services/api";
 import { Dimension, DimensionValue, TagRule } from "@/types";
 import { Button } from "@/components/ui/button";
+import { LayoutGrid } from "lucide-react";
+import { ActivityTypeMatrixDialog } from "@/components/ActivityTypeMatrixDialog";
 import toast from "react-hot-toast";
 
 export default function TagRulesPage() {
   const queryClient = useQueryClient();
+  const [matrixOpen, setMatrixOpen] = useState(false);
 
   const { data: dimensions = [] } = useQuery<Dimension[]>({
     queryKey: ["dimensions"],
@@ -109,6 +112,10 @@ export default function TagRulesPage() {
     <>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold">Tag Rules</h2>
+        <Button size="sm" variant="outline" onClick={() => setMatrixOpen(true)}>
+          <LayoutGrid className="h-4 w-4 mr-1" />
+          View Matrix
+        </Button>
       </div>
 
       <p className="text-sm text-gray-500 mb-4">
@@ -194,6 +201,11 @@ export default function TagRulesPage() {
           </Button>
         </div>
       )}
+
+      <ActivityTypeMatrixDialog
+        open={matrixOpen}
+        onClose={() => setMatrixOpen(false)}
+      />
     </>
   );
 }
