@@ -290,6 +290,27 @@ PROGRAMME_LOCATIONS = {
     "UNLIMITED": ["THANE", "MANKHURD"],
 }
 
+# Programme → Activity Types (explicit, because programmes can share locations
+# with different activity types — e.g. TRANSFORMATION and UNLIMITED both have THANE)
+# None = derive from PROGRAMME_LOCATIONS × LOCATION_ACTIVITY_TYPES (safe when
+# the programme's locations are not shared with other programmes).
+PROGRAMME_ACTIVITY_TYPES = {
+    "OUTREACH": None,  # derived (its locations are exclusive)
+    "TRANSFORMATION": [
+        "Physical Health",
+        "Mental Health",
+        "Life Skill Education",
+        "Education",
+        "Skill Building",
+        "Job Readiness - Sessions / Visits",
+        "Visits",
+        "External Training",
+        "Mentoring",
+        "Job / OJT Placement",
+    ],
+    "UNLIMITED": [],  # no activity types assigned yet
+}
+
 # Project → Location
 PROJECT_LOCATIONS = {
     "INSTITUTIONS": [
@@ -360,12 +381,17 @@ def _build_activity_type_access(location_map, programme_map, project_map):
         for at_name in at_names:
             at_access.setdefault(at_name, set()).add(loc_code)
 
-    # Add programme codes (derived: if a location belongs to a programme,
-    # the programme applies to all its activity types)
-    for prog_code, loc_codes in PROGRAMME_LOCATIONS.items():
-        for loc_code in loc_codes:
-            for at_name in LOCATION_ACTIVITY_TYPES.get(loc_code, []):
+    # Add programme codes
+    for prog_code, explicit_types in PROGRAMME_ACTIVITY_TYPES.items():
+        if explicit_types is not None:
+            # Explicit mapping provided
+            for at_name in explicit_types:
                 at_access.setdefault(at_name, set()).add(prog_code)
+        else:
+            # Derive from PROGRAMME_LOCATIONS × LOCATION_ACTIVITY_TYPES
+            for loc_code in PROGRAMME_LOCATIONS.get(prog_code, []):
+                for at_name in LOCATION_ACTIVITY_TYPES.get(loc_code, []):
+                    at_access.setdefault(at_name, set()).add(prog_code)
 
     # Add project codes (derived similarly)
     for proj_code, loc_codes in PROJECT_LOCATIONS.items():
@@ -377,31 +403,36 @@ def _build_activity_type_access(location_map, programme_map, project_map):
 
 
 def _ensure_activity_type_access(db, org, at, dv_codes, all_dv_maps):
-    """Ensure access records exist for an activity type."""
-    count = 0
+    """Sync access records for an activity type (add missing, remove stale)."""
+    # Resolve codes to dimension value IDs
+    desired_dv_ids = set()
     for code in dv_codes:
-        # Find the dimension value by code across all maps
         dv = None
         for dv_map in all_dv_maps:
             if code in dv_map:
                 dv = dv_map[code]
                 break
-        if not dv:
-            continue
-        existing = (
-            db.query(ActivityTypeAccess)
-            .filter_by(activity_type_id=at.id, dimension_value_id=dv.id)
-            .first()
-        )
-        if not existing:
-            db.add(
-                ActivityTypeAccess(
-                    activity_type_id=at.id,
-                    dimension_value_id=dv.id,
-                )
-            )
-            count += 1
-    return count
+        if dv:
+            desired_dv_ids.add(dv.id)
+
+    # Get existing access
+    existing = db.query(ActivityTypeAccess).filter_by(activity_type_id=at.id).all()
+    existing_dv_ids = {row.dimension_value_id for row in existing}
+
+    # Add missing
+    added = 0
+    for dv_id in desired_dv_ids - existing_dv_ids:
+        db.add(ActivityTypeAccess(activity_type_id=at.id, dimension_value_id=dv_id))
+        added += 1
+
+    # Remove stale
+    removed = 0
+    for row in existing:
+        if row.dimension_value_id not in desired_dv_ids:
+            db.delete(row)
+            removed += 1
+
+    return added, removed
 
 
 def seed():
@@ -457,13 +488,20 @@ def seed():
         # 5. Activity Type Access (replaces tag rules)
         at_access = _build_activity_type_access(location_map, programme_map, project_map)
         all_dv_maps = [location_map, programme_map, project_map]
-        new_access = 0
+        total_added = 0
+        total_removed = 0
         for at_name, dv_codes in at_access.items():
             at = at_map.get(at_name)
             if at:
-                new_access += _ensure_activity_type_access(db, org, at, dv_codes, all_dv_maps)
+                added, removed = _ensure_activity_type_access(
+                    db, org, at, dv_codes, all_dv_maps
+                )
+                total_added += added
+                total_removed += removed
         db.flush()
-        print(f"  Ensured activity type access ({new_access} new)")
+        print(
+            f"  Synced activity type access ({total_added} added, {total_removed} removed)"
+        )
 
         # 6. Admin role (all permissions — always syncs missing ones)
         admin_role = db.query(Role).filter_by(organization_id=org.id, name="Admin").first()
