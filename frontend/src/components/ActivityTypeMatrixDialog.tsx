@@ -19,6 +19,14 @@ interface ActivityTypeMatrixDialogProps {
   onClose: () => void;
 }
 
+type PathNode = {
+  dimValue: DimensionValue;
+  children: PathNode[];
+  activityTypes: ActivityType[];
+};
+
+type HeaderCell = { label: string; colSpan: number; key: string };
+
 export function ActivityTypeMatrixDialog({ open, onClose }: ActivityTypeMatrixDialogProps) {
   const { vPlural } = useVocabulary();
 
@@ -40,10 +48,8 @@ export function ActivityTypeMatrixDialog({ open, onClose }: ActivityTypeMatrixDi
 
   const [dimensionOrder, setDimensionOrder] = useState<string[]>([]);
 
-  // Initialize dimension order when dimensions load
   const orderedDimensions = useMemo(() => {
     if (nonSystemDimensions.length === 0) return [];
-    // If no custom order set yet, or order doesn't match current dimensions, reset
     const currentIds = new Set(nonSystemDimensions.map((d) => d.id));
     const validOrder = dimensionOrder.filter((id) => currentIds.has(id));
     if (validOrder.length !== nonSystemDimensions.length) {
@@ -52,7 +58,7 @@ export function ActivityTypeMatrixDialog({ open, onClose }: ActivityTypeMatrixDi
     return validOrder.map((id) => nonSystemDimensions.find((d) => d.id === id)!);
   }, [nonSystemDimensions, dimensionOrder]);
 
-  // Load all dimension values
+  // Load all dimension values grouped by dimension
   const { data: allDvsByDim = {} } = useQuery<Record<string, DimensionValue[]>>({
     queryKey: ["all-dvs-by-dim", nonSystemDimensions.map((d) => d.id).join(",")],
     queryFn: async () => {
@@ -67,28 +73,26 @@ export function ActivityTypeMatrixDialog({ open, onClose }: ActivityTypeMatrixDi
     enabled: open && nonSystemDimensions.length > 0,
   });
 
-  // Load system dimension values
+  // Load system dimension values (correspond 1:1 with activity types by name)
   const { data: systemDvs = [] } = useQuery<DimensionValue[]>({
     queryKey: ["dimension-values", systemDimension?.id],
     queryFn: () => dimensionApi.listValues(systemDimension!.id),
     enabled: open && !!systemDimension,
   });
 
-  // Load all tag rules
   const { data: allTagRules = [] } = useQuery<TagRule[]>({
     queryKey: ["tag-rules-all"],
     queryFn: () => tagRuleApi.list(),
     enabled: open,
   });
 
-  // Load activity types
   const { data: activityTypes = [] } = useQuery<ActivityType[]>({
     queryKey: ["activity-types"],
     queryFn: activityTypeApi.list,
     enabled: open,
   });
 
-  // Build bidirectional rule lookup: dvId → Set<connected dvId>
+  // Bidirectional rule lookup: dvId → Set<connected dvId>
   const ruleMap = useMemo(() => {
     const map = new Map<string, Set<string>>();
     for (const rule of allTagRules) {
@@ -101,68 +105,36 @@ export function ActivityTypeMatrixDialog({ open, onClose }: ActivityTypeMatrixDi
     return map;
   }, [allTagRules]);
 
-  // Map system dv name → activity type
-  const dvNameToActivityType = useMemo(() => {
-    const map = new Map<string, ActivityType>();
-    for (const at of activityTypes) {
-      map.set(at.name, at);
-    }
-    return map;
-  }, [activityTypes]);
-
-  // Map system dv id → activity type
+  // Map system dv id → activity type (matched by name)
   const sysDvToActivityType = useMemo(() => {
+    const nameMap = new Map<string, ActivityType>();
+    for (const at of activityTypes) {
+      nameMap.set(at.name, at);
+    }
     const map = new Map<string, ActivityType>();
     for (const dv of systemDvs) {
-      const at = dvNameToActivityType.get(dv.name);
+      const at = nameMap.get(dv.name);
       if (at) map.set(dv.id, at);
     }
     return map;
-  }, [systemDvs, dvNameToActivityType]);
+  }, [systemDvs, activityTypes]);
 
-  // Build the hierarchical column tree
-  const { columns, headerRows } = useMemo(() => {
+  // Build the hierarchical column tree and header rows
+  const { headerRows, leafGroups } = useMemo(() => {
     if (orderedDimensions.length === 0 || systemDvs.length === 0) {
-      return { columns: [], headerRows: [] };
+      return { headerRows: [], leafGroups: [] };
     }
 
-    // For each dimension level, find which values are valid given parent selections
-    // A leaf column = a unique path through dimension values that has at least one activity type connected
-
-    type PathNode = {
-      dimValue: DimensionValue;
-      children: PathNode[];
-      activityTypes: ActivityType[];
-    };
-
-    function buildTree(
-      dimIndex: number,
-      parentDvIds: string[] // dv ids selected so far in the path
-    ): PathNode[] {
-      if (dimIndex >= orderedDimensions.length) {
-        // At leaf level: find activity types connected to ALL parent dvIds
-        const matchingAts: ActivityType[] = [];
-        for (const sysDv of systemDvs) {
-          const connected = ruleMap.get(sysDv.id);
-          if (!connected) continue;
-          // Activity type must be connected to every parent dv in the path
-          const allConnected = parentDvIds.every((pid) => connected.has(pid));
-          if (allConnected) {
-            const at = sysDvToActivityType.get(sysDv.id);
-            if (at) matchingAts.push(at);
-          }
-        }
-        return matchingAts.length > 0
-          ? [{ dimValue: null as unknown as DimensionValue, children: [], activityTypes: matchingAts }]
-          : [];
-      }
-
+    // Build tree: each node is a real dimension value.
+    // Leaf nodes (last dimension) carry activityTypes directly.
+    function buildTree(dimIndex: number, parentDvIds: string[]): PathNode[] {
       const dim = orderedDimensions[dimIndex];
       const dvs = allDvsByDim[dim.id] || [];
+      const isLastDim = dimIndex === orderedDimensions.length - 1;
       const nodes: PathNode[] = [];
 
       for (const dv of dvs) {
-        // Check if this dv is connected to all parent dvIds (via tag rules)
+        // This dv must be connected to every parent dv in the path
         if (parentDvIds.length > 0) {
           const connected = ruleMap.get(dv.id);
           if (!connected || !parentDvIds.every((pid) => connected.has(pid))) {
@@ -170,26 +142,26 @@ export function ActivityTypeMatrixDialog({ open, onClose }: ActivityTypeMatrixDi
           }
         }
 
-        const children = buildTree(dimIndex + 1, [...parentDvIds, dv.id]);
-        // Only include if there are valid children/leaves
-        if (children.length > 0 || dimIndex === orderedDimensions.length - 1) {
-          // For the last dimension, we need to check if there are activity types
-          if (dimIndex === orderedDimensions.length - 1 && children.length === 0) {
-            // Check for activity types at this leaf
-            const matchingAts: ActivityType[] = [];
-            const allParentIds = [...parentDvIds, dv.id];
-            for (const sysDv of systemDvs) {
-              const conn = ruleMap.get(sysDv.id);
-              if (!conn) continue;
-              if (allParentIds.every((pid) => conn.has(pid))) {
-                const at = sysDvToActivityType.get(sysDv.id);
-                if (at) matchingAts.push(at);
-              }
+        const pathSoFar = [...parentDvIds, dv.id];
+
+        if (isLastDim) {
+          // Leaf: find activity types connected to ALL dvIds in the full path
+          const matchingAts: ActivityType[] = [];
+          for (const sysDv of systemDvs) {
+            const conn = ruleMap.get(sysDv.id);
+            if (!conn) continue;
+            if (pathSoFar.every((pid) => conn.has(pid))) {
+              const at = sysDvToActivityType.get(sysDv.id);
+              if (at) matchingAts.push(at);
             }
-            if (matchingAts.length > 0) {
-              nodes.push({ dimValue: dv, children: [], activityTypes: matchingAts });
-            }
-          } else if (children.length > 0) {
+          }
+          if (matchingAts.length > 0) {
+            nodes.push({ dimValue: dv, children: [], activityTypes: matchingAts });
+          }
+        } else {
+          // Intermediate: recurse deeper
+          const children = buildTree(dimIndex + 1, pathSoFar);
+          if (children.length > 0) {
             nodes.push({ dimValue: dv, children, activityTypes: [] });
           }
         }
@@ -200,85 +172,47 @@ export function ActivityTypeMatrixDialog({ open, onClose }: ActivityTypeMatrixDi
 
     const tree = buildTree(0, []);
 
-    // Build header rows from the tree
-    // Each dimension level gets one header row
-    // Plus one row for activity type names at the bottom
-
+    // Count leaf columns under a node (each leaf = 1 column)
     function countLeaves(node: PathNode): number {
-      if (node.children.length === 0) {
-        return Math.max(node.activityTypes.length, 1);
-      }
-      return node.children.reduce((sum, child) => sum + countLeaves(child), 0);
+      if (node.children.length === 0) return 1;
+      return node.children.reduce((sum, c) => sum + countLeaves(c), 0);
     }
 
-    // Build header rows
-    type HeaderCell = { label: string; colSpan: number; key: string };
+    // Collect header rows: one row per dimension level
     const rows: HeaderCell[][] = [];
-
-    function collectRow(nodes: PathNode[], depth: number) {
+    function collectHeaders(nodes: PathNode[], depth: number) {
       if (!rows[depth]) rows[depth] = [];
       for (const node of nodes) {
-        if (node.dimValue) {
-          const span = countLeaves(node);
-          rows[depth].push({
-            label: node.dimValue.name,
-            colSpan: span,
-            key: node.dimValue.id,
-          });
-        }
+        const span = countLeaves(node);
+        rows[depth].push({
+          label: node.dimValue.name,
+          colSpan: span,
+          key: node.dimValue.id,
+        });
         if (node.children.length > 0) {
-          collectRow(node.children, depth + 1);
+          collectHeaders(node.children, depth + 1);
         }
       }
     }
+    collectHeaders(tree, 0);
 
-    collectRow(tree, 0);
-
-    // Collect leaf activity types (bottom row)
-    const leafAts: ActivityType[][] = [];
-    function collectLeaves(node: PathNode) {
-      if (node.children.length === 0 && node.activityTypes.length > 0) {
-        leafAts.push(node.activityTypes);
-      } else {
-        for (const child of node.children) {
-          collectLeaves(child);
+    // Collect leaf activity type groups (one group per leaf column)
+    const leaves: ActivityType[][] = [];
+    function collectLeaves(nodes: PathNode[]) {
+      for (const node of nodes) {
+        if (node.children.length === 0) {
+          leaves.push(node.activityTypes);
+        } else {
+          collectLeaves(node.children);
         }
       }
     }
-    for (const node of tree) {
-      collectLeaves(node);
-    }
+    collectLeaves(tree);
 
-    return {
-      columns: tree,
-      headerRows: rows,
-    };
+    return { headerRows: rows, leafGroups: leaves };
   }, [orderedDimensions, allDvsByDim, systemDvs, ruleMap, sysDvToActivityType]);
 
-  // Collect leaf activity type groups for the bottom
-  const leafActivityTypeGroups = useMemo(() => {
-    type PathNode = {
-      dimValue: DimensionValue;
-      children: PathNode[];
-      activityTypes: ActivityType[];
-    };
-
-    function collectLeaves(nodes: PathNode[]): ActivityType[][] {
-      const result: ActivityType[][] = [];
-      for (const node of nodes) {
-        if (node.children.length === 0 && node.activityTypes.length > 0) {
-          result.push(node.activityTypes);
-        } else if (node.children.length > 0) {
-          result.push(...collectLeaves(node.children));
-        }
-      }
-      return result;
-    }
-
-    return collectLeaves(columns as unknown as PathNode[]);
-  }, [columns]);
-
-  // Drag and drop for dimension chips
+  // Drag and drop for dimension chip reordering
   const dragItem = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);
 
@@ -302,7 +236,7 @@ export function ActivityTypeMatrixDialog({ open, onClose }: ActivityTypeMatrixDi
     dragOverItem.current = null;
   }, [dimensionOrder, orderedDimensions]);
 
-  const hasData = leafActivityTypeGroups.length > 0;
+  const hasData = leafGroups.length > 0;
 
   return (
     <Transition show={open} as={Fragment}>
@@ -330,7 +264,7 @@ export function ActivityTypeMatrixDialog({ open, onClose }: ActivityTypeMatrixDi
               leaveFrom="opacity-100 scale-100"
               leaveTo="opacity-0 scale-95"
             >
-              <DialogPanel className="w-full max-w-6xl max-h-[90vh] rounded-xl bg-white shadow-xl flex flex-col">
+              <DialogPanel className="w-full max-w-[95vw] max-h-[90vh] rounded-xl bg-white shadow-xl flex flex-col">
                 {/* Header */}
                 <div className="flex items-center justify-between px-6 py-4 border-b shrink-0">
                   <DialogTitle className="text-lg font-semibold">
@@ -382,7 +316,7 @@ export function ActivityTypeMatrixDialog({ open, onClose }: ActivityTypeMatrixDi
                     <div className="overflow-x-auto">
                       <table className="min-w-full text-sm border-collapse">
                         <thead>
-                          {/* Dimension hierarchy header rows */}
+                          {/* One header row per dimension level */}
                           {headerRows.map((row, rowIndex) => (
                             <tr key={rowIndex}>
                               {/* Left label: dimension name */}
@@ -401,12 +335,12 @@ export function ActivityTypeMatrixDialog({ open, onClose }: ActivityTypeMatrixDi
                             </tr>
                           ))}
 
-                          {/* Activity type names row - vertical text */}
+                          {/* Activity type names — one column per leaf, types listed vertically */}
                           <tr>
                             <th className="px-3 py-2 text-left font-medium text-gray-500 bg-purple-50 border border-gray-200 sticky left-0 z-10">
                               {vPlural("activity_type")}
                             </th>
-                            {leafActivityTypeGroups.map((group, colIndex) => (
+                            {leafGroups.map((group, colIndex) => (
                               <td
                                 key={colIndex}
                                 className="px-2 py-3 text-center border border-gray-200 bg-purple-50 align-top"
