@@ -25,7 +25,7 @@ import { ActivityTypeMatrixDialog } from "@/components/ActivityTypeMatrixDialog"
 
 export default function ActivityTypesPage() {
   const queryClient = useQueryClient();
-  const { v, vPlural } = useVocabulary();
+  const { v, vPlural, vDim } = useVocabulary();
   const [modalOpen, setModalOpen] = useState(false);
   const [matrixOpen, setMatrixOpen] = useState(false);
   const [editing, setEditing] = useState<ActivityType | null>(null);
@@ -210,7 +210,7 @@ export default function ActivityTypesPage() {
               <TableHead>Name</TableHead>
               <TableHead>Description</TableHead>
               {nonSystemDimensions.map((dim) => (
-                <TableHead key={dim.id}>{dim.name}</TableHead>
+                <TableHead key={dim.id}>{vDim(dim)}</TableHead>
               ))}
               {metaFields.map((f) => (
                 <TableHead key={f.key}>{f.label}</TableHead>

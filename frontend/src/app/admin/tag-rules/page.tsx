@@ -7,10 +7,12 @@ import { Dimension, DimensionValue, TagRule } from "@/types";
 import { Button } from "@/components/ui/button";
 import { LayoutGrid } from "lucide-react";
 import { ActivityTypeMatrixDialog } from "@/components/ActivityTypeMatrixDialog";
+import { useVocabulary } from "@/hooks/useVocabulary";
 import toast from "react-hot-toast";
 
 export default function TagRulesPage() {
   const queryClient = useQueryClient();
+  const { vDim } = useVocabulary();
   const [matrixOpen, setMatrixOpen] = useState(false);
 
   const { data: dimensions = [] } = useQuery<Dimension[]>({
@@ -132,7 +134,7 @@ export default function TagRulesPage() {
             onChange={(e) => { setDim1Id(e.target.value); setPendingPairs(null); }}
           >
             {dimensions.filter((d) => d.id !== effectiveDim2).map((d) => (
-              <option key={d.id} value={d.id}>{d.name}</option>
+              <option key={d.id} value={d.id}>{vDim(d)}</option>
             ))}
           </select>
         </div>
@@ -144,7 +146,7 @@ export default function TagRulesPage() {
             onChange={(e) => { setDim2Id(e.target.value); setPendingPairs(null); }}
           >
             {dimensions.filter((d) => d.id !== effectiveDim1).map((d) => (
-              <option key={d.id} value={d.id}>{d.name}</option>
+              <option key={d.id} value={d.id}>{vDim(d)}</option>
             ))}
           </select>
         </div>
@@ -156,7 +158,7 @@ export default function TagRulesPage() {
           <thead>
             <tr className="bg-gray-50">
               <th className="px-3 py-2 text-left font-medium text-gray-700 border-b">
-                {dim1?.name} \ {dim2?.name}
+                {dim1 ? vDim(dim1) : ""} \ {dim2 ? vDim(dim2) : ""}
               </th>
               {values2.map((v2) => (
                 <th key={v2.id} className="px-3 py-2 text-center font-medium text-gray-700 border-b whitespace-nowrap">

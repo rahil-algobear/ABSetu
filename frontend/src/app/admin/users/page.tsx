@@ -22,6 +22,7 @@ import {
   TableCell,
 } from "@/components/ui/page-table";
 import { Plus, Pencil, Phone, Shield, Trash2 } from "lucide-react";
+import { useVocabulary } from "@/hooks/useVocabulary";
 import toast from "react-hot-toast";
 
 function AccessCheckboxSection({
@@ -104,6 +105,7 @@ function AccessCheckboxSection({
 
 export default function UsersPage() {
   const queryClient = useQueryClient();
+  const { vDim } = useVocabulary();
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [accessModalOpen, setAccessModalOpen] = useState(false);
@@ -341,7 +343,7 @@ export default function UsersPage() {
               <TableHead>Mobile</TableHead>
               <TableHead>Role</TableHead>
               {dimensions.map((dim) => (
-                <TableHead key={dim.id}>{dim.name}</TableHead>
+                <TableHead key={dim.id}>{vDim(dim)}</TableHead>
               ))}
               <TableHead className="w-24">Actions</TableHead>
             </TableRow>
@@ -497,7 +499,7 @@ export default function UsersPage() {
           {dvsByDimension.map(({ dimension, values }) => (
             <AccessCheckboxSection
               key={dimension.id}
-              title={dimension.name}
+              title={vDim(dimension)}
               items={values}
               selectedIds={createDvIds}
               onToggle={(id) => toggleId(createDvIds, setCreateDvIds, id)}
@@ -602,7 +604,7 @@ export default function UsersPage() {
             {dvsByDimension.map(({ dimension, values }) => (
               <AccessCheckboxSection
                 key={dimension.id}
-                title={dimension.name}
+                title={vDim(dimension)}
                 items={values}
                 selectedIds={selectedDvIds}
                 onToggle={(id) => toggleId(selectedDvIds, setSelectedDvIds, id)}

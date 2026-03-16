@@ -63,7 +63,7 @@ function getFilteredValues(
 export default function ActivitiesPage() {
   const [showCreate, setShowCreate] = useState(false);
   const queryClient = useQueryClient();
-  const { v, vPlural } = useVocabulary();
+  const { v, vPlural, vDim } = useVocabulary();
 
   const { data: activities = [], isLoading } = useQuery({
     queryKey: ["activities"],
@@ -220,7 +220,7 @@ export default function ActivitiesPage() {
                   ) || "";
                 return (
                   <div key={dim.id}>
-                    <label className="text-sm font-medium">{dim.name}</label>
+                    <label className="text-sm font-medium">{vDim(dim)}</label>
                     <select
                       className="w-full mt-1 border rounded-md p-2 text-sm"
                       value={currentSelection}
@@ -237,7 +237,7 @@ export default function ActivitiesPage() {
                         });
                       }}
                     >
-                      <option value="">Select {dim.name}...</option>
+                      <option value="">Select {vDim(dim)}...</option>
                       {filtered.map((dv) => (
                         <option key={dv.id} value={dv.id}>
                           {dv.name}

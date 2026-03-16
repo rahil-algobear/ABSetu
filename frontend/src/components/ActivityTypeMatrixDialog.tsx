@@ -27,7 +27,7 @@ type LeafColumn = {
 };
 
 export function ActivityTypeMatrixDialog({ open, onClose }: ActivityTypeMatrixDialogProps) {
-  const { vPlural } = useVocabulary();
+  const { vPlural, vDim } = useVocabulary();
 
   const { data: dimensions = [] } = useQuery<Dimension[]>({
     queryKey: ["dimensions"],
@@ -372,7 +372,7 @@ export function ActivityTypeMatrixDialog({ open, onClose }: ActivityTypeMatrixDi
                         className="flex items-center gap-1 px-3 py-1.5 bg-white border border-gray-200 rounded-full text-sm font-medium text-gray-700 cursor-grab active:cursor-grabbing shadow-sm hover:shadow-md transition-shadow select-none"
                       >
                         <GripVertical className="h-3 w-3 text-gray-400" />
-                        {dim.name}
+                        {vDim(dim)}
                       </div>
                     ))}
                   </div>
@@ -397,7 +397,7 @@ export function ActivityTypeMatrixDialog({ open, onClose }: ActivityTypeMatrixDi
                           {headerRows.map((row, rowIndex) => (
                             <tr key={rowIndex}>
                               <th className="px-3 py-2 text-left font-medium text-gray-500 bg-gray-50 border border-gray-200 whitespace-nowrap sticky left-0 z-10">
-                                {orderedDimensions[rowIndex]?.name || ""}
+                                {orderedDimensions[rowIndex] ? vDim(orderedDimensions[rowIndex]) : ""}
                               </th>
                               {row.map((cell) => (
                                 <th
