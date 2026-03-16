@@ -541,8 +541,10 @@ def seed():
             db.flush()
             print(f"  Created Admin role")
 
-        # Sync: grant any permissions the role doesn't have yet
-        all_perms = db.query(Permission).all()
+        # Sync: grant any current permissions the role doesn't have yet
+        from app.seeds.initial import PERMISSIONS as CANONICAL_PERMISSIONS
+        canonical_keys = [key for key, _ in CANONICAL_PERMISSIONS]
+        all_perms = db.query(Permission).filter(Permission.key.in_(canonical_keys)).all()
         existing_perm_ids = {
             rp.permission_id
             for rp in db.query(RolePermission).filter_by(role_id=admin_role.id).all()

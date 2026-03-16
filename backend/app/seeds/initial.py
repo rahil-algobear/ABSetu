@@ -90,6 +90,21 @@ def seed():
 
         print(f"Ensured {len(PERMISSIONS)} permissions exist")
 
+        # 2b. Remove stale permissions no longer in the canonical list
+        canonical_keys = {key for key, _ in PERMISSIONS}
+        stale_perms = db.query(Permission).filter(~Permission.key.in_(canonical_keys)).all()
+        if stale_perms:
+            stale_ids = [p.id for p in stale_perms]
+            stale_keys = [p.key for p in stale_perms]
+            db.query(RolePermission).filter(
+                RolePermission.permission_id.in_(stale_ids)
+            ).delete(synchronize_session="fetch")
+            db.query(Permission).filter(Permission.id.in_(stale_ids)).delete(
+                synchronize_session="fetch"
+            )
+            db.flush()
+            print(f"Removed {len(stale_perms)} stale permissions: {stale_keys}")
+
         # 3. Create Admin role (all permissions — always syncs missing ones)
         admin_role = db.query(Role).filter_by(organization_id=org.id, name="Admin").first()
         if not admin_role:
