@@ -1,5 +1,7 @@
 # Generic NGO Architecture — Implementation Document
 
+> **Status:** Core architecture implemented. See checkmarks (✅) throughout for completion status.
+
 ## Problem
 
 ABSetu currently hardcodes entity types (Center, Programme, SessionTemplate) and their hierarchy (Organization → Centre/Programme → ProgrammeCenter → Session → Attendance). This works for Kshamata but won't work for NGOs with different organizational structures.
@@ -50,7 +52,7 @@ Replace hardcoded organizational entities (Center, Programme, ProgrammeCenter) w
 
 ### New Tables
 
-#### `dimensions`
+#### `dimensions` ✅
 
 Org-defined grouping axes. Each org creates the dimensions that match how they work.
 
@@ -61,21 +63,27 @@ Org-defined grouping axes. Each org creates the dimensions that match how they w
 | `name` | String | Display name, e.g. "Location", "Programme" |
 | `key` | String | Machine key, e.g. "location", "programme" |
 | `sort_order` | Integer | Display ordering |
+| `is_system` | String, nullable | If set, indicates a system-managed dimension (e.g. `"activity_type"`). System dimensions cannot be deleted and their values are synced automatically from their source entity. |
 | `created_at` | Timestamp | From BaseModel |
 | `updated_at` | Timestamp | From BaseModel |
 
 Unique constraint: `(organization_id, key)`
 
+> **System dimensions:** When `is_system = "activity_type"`, the dimension's values are automatically synced from the `activity_types` table. This allows activity types to participate in tag rules using the same dimension_value ↔ dimension_value mechanism. The seeder creates this dimension and keeps it in sync; the frontend hides system dimensions from the settings dimension tabs.
+
 **Kshamata example:**
-| name | key |
-|------|-----|
-| Location | location |
-| Location Type | location_type |
-| Programme | programme |
+| name | key | is_system |
+|------|-----|-----------|
+| Programme | programme | NULL |
+| Project | project | NULL |
+| Location | location | NULL |
+| Intervention | activity_type | `"activity_type"` |
+
+> **Note:** Dimension `name` is org-specific (e.g. "Intervention" is Kshamata's term for activity types). The frontend vocabulary system (`vDim()`) can override display names without changing the DB value.
 
 ---
 
-#### `dimension_values`
+#### `dimension_values` ✅
 
 Values within a dimension.
 
@@ -108,9 +116,16 @@ Unique constraint: `(dimension_id, code)`
 | Kshamata Transformation Programme | TRANSFORMATION |
 | Kshamata Unlimited | UNLIMITED |
 
+**Kshamata example (Project dimension):**
+| name | code |
+|------|------|
+| Institutions | INSTITUTIONS |
+| Post Institutions | POST_INSTITUTIONS |
+| Community | COMMUNITY |
+
 ---
 
-#### `tag_rules`
+#### `tag_rules` ✅
 
 Defines which dimension values are valid together. Replaces `programme_centers` join table AND the `CENTRE_INTERVENTIONS` mapping.
 
@@ -143,11 +158,13 @@ Location ↔ ActivityType rules (replaces `CENTRE_INTERVENTIONS`):
 | Location:ShantiSadan | ActivityType:Vocational Skill Training |
 | ... | ... |
 
-> **Note on ActivityType in tag rules:** ActivityType remains a first-class table (`activity_types`), but for tag rule purposes we create a system-managed "Activity Type" dimension whose values mirror the `activity_types` table. This lets `tag_rules` work with a single mechanism (dimension_value ↔ dimension_value) without special-casing activity types. When an activity type is created/deleted, the corresponding dimension value is synced automatically.
+> **Note on ActivityType in tag rules:** ActivityType remains a first-class table (`activity_types`), but for tag rule purposes we create a system-managed dimension (with `is_system = "activity_type"`) whose values mirror the `activity_types` table. This lets `tag_rules` work with a single mechanism (dimension_value ↔ dimension_value) without special-casing activity types. The seeder creates this dimension and syncs values automatically. The dimension name is org-specific (e.g. "Intervention" for Kshamata).
+>
+> **Programme ↔ ActivityType rules:** The seeder uses an explicit `PROGRAMME_ACTIVITY_TYPES` mapping to define which activity types belong to each programme, along with a `_remove_stale_programme_at_rules()` function to clean up rules for programmes that should have no activity types (e.g. Kshamata Unlimited).
 
 ---
 
-#### `activity_tags`
+#### `activity_tags` ✅
 
 Links dimension values to activities. Replaces the `programme_center_id` FK on activities (formerly sessions).
 
@@ -167,7 +184,7 @@ Unique constraint: `(activity_id, dimension_value_id)`
 
 ---
 
-#### `beneficiary_tags`
+#### `beneficiary_tags` ✅
 
 Links dimension values to beneficiaries for scoping and reporting.
 
@@ -181,7 +198,7 @@ Unique constraint: `(beneficiary_id, dimension_value_id)`
 
 ---
 
-#### `enrollment_tags`
+#### `enrollment_tags` ✅
 
 Links dimension values to enrollments. Replaces the `programme_center_id` FK on enrollments.
 
@@ -195,7 +212,7 @@ Unique constraint: `(enrollment_id, dimension_value_id)`
 
 ---
 
-#### `user_dimension_access`
+#### `user_dimension_access` ✅
 
 Replaces `user_center_access`, `user_programme_access`, and `user_session_template_access` with a single table.
 
@@ -241,7 +258,7 @@ Tags are now in `enrollment_tags`.
 
 ---
 
-## Permissions
+## Permissions ✅
 
 ### Simplified Permission Keys
 
@@ -277,7 +294,7 @@ These are independent. A user needs BOTH the right permission AND matching scope
 
 ---
 
-## Custom Fields (Meta) Per Dimension
+## Custom Fields (Meta) Per Dimension ✅
 
 The existing meta field schema system (`Organization.meta['meta_field_schemas']`) extends to support dimension-scoped schemas.
 
@@ -298,9 +315,9 @@ The prefix `dimension:{key}` makes schemas dynamic per-dimension. When an admin 
 
 ---
 
-## Frontend Changes
+## Frontend Changes ✅
 
-### Settings Navigation
+### Settings Navigation ✅
 
 **Current tabs:**
 ```
@@ -323,7 +340,7 @@ For a different NGO with dimensions "Region", "Project", "Funder":
 Regions | Projects | Funders | Tag Rules | Activity Types | Facilitators | Beneficiaries | Roles | Users | Custom Fields
 ```
 
-### Dimension Settings Pages (`/admin/dimensions/{dimension_key}`)
+### Dimension Settings Pages (`/admin/dimensions/{dimension_key}`) ✅
 
 Each dimension gets its own page (one route, reused component). Shows a list of that dimension's values with add/edit/delete.
 
@@ -331,9 +348,9 @@ Admin can:
 - Add/edit/remove values within the dimension
 - Custom fields per dimension render via DynamicMetaForm (fetched from meta_field_schemas using `dimension:{key}`)
 
-A separate admin page (or section within org settings) allows creating new dimensions themselves.
+> **Note:** Creating new dimensions themselves is currently done via seeder/API only. No admin UI for creating dimensions yet.
 
-### Tag Rules Page (`/admin/tag-rules`)
+### Tag Rules Page (`/admin/tag-rules`) ✅
 
 Matrix view showing valid combinations between two selected dimensions.
 
@@ -346,9 +363,22 @@ Kasturba               ✓           ✓          ✓
 ...
 ```
 
-Admin selects two dimensions from dropdowns, then toggles checkboxes in the matrix.
+Admin selects two dimensions from dropdowns, then toggles checkboxes in the matrix. Includes a bulk sync mechanism — changes are staged locally and saved in one API call.
 
-### Activity Creation Form
+### Activity Type Matrix Dialog ✅
+
+A "View Matrix" button (on both Tag Rules and Activity Types pages) opens a near-fullscreen dialog showing the complete dimension hierarchy with activity types as leaf columns.
+
+Features:
+- **Drag-and-drop dimension reordering** — chips at the top let admins reorder which dimension is the top-level grouping
+- **Hierarchical column headers** — parent dimension values span across their children with `colSpan`
+- **Gap handling** — dimensions that don't apply to certain paths show as blank (e.g. Programmes with no Project)
+- **Orphan detection** — values connected to ancestors but not to any value at intermediate levels still appear (e.g. Transformation/Unlimited appear even when Project is first in the ordering)
+- **Ancestor-aware header merging** — same dimension value under different parent groups renders as separate columns (e.g. "Thane" under Transformation vs Unlimited)
+
+Component: `src/components/ActivityTypeMatrixDialog.tsx`
+
+### Activity Creation Form ✅
 
 Dynamically renders one dropdown per dimension (filtered by user's access scope). Selection cascading via tag rules — choosing a Location filters Programme to valid options, which filters Activity Type to valid options.
 
@@ -364,7 +394,13 @@ Dynamically renders one dropdown per dimension (filtered by user's access scope)
 
 **The UI looks identical to today for end users.** The difference is that dropdowns are generic (driven by dimensions) rather than hardcoded. All labels come from the org's vocabulary mapping.
 
-### Custom Fields Page (`/admin/meta-fields`)
+### Activity Types Page ✅
+
+Shows all activity types in a table with:
+- **Dimension columns** — each non-system dimension gets a column showing which dimension values the activity type is connected to (via tag rules), displayed as blue pills/badges
+- **View Matrix** button — opens the ActivityTypeMatrixDialog
+
+### Custom Fields Page (`/admin/meta-fields`) ✅
 
 Entity type selector dynamically includes dimension-based types:
 
@@ -377,7 +413,7 @@ No other changes to this page — DynamicMetaForm handles rendering.
 
 ---
 
-## API Changes
+## API Changes ✅
 
 ### New Endpoints
 
@@ -441,121 +477,83 @@ PUT    /api/organization/meta-field-schemas/{entity_type}
 
 ---
 
-## Backend Module Structure
+## Backend Module Structure ✅
 
-### New Module: `app/modules/dimension/`
+### Module: `app/modules/dimension/`
 
 ```
 app/modules/dimension/
-├── model.py       # Dimension, DimensionValue, TagRule
+├── model.py       # Dimension, DimensionValue, TagRule, ActivityTag, BeneficiaryTag,
+│                  #   EnrollmentTag, UserDimensionAccess (all tagging in one module)
 ├── schemas.py     # Request/response schemas
-├── service.py     # Business logic, tag rule validation
-└── routes.py      # API endpoints
+├── service.py     # DimensionService, DimensionValueService, TagRuleService,
+│                  #   UserDimensionAccessService
+└── routes.py      # /api/dimensions, /api/tag-rules endpoints
 ```
 
-### New Module: `app/modules/tagging/`
+> **Note:** The originally planned separate `app/modules/tagging/` module was not created. All tag models (`ActivityTag`, `BeneficiaryTag`, `EnrollmentTag`, `UserDimensionAccess`) live in the dimension module alongside `TagRule` since they're closely related. User access endpoints are in the user module routes.
 
-```
-app/modules/tagging/
-├── model.py       # ActivityTag, BeneficiaryTag, EnrollmentTag, UserDimensionAccess
-├── schemas.py
-├── service.py     # Scoping/filtering logic
-└── routes.py      # User access endpoints
-```
-
-### Renamed Module: `app/modules/session/` → `app/modules/activity/`
+### Module: `app/modules/activity/`
 
 ```
 app/modules/activity/
-├── model.py       # Activity, ActivityType, ActivityFacilitator, Participation
+├── model.py       # Activity, ActivityType, Facilitator, ActivityFacilitator, Participation
 ├── schemas.py
 ├── service.py
-└── routes.py      # /api/activities, /api/activity-types
+└── routes.py      # /api/activities, /api/activity-types, /api/facilitators
 ```
 
-### Modified Module: `app/modules/organization/model.py`
+> **Note:** `Facilitator` model lives in the activity module (not a separate module).
 
-Remove `Center`, `Programme`, `ProgrammeCenter` classes. `Organization` stays.
+### Module: `app/modules/organization/model.py`
 
----
-
-## Migration Path
-
-Since we don't need backward compatibility:
-
-1. Create new migration that:
-   - Creates `dimensions`, `dimension_values`, `tag_rules` tables
-   - Creates `activity_tags`, `beneficiary_tags`, `enrollment_tags` tables
-   - Creates `user_dimension_access` table
-   - Renames `session_templates` → `activity_types`, `sessions` → `activities`, `session_facilitators` → `activity_facilitators`, `attendances` → `participations`
-   - Renames `session_template_id` → `activity_type_id` on activities
-   - Adds `meta` JSONB column to `participations`
-   - Adds `organization_id` to `activities` and `enrollments`
-   - Drops `programme_center_id` from `activities` and `enrollments`
-   - Drops `centres`, `programmes`, `programme_centers` tables
-   - Drops `user_center_access`, `user_programme_access`, `user_session_template_access` tables
-   - Updates permission records (remove old, add new)
-
-2. Rename backend module `app/modules/session/` → `app/modules/activity/`
-
-3. Update all backend modules (routes, services, schemas)
-
-4. Update all frontend pages and components
-
-5. Update seeders (`initial.py` and `kshamata.py`) — see Seeders section below
+`Organization` model with `meta` JSONB storing vocabulary and meta_field_schemas. Old `Center`, `Programme`, `ProgrammeCenter` classes removed.
 
 ---
 
-## Kshamata Seeder (New Version)
+## Migration Path ✅
+
+All migrations have been applied. The database schema is in the new state.
+
+---
+
+## Kshamata Seeder ✅
+
+Implemented in `app/seeds/kshamata.py`.
 
 ```python
-# Dimensions (key, name — name is what appears in the UI/settings tabs)
+# Dimensions (key, name, sort_order)
+# Note: name is org-specific, not generic
 DIMENSIONS = [
-    ("location", "Location"),
-    ("location_type", "Location Type"),
-    ("programme", "Programme"),
+    ("programme", "Programme", 0),
+    ("project", "Project", 1),
+    ("location", "Location", 2),
 ]
+# Plus system dimension: ("activity_type", "Intervention", 3, is_system="activity_type")
 
-# Dimension Values
-DIMENSION_VALUES = {
-    "location": [
-        ("SHANTISADAN", "ShantiSadan"),
-        ("KASTURBA", "Kasturba"),
-        ("NAVJEEVAN", "Navjeevan"),
-        # ... all 15 locations
-    ],
-    "location_type": [
-        ("INSTITUTION", "Institution"),
-        ("POST_INSTITUTION", "Post Institution"),
-        ("COMMUNITY", "Community"),
-    ],
-    "programme": [
-        ("OUTREACH", "Kshamata Outreach Programme"),
-        ("TRANSFORMATION", "Kshamata Transformation Programme"),
-        ("UNLIMITED", "Kshamata Unlimited"),
-    ],
-}
-
-# Tag Rules (replaces PROGRAMME_CENTERS + CENTRE_INTERVENTIONS)
-TAG_RULES = {
-    ("programme:OUTREACH", "location:SHANTISADAN"),
-    ("programme:OUTREACH", "location:KASTURBA"),
-    # ...
-    ("location:SHANTISADAN", "activity_type:LIFE_SKILL_EDUCATION"),
-    ("location:SHANTISADAN", "activity_type:JOB_READINESS"),
-    # ... all valid combinations
+# Explicit Programme ↔ ActivityType mapping (not derived from shared locations)
+PROGRAMME_ACTIVITY_TYPES = {
+    "OUTREACH": ["Life Skill Education", "Job Readiness", ...],
+    "TRANSFORMATION": ["Physical Health", "Mental Health", ...],
+    # UNLIMITED: no activity types per the spreadsheet
 }
 
 # Vocabulary (maps generic names to Kshamata's terminology)
 VOCABULARY = {
     "activity": "Session",
-    "activity_type": "Session Template",
+    "activity_type": "Intervention",
     "participation": "Attendance",
     "facilitator": "Facilitator",
     "beneficiary": "Beneficiary",
     "enrollment": "Enrollment",
 }
 ```
+
+Key seeder features:
+- `_ensure_dimension()` — idempotent, updates name/sort_order on re-seed
+- `_ensure_dimension_value()` — idempotent by code within dimension
+- `_ensure_tag_rule()` — normalized pair ordering, skip duplicates
+- `_remove_stale_programme_at_rules()` — cleans up Programme↔ActivityType rules for programmes not in `PROGRAMME_ACTIVITY_TYPES` (e.g. Unlimited)
 
 ---
 
@@ -587,7 +585,7 @@ The `meta` column on participations is critical for NGOs that need to record per
 
 Custom field schemas for participations are defined via `meta_field_schemas` using the entity type `"participation"`.
 
-### Vocabulary mapping
+### Vocabulary mapping ✅
 
 Each org can rename entities in the UI via an org-level config stored in `Organization.meta['vocabulary']`:
 
@@ -595,7 +593,7 @@ Each org can rename entities in the UI via an org-level config stored in `Organi
 {
   "vocabulary": {
     "activity": "Session",
-    "activity_type": "Session Template",
+    "activity_type": "Intervention",
     "participation": "Attendance",
     "facilitator": "Facilitator",
     "beneficiary": "Beneficiary",
@@ -604,9 +602,15 @@ Each org can rename entities in the UI via an org-level config stored in `Organi
 }
 ```
 
-If no vocabulary is configured, the UI uses sensible defaults (the generic names above, or the Kshamata-style names — TBD). The frontend reads this config and renders all labels, page titles, navigation items, and button text dynamically.
+**Vocabulary is frontend-only.** The `useVocabulary` hook (`src/hooks/useVocabulary.ts`) fetches the org once (cached 5 min via TanStack Query) and provides:
 
-**Kshamata example:** `activity → "Session"`, `activity_type → "Session Template"`, `participation → "Attendance"` — UI looks identical to today.
+- **`v(key)`** — singular form: `v("activity")` → `"Session"` for Kshamata
+- **`vPlural(key)`** — plural with naive pluralization: `vPlural("activity")` → `"Sessions"`
+- **`vDim(dim)`** — dimension display name: checks `vocab[dim.key]`, falls back to `dim.name`. Used for all dimension labels in the UI (tabs, dropdowns, table headers, matrix chips).
+
+The vocabulary key for dimensions matches the dimension's `key` field. For example, a dimension with `key: "activity_type"` is overridden by `vocabulary.activity_type`. This means dimension names in the DB can be org-specific raw terms (e.g. "Intervention"), and the frontend can either use them as-is or override them via vocabulary.
+
+**Kshamata example:** `activity → "Session"`, `activity_type → "Intervention"`, `participation → "Attendance"`.
 
 **Donation NGO example:** `activity → "Disbursement"`, `activity_type → "Disbursement Type"`, `participation → "Recipient"`, `facilitator → "Field Officer"`.
 
@@ -635,22 +639,24 @@ All references to "session" in code (routes, components, API calls, types) updat
 
 ---
 
-## Seeders
+## Seeders ✅
 
-After all schema and code changes are complete, update both seed scripts:
+Both seed scripts have been updated:
 
-### `app/seeds/initial.py`
-- Update permission keys to new names (`activity:view`, `activity_type:manage`, `dimension:view`, `dimension:manage`, etc.)
-- Remove old permission keys (`center:view`, `centre:manage`, `programme:view`, `programme:manage`, `session:view`, `session:create`, `session_template:view`, `session_template:manage`)
-- Update default role permission assignments
+### `app/seeds/initial.py` ✅
+- Permission keys updated to new names (`activity:view`, `activity_type:manage`, `dimension:view`, `dimension:manage`, etc.)
+- Old permission keys removed
+- Default role permission assignments updated
 
-### `app/seeds/kshamata.py`
-- Replace `Center`, `Programme`, `ProgrammeCenter` creation with `Dimension` + `DimensionValue` creation
-- Replace `SessionTemplate` creation with `ActivityType` creation
-- Replace `PROGRAMME_CENTERS` mapping with `TagRule` creation
-- Replace `CENTRE_INTERVENTIONS` mapping with `TagRule` creation (same mechanism)
-- Add vocabulary config to org meta: `{"vocabulary": {"activity": "Session", "activity_type": "Session Template", "participation": "Attendance"}}`
-- Add dimension-scoped meta field schemas if needed (e.g., address field on Location dimension values)
+### `app/seeds/kshamata.py` ✅
+- Dimensions + DimensionValues replace old Center/Programme/ProgrammeCenter creation
+- ActivityTypes replace SessionTemplates
+- TagRules replace PROGRAMME_CENTERS + CENTRE_INTERVENTIONS mappings
+- System dimension (`is_system="activity_type"`) created with auto-synced values
+- Explicit `PROGRAMME_ACTIVITY_TYPES` mapping for Programme↔ActivityType rules
+- `_remove_stale_programme_at_rules()` cleans up stale data on re-seed
+- Vocabulary config set in org meta
+- Meta field schemas for dimensions (e.g., address field on Location values)
 
 ---
 
