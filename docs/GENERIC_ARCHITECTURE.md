@@ -684,3 +684,305 @@ Organization
         ├── Role assignment
         └── UserDimensionAccess → DimensionValues
 ```
+
+---
+---
+
+# V2 — Entity/EntityType + Activity Categories
+
+> **Status:** Proposed. Not yet implemented.
+
+## Problem
+
+The v1 architecture has two hardcoded person types (`beneficiaries`, `facilitators`) and assumes all activities are session-like (participation = present/absent). This limits the platform to session-recording NGOs and blocks:
+
+1. **Orgs with more than two person types** — caregivers, donors, volunteers, referral sources, mentors, community leaders
+2. **Orgs doing non-session work** — disbursements (need amount per recipient), home visits (need visit notes), health checkups (need vitals), assessments (need scores)
+3. **Orgs doing multiple kinds of work** — sessions AND disbursements in the same org, each with different participation semantics
+
+## Solution 1: Entity & EntityType
+
+Replace `beneficiaries` and `facilitators` tables with a generic `entities` table. Each entity belongs to an org-defined `entity_type`.
+
+### Tables Removed
+
+| Table | Replaced By |
+|-------|-------------|
+| `beneficiaries` | `entities` + `entity_types` |
+| `facilitators` | `entities` + `entity_types` |
+| `activity_facilitators` | `participations` (with role/entity_type distinction) |
+| `beneficiary_tags` | `entity_tags` |
+
+### New Tables
+
+#### `entity_types`
+
+Org-defined person categories. Each org creates the types that match their domain.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID | PK |
+| `organization_id` | UUID | FK → organizations, NOT NULL |
+| `name` | String | Display name, e.g. "Beneficiary", "Facilitator", "Caregiver" |
+| `key` | String | Machine key, e.g. "beneficiary", "facilitator", "caregiver" |
+| `config` | JSONB | Type-level configuration (see below) |
+| `sort_order` | Integer | Display ordering |
+| `created_at` | Timestamp | From BaseModel |
+| `updated_at` | Timestamp | From BaseModel |
+
+Unique constraint: `(organization_id, key)`
+
+**Config schema:**
+```json
+{
+  "case_number_enabled": true,
+  "case_number_format": "{ORG_CODE}-{SERIAL}",
+  "can_enroll": true,
+  "can_participate": true
+}
+```
+
+- `case_number_enabled` — only some entity types need auto-generated case numbers (beneficiaries yes, facilitators no)
+- `can_enroll` — whether entities of this type can be enrolled in programmes
+- `can_participate` — whether entities of this type appear in participation checklists
+
+**Kshamata example:**
+| name | key | case_number_enabled | can_enroll | can_participate |
+|------|-----|---------------------|------------|-----------------|
+| Beneficiary | beneficiary | true | true | true |
+| Facilitator | facilitator | false | false | false |
+
+**Multi-stakeholder NGO example:**
+| name | key | case_number_enabled | can_enroll | can_participate |
+|------|-----|---------------------|------------|-----------------|
+| Child | child | true | true | true |
+| Caregiver | caregiver | true | true | true |
+| Volunteer | volunteer | false | false | false |
+| Referral Source | referral_source | false | false | false |
+
+#### `entities`
+
+All people tracked by the org, regardless of type.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID | PK |
+| `organization_id` | UUID | FK → organizations, NOT NULL |
+| `entity_type_id` | UUID | FK → entity_types, NOT NULL |
+| `case_number` | String | Auto-generated (if type has case_number_enabled), unique within org |
+| `name` | String | Required |
+| `meta` | JSONB | Custom fields (scoped per entity_type via meta_field_schemas using `entity:{key}`) |
+| `created_at` | Timestamp | From BaseModel |
+| `updated_at` | Timestamp | From BaseModel |
+
+#### `entity_tags`
+
+Replaces `beneficiary_tags`. Links dimension values to entities for scoping and reporting.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID | PK |
+| `entity_id` | UUID | FK → entities, NOT NULL |
+| `dimension_value_id` | UUID | FK → dimension_values, NOT NULL |
+
+Unique constraint: `(entity_id, dimension_value_id)`
+
+### Modified Tables
+
+#### `participations` (modified)
+
+Now references `entity_id` instead of `beneficiary_id`. Replaces both the old `attendances` table and `activity_facilitators` table — facilitators are just participants with a different entity type.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID | PK |
+| `activity_id` | UUID | FK → activities, NOT NULL |
+| `entity_id` | UUID | FK → entities, NOT NULL (replaces `beneficiary_id`) |
+| `status` | String | Driven by activity category config |
+| `meta` | JSONB | Custom data per participation record |
+
+The entity's type determines their role in the activity. A "Facilitator" entity participating = they conducted it. A "Beneficiary" entity participating = they attended/received. The UI groups participants by entity type in the activity view.
+
+#### `enrollments` (modified)
+
+References `entity_id` instead of `beneficiary_id`.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID | PK |
+| `entity_id` | UUID | FK → entities, NOT NULL |
+| `organization_id` | UUID | FK → organizations, NOT NULL |
+| `admission_date` | Date | When enrolled |
+| `release_date` | Date | Nullable — null means still enrolled |
+| `meta` | JSONB | Enrollment-specific custom fields |
+
+Only entity types with `can_enroll: true` can be enrolled. Enrollment tags work as before.
+
+### Meta Field Schemas
+
+Entity type meta schemas use the key `"entity:{entity_type_key}"`:
+
+```
+"entity:beneficiary"  → fields for beneficiaries (age, nationality, etc.)
+"entity:facilitator"  → fields for facilitators (contact, specialization, etc.)
+"entity:caregiver"    → fields for caregivers (relationship, contact, etc.)
+```
+
+`DynamicMetaForm` requires no changes — it renders from a field definition array regardless of source.
+
+### Vocabulary
+
+The entity type's `name` field serves as the display name directly. No separate vocabulary mapping needed — the org names the type whatever they want when they create it. The existing vocabulary keys (`"beneficiary"`, `"facilitator"`) become defaults that map to entity type keys.
+
+### Permissions
+
+| Key | Description |
+|-----|-------------|
+| `entity:view` | View entities (replaces `beneficiary:view`, `facilitator:view`) |
+| `entity:create` | Create entities (replaces `beneficiary:create`, `facilitator:manage`) |
+| `entity:edit` | Edit entities (replaces `beneficiary:edit`) |
+| `entity:manage` | Delete entities, manage entity types |
+| `entity_type:view` | View entity types |
+| `entity_type:manage` | Create/edit/delete entity types |
+
+Data scoping via `UserDimensionAccess` applies to entities through `entity_tags`, same as it does today for beneficiaries through `beneficiary_tags`.
+
+---
+
+## Solution 2: Activity Categories
+
+Add a category layer that defines **how participation works** for a group of activity types. This is a behavioral classification, not a scoping/organizational dimension.
+
+### Why not just configure each ActivityType?
+
+An org like Kshamata has 15 activity types that all share identical participation behavior (present/absent, no extra fields). Configuring each one individually is tedious and error-prone. Category defines it once.
+
+### Why not a Dimension?
+
+Dimensions are for **scoping and reporting** (where, which programme, which funder). Category answers a different question: **how does the participation form behave?** It drives UI rendering and validation, not access control or filtering. Putting behavioral config in dimensions conflates two concerns.
+
+### New Table
+
+#### `activity_categories`
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID | PK |
+| `organization_id` | UUID | FK → organizations, NOT NULL |
+| `name` | String | Display name, e.g. "Sessions", "Disbursements" |
+| `key` | String | Machine key, e.g. "sessions", "disbursements" |
+| `config` | JSONB | Participation behavior config (see below) |
+| `sort_order` | Integer | Display ordering |
+| `created_at` | Timestamp | From BaseModel |
+| `updated_at` | Timestamp | From BaseModel |
+
+Unique constraint: `(organization_id, key)`
+
+**Config schema:**
+```json
+{
+  "participation_statuses": ["present", "absent"],
+  "participation_default_status": "present",
+  "participation_label": "Attendance",
+  "participant_label": "Attendee"
+}
+```
+
+**Kshamata example:**
+| name | key | config |
+|------|-----|--------|
+| Sessions | sessions | `{"participation_statuses": ["present", "absent"], "participation_default_status": "present", "participation_label": "Attendance", "participant_label": "Attendee"}` |
+
+**Multi-purpose NGO example:**
+| name | key | config |
+|------|-----|--------|
+| Sessions | sessions | `{"participation_statuses": ["present", "absent"], "participation_default_status": "present", "participation_label": "Attendance", "participant_label": "Attendee"}` |
+| Disbursements | disbursements | `{"participation_statuses": ["received", "not_received"], "participation_default_status": "received", "participation_label": "Receipt", "participant_label": "Recipient"}` |
+| Home Visits | home_visits | `{"participation_statuses": ["completed", "cancelled", "no_show"], "participation_default_status": "completed", "participation_label": "Visit Record", "participant_label": "Visitee"}` |
+
+### Modified Tables
+
+#### `activity_types` (modified)
+
+Gains a `category_id` FK.
+
+| Column | Change |
+|--------|--------|
+| `category_id` | **Added** — FK → activity_categories, NOT NULL |
+
+Activity types inherit participation config from their category. All 15 of Kshamata's interventions point to the same "Sessions" category.
+
+### Participation Meta Schemas
+
+Scoped per category: `"participation:{category_key}"`
+
+```
+"participation:sessions"       → [] (no extra fields for basic attendance)
+"participation:disbursements"  → [{"key": "amount", "type": "number", "required": true}, {"key": "items", "type": "text"}]
+"participation:home_visits"    → [{"key": "visit_notes", "type": "text"}, {"key": "follow_up_needed", "type": "boolean"}]
+```
+
+`DynamicMetaForm` renders participation meta fields based on the activity's type's category. No component changes needed.
+
+### Relationship to Tag Rules
+
+**Activity categories do NOT participate in tag rules.** Tag rules continue to operate at the activity type level via the system dimension (`is_system="activity_type"`). Category is orthogonal to scoping.
+
+```
+Tag Rules (unchanged):
+  Location:ShantiSadan ↔ ActivityType:Life Skills           (category: Sessions)
+  Location:ShantiSadan ↔ ActivityType:Cash Aid              (category: Disbursements)
+  Funder:UNICEF ↔ ActivityType:Cash Aid                     (category: Disbursements)
+```
+
+When a user selects a location, they see activity types from any category — the participation form adapts based on the selected type's category.
+
+### Vocabulary Integration
+
+Category-level labels (`participation_label`, `participant_label`) override the org-level vocabulary **per category**. The `useVocabulary` hook gains a category-aware variant:
+
+- `v("participation")` → org default (e.g. "Attendance")
+- `v("participation", { category: "disbursements" })` → category override (e.g. "Receipt")
+
+The frontend resolves this when rendering an activity: look up the activity type's category, use its labels.
+
+---
+
+## V2 Entity Relationship Summary
+
+```
+Organization
+  ├── Dimensions
+  │     └── DimensionValues (with per-dimension custom fields via meta)
+  │           └── TagRules (valid combinations between values)
+  ├── EntityTypes (replaces hardcoded Beneficiary/Facilitator)
+  │     └── Entities (all people tracked by the org)
+  │           ├── EntityTags → DimensionValues
+  │           └── Enrollments
+  │                 └── EnrollmentTags → DimensionValues
+  ├── ActivityCategories (behavioral config for participation)
+  │     └── ActivityTypes (formerly SessionTemplates, now with category_id)
+  │           └── Activities
+  │                 ├── ActivityTags → DimensionValues
+  │                 └── Participations → Entities (status + meta driven by category)
+  ├── Roles
+  │     └── RolePermissions → Permissions
+  └── Users
+        ├── Role assignment
+        └── UserDimensionAccess → DimensionValues
+```
+
+---
+
+## Migration Considerations
+
+Since `enrollments` haven't been built yet and `facilitators` + `beneficiaries` already exist:
+
+1. Create `entity_types` and `activity_categories` tables
+2. Create `entities` table, migrate data from `beneficiaries` and `facilitators`
+3. Create `entity_tags`, migrate data from `beneficiary_tags`
+4. Update `participations` to reference `entity_id` instead of `beneficiary_id`
+5. Merge `activity_facilitators` into `participations`
+6. Add `category_id` to `activity_types`
+7. Drop old tables (`beneficiaries`, `facilitators`, `activity_facilitators`, `beneficiary_tags`)
+8. Update all services, routes, and frontend to use new entity/category models
