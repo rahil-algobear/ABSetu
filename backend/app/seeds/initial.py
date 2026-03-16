@@ -89,7 +89,7 @@ def seed():
 
         print(f"Ensured {len(PERMISSIONS)} permissions exist")
 
-        # 3. Create Admin role (all permissions)
+        # 3. Create Admin role (all permissions — always syncs missing ones)
         admin_role = db.query(Role).filter_by(organization_id=org.id, name="Admin").first()
         if not admin_role:
             admin_role = Role(
@@ -100,16 +100,24 @@ def seed():
             )
             db.add(admin_role)
             db.flush()
+            print("Created Admin role")
 
-            for perm in permission_map.values():
-                rp = RolePermission(role_id=admin_role.id, permission_id=perm.id)
-                db.add(rp)
-
-            print("Created Admin role with all permissions")
+        existing_admin_perm_ids = {
+            rp.permission_id
+            for rp in db.query(RolePermission).filter_by(role_id=admin_role.id).all()
+        }
+        added = 0
+        for perm in permission_map.values():
+            if perm.id not in existing_admin_perm_ids:
+                db.add(RolePermission(role_id=admin_role.id, permission_id=perm.id))
+                added += 1
+        if added:
+            db.flush()
+            print(f"Admin role: added {added} missing permissions")
         else:
-            print("Admin role already exists")
+            print(f"Admin role: all {len(permission_map)} permissions present")
 
-        # 4. Create Team Member role (scoped permissions)
+        # 4. Create Team Member role (scoped permissions — always syncs)
         team_role = db.query(Role).filter_by(organization_id=org.id, name="Team Member").first()
         if not team_role:
             team_role = Role(
@@ -119,15 +127,23 @@ def seed():
             )
             db.add(team_role)
             db.flush()
+            print("Created Team Member role")
 
-            for key in TEAM_MEMBER_PERMISSIONS:
-                perm = permission_map[key]
-                rp = RolePermission(role_id=team_role.id, permission_id=perm.id)
-                db.add(rp)
-
-            print("Created Team Member role with scoped permissions")
+        existing_team_perm_ids = {
+            rp.permission_id
+            for rp in db.query(RolePermission).filter_by(role_id=team_role.id).all()
+        }
+        added = 0
+        for key in TEAM_MEMBER_PERMISSIONS:
+            perm = permission_map[key]
+            if perm.id not in existing_team_perm_ids:
+                db.add(RolePermission(role_id=team_role.id, permission_id=perm.id))
+                added += 1
+        if added:
+            db.flush()
+            print(f"Team Member role: added {added} missing permissions")
         else:
-            print("Team Member role already exists")
+            print(f"Team Member role: all {len(TEAM_MEMBER_PERMISSIONS)} permissions present")
 
         # 5. Create admin user (or assign role to existing)
         admin_mobile = "9999999999"

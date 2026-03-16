@@ -486,7 +486,7 @@ def seed():
         )
         print(f"  Ensured tag rules ({new_rules} new)")
 
-        # 6. Admin role (all permissions)
+        # 6. Admin role (all permissions — always syncs missing ones)
         admin_role = db.query(Role).filter_by(organization_id=org.id, name="Admin").first()
         if not admin_role:
             admin_role = Role(
@@ -496,14 +496,24 @@ def seed():
             )
             db.add(admin_role)
             db.flush()
+            print(f"  Created Admin role")
 
-            all_perms = db.query(Permission).all()
-            for perm in all_perms:
-                rp = RolePermission(role_id=admin_role.id, permission_id=perm.id)
-                db.add(rp)
-            print(f"  Created Admin role with {len(all_perms)} permissions")
+        # Sync: grant any permissions the role doesn't have yet
+        all_perms = db.query(Permission).all()
+        existing_perm_ids = {
+            rp.permission_id
+            for rp in db.query(RolePermission).filter_by(role_id=admin_role.id).all()
+        }
+        added = 0
+        for perm in all_perms:
+            if perm.id not in existing_perm_ids:
+                db.add(RolePermission(role_id=admin_role.id, permission_id=perm.id))
+                added += 1
+        if added:
+            db.flush()
+            print(f"  Admin role: added {added} missing permissions (total: {len(all_perms)})")
         else:
-            print("  Admin role already exists")
+            print(f"  Admin role: all {len(all_perms)} permissions present")
 
         # 7. Admin user
         admin_user = db.query(User).filter_by(mobile_number=ADMIN_MOBILE).first()
