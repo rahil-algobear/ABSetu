@@ -12,7 +12,7 @@ import sys
 
 from app.core.database import SessionLocal
 from app.modules.organization.model import Organization
-from app.modules.dimension.model import Dimension, DimensionValue
+from app.modules.dimension.model import Dimension, DimensionValue, DimensionValueRelationship
 from app.modules.activity.model import ActivityType, ActivityTypeAccess
 from app.modules.auth.model import User
 from app.modules.role.model import Permission, Role, RolePermission
@@ -435,6 +435,62 @@ def _ensure_activity_type_access(db, org, at, dv_codes, all_dv_maps):
     return added, removed
 
 
+def _seed_relationships(db, programme_map, project_map, location_map):
+    """Seed dimension value relationships from PROGRAMME_LOCATIONS and PROJECT_LOCATIONS.
+
+    Creates parent→child links:
+    - Programme → Location (from PROGRAMME_LOCATIONS)
+    - Project → Location (from PROJECT_LOCATIONS)
+    """
+    pairs = []
+
+    # Programme → Location
+    for prog_code, loc_codes in PROGRAMME_LOCATIONS.items():
+        prog = programme_map.get(prog_code)
+        if not prog:
+            continue
+        for loc_code in loc_codes:
+            loc = location_map.get(loc_code)
+            if loc:
+                pairs.append((prog.id, loc.id))
+
+    # Project → Location
+    for proj_code, loc_codes in PROJECT_LOCATIONS.items():
+        proj = project_map.get(proj_code)
+        if not proj:
+            continue
+        for loc_code in loc_codes:
+            loc = location_map.get(loc_code)
+            if loc:
+                pairs.append((proj.id, loc.id))
+
+    # Sync: add missing, remove stale
+    existing = db.query(DimensionValueRelationship).filter(
+        DimensionValueRelationship.parent_dimension_value_id.in_(
+            [dv.id for dv in list(programme_map.values()) + list(project_map.values())]
+        )
+    ).all()
+    existing_set = {(r.parent_dimension_value_id, r.child_dimension_value_id) for r in existing}
+    desired_set = set(pairs)
+
+    added = 0
+    for parent_id, child_id in desired_set - existing_set:
+        db.add(DimensionValueRelationship(
+            parent_dimension_value_id=parent_id,
+            child_dimension_value_id=child_id,
+        ))
+        added += 1
+
+    removed = 0
+    for rel in existing:
+        if (rel.parent_dimension_value_id, rel.child_dimension_value_id) not in desired_set:
+            db.delete(rel)
+            removed += 1
+
+    db.flush()
+    print(f"  Synced dimension value relationships ({added} added, {removed} removed)")
+
+
 def seed():
     db = SessionLocal()
     try:
@@ -503,7 +559,10 @@ def seed():
             f"  Synced activity type access ({total_added} added, {total_removed} removed)"
         )
 
-        # 6. Admin role (all permissions — always syncs missing ones)
+        # 6. Dimension value relationships (hierarchy for matrix view)
+        _seed_relationships(db, programme_map, project_map, location_map)
+
+        # 7. Admin role (all permissions — always syncs missing ones)
         admin_role = db.query(Role).filter_by(organization_id=org.id, name="Admin").first()
         if not admin_role:
             admin_role = Role(

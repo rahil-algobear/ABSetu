@@ -15,11 +15,15 @@ from app.modules.dimension.schemas import (
     DimensionResponse,
     DimensionUpdate,
     DimensionValueCreate,
+    DimensionValueRelationshipItem,
+    DimensionValueRelationshipResponse,
+    DimensionValueRelationshipUpdate,
     DimensionValueResponse,
     DimensionValueUpdate,
 )
 from app.modules.dimension.service import (
     DimensionService,
+    DimensionValueRelationshipService,
     DimensionValueService,
 )
 
@@ -40,6 +44,58 @@ def list_dimensions(
     service = DimensionService(db)
     dimensions = service.list_by_org(current_user.organization_id)
     return [DimensionResponse.dump_from_model(d) for d in dimensions]
+
+
+# --- Dimension Value Relationships ---
+# (Must be before /{dimension_id} to avoid path conflicts)
+
+
+@dimension_router.get(
+    "/relationships",
+    dependencies=[Depends(require_permissions("dimension:view"))],
+)
+def list_relationships(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """List all dimension value relationships for the org."""
+    service = DimensionValueRelationshipService(db)
+    rels = service.list_by_org(current_user.organization_id)
+    return DimensionValueRelationshipResponse(
+        relationships=[
+            DimensionValueRelationshipItem(
+                parent_dimension_value_id=str(r.parent_dimension_value_id),
+                child_dimension_value_id=str(r.child_dimension_value_id),
+            )
+            for r in rels
+        ]
+    ).model_dump()
+
+
+@dimension_router.put(
+    "/relationships",
+    dependencies=[Depends(require_permissions("dimension:manage"))],
+)
+def update_relationships(
+    data: DimensionValueRelationshipUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Bulk-replace all dimension value relationships for the org."""
+    service = DimensionValueRelationshipService(db)
+    rels = service.bulk_replace(
+        current_user.organization_id,
+        [item.model_dump() for item in data.relationships],
+    )
+    return DimensionValueRelationshipResponse(
+        relationships=[
+            DimensionValueRelationshipItem(
+                parent_dimension_value_id=str(r.parent_dimension_value_id),
+                child_dimension_value_id=str(r.child_dimension_value_id),
+            )
+            for r in rels
+        ]
+    ).model_dump()
 
 
 @dimension_router.get(

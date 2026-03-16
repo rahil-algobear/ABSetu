@@ -1,5 +1,5 @@
 """
-Dimension models: Dimension, DimensionValue, UserDimensionAccess
+Dimension models: Dimension, DimensionValue, DimensionValueRelationship, UserDimensionAccess
 """
 
 from sqlalchemy import Column, ForeignKey, Integer, String, UniqueConstraint
@@ -60,6 +60,44 @@ class DimensionValue(BaseModel):
     organization = relationship("Organization")
 
     __table_args__ = (UniqueConstraint("dimension_id", "code", name="uq_dimension_value_code"),)
+
+
+class DimensionValueRelationship(BaseModel):
+    """Links dimension values across dimensions to define hierarchy.
+
+    E.g. Location 'Thane' → parent Programme 'Transformation'.
+    Used by the matrix view to build hierarchical column headers.
+    """
+
+    __tablename__ = "dimension_value_relationships"
+
+    parent_dimension_value_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("dimension_values.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    child_dimension_value_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("dimension_values.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    parent_value = relationship(
+        "DimensionValue", foreign_keys=[parent_dimension_value_id]
+    )
+    child_value = relationship(
+        "DimensionValue", foreign_keys=[child_dimension_value_id]
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "parent_dimension_value_id",
+            "child_dimension_value_id",
+            name="uq_dimension_value_relationship",
+        ),
+    )
 
 
 class ActivityTag(BaseModel):

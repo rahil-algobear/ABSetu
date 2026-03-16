@@ -20,7 +20,8 @@ import {
   TableHead,
   TableCell,
 } from "@/components/ui/page-table";
-import { Plus, Pencil, Trash2, Shield } from "lucide-react";
+import { ActivityTypeMatrixDialog } from "@/components/ActivityTypeMatrix";
+import { Plus, Pencil, Trash2, Shield, LayoutGrid } from "lucide-react";
 import toast from "react-hot-toast";
 
 export default function ActivityTypesPage() {
@@ -35,6 +36,9 @@ export default function ActivityTypesPage() {
   // Access modal (for existing activity types)
   const [accessType, setAccessType] = useState<ActivityType | null>(null);
   const [accessDvIds, setAccessDvIds] = useState<Set<string>>(new Set());
+
+  // Matrix view
+  const [matrixOpen, setMatrixOpen] = useState(false);
 
   const { data: types = [], isLoading } = useQuery({
     queryKey: ["activity-types"],
@@ -222,12 +226,18 @@ export default function ActivityTypesPage() {
     <>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold">{vPlural("activity_type")}</h2>
-        <Can permission="activity_type:manage">
-          <Button size="sm" onClick={openAdd}>
-            <Plus className="h-4 w-4 mr-1" />
-            Add
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" onClick={() => setMatrixOpen(true)}>
+            <LayoutGrid className="h-4 w-4 mr-1" />
+            View Matrix
           </Button>
-        </Can>
+          <Can permission="activity_type:manage">
+            <Button size="sm" onClick={openAdd}>
+              <Plus className="h-4 w-4 mr-1" />
+              Add
+            </Button>
+          </Can>
+        </div>
       </div>
 
       {isLoading ? (
@@ -407,6 +417,12 @@ export default function ActivityTypesPage() {
           </div>
         </div>
       </Dialog>
+
+      {/* Matrix view */}
+      <ActivityTypeMatrixDialog
+        open={matrixOpen}
+        onClose={() => setMatrixOpen(false)}
+      />
     </>
   );
 }

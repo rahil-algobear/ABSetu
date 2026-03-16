@@ -6,6 +6,7 @@ import {
   Beneficiary,
   Dimension,
   DimensionValue,
+  DimensionValueRelationship,
   Enrollment,
   Facilitator,
   LoginResponse,
@@ -147,6 +148,11 @@ export const dimensionApi = {
   deleteValue: async (dimensionId: string, valueId: string) => {
     const response = await authAxios.delete(`/dimensions/${dimensionId}/values/${valueId}`);
     return response.data;
+  },
+  // Dimension value relationships
+  listRelationships: async (): Promise<DimensionValueRelationship[]> => {
+    const response = await authAxios.get<{ relationships: DimensionValueRelationship[] }>('/dimensions/relationships');
+    return response.data.relationships;
   },
 };
 

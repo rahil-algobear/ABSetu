@@ -82,6 +82,11 @@ export interface DimensionValue {
   updated_at: number | null;
 }
 
+export interface DimensionValueRelationship {
+  parent_dimension_value_id: string;
+  child_dimension_value_id: string;
+}
+
 export interface ActivityTypeAccess {
   activity_type_id: string;
   dimension_value_ids: string[];

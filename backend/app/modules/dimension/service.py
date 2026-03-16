@@ -10,6 +10,7 @@ from app.common.exceptions import NotFoundError, ValidationError
 from app.modules.dimension.model import (
     Dimension,
     DimensionValue,
+    DimensionValueRelationship,
     UserDimensionAccess,
 )
 
@@ -101,6 +102,44 @@ class DimensionValueService:
         value = self.get_by_id(value_id)
         self.db.delete(value)
         self.db.commit()
+
+
+class DimensionValueRelationshipService:
+    def __init__(self, db: Session):
+        self.db = db
+
+    def list_by_org(self, org_id: uuid.UUID) -> list[DimensionValueRelationship]:
+        """List all relationships for an org (via dimension values)."""
+        return (
+            self.db.query(DimensionValueRelationship)
+            .join(
+                DimensionValue,
+                DimensionValueRelationship.parent_dimension_value_id == DimensionValue.id,
+            )
+            .filter(DimensionValue.organization_id == org_id)
+            .all()
+        )
+
+    def bulk_replace(
+        self, org_id: uuid.UUID, relationships: list[dict]
+    ) -> list[DimensionValueRelationship]:
+        """Bulk-replace all relationships for an org."""
+        # Delete existing
+        existing = self.list_by_org(org_id)
+        for rel in existing:
+            self.db.delete(rel)
+        self.db.flush()
+
+        # Insert new
+        for item in relationships:
+            self.db.add(
+                DimensionValueRelationship(
+                    parent_dimension_value_id=item["parent_dimension_value_id"],
+                    child_dimension_value_id=item["child_dimension_value_id"],
+                )
+            )
+        self.db.commit()
+        return self.list_by_org(org_id)
 
 
 class UserDimensionAccessService:

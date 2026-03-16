@@ -61,6 +61,27 @@ class DimensionValueResponse(BaseResponseSchema):
 # --- UserDimensionAccess ---
 
 
+# --- DimensionValueRelationship ---
+
+
+class DimensionValueRelationshipItem(BaseModel):
+    parent_dimension_value_id: str
+    child_dimension_value_id: str
+
+
+class DimensionValueRelationshipUpdate(BaseModel):
+    """Bulk-replace all relationships for an org."""
+
+    relationships: list[DimensionValueRelationshipItem]
+
+
+class DimensionValueRelationshipResponse(BaseModel):
+    relationships: list[DimensionValueRelationshipItem]
+
+
+# --- UserDimensionAccess ---
+
+
 class UserAccessUpdate(BaseModel):
     """Replace all dimension access for a user."""
 
