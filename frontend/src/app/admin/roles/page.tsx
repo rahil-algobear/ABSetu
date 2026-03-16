@@ -41,8 +41,43 @@ const AREA_LABELS: Record<string, string> = {
   reports: "Reports",
 };
 
+// Generic terms in permission descriptions → vocabulary keys
+// Order matters: longer phrases first to avoid partial replacements
+const DESCRIPTION_REPLACEMENTS: [string, string][] = [
+  ["activity types", "activity_type"],
+  ["activity type", "activity_type"],
+  ["activities", "activity"],
+  ["participation", "participation"],
+  ["facilitators", "facilitator"],
+  ["facilitator", "facilitator"],
+  ["beneficiaries", "beneficiary"],
+  ["beneficiary", "beneficiary"],
+  ["enrollments", "enrollment"],
+  ["enrollment", "enrollment"],
+];
+
+/** Replace generic entity terms in a permission description with vocab overrides. */
+function localizeDescription(
+  desc: string,
+  v: (key: string) => string,
+  vPlural: (key: string) => string,
+): string {
+  let result = desc;
+  for (const [term, vocabKey] of DESCRIPTION_REPLACEMENTS) {
+    if (!result.toLowerCase().includes(term)) continue;
+    // Determine if the term is plural (ends with s/ies)
+    const isPlural = term.endsWith("ies") || (term.endsWith("s") && !term.endsWith("ss"));
+    const replacement = isPlural ? vPlural(vocabKey) : v(vocabKey);
+    // Case-insensitive replace preserving surrounding text
+    const regex = new RegExp(term, "gi");
+    result = result.replace(regex, replacement.toLowerCase());
+    break; // Only replace the first matching term
+  }
+  return result;
+}
+
 export default function RolesPage() {
-  const { vPlural } = useVocabulary();
+  const { v, vPlural } = useVocabulary();
   const queryClient = useQueryClient();
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Role | null>(null);
@@ -310,7 +345,7 @@ export default function RolesPage() {
                             onChange={() => togglePermission(p.id)}
                             className="h-3.5 w-3.5 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
                           />
-                          <span>{p.description || p.key}</span>
+                          <span>{p.description ? localizeDescription(p.description, v, vPlural) : p.key}</span>
                         </label>
                       ))}
                     </div>
