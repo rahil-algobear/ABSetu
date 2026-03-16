@@ -137,21 +137,21 @@ export function ActivityTypeMatrixDialog({ open, onClose }: ActivityTypeMatrixDi
       return result;
     }
 
-    // Build leaf columns recursively, allowing null gaps when a dimension
-    // has no matching values for a path.
+    // Build leaf columns recursively. After normal branches through matching
+    // values at the current level, also discovers "orphan" values at deeper
+    // levels that aren't reachable through any value at the current level
+    // (e.g. Transformation/Unlimited have no Project but should still appear
+    // when Project is the first dimension in the ordering).
     function buildLeaves(
       dimIndex: number,
       pathSoFar: (DimensionValue | null)[],
       ancestorDvIds: string[]
     ): LeafColumn[] {
       if (dimIndex >= orderedDimensions.length) {
-        // Past last dimension: check for matching activity types
         const ats = findActivityTypes(ancestorDvIds);
         if (ats.length > 0) {
           return [{ path: [...pathSoFar], activityTypes: ats }];
         }
-        // Even if no ATs, include the column if we have ancestor dvIds
-        // (programme exists but has no interventions yet)
         if (ancestorDvIds.length > 0) {
           return [{ path: [...pathSoFar], activityTypes: [] }];
         }
@@ -161,32 +161,91 @@ export function ActivityTypeMatrixDialog({ open, onClose }: ActivityTypeMatrixDi
       const dim = orderedDimensions[dimIndex];
       const dvs = allDvsByDim[dim.id] || [];
 
-      // Find values at this level connected to all ancestor dvIds
       const matchingDvs = ancestorDvIds.length === 0
-        ? dvs // First level: all values
+        ? dvs
         : dvs.filter((dv) => {
             const connected = ruleMap.get(dv.id);
             if (!connected) return false;
             return ancestorDvIds.every((pid) => connected.has(pid));
           });
 
-      if (matchingDvs.length > 0) {
-        // Normal case: values found at this level
-        return matchingDvs.flatMap((dv) =>
-          buildLeaves(
+      const results: LeafColumn[] = [];
+
+      // 1. Normal branches through matching values at this level
+      for (const dv of matchingDvs) {
+        results.push(
+          ...buildLeaves(
             dimIndex + 1,
             [...pathSoFar, dv],
             [...ancestorDvIds, dv.id]
           )
         );
-      } else {
-        // Gap: no values at this level. Skip dimension (null in path).
-        return buildLeaves(
-          dimIndex + 1,
-          [...pathSoFar, null],
-          ancestorDvIds
-        );
       }
+
+      // 2. Gap branches: find orphan values at deeper levels that connect
+      //    to ancestors but NOT to any matching value at this level (or
+      //    intermediate skipped levels). These need a null gap at this level.
+      const matchingDvIdSet = new Set(matchingDvs.map((d) => d.id));
+      for (
+        let gapTarget = dimIndex + 1;
+        gapTarget < orderedDimensions.length;
+        gapTarget++
+      ) {
+        // Collect all dimension value IDs in skipped levels
+        // (current level uses only matching values; intermediate levels use all)
+        const skippedDvIds = new Set(matchingDvIdSet);
+        for (let s = dimIndex + 1; s < gapTarget; s++) {
+          for (const sdv of allDvsByDim[orderedDimensions[s].id] || []) {
+            skippedDvIds.add(sdv.id);
+          }
+        }
+
+        const targetDvs = allDvsByDim[orderedDimensions[gapTarget].id] || [];
+        const orphans = targetDvs.filter((tdv) => {
+          // Must connect to all ancestors
+          if (ancestorDvIds.length > 0) {
+            const conn = ruleMap.get(tdv.id);
+            if (!conn || !ancestorDvIds.every((pid) => conn.has(pid)))
+              return false;
+          }
+          // Must NOT connect to any value in skipped levels
+          const conn = ruleMap.get(tdv.id);
+          if (!conn) return true;
+          for (const sid of skippedDvIds) {
+            if (conn.has(sid)) return false;
+          }
+          return true;
+        });
+
+        if (orphans.length > 0) {
+          // Build path with nulls for all skipped levels
+          const gapPath = [...pathSoFar];
+          for (let g = dimIndex; g < gapTarget; g++) gapPath.push(null);
+
+          for (const orphan of orphans) {
+            results.push(
+              ...buildLeaves(
+                gapTarget + 1,
+                [...gapPath, orphan],
+                [...ancestorDvIds, orphan.id]
+              )
+            );
+          }
+        }
+      }
+
+      // 3. If nothing found at all (no normal branches, no orphans), and
+      //    there are ancestors, produce a gap-only leaf so the ancestor
+      //    path still appears in the matrix
+      if (results.length === 0 && ancestorDvIds.length > 0) {
+        const gapPath = [...pathSoFar];
+        for (let g = dimIndex; g < orderedDimensions.length; g++)
+          gapPath.push(null);
+        const ats = findActivityTypes(ancestorDvIds);
+        results.push({ path: gapPath, activityTypes: ats });
+      }
+
+      return results;
     }
 
     const leaves = buildLeaves(0, [], []);
@@ -347,10 +406,10 @@ export function ActivityTypeMatrixDialog({ open, onClose }: ActivityTypeMatrixDi
                                   className={`px-3 py-2 text-center font-medium border border-gray-200 whitespace-nowrap ${
                                     cell.label
                                       ? "text-gray-700 bg-gray-50"
-                                      : "bg-gray-25"
+                                      : "text-gray-300 bg-gray-50/50 italic"
                                   }`}
                                 >
-                                  {cell.label}
+                                  {cell.label || "—"}
                                 </th>
                               ))}
                             </tr>
