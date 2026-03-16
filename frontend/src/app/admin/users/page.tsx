@@ -340,7 +340,9 @@ export default function UsersPage() {
               <TableHead>Name</TableHead>
               <TableHead>Mobile</TableHead>
               <TableHead>Role</TableHead>
-              <TableHead>Access</TableHead>
+              {dimensions.map((dim) => (
+                <TableHead key={dim.id}>{dim.name}</TableHead>
+              ))}
               <TableHead className="w-24">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -367,22 +369,26 @@ export default function UsersPage() {
                     <span className="text-sm text-gray-400">No role</span>
                   )}
                 </TableCell>
-                <TableCell>
-                  <div className="flex flex-wrap gap-1">
-                    {user.dimension_value_ids?.length ? (
-                      user.dimension_value_ids.map((id) => {
-                        const dv = dvMap.get(id);
-                        return (
-                          <span key={id} className="inline-block text-sm bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">
-                            {dv ? dv.name : "Unknown"}
-                          </span>
-                        );
-                      })
-                    ) : (
-                      <span className="text-sm text-gray-400">All</span>
-                    )}
-                  </div>
-                </TableCell>
+                {dimensions.map((dim) => {
+                  const values = (user.dimension_value_ids ?? [])
+                    .map((id) => dvMap.get(id))
+                    .filter((dv): dv is DimensionValue => dv?.dimension_id === dim.id);
+                  return (
+                    <TableCell key={dim.id}>
+                      <div className="flex flex-wrap gap-1">
+                        {values.length ? (
+                          values.map((dv) => (
+                            <span key={dv.id} className="inline-block text-sm bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">
+                              {dv.name}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-sm text-gray-400">All</span>
+                        )}
+                      </div>
+                    </TableCell>
+                  );
+                })}
                 <TableCell>
                   <Can permission="user:manage">
                     <div className="flex items-center gap-2">
