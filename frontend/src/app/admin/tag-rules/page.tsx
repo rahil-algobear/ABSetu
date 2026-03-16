@@ -40,9 +40,12 @@ export default function TagRulesPage() {
     enabled: !!effectiveDim1 && !!effectiveDim2,
   });
 
-  // Build a set of active pairs for the matrix
+  // Build a set of active pairs for the matrix (both directions)
   const activePairs = new Set(
-    rules.map((r) => `${r.dimension_value_id_1}:${r.dimension_value_id_2}`)
+    rules.flatMap((r) => [
+      `${r.dimension_value_id_1}:${r.dimension_value_id_2}`,
+      `${r.dimension_value_id_2}:${r.dimension_value_id_1}`,
+    ])
   );
 
   const [pendingPairs, setPendingPairs] = useState<Set<string> | null>(null);
@@ -50,18 +53,31 @@ export default function TagRulesPage() {
 
   const togglePair = (v1Id: string, v2Id: string) => {
     const key = `${v1Id}:${v2Id}`;
+    const rev = `${v2Id}:${v1Id}`;
     const next = new Set(displayPairs);
-    if (next.has(key)) next.delete(key);
-    else next.add(key);
+    if (next.has(key) || next.has(rev)) {
+      next.delete(key);
+      next.delete(rev);
+    } else {
+      next.add(key);
+      next.add(rev);
+    }
     setPendingPairs(next);
   };
 
   const bulkSyncMutation = useMutation({
     mutationFn: () => {
-      const pairs: [string, string][] = Array.from(displayPairs).map((key) => {
+      // Deduplicate: keep only one direction per pair (smaller ID first)
+      const seen = new Set<string>();
+      const pairs: [string, string][] = [];
+      for (const key of displayPairs) {
         const [a, b] = key.split(":");
-        return [a, b];
-      });
+        const normalized = a < b ? `${a}:${b}` : `${b}:${a}`;
+        if (!seen.has(normalized)) {
+          seen.add(normalized);
+          pairs.push([a, b]);
+        }
+      }
       return tagRuleApi.bulkSync({
         dimension_id_1: effectiveDim1,
         dimension_id_2: effectiveDim2,
