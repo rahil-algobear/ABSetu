@@ -124,7 +124,7 @@ export default function TagRulesPage() {
             value={effectiveDim1}
             onChange={(e) => { setDim1Id(e.target.value); setPendingPairs(null); }}
           >
-            {dimensions.map((d) => (
+            {dimensions.filter((d) => d.id !== effectiveDim2).map((d) => (
               <option key={d.id} value={d.id}>{d.name}</option>
             ))}
           </select>
