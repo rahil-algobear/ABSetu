@@ -69,5 +69,10 @@ export function useVocabulary() {
     return override + "s";
   }
 
-  return { v, vPlural, vocab };
+  /** Get display name for a dimension: vocab override by key, else DB name. */
+  function vDim(dim: { key: string; name: string }): string {
+    return vocab[dim.key] || dim.name;
+  }
+
+  return { v, vPlural, vDim, vocab };
 }

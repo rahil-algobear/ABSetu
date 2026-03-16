@@ -19,12 +19,14 @@ import {
   TableCell,
 } from "@/components/ui/page-table";
 import { Plus, Pencil, Trash2 } from "lucide-react";
+import { useVocabulary } from "@/hooks/useVocabulary";
 import toast from "react-hot-toast";
 
 export default function DimensionValuesPage() {
   const params = useParams();
   const dimensionKey = params.key as string;
   const queryClient = useQueryClient();
+  const { vDim } = useVocabulary();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingValue, setEditingValue] = useState<DimensionValue | null>(null);
   const [form, setForm] = useState({ name: "", code: "" });
@@ -106,11 +108,11 @@ export default function DimensionValuesPage() {
   return (
     <>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold">{dimension.name}</h2>
+        <h2 className="text-lg font-semibold">{vDim(dimension)}</h2>
         <Can permission="dimension:manage">
           <Button size="sm" onClick={openAdd}>
             <Plus className="h-4 w-4 mr-1" />
-            Add {dimension.name}
+            Add {vDim(dimension)}
           </Button>
         </Can>
       </div>
@@ -163,7 +165,7 @@ export default function DimensionValuesPage() {
       <Dialog
         open={modalOpen}
         onClose={closeModal}
-        title={editingValue ? `Edit ${dimension.name}` : `Add ${dimension.name}`}
+        title={editingValue ? `Edit ${vDim(dimension)}` : `Add ${vDim(dimension)}`}
       >
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>

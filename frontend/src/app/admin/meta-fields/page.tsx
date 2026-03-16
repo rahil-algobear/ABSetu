@@ -54,7 +54,7 @@ const emptyField: MetaFieldDefinition = {
 
 export default function MetaFieldsPage() {
   const queryClient = useQueryClient();
-  const { vPlural } = useVocabulary();
+  const { vPlural, vDim } = useVocabulary();
   const [selectedEntity, setSelectedEntity] = useState<string>("beneficiary");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
@@ -74,7 +74,7 @@ export default function MetaFieldsPage() {
     })),
     ...dimensions.map((d) => ({
       value: `dimension:${d.key}`,
-      label: d.name,
+      label: vDim(d),
     })),
   ];
 

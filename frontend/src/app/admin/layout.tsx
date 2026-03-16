@@ -26,7 +26,7 @@ export default function AdminLayout({
 }) {
   const pathname = usePathname();
   const { can, loading } = usePermissions();
-  const { vPlural } = useVocabulary();
+  const { vPlural, vDim } = useVocabulary();
 
   const { data: dimensions = [] } = useQuery({
     queryKey: ["dimensions"],
@@ -39,7 +39,7 @@ export default function AdminLayout({
     .filter((d) => !d.is_system)
     .map((d) => ({
       href: `/admin/dimensions/${d.key}`,
-      label: d.name,
+      label: vDim(d),
       icon: Layers,
       permission: "dimension:view",
     }));
