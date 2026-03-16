@@ -10,7 +10,7 @@ from app.core.database import Base
 from app.modules.auth.model import User, OTP, RefreshToken  # noqa: F401
 from app.modules.organization.model import Organization  # noqa: F401
 from app.modules.dimension.model import (  # noqa: F401
-    Dimension, DimensionValue, TagRule,
+    Dimension, DimensionValue, DimensionValueLink,
     ActivityTag, BeneficiaryTag, EnrollmentTag, UserDimensionAccess,
 )
 from app.modules.activity.model import (  # noqa: F401

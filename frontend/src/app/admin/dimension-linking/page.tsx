@@ -2,15 +2,15 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { dimensionApi, tagRuleApi } from "@/services/api";
-import { Dimension, DimensionValue, TagRule } from "@/types";
+import { dimensionApi, dimensionValueLinkApi } from "@/services/api";
+import { Dimension, DimensionValue, DimensionValueLink } from "@/types";
 import { Button } from "@/components/ui/button";
 import { LayoutGrid } from "lucide-react";
 import { ActivityTypeMatrixDialog } from "@/components/ActivityTypeMatrixDialog";
 import { useVocabulary } from "@/hooks/useVocabulary";
 import toast from "react-hot-toast";
 
-export default function TagRulesPage() {
+export default function DimensionLinkingPage() {
   const queryClient = useQueryClient();
   const { vDim } = useVocabulary();
   const [matrixOpen, setMatrixOpen] = useState(false);
@@ -39,15 +39,15 @@ export default function TagRulesPage() {
     enabled: !!effectiveDim2,
   });
 
-  const { data: rules = [] } = useQuery<TagRule[]>({
-    queryKey: ["tag-rules", effectiveDim1, effectiveDim2],
-    queryFn: () => tagRuleApi.list(effectiveDim1, effectiveDim2),
+  const { data: links = [] } = useQuery<DimensionValueLink[]>({
+    queryKey: ["dimension-value-links", effectiveDim1, effectiveDim2],
+    queryFn: () => dimensionValueLinkApi.list(effectiveDim1, effectiveDim2),
     enabled: !!effectiveDim1 && !!effectiveDim2,
   });
 
   // Build a set of active pairs for the matrix (both directions)
   const activePairs = new Set(
-    rules.flatMap((r) => [
+    links.flatMap((r) => [
       `${r.dimension_value_id_1}:${r.dimension_value_id_2}`,
       `${r.dimension_value_id_2}:${r.dimension_value_id_1}`,
     ])
@@ -83,18 +83,18 @@ export default function TagRulesPage() {
           pairs.push([a, b]);
         }
       }
-      return tagRuleApi.bulkSync({
+      return dimensionValueLinkApi.bulkSync({
         dimension_id_1: effectiveDim1,
         dimension_id_2: effectiveDim2,
         pairs,
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tag-rules"] });
+      queryClient.invalidateQueries({ queryKey: ["dimension-value-links"] });
       setPendingPairs(null);
-      toast.success("Tag rules saved");
+      toast.success("Dimension links saved");
     },
-    onError: () => toast.error("Failed to save tag rules"),
+    onError: () => toast.error("Failed to save dimension links"),
   });
 
   const hasPendingChanges = pendingPairs !== null;
@@ -105,7 +105,7 @@ export default function TagRulesPage() {
   if (dimensions.length < 2) {
     return (
       <p className="text-gray-500 text-sm">
-        You need at least 2 dimensions to define tag rules.
+        You need at least 2 dimensions to define dimension links.
       </p>
     );
   }
@@ -113,7 +113,7 @@ export default function TagRulesPage() {
   return (
     <>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold">Tag Rules</h2>
+        <h2 className="text-lg font-semibold">Dimension Linking</h2>
         <Button size="sm" variant="outline" onClick={() => setMatrixOpen(true)}>
           <LayoutGrid className="h-4 w-4 mr-1" />
           View Matrix
@@ -121,7 +121,7 @@ export default function TagRulesPage() {
       </div>
 
       <p className="text-sm text-gray-500 mb-4">
-        Define valid combinations between dimension values. Check cells to create rules.
+        Define valid combinations between dimension values. Check cells to create links.
       </p>
 
       {/* Dimension selectors */}

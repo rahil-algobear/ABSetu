@@ -82,7 +82,7 @@ export interface DimensionValue {
   updated_at: number | null;
 }
 
-export interface TagRule {
+export interface DimensionValueLink {
   id: string;
   organization_id: string;
   dimension_value_id_1: string;
