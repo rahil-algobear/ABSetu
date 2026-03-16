@@ -343,8 +343,11 @@ def _ensure_dimension(db, org, key, name, sort_order, is_system=None):
         )
         db.add(dim)
         db.flush()
-    elif is_system and not dim.is_system:
-        dim.is_system = is_system
+    else:
+        if name and dim.name != name:
+            dim.name = name
+        if is_system and not dim.is_system:
+            dim.is_system = is_system
         db.flush()
     print(f"  Ensured dimension: {dim.name}" + (" [system]" if dim.is_system else ""))
     return dim
@@ -428,8 +431,8 @@ def seed():
         else:
             org.name = ORG_NAME
             org.logo_url = ORG_LOGO_URL
-            # Merge vocabulary into existing meta
-            meta = org.meta or {}
+            # Merge vocabulary into existing meta (deep copy to trigger change detection)
+            meta = dict(org.meta or {})
             meta["vocabulary"] = VOCABULARY
             org.meta = meta
             db.flush()
