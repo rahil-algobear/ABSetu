@@ -355,7 +355,7 @@ export default function ActivityTypesPage() {
                   selectedIds={selectedDvIds}
                   onToggle={(id) => toggleId(selectedDvIds, setSelectedDvIds, id)}
                   onToggleAll={() => toggleAll(values, selectedDvIds, setSelectedDvIds)}
-                  emptyLabel={`Available at all ${dimension.name.toLowerCase()}s`}
+                  emptyLabel={`Not assigned to any ${dimension.name.toLowerCase()}`}
                 />
               ))}
             </div>
@@ -385,7 +385,7 @@ export default function ActivityTypesPage() {
               selectedIds={accessDvIds}
               onToggle={(id) => toggleId(accessDvIds, setAccessDvIds, id)}
               onToggleAll={() => toggleAll(values, accessDvIds, setAccessDvIds)}
-              emptyLabel={`Available at all ${dimension.name.toLowerCase()}s`}
+              emptyLabel={`Not assigned to any ${dimension.name.toLowerCase()}`}
             />
           ))}
           <div className="flex justify-end gap-2 pt-2">
