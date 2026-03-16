@@ -522,7 +522,7 @@ def seed():
         project_dim = _ensure_dimension(db, org, "project", "Project", 1)
         location_dim = _ensure_dimension(db, org, "location", "Location", 2)
         at_dim = _ensure_dimension(
-            db, org, "activity_type", "Intervention", 3, is_system="activity_type"
+            db, org, "activity_type", "Activity Type", 3, is_system="activity_type"
         )
 
         # 3. Dimension values
