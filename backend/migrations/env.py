@@ -10,11 +10,11 @@ from app.core.database import Base
 from app.modules.auth.model import User, OTP, RefreshToken  # noqa: F401
 from app.modules.organization.model import Organization  # noqa: F401
 from app.modules.dimension.model import (  # noqa: F401
-    Dimension, DimensionValue, TagRule,
+    Dimension, DimensionValue,
     ActivityTag, BeneficiaryTag, EnrollmentTag, UserDimensionAccess,
 )
 from app.modules.activity.model import (  # noqa: F401
-    ActivityType, Facilitator, Activity, ActivityFacilitator, Participation,
+    ActivityType, ActivityTypeAccess, Facilitator, Activity, ActivityFacilitator, Participation,
 )
 from app.modules.beneficiary.model import Beneficiary, Enrollment  # noqa: F401
 from app.modules.role.model import Permission, Role, RolePermission  # noqa: F401

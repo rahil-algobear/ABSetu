@@ -24,6 +24,35 @@ class ActivityType(BaseModel):
 
     organization = relationship("Organization", back_populates="activity_types")
     activities = relationship("Activity", back_populates="activity_type", lazy="dynamic")
+    dimension_access = relationship(
+        "ActivityTypeAccess",
+        back_populates="activity_type",
+        cascade="all, delete-orphan",
+    )
+
+
+class ActivityTypeAccess(BaseModel):
+    __tablename__ = "activity_type_access"
+
+    activity_type_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("activity_types.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    dimension_value_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("dimension_values.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    activity_type = relationship("ActivityType", back_populates="dimension_access")
+    dimension_value = relationship("DimensionValue")
+
+    __table_args__ = (
+        UniqueConstraint("activity_type_id", "dimension_value_id", name="uq_activity_type_access"),
+    )
 
 
 class Facilitator(BaseModel):

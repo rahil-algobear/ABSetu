@@ -1,5 +1,5 @@
 """
-Dimension, DimensionValue, TagRule schemas
+Dimension, DimensionValue schemas
 """
 
 from typing import Any
@@ -56,35 +56,6 @@ class DimensionValueResponse(BaseResponseSchema):
     meta: dict[str, Any] | None = None
     dimension_name: str | None = None
     dimension_key: str | None = None
-
-
-# --- TagRule ---
-
-
-class TagRuleCreate(BaseModel):
-    dimension_value_id_1: str
-    dimension_value_id_2: str
-
-
-class TagRuleBulkSync(BaseModel):
-    """Bulk sync tag rules between two dimensions.
-    Provide the full list of valid pairs; rules not in the list are deleted."""
-
-    dimension_id_1: str
-    dimension_id_2: str
-    pairs: list[tuple[str, str]]  # List of (value_id_1, value_id_2)
-
-
-class TagRuleResponse(BaseResponseSchema):
-    organization_id: str
-    dimension_value_id_1: str
-    dimension_value_id_2: str
-    value_1_name: str | None = None
-    value_1_code: str | None = None
-    value_1_dimension_key: str | None = None
-    value_2_name: str | None = None
-    value_2_code: str | None = None
-    value_2_dimension_key: str | None = None
 
 
 # --- UserDimensionAccess ---

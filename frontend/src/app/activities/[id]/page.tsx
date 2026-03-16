@@ -71,9 +71,7 @@ export default function ActivityDetailPage() {
     <PageLayout className="p-4">
       <h1 className="text-2xl font-bold mb-1">{activity.type_name}</h1>
       <div className="flex gap-1 mb-1 flex-wrap">
-        {activity.tags
-          .filter((tag) => tag.dimension_key !== "activity_type")
-          .map((tag) => (
+        {activity.tags.map((tag) => (
             <Badge key={tag.value_id} variant="secondary">
               {tag.dimension_name}: {tag.value_name}
             </Badge>

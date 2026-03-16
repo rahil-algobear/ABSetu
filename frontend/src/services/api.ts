@@ -2,6 +2,7 @@ import authAxios, { publicAxios } from './axios';
 import {
   Activity,
   ActivityType,
+  ActivityTypeAccess,
   Beneficiary,
   Dimension,
   DimensionValue,
@@ -15,7 +16,6 @@ import {
   Participation,
   Permission,
   Role,
-  TagRule,
   UserAccess,
   UserListItem,
   UserLoginData,
@@ -150,30 +150,6 @@ export const dimensionApi = {
   },
 };
 
-// --- Tag Rules ---
-
-export const tagRuleApi = {
-  list: async (dimensionId1?: string, dimensionId2?: string): Promise<TagRule[]> => {
-    const params = new URLSearchParams();
-    if (dimensionId1) params.set('dimension_id_1', dimensionId1);
-    if (dimensionId2) params.set('dimension_id_2', dimensionId2);
-    const response = await authAxios.get<TagRule[]>(`/tag-rules/?${params.toString()}`);
-    return response.data;
-  },
-  create: async (data: { dimension_value_id_1: string; dimension_value_id_2: string }): Promise<TagRule> => {
-    const response = await authAxios.post<TagRule>('/tag-rules/', data);
-    return response.data;
-  },
-  delete: async (id: string) => {
-    const response = await authAxios.delete(`/tag-rules/${id}`);
-    return response.data;
-  },
-  bulkSync: async (data: { dimension_id_1: string; dimension_id_2: string; pairs: [string, string][] }): Promise<TagRule[]> => {
-    const response = await authAxios.post<TagRule[]>('/tag-rules/bulk', data);
-    return response.data;
-  },
-};
-
 // --- Activity Types ---
 
 export const activityTypeApi = {
@@ -195,6 +171,18 @@ export const activityTypeApi = {
   },
   delete: async (id: string) => {
     const response = await authAxios.delete(`/activity-types/${id}`);
+    return response.data;
+  },
+  getAccess: async (id: string): Promise<{ dimension_value_ids: string[] }> => {
+    const response = await authAxios.get<{ dimension_value_ids: string[] }>(`/activity-types/${id}/access`);
+    return response.data;
+  },
+  updateAccess: async (id: string, data: { dimension_value_ids: string[] }): Promise<{ dimension_value_ids: string[] }> => {
+    const response = await authAxios.put<{ dimension_value_ids: string[] }>(`/activity-types/${id}/access`, data);
+    return response.data;
+  },
+  listAllAccess: async (): Promise<ActivityTypeAccess[]> => {
+    const response = await authAxios.get<ActivityTypeAccess[]>('/activity-types/access');
     return response.data;
   },
 };

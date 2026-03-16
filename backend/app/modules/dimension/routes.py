@@ -1,10 +1,10 @@
 """
-Dimension, DimensionValue, TagRule routes
+Dimension, DimensionValue routes
 """
 
 import uuid
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -17,21 +17,15 @@ from app.modules.dimension.schemas import (
     DimensionValueCreate,
     DimensionValueResponse,
     DimensionValueUpdate,
-    TagRuleBulkSync,
-    TagRuleCreate,
-    TagRuleResponse,
 )
 from app.modules.dimension.service import (
     DimensionService,
     DimensionValueService,
-    TagRuleService,
-    UserDimensionAccessService,
 )
 
 router = APIRouter(tags=["dimensions"])
 
 dimension_router = APIRouter(prefix="/dimensions")
-tag_rule_router = APIRouter(prefix="/tag-rules")
 
 
 # --- Dimensions ---
@@ -217,119 +211,5 @@ def delete_dimension_value(
     return {"message": "Dimension value deleted"}
 
 
-# --- Tag Rules ---
-
-
-@tag_rule_router.get("/", dependencies=[Depends(require_permissions("dimension:view"))])
-def list_tag_rules(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-    dimension_id_1: uuid.UUID | None = Query(None),
-    dimension_id_2: uuid.UUID | None = Query(None),
-):
-    """List tag rules, optionally filtered by dimension pair."""
-    service = TagRuleService(db)
-    rules = service.list_by_org(
-        current_user.organization_id,
-        dimension_id_1=dimension_id_1,
-        dimension_id_2=dimension_id_2,
-    )
-    results = []
-    for r in rules:
-        resp = TagRuleResponse(
-            id=str(r.id),
-            updated_at=r.updated_at,
-            organization_id=str(r.organization_id),
-            dimension_value_id_1=str(r.dimension_value_id_1),
-            dimension_value_id_2=str(r.dimension_value_id_2),
-            value_1_name=r.dimension_value_1.name if r.dimension_value_1 else None,
-            value_1_code=r.dimension_value_1.code if r.dimension_value_1 else None,
-            value_1_dimension_key=(
-                r.dimension_value_1.dimension.key
-                if r.dimension_value_1 and r.dimension_value_1.dimension
-                else None
-            ),
-            value_2_name=r.dimension_value_2.name if r.dimension_value_2 else None,
-            value_2_code=r.dimension_value_2.code if r.dimension_value_2 else None,
-            value_2_dimension_key=(
-                r.dimension_value_2.dimension.key
-                if r.dimension_value_2 and r.dimension_value_2.dimension
-                else None
-            ),
-        )
-        results.append(resp.dump())
-    return results
-
-
-@tag_rule_router.post(
-    "/",
-    dependencies=[Depends(require_permissions("dimension:manage"))],
-    status_code=201,
-)
-def create_tag_rule(
-    data: TagRuleCreate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Create a tag rule."""
-    service = TagRuleService(db)
-    rule = service.create(
-        current_user.organization_id,
-        uuid.UUID(data.dimension_value_id_1),
-        uuid.UUID(data.dimension_value_id_2),
-    )
-    return TagRuleResponse(
-        id=str(rule.id),
-        updated_at=rule.updated_at,
-        organization_id=str(rule.organization_id),
-        dimension_value_id_1=str(rule.dimension_value_id_1),
-        dimension_value_id_2=str(rule.dimension_value_id_2),
-    ).dump()
-
-
-@tag_rule_router.delete(
-    "/{rule_id}",
-    dependencies=[Depends(require_permissions("dimension:manage"))],
-)
-def delete_tag_rule(
-    rule_id: uuid.UUID,
-    db: Session = Depends(get_db),
-):
-    """Delete a tag rule."""
-    service = TagRuleService(db)
-    service.delete(rule_id)
-    return {"message": "Tag rule deleted"}
-
-
-@tag_rule_router.post(
-    "/bulk",
-    dependencies=[Depends(require_permissions("dimension:manage"))],
-)
-def bulk_sync_tag_rules(
-    data: TagRuleBulkSync,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Bulk sync tag rules between two dimensions (for matrix UI)."""
-    service = TagRuleService(db)
-    rules = service.bulk_sync(
-        current_user.organization_id,
-        uuid.UUID(data.dimension_id_1),
-        uuid.UUID(data.dimension_id_2),
-        [(uuid.UUID(a), uuid.UUID(b)) for a, b in data.pairs],
-    )
-    return [
-        TagRuleResponse(
-            id=str(r.id),
-            updated_at=r.updated_at,
-            organization_id=str(r.organization_id),
-            dimension_value_id_1=str(r.dimension_value_id_1),
-            dimension_value_id_2=str(r.dimension_value_id_2),
-        ).dump()
-        for r in rules
-    ]
-
-
 # Include sub-routers
 router.include_router(dimension_router)
-router.include_router(tag_rule_router)

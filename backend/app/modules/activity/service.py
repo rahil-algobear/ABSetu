@@ -11,69 +11,19 @@ from app.modules.activity.model import (
     Activity,
     ActivityFacilitator,
     ActivityType,
+    ActivityTypeAccess,
     Facilitator,
     Participation,
 )
 from app.modules.dimension.model import (
     ActivityTag,
-    Dimension,
     DimensionValue,
-    UserDimensionAccess,
 )
-
-
-def _make_at_code(name: str) -> str:
-    """Convert activity type name to a dimension value code."""
-    return name.upper().replace(" ", "_").replace("-", "_").replace("/", "_").replace(",", "")
 
 
 class ActivityTypeService:
     def __init__(self, db: Session):
         self.db = db
-
-    def _get_system_dimension(self, org_id: uuid.UUID) -> Dimension | None:
-        """Get the system-managed 'activity_type' dimension for the org."""
-        return (
-            self.db.query(Dimension)
-            .filter_by(organization_id=org_id, is_system="activity_type")
-            .first()
-        )
-
-    def _sync_dimension_value(self, org_id: uuid.UUID, name: str) -> None:
-        """Create or update a mirrored dimension value for an activity type."""
-        dim = self._get_system_dimension(org_id)
-        if not dim:
-            return
-        code = _make_at_code(name)
-        dv = self.db.query(DimensionValue).filter_by(dimension_id=dim.id, code=code).first()
-        if not dv:
-            max_order = (
-                self.db.query(DimensionValue.sort_order)
-                .filter_by(dimension_id=dim.id)
-                .order_by(DimensionValue.sort_order.desc())
-                .first()
-            )
-            next_order = (max_order[0] + 1) if max_order else 0
-            dv = DimensionValue(
-                organization_id=org_id,
-                dimension_id=dim.id,
-                name=name,
-                code=code,
-                sort_order=next_order,
-            )
-            self.db.add(dv)
-        else:
-            dv.name = name  # keep name in sync
-
-    def _delete_dimension_value(self, org_id: uuid.UUID, name: str) -> None:
-        """Remove the mirrored dimension value for a deleted activity type."""
-        dim = self._get_system_dimension(org_id)
-        if not dim:
-            return
-        code = _make_at_code(name)
-        dv = self.db.query(DimensionValue).filter_by(dimension_id=dim.id, code=code).first()
-        if dv:
-            self.db.delete(dv)
 
     def list_by_org(
         self, org_id: uuid.UUID, accessible_ids: list[uuid.UUID] | None = None
@@ -92,31 +42,65 @@ class ActivityTypeService:
     def create(self, org_id: uuid.UUID, data: dict) -> ActivityType:
         at = ActivityType(organization_id=org_id, **data)
         self.db.add(at)
-        self.db.flush()
-        self._sync_dimension_value(org_id, at.name)
         self.db.commit()
         self.db.refresh(at)
         return at
 
     def update(self, type_id: uuid.UUID, org_id: uuid.UUID, data: dict) -> ActivityType:
         at = self.get_by_id(type_id, org_id)
-        old_name = at.name
         for key, value in data.items():
             if value is not None:
                 setattr(at, key, value)
-        # If name changed, update the mirrored dimension value
-        if "name" in data and data["name"] != old_name:
-            self._delete_dimension_value(org_id, old_name)
-            self._sync_dimension_value(org_id, at.name)
         self.db.commit()
         self.db.refresh(at)
         return at
 
     def delete(self, type_id: uuid.UUID, org_id: uuid.UUID) -> None:
         at = self.get_by_id(type_id, org_id)
-        self._delete_dimension_value(org_id, at.name)
         self.db.delete(at)
         self.db.commit()
+
+    # --- Access management ---
+
+    def get_access(self, activity_type_id: uuid.UUID) -> list[uuid.UUID]:
+        """Get dimension value IDs for an activity type's access."""
+        rows = self.db.query(ActivityTypeAccess).filter_by(activity_type_id=activity_type_id).all()
+        return [r.dimension_value_id for r in rows]
+
+    def update_access(
+        self, activity_type_id: uuid.UUID, dimension_value_ids: list[uuid.UUID]
+    ) -> list[uuid.UUID]:
+        """Bulk-replace an activity type's dimension access."""
+        self.db.query(ActivityTypeAccess).filter_by(activity_type_id=activity_type_id).delete()
+        for dv_id in dimension_value_ids:
+            self.db.add(
+                ActivityTypeAccess(
+                    activity_type_id=activity_type_id,
+                    dimension_value_id=dv_id,
+                )
+            )
+        self.db.commit()
+        return self.get_access(activity_type_id)
+
+    def list_all_access(self, org_id: uuid.UUID) -> list[dict]:
+        """List access for all activity types in the org.
+
+        Returns a list of {activity_type_id, dimension_value_ids} dicts.
+        """
+        rows = (
+            self.db.query(ActivityTypeAccess)
+            .join(ActivityType, ActivityTypeAccess.activity_type_id == ActivityType.id)
+            .filter(ActivityType.organization_id == org_id)
+            .all()
+        )
+        # Group by activity_type_id
+        access_map: dict[uuid.UUID, list[uuid.UUID]] = {}
+        for row in rows:
+            access_map.setdefault(row.activity_type_id, []).append(row.dimension_value_id)
+        return [
+            {"activity_type_id": at_id, "dimension_value_ids": dv_ids}
+            for at_id, dv_ids in access_map.items()
+        ]
 
 
 class FacilitatorService:

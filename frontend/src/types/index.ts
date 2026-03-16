@@ -82,18 +82,9 @@ export interface DimensionValue {
   updated_at: number | null;
 }
 
-export interface TagRule {
-  id: string;
-  organization_id: string;
-  dimension_value_id_1: string;
-  dimension_value_id_2: string;
-  value_1_name: string | null;
-  value_1_code: string | null;
-  value_1_dimension_key: string | null;
-  value_2_name: string | null;
-  value_2_code: string | null;
-  value_2_dimension_key: string | null;
-  updated_at: number | null;
+export interface ActivityTypeAccess {
+  activity_type_id: string;
+  dimension_value_ids: string[];
 }
 
 // --- Activities ---

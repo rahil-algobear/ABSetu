@@ -31,6 +31,28 @@ class ActivityTypeResponse(BaseResponseSchema):
     meta: dict[str, Any] | None = None
 
 
+# --- Activity Type Access ---
+
+
+class ActivityTypeAccessUpdate(BaseModel):
+    """Replace all dimension access for an activity type."""
+
+    dimension_value_ids: list[str] = []
+
+
+class ActivityTypeAccessResponse(BaseModel):
+    """Single activity type's dimension access."""
+
+    dimension_value_ids: list[str] = []
+
+
+class ActivityTypeAccessListItem(BaseModel):
+    """Access entry for bulk list endpoint."""
+
+    activity_type_id: str
+    dimension_value_ids: list[str] = []
+
+
 # --- Facilitator ---
 
 

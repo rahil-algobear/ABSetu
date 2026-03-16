@@ -1,8 +1,8 @@
 """
-Dimension models: Dimension, DimensionValue, TagRule, UserDimensionAccess
+Dimension models: Dimension, DimensionValue, UserDimensionAccess
 """
 
-from sqlalchemy import Column, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Column, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 
@@ -60,40 +60,6 @@ class DimensionValue(BaseModel):
     organization = relationship("Organization")
 
     __table_args__ = (UniqueConstraint("dimension_id", "code", name="uq_dimension_value_code"),)
-
-
-class TagRule(BaseModel):
-    __tablename__ = "tag_rules"
-
-    organization_id = Column(
-        UUID(as_uuid=True),
-        ForeignKey("organizations.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-    dimension_value_id_1 = Column(
-        UUID(as_uuid=True),
-        ForeignKey("dimension_values.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-    dimension_value_id_2 = Column(
-        UUID(as_uuid=True),
-        ForeignKey("dimension_values.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-
-    dimension_value_1 = relationship("DimensionValue", foreign_keys=[dimension_value_id_1])
-    dimension_value_2 = relationship("DimensionValue", foreign_keys=[dimension_value_id_2])
-
-    __table_args__ = (
-        UniqueConstraint(
-            "dimension_value_id_1",
-            "dimension_value_id_2",
-            name="uq_tag_rule_pair",
-        ),
-    )
 
 
 class ActivityTag(BaseModel):

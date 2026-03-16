@@ -13,6 +13,9 @@ from app.modules.auth.model import User
 from app.modules.activity.schemas import (
     ActivityCreate,
     ActivityResponse,
+    ActivityTypeAccessListItem,
+    ActivityTypeAccessResponse,
+    ActivityTypeAccessUpdate,
     ActivityTypeCreate,
     ActivityTypeResponse,
     ActivityTypeUpdate,
@@ -48,6 +51,26 @@ def list_activity_types(
     service = ActivityTypeService(db)
     types = service.list_by_org(current_user.organization_id)
     return [ActivityTypeResponse.dump_from_model(t) for t in types]
+
+
+@type_router.get(
+    "/access",
+    dependencies=[Depends(require_permissions("activity_type:view"))],
+)
+def list_all_activity_type_access(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """List access for all activity types in the org (for cascading filters)."""
+    service = ActivityTypeService(db)
+    access_list = service.list_all_access(current_user.organization_id)
+    return [
+        ActivityTypeAccessListItem(
+            activity_type_id=str(item["activity_type_id"]),
+            dimension_value_ids=[str(dv_id) for dv_id in item["dimension_value_ids"]],
+        ).model_dump()
+        for item in access_list
+    ]
 
 
 @type_router.get(
@@ -113,6 +136,48 @@ def delete_activity_type(
     service = ActivityTypeService(db)
     service.delete(type_id, current_user.organization_id)
     return {"message": "Activity type deleted"}
+
+
+@type_router.get(
+    "/{type_id}/access",
+    dependencies=[Depends(require_permissions("activity_type:view"))],
+)
+def get_activity_type_access(
+    type_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get dimension access for an activity type."""
+    service = ActivityTypeService(db)
+    # Verify it belongs to the org
+    service.get_by_id(type_id, current_user.organization_id)
+    dv_ids = service.get_access(type_id)
+    return ActivityTypeAccessResponse(
+        dimension_value_ids=[str(dv_id) for dv_id in dv_ids],
+    ).model_dump()
+
+
+@type_router.put(
+    "/{type_id}/access",
+    dependencies=[Depends(require_permissions("activity_type:manage"))],
+)
+def update_activity_type_access(
+    type_id: uuid.UUID,
+    data: ActivityTypeAccessUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Update dimension access for an activity type (bulk-replace)."""
+    service = ActivityTypeService(db)
+    # Verify it belongs to the org
+    service.get_by_id(type_id, current_user.organization_id)
+    dv_ids = service.update_access(
+        type_id,
+        [uuid.UUID(dv_id) for dv_id in data.dimension_value_ids],
+    )
+    return ActivityTypeAccessResponse(
+        dimension_value_ids=[str(dv_id) for dv_id in dv_ids],
+    ).model_dump()
 
 
 # --- Facilitators ---

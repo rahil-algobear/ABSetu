@@ -1,7 +1,6 @@
 """
-Kshamata seed script: creates org, dimensions (Programme, Project, Location,
-Activity Type [system-managed]), activity types, tag rules, vocabulary, and
-admin user using the generic dimension system.
+Kshamata seed script: creates org, dimensions (Programme, Project, Location),
+activity types with dimension access, vocabulary, and admin user.
 
 Usage:
     cd backend
@@ -13,8 +12,8 @@ import sys
 
 from app.core.database import SessionLocal
 from app.modules.organization.model import Organization
-from app.modules.dimension.model import Dimension, DimensionValue, TagRule
-from app.modules.activity.model import ActivityType
+from app.modules.dimension.model import Dimension, DimensionValue
+from app.modules.activity.model import ActivityType, ActivityTypeAccess
 from app.modules.auth.model import User
 from app.modules.role.model import Permission, Role, RolePermission
 from app.modules.beneficiary.model import Beneficiary, Enrollment  # noqa: F401
@@ -136,65 +135,10 @@ ACTIVITY_TYPES = [
 ]
 
 # ---------------------------------------------------------------------------
-# Tag Rules
+# Activity Type Access: maps activity type name → list of dimension value codes
+# Each activity type gets tagged with the locations, programmes, and projects
+# where it applies.
 # ---------------------------------------------------------------------------
-
-# Programme → Project (only Outreach has projects)
-PROGRAMME_PROJECTS = {
-    "OUTREACH": ["INSTITUTIONS", "POST_INSTITUTIONS", "COMMUNITY"],
-}
-
-# Project → Location
-PROJECT_LOCATIONS = {
-    "INSTITUTIONS": [
-        "SHANTISADAN",
-        "KASTURBA",
-        "NAVJEEVAN",
-        "ULHASNAGAR_MH",
-        "BHIWANDI_MH",
-        "BKN",
-        "DONGRI_MH",
-        "DEONAR_MH",
-    ],
-    "POST_INSTITUTIONS": [
-        "MAHARASHTRA",
-    ],
-    "COMMUNITY": [
-        "TURBHE",
-        "KAMATHIPURA",
-        "SONAPUR",
-        "BHIWANDI_COMM",
-    ],
-}
-
-# Programme → Location
-PROGRAMME_LOCATIONS = {
-    "OUTREACH": [
-        # Institutions
-        "SHANTISADAN",
-        "KASTURBA",
-        "NAVJEEVAN",
-        "ULHASNAGAR_MH",
-        "BHIWANDI_MH",
-        "BKN",
-        "DONGRI_MH",
-        "DEONAR_MH",
-        # Post Institutions
-        "MAHARASHTRA",
-        # Community
-        "TURBHE",
-        "KAMATHIPURA",
-        "SONAPUR",
-        "BHIWANDI_COMM",
-    ],
-    "TRANSFORMATION": [
-        "THANE",
-    ],
-    "UNLIMITED": [
-        "THANE",
-        "MANKHURD",
-    ],
-}
 
 # Location → Activity Types (from the master spreadsheet)
 LOCATION_ACTIVITY_TYPES = {
@@ -325,10 +269,42 @@ LOCATION_ACTIVITY_TYPES = {
     ],
 }
 
+# Programme → Location
+PROGRAMME_LOCATIONS = {
+    "OUTREACH": [
+        "SHANTISADAN",
+        "KASTURBA",
+        "NAVJEEVAN",
+        "ULHASNAGAR_MH",
+        "BHIWANDI_MH",
+        "BKN",
+        "DONGRI_MH",
+        "DEONAR_MH",
+        "MAHARASHTRA",
+        "TURBHE",
+        "KAMATHIPURA",
+        "SONAPUR",
+        "BHIWANDI_COMM",
+    ],
+    "TRANSFORMATION": ["THANE"],
+    "UNLIMITED": ["THANE", "MANKHURD"],
+}
 
-def _make_at_code(name: str) -> str:
-    """Convert activity type name to a dimension value code."""
-    return name.upper().replace(" ", "_").replace("-", "_").replace("/", "_").replace(",", "")
+# Project → Location
+PROJECT_LOCATIONS = {
+    "INSTITUTIONS": [
+        "SHANTISADAN",
+        "KASTURBA",
+        "NAVJEEVAN",
+        "ULHASNAGAR_MH",
+        "BHIWANDI_MH",
+        "BKN",
+        "DONGRI_MH",
+        "DEONAR_MH",
+    ],
+    "POST_INSTITUTIONS": ["MAHARASHTRA"],
+    "COMMUNITY": ["TURBHE", "KAMATHIPURA", "SONAPUR", "BHIWANDI_COMM"],
+}
 
 
 def _ensure_dimension(db, org, key, name, sort_order, is_system=None):
@@ -356,11 +332,7 @@ def _ensure_dimension(db, org, key, name, sort_order, is_system=None):
 def _ensure_values(db, org, dimension, values_list):
     value_map = {}
     for idx, (code, name) in enumerate(values_list):
-        dv = (
-            db.query(DimensionValue)
-            .filter_by(dimension_id=dimension.id, code=code)
-            .first()
-        )
+        dv = db.query(DimensionValue).filter_by(dimension_id=dimension.id, code=code).first()
         if not dv:
             dv = DimensionValue(
                 organization_id=org.id,
@@ -376,39 +348,59 @@ def _ensure_values(db, org, dimension, values_list):
     return value_map
 
 
-def _ensure_tag_rules(db, org, mapping, source_map, target_map):
+def _build_activity_type_access(location_map, programme_map, project_map):
+    """Build a mapping: activity_type_name → set of dimension_value codes.
+
+    Derives from LOCATION_ACTIVITY_TYPES, then adds programme and project
+    associations based on which locations each programme/project covers.
+    """
+    # Start with location codes
+    at_access: dict[str, set[str]] = {}
+    for loc_code, at_names in LOCATION_ACTIVITY_TYPES.items():
+        for at_name in at_names:
+            at_access.setdefault(at_name, set()).add(loc_code)
+
+    # Add programme codes (derived: if a location belongs to a programme,
+    # the programme applies to all its activity types)
+    for prog_code, loc_codes in PROGRAMME_LOCATIONS.items():
+        for loc_code in loc_codes:
+            for at_name in LOCATION_ACTIVITY_TYPES.get(loc_code, []):
+                at_access.setdefault(at_name, set()).add(prog_code)
+
+    # Add project codes (derived similarly)
+    for proj_code, loc_codes in PROJECT_LOCATIONS.items():
+        for loc_code in loc_codes:
+            for at_name in LOCATION_ACTIVITY_TYPES.get(loc_code, []):
+                at_access.setdefault(at_name, set()).add(proj_code)
+
+    return at_access
+
+
+def _ensure_activity_type_access(db, org, at, dv_codes, all_dv_maps):
+    """Ensure access records exist for an activity type."""
     count = 0
-    for src_code, target_codes in mapping.items():
-        src_dv = source_map[src_code]
-        for tgt_code in target_codes:
-            tgt_dv = target_map[tgt_code]
-            existing = (
-                db.query(TagRule)
-                .filter_by(
-                    dimension_value_id_1=src_dv.id,
-                    dimension_value_id_2=tgt_dv.id,
+    for code in dv_codes:
+        # Find the dimension value by code across all maps
+        dv = None
+        for dv_map in all_dv_maps:
+            if code in dv_map:
+                dv = dv_map[code]
+                break
+        if not dv:
+            continue
+        existing = (
+            db.query(ActivityTypeAccess)
+            .filter_by(activity_type_id=at.id, dimension_value_id=dv.id)
+            .first()
+        )
+        if not existing:
+            db.add(
+                ActivityTypeAccess(
+                    activity_type_id=at.id,
+                    dimension_value_id=dv.id,
                 )
-                .first()
             )
-            if not existing:
-                # Also check reverse
-                existing = (
-                    db.query(TagRule)
-                    .filter_by(
-                        dimension_value_id_1=tgt_dv.id,
-                        dimension_value_id_2=src_dv.id,
-                    )
-                    .first()
-                )
-            if not existing:
-                rule = TagRule(
-                    organization_id=org.id,
-                    dimension_value_id_1=src_dv.id,
-                    dimension_value_id_2=tgt_dv.id,
-                )
-                db.add(rule)
-                count += 1
-    db.flush()
+            count += 1
     return count
 
 
@@ -438,27 +430,20 @@ def seed():
             db.flush()
             print(f"Updated organization: {org.name} ({org.code})")
 
-        # 2. Dimensions
+        # 2. Dimensions (no more system activity_type dimension)
         programme_dim = _ensure_dimension(db, org, "programme", "Programme", 0)
         project_dim = _ensure_dimension(db, org, "project", "Project", 1)
         location_dim = _ensure_dimension(db, org, "location", "Location", 2)
-        at_dim = _ensure_dimension(
-            db, org, "activity_type", "Intervention", 3, is_system="activity_type"
-        )
 
         # 3. Dimension values
         programme_map = _ensure_values(db, org, programme_dim, PROGRAMMES)
         project_map = _ensure_values(db, org, project_dim, PROJECTS)
         location_map = _ensure_values(db, org, location_dim, LOCATIONS)
 
-        # 4. Activity Types + mirrored dimension values
-        at_dv_map = {}  # activity type name → dimension value
-        for idx, at_name in enumerate(ACTIVITY_TYPES):
-            at = (
-                db.query(ActivityType)
-                .filter_by(organization_id=org.id, name=at_name)
-                .first()
-            )
+        # 4. Activity Types
+        at_map = {}  # activity type name → ActivityType
+        for at_name in ACTIVITY_TYPES:
+            at = db.query(ActivityType).filter_by(organization_id=org.id, name=at_name).first()
             if not at:
                 at = ActivityType(
                     organization_id=org.id,
@@ -466,68 +451,19 @@ def seed():
                 )
                 db.add(at)
                 db.flush()
+            at_map[at_name] = at
+        print(f"  Ensured {len(ACTIVITY_TYPES)} activity types")
 
-            # Mirror as dimension value in the system Activity Type dimension
-            at_code = _make_at_code(at_name)
-            dv = (
-                db.query(DimensionValue)
-                .filter_by(dimension_id=at_dim.id, code=at_code)
-                .first()
-            )
-            if not dv:
-                dv = DimensionValue(
-                    organization_id=org.id,
-                    dimension_id=at_dim.id,
-                    name=at_name,
-                    code=at_code,
-                    sort_order=idx,
-                )
-                db.add(dv)
-                db.flush()
-            at_dv_map[at_name] = dv
-        print(f"  Ensured {len(ACTIVITY_TYPES)} activity types + dimension values")
-
-        # 5. Tag Rules
-        new_rules = 0
-        # Programme ↔ Project
-        new_rules += _ensure_tag_rules(
-            db, org, PROGRAMME_PROJECTS, programme_map, project_map
-        )
-        # Project ↔ Location
-        new_rules += _ensure_tag_rules(
-            db, org, PROJECT_LOCATIONS, project_map, location_map
-        )
-        # Programme ↔ Location
-        new_rules += _ensure_tag_rules(
-            db, org, PROGRAMME_LOCATIONS, programme_map, location_map
-        )
-        # Location ↔ Activity Type
-        new_rules += _ensure_tag_rules(
-            db, org, LOCATION_ACTIVITY_TYPES, location_map, at_dv_map
-        )
-        # Programme ↔ Activity Type (derived: union of activity types across
-        # all locations belonging to each programme)
-        programme_activity_types = {}
-        for prog_code, loc_codes in PROGRAMME_LOCATIONS.items():
-            at_set = set()
-            for loc_code in loc_codes:
-                at_set.update(LOCATION_ACTIVITY_TYPES.get(loc_code, []))
-            programme_activity_types[prog_code] = list(at_set)
-        new_rules += _ensure_tag_rules(
-            db, org, programme_activity_types, programme_map, at_dv_map
-        )
-        # Project ↔ Activity Type (derived: union of activity types across
-        # all locations belonging to each project)
-        project_activity_types = {}
-        for proj_code, loc_codes in PROJECT_LOCATIONS.items():
-            at_set = set()
-            for loc_code in loc_codes:
-                at_set.update(LOCATION_ACTIVITY_TYPES.get(loc_code, []))
-            project_activity_types[proj_code] = list(at_set)
-        new_rules += _ensure_tag_rules(
-            db, org, project_activity_types, project_map, at_dv_map
-        )
-        print(f"  Ensured tag rules ({new_rules} new)")
+        # 5. Activity Type Access (replaces tag rules)
+        at_access = _build_activity_type_access(location_map, programme_map, project_map)
+        all_dv_maps = [location_map, programme_map, project_map]
+        new_access = 0
+        for at_name, dv_codes in at_access.items():
+            at = at_map.get(at_name)
+            if at:
+                new_access += _ensure_activity_type_access(db, org, at, dv_codes, all_dv_maps)
+        db.flush()
+        print(f"  Ensured activity type access ({new_access} new)")
 
         # 6. Admin role (all permissions — always syncs missing ones)
         admin_role = db.query(Role).filter_by(organization_id=org.id, name="Admin").first()
@@ -543,6 +479,7 @@ def seed():
 
         # Sync: grant any current permissions the role doesn't have yet
         from app.seeds.initial import PERMISSIONS as CANONICAL_PERMISSIONS
+
         canonical_keys = [key for key, _ in CANONICAL_PERMISSIONS]
         all_perms = db.query(Permission).filter(Permission.key.in_(canonical_keys)).all()
         existing_perm_ids = {
@@ -582,26 +519,16 @@ def seed():
         db.commit()
 
         # Summary
-        total_loc_at_rules = sum(len(v) for v in LOCATION_ACTIVITY_TYPES.values())
-        total_rules = (
-            sum(len(v) for v in PROGRAMME_PROJECTS.values())
-            + sum(len(v) for v in PROJECT_LOCATIONS.values())
-            + sum(len(v) for v in PROGRAMME_LOCATIONS.values())
-            + total_loc_at_rules
-        )
+        total_access = sum(len(codes) for codes in at_access.values())
         print(f"\nKshamata seed completed successfully!")
-        print(f"  Organisation        : {ORG_NAME}")
-        print(f"  Vocabulary          : {len(VOCABULARY)} term overrides")
-        print(f"  Dimensions          : 4 (Programme, Project, Location, Activity Type [system])")
-        print(f"  Programmes          : {len(PROGRAMMES)}")
-        print(f"  Projects            : {len(PROJECTS)}")
-        print(f"  Locations           : {len(LOCATIONS)}")
-        print(f"  Activity Types      : {len(ACTIVITY_TYPES)}")
-        print(f"  Tag Rules           : {total_rules} combos")
-        print(f"    Programme↔Project : {sum(len(v) for v in PROGRAMME_PROJECTS.values())}")
-        print(f"    Project↔Location  : {sum(len(v) for v in PROJECT_LOCATIONS.values())}")
-        print(f"    Programme↔Location: {sum(len(v) for v in PROGRAMME_LOCATIONS.values())}")
-        print(f"    Location↔Activity : {total_loc_at_rules}")
+        print(f"  Organisation         : {ORG_NAME}")
+        print(f"  Vocabulary           : {len(VOCABULARY)} term overrides")
+        print(f"  Dimensions           : 3 (Programme, Project, Location)")
+        print(f"  Programmes           : {len(PROGRAMMES)}")
+        print(f"  Projects             : {len(PROJECTS)}")
+        print(f"  Locations            : {len(LOCATIONS)}")
+        print(f"  Activity Types       : {len(ACTIVITY_TYPES)}")
+        print(f"  Activity Type Access : {total_access} mappings")
 
     except Exception as e:
         db.rollback()

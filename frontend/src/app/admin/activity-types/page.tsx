@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { activityTypeApi, metaFieldSchemaApi } from "@/services/api";
-import { ActivityType, MetaFieldDefinition } from "@/types";
+import { activityTypeApi, dimensionApi, metaFieldSchemaApi } from "@/services/api";
+import { ActivityType, Dimension, DimensionValue, MetaFieldDefinition } from "@/types";
 import { Can } from "@/components/Auth/Permissions";
 import { useVocabulary } from "@/hooks/useVocabulary";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog } from "@/components/ui/dialog";
 import { DynamicMetaForm, MetaFieldDisplay } from "@/components/DynamicMetaForm";
+import { AccessCheckboxSection } from "@/components/ui/access-checkbox-section";
 import {
   Table,
   TableHeader,
@@ -19,7 +20,7 @@ import {
   TableHead,
   TableCell,
 } from "@/components/ui/page-table";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Shield } from "lucide-react";
 import toast from "react-hot-toast";
 
 export default function ActivityTypesPage() {
@@ -29,6 +30,11 @@ export default function ActivityTypesPage() {
   const [editing, setEditing] = useState<ActivityType | null>(null);
   const [form, setForm] = useState({ name: "", description: "" });
   const [metaValues, setMetaValues] = useState<Record<string, unknown>>({});
+  const [selectedDvIds, setSelectedDvIds] = useState<Set<string>>(new Set());
+
+  // Access modal (for existing activity types)
+  const [accessType, setAccessType] = useState<ActivityType | null>(null);
+  const [accessDvIds, setAccessDvIds] = useState<Set<string>>(new Set());
 
   const { data: types = [], isLoading } = useQuery({
     queryKey: ["activity-types"],
@@ -40,10 +46,47 @@ export default function ActivityTypesPage() {
     queryFn: () => metaFieldSchemaApi.get("activity_type"),
   });
 
+  const { data: dimensions = [] } = useQuery<Dimension[]>({
+    queryKey: ["dimensions"],
+    queryFn: dimensionApi.list,
+  });
+
+  // Non-system dimensions only
+  const selectableDimensions = dimensions.filter((d) => !d.is_system);
+
+  const { data: allDimensionValues = [] } = useQuery<DimensionValue[]>({
+    queryKey: ["all-dimension-values", dimensions.map((d) => d.id).join(",")],
+    queryFn: async () => {
+      const results = await Promise.all(
+        dimensions.map((d) => dimensionApi.listValues(d.id))
+      );
+      return results.flat();
+    },
+    enabled: dimensions.length > 0,
+  });
+
+  // Group dimension values by dimension
+  const dvsByDimension = selectableDimensions.map((dim) => ({
+    dimension: dim,
+    values: allDimensionValues
+      .filter((dv) => dv.dimension_id === dim.id)
+      .map((dv) => ({ id: dv.id, name: dv.name })),
+  }));
+
   const createMutation = useMutation({
-    mutationFn: activityTypeApi.create,
+    mutationFn: async (data: { name: string; description?: string; meta?: Record<string, unknown> }) => {
+      const at = await activityTypeApi.create(data);
+      // Save access if any selected
+      if (selectedDvIds.size > 0) {
+        await activityTypeApi.updateAccess(at.id, {
+          dimension_value_ids: Array.from(selectedDvIds),
+        });
+      }
+      return at;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["activity-types"] });
+      queryClient.invalidateQueries({ queryKey: ["activity-type-access"] });
       closeModal();
       toast.success(`${v("activity_type")} created`);
     },
@@ -51,10 +94,17 @@ export default function ActivityTypesPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<ActivityType> }) =>
-      activityTypeApi.update(id, data),
+    mutationFn: async ({ id, data }: { id: string; data: Partial<ActivityType> }) => {
+      const at = await activityTypeApi.update(id, data);
+      // Save access
+      await activityTypeApi.updateAccess(id, {
+        dimension_value_ids: Array.from(selectedDvIds),
+      });
+      return at;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["activity-types"] });
+      queryClient.invalidateQueries({ queryKey: ["activity-type-access"] });
       closeModal();
       toast.success(`${v("activity_type")} updated`);
     },
@@ -65,23 +115,53 @@ export default function ActivityTypesPage() {
     mutationFn: activityTypeApi.delete,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["activity-types"] });
+      queryClient.invalidateQueries({ queryKey: ["activity-type-access"] });
       toast.success(`${v("activity_type")} deleted`);
     },
     onError: () => toast.error("Failed to delete"),
+  });
+
+  const updateAccessMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: { dimension_value_ids: string[] } }) =>
+      activityTypeApi.updateAccess(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["activity-type-access"] });
+      setAccessType(null);
+      toast.success("Access updated");
+    },
+    onError: () => toast.error("Failed to update access"),
   });
 
   const openAdd = () => {
     setEditing(null);
     setForm({ name: "", description: "" });
     setMetaValues({});
+    setSelectedDvIds(new Set());
     setModalOpen(true);
   };
 
-  const openEdit = (at: ActivityType) => {
+  const openEdit = async (at: ActivityType) => {
     setEditing(at);
     setForm({ name: at.name, description: at.description || "" });
     setMetaValues(at.meta || {});
+    // Load existing access
+    try {
+      const access = await activityTypeApi.getAccess(at.id);
+      setSelectedDvIds(new Set(access.dimension_value_ids));
+    } catch {
+      setSelectedDvIds(new Set());
+    }
     setModalOpen(true);
+  };
+
+  const openAccess = async (at: ActivityType) => {
+    try {
+      const access = await activityTypeApi.getAccess(at.id);
+      setAccessDvIds(new Set(access.dimension_value_ids));
+    } catch {
+      setAccessDvIds(new Set());
+    }
+    setAccessType(at);
   };
 
   const closeModal = () => {
@@ -97,6 +177,28 @@ export default function ActivityTypesPage() {
     } else {
       createMutation.mutate({ ...form, meta });
     }
+  };
+
+  const toggleId = (set: Set<string>, setter: (s: Set<string>) => void, id: string) => {
+    const next = new Set(set);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setter(next);
+  };
+
+  const toggleAll = (
+    items: { id: string }[],
+    set: Set<string>,
+    setter: (s: Set<string>) => void,
+  ) => {
+    const allSelected = items.every((i) => set.has(i.id));
+    const next = new Set(set);
+    if (allSelected) {
+      items.forEach((i) => next.delete(i.id));
+    } else {
+      items.forEach((i) => next.add(i.id));
+    }
+    setter(next);
   };
 
   return (
@@ -124,7 +226,7 @@ export default function ActivityTypesPage() {
               {metaFields.map((f) => (
                 <TableHead key={f.key}>{f.label}</TableHead>
               ))}
-              <TableHead className="w-20">Actions</TableHead>
+              <TableHead className="w-24">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -142,6 +244,13 @@ export default function ActivityTypesPage() {
                 <TableCell>
                   <Can permission="activity_type:manage">
                     <div className="flex gap-1">
+                      <button
+                        onClick={() => openAccess(at)}
+                        className="text-gray-400 hover:text-purple-600"
+                        title="Manage access"
+                      >
+                        <Shield className="h-4 w-4" />
+                      </button>
                       <button
                         onClick={() => openEdit(at)}
                         className="text-gray-400 hover:text-purple-600"
@@ -166,6 +275,7 @@ export default function ActivityTypesPage() {
         </Table>
       )}
 
+      {/* Create / Edit modal */}
       <Dialog
         open={modalOpen}
         onClose={closeModal}
@@ -190,6 +300,25 @@ export default function ActivityTypesPage() {
             />
           </div>
           <DynamicMetaForm fields={metaFields} values={metaValues} onChange={setMetaValues} />
+
+          {/* Dimension access sections */}
+          {dvsByDimension.length > 0 && (
+            <div className="space-y-3 pt-2 border-t">
+              <p className="text-sm font-medium text-gray-700">Access</p>
+              {dvsByDimension.map(({ dimension, values }) => (
+                <AccessCheckboxSection
+                  key={dimension.id}
+                  title={dimension.name}
+                  items={values}
+                  selectedIds={selectedDvIds}
+                  onToggle={(id) => toggleId(selectedDvIds, setSelectedDvIds, id)}
+                  onToggleAll={() => toggleAll(values, selectedDvIds, setSelectedDvIds)}
+                  emptyLabel={`Available at all ${dimension.name.toLowerCase()}s`}
+                />
+              ))}
+            </div>
+          )}
+
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={closeModal}>
               Cancel
@@ -197,6 +326,44 @@ export default function ActivityTypesPage() {
             <Button type="submit">{editing ? "Save" : "Add"}</Button>
           </div>
         </form>
+      </Dialog>
+
+      {/* Manage Access modal */}
+      <Dialog
+        open={!!accessType}
+        onClose={() => setAccessType(null)}
+        title={`${accessType?.name} — Access`}
+      >
+        <div className="space-y-3">
+          {dvsByDimension.map(({ dimension, values }) => (
+            <AccessCheckboxSection
+              key={dimension.id}
+              title={dimension.name}
+              items={values}
+              selectedIds={accessDvIds}
+              onToggle={(id) => toggleId(accessDvIds, setAccessDvIds, id)}
+              onToggleAll={() => toggleAll(values, accessDvIds, setAccessDvIds)}
+              emptyLabel={`Available at all ${dimension.name.toLowerCase()}s`}
+            />
+          ))}
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setAccessType(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (accessType) {
+                  updateAccessMutation.mutate({
+                    id: accessType.id,
+                    data: { dimension_value_ids: Array.from(accessDvIds) },
+                  });
+                }
+              }}
+            >
+              Save Access
+            </Button>
+          </div>
+        </div>
       </Dialog>
     </>
   );

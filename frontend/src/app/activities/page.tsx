@@ -7,9 +7,8 @@ import {
   activityTypeApi,
   dimensionApi,
   facilitatorApi,
-  tagRuleApi,
 } from "@/services/api";
-import { Dimension, DimensionValue, TagRule } from "@/types";
+import { ActivityTypeAccess, Dimension, DimensionValue } from "@/types";
 import { Can } from "@/components/Auth/Permissions";
 import { useVocabulary } from "@/hooks/useVocabulary";
 import { Button } from "@/components/ui/button";
@@ -20,45 +19,6 @@ import { PageLayout } from "@/components/ui/page-layout";
 import { Plus } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
-
-/**
- * Given a set of tag rules and the currently selected dimension value IDs,
- * return the filtered list of allowed values for a target dimension.
- *
- * Logic: for each *other* dimension that has a selection, find tag rules
- * linking that selection to values in the target dimension. A target value
- * is allowed only if it has a rule with every selected value from other dims.
- * If no other dimension has a selection, all values are allowed.
- */
-function getFilteredValues(
-  targetDimValues: DimensionValue[],
-  selectedByDim: Record<string, string>, // dimId → selected dvId
-  targetDimId: string,
-  tagRules: TagRule[],
-): DimensionValue[] {
-  // Collect selections from OTHER dimensions (not the target)
-  const otherSelections = Object.entries(selectedByDim)
-    .filter(([dimId, dvId]) => dimId !== targetDimId && dvId)
-    .map(([, dvId]) => dvId);
-
-  if (otherSelections.length === 0) {
-    return targetDimValues;
-  }
-
-  // Build a set of (dv1, dv2) pairs from rules for fast lookup
-  const rulePairs = new Set<string>();
-  for (const rule of tagRules) {
-    rulePairs.add(`${rule.dimension_value_id_1}:${rule.dimension_value_id_2}`);
-    rulePairs.add(`${rule.dimension_value_id_2}:${rule.dimension_value_id_1}`);
-  }
-
-  // A target value is allowed if it has a rule with EVERY other selection
-  return targetDimValues.filter((dv) =>
-    otherSelections.every(
-      (selectedId) => rulePairs.has(`${dv.id}:${selectedId}`)
-    )
-  );
-}
 
 export default function ActivitiesPage() {
   const [showCreate, setShowCreate] = useState(false);
@@ -97,21 +57,15 @@ export default function ActivitiesPage() {
     enabled: dimensions.length > 0,
   });
 
-  // Load all tag rules (used for cascading filters)
-  const { data: tagRules = [] } = useQuery<TagRule[]>({
-    queryKey: ["tag-rules-all"],
-    queryFn: () => tagRuleApi.list(),
+  // Load all activity type access (for cascading filters)
+  const { data: allAccess = [] } = useQuery<ActivityTypeAccess[]>({
+    queryKey: ["activity-type-access"],
+    queryFn: () => activityTypeApi.listAllAccess(),
   });
 
   // Non-system dimensions shown as selectable dropdowns
   const selectableDimensions = useMemo(
     () => dimensions.filter((d) => !d.is_system),
-    [dimensions]
-  );
-
-  // The system Activity Type dimension (if it exists)
-  const atDimension = useMemo(
-    () => dimensions.find((d) => d.is_system === "activity_type"),
     [dimensions]
   );
 
@@ -123,43 +77,52 @@ export default function ActivitiesPage() {
     dimension_value_ids: [] as string[],
   });
 
-  // Track selection per dimension for cascading logic
-  const selectedByDim = useMemo(() => {
-    const map: Record<string, string> = {};
-    for (const dim of dimensions) {
-      const dimValues = allDimensionValues.filter(
-        (dv) => dv.dimension_id === dim.id
-      );
-      const selected = formData.dimension_value_ids.find((id) =>
-        dimValues.some((dv) => dv.id === id)
-      );
-      if (selected) {
-        map[dim.id] = selected;
-      }
+  // Build access lookup: activity_type_id → Set<dimension_value_id>
+  const accessByType = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    for (const entry of allAccess) {
+      map.set(entry.activity_type_id, new Set(entry.dimension_value_ids));
     }
     return map;
-  }, [dimensions, allDimensionValues, formData.dimension_value_ids]);
+  }, [allAccess]);
 
-  // Filter activity types based on tag rules with selected dimension values
+  // Filter activity types based on selected dimension values
   const filteredActivityTypes = useMemo(() => {
-    if (!atDimension) return activityTypes;
+    const selectedIds = formData.dimension_value_ids;
+    if (selectedIds.length === 0) return activityTypes;
 
-    const atDimValues = allDimensionValues.filter(
-      (dv) => dv.dimension_id === atDimension.id
+    return activityTypes.filter((at) => {
+      const accessSet = accessByType.get(at.id);
+      if (!accessSet) return false; // No access defined → not shown when filters active
+      return selectedIds.every((dvId) => accessSet.has(dvId));
+    });
+  }, [activityTypes, formData.dimension_value_ids, accessByType]);
+
+  // Filter dimension values: only show values that appear in access of at
+  // least one currently-valid activity type (considering OTHER dimension selections)
+  const getFilteredDimValues = (targetDimId: string): DimensionValue[] => {
+    const dimValues = allDimensionValues.filter(
+      (dv) => dv.dimension_id === targetDimId
     );
-    const filteredDvs = getFilteredValues(
-      atDimValues,
-      selectedByDim,
-      atDimension.id,
-      tagRules
+
+    // Get selections from OTHER dimensions
+    const otherSelectedIds = formData.dimension_value_ids.filter(
+      (id) => !dimValues.some((dv) => dv.id === id)
     );
-    const allowedNames = new Set(filteredDvs.map((dv) => dv.name));
 
-    // If no filtering applied (no selections), return all
-    if (Object.keys(selectedByDim).length === 0) return activityTypes;
+    if (otherSelectedIds.length === 0) return dimValues;
 
-    return activityTypes.filter((at) => allowedNames.has(at.name));
-  }, [activityTypes, atDimension, allDimensionValues, selectedByDim, tagRules]);
+    // A dimension value is valid if at least one activity type has access to
+    // it AND to all other selected values
+    return dimValues.filter((dv) =>
+      activityTypes.some((at) => {
+        const accessSet = accessByType.get(at.id);
+        if (!accessSet) return false;
+        if (!accessSet.has(dv.id)) return false;
+        return otherSelectedIds.every((id) => accessSet.has(id));
+      })
+    );
+  };
 
   const createMutation = useMutation({
     mutationFn: activityApi.create,
@@ -208,12 +171,7 @@ export default function ActivitiesPage() {
                 const dimValues = allDimensionValues.filter(
                   (dv) => dv.dimension_id === dim.id
                 );
-                const filtered = getFilteredValues(
-                  dimValues,
-                  selectedByDim,
-                  dim.id,
-                  tagRules
-                );
+                const filtered = getFilteredDimValues(dim.id);
                 const currentSelection =
                   formData.dimension_value_ids.find((id) =>
                     dimValues.some((dv) => dv.id === id)
@@ -248,7 +206,7 @@ export default function ActivitiesPage() {
                 );
               })}
 
-              {/* Activity Type — filtered by tag rules */}
+              {/* Activity Type — filtered by access */}
               <div>
                 <label className="text-sm font-medium">{v("activity_type")}</label>
                 <select
@@ -343,13 +301,11 @@ export default function ActivitiesPage() {
                     <div>
                       <p className="font-medium">{a.type_name}</p>
                       <div className="flex gap-1 mt-0.5 flex-wrap">
-                        {a.tags
-                          .filter((tag) => tag.dimension_key !== "activity_type")
-                          .map((tag) => (
-                            <Badge key={tag.value_id} variant="secondary" className="text-xs">
-                              {tag.value_name}
-                            </Badge>
-                          ))}
+                        {a.tags.map((tag) => (
+                          <Badge key={tag.value_id} variant="secondary" className="text-xs">
+                            {tag.value_name}
+                          </Badge>
+                        ))}
                       </div>
                     </div>
                     <div className="text-right">
