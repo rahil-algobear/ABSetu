@@ -1,13 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { metaFieldSchemaApi, dimensionApi, entityTypeApi } from "@/services/api";
+import {
+  metaFieldSchemaApi,
+  dimensionApi,
+  entityTypeApi,
+  activityCategoryApi,
+  activityTypeApi,
+} from "@/services/api";
 import {
   MetaFieldDefinition,
   MetaFieldSchemas,
   MetaFieldType,
   Dimension,
+  ActivityCategory,
+  ActivityType,
 } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,12 +34,6 @@ import { Plus, Pencil, Trash2, GripVertical } from "lucide-react";
 import toast from "react-hot-toast";
 import { useVocabulary } from "@/hooks/useVocabulary";
 
-const STATIC_ENTITY_KEYS = [
-  "activity_type",
-  "enrollment",
-  "activity",
-];
-
 const FIELD_TYPES: { value: MetaFieldType; label: string }[] = [
   { value: "text", label: "Text" },
   { value: "number", label: "Number" },
@@ -49,10 +51,13 @@ const emptyField: MetaFieldDefinition = {
   options: [],
 };
 
+type SectionKind = "entity" | "dimension" | "other" | "activity" | "participant";
+
 export default function MetaFieldsPage() {
   const queryClient = useQueryClient();
-  const { vPlural, vDim } = useVocabulary();
-  const [selectedEntity, setSelectedEntity] = useState<string>("activity");
+  const { v, vPlural, vDim } = useVocabulary();
+  const [activeSection, setActiveSection] = useState<SectionKind>("entity");
+  const [activeKey, setActiveKey] = useState<string>("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [fieldForm, setFieldForm] = useState<MetaFieldDefinition>({ ...emptyField });
@@ -68,35 +73,77 @@ export default function MetaFieldsPage() {
     queryFn: entityTypeApi.list,
   });
 
-  // Build the full entity type list: entity types + static + dimensions
-  const entityTypes = [
-    ...entityTypesList.map((et) => ({
-      value: `entity:${et.key}`,
-      label: et.name,
-    })),
-    ...STATIC_ENTITY_KEYS.map((key) => ({
-      value: key,
-      label: vPlural(key),
-    })),
-    ...dimensions.map((d) => ({
-      value: `dimension:${d.key}`,
-      label: vDim(d),
-    })),
-  ];
+  const { data: categories = [] } = useQuery<ActivityCategory[]>({
+    queryKey: ["activity-categories"],
+    queryFn: activityCategoryApi.list,
+  });
+
+  const { data: activityTypes = [] } = useQuery<ActivityType[]>({
+    queryKey: ["activity-types"],
+    queryFn: () => activityTypeApi.list(),
+  });
+
+  // Non-system dimensions for the pills
+  const nonSystemDimensions = useMemo(
+    () => dimensions.filter((d) => !d.is_system),
+    [dimensions]
+  );
+
+  // Derive the schema key from section + activeKey
+  const schemaKey = useMemo(() => {
+    if (!activeKey) return "";
+    switch (activeSection) {
+      case "entity": return `entity:${activeKey}`;
+      case "dimension": return `dimension:${activeKey}`;
+      case "other": return activeKey; // "activity_type", "enrollment"
+      case "activity": return `activity:${activeKey}`;
+      case "participant": return `participant:${activeKey}`;
+      default: return "";
+    }
+  }, [activeSection, activeKey]);
+
+  // Auto-select first key when section changes
+  const selectSection = (section: SectionKind) => {
+    setActiveSection(section);
+    switch (section) {
+      case "entity":
+        setActiveKey(entityTypesList[0]?.key || "");
+        break;
+      case "dimension":
+        setActiveKey(nonSystemDimensions[0]?.key || "");
+        break;
+      case "other":
+        setActiveKey("activity_type");
+        break;
+      case "activity":
+        setActiveKey(categories[0]?.key || "");
+        break;
+      case "participant":
+        setActiveKey(categories[0]?.key || "");
+        break;
+    }
+  };
+
+  // Set initial key on first load
+  useMemo(() => {
+    if (!activeKey && entityTypesList.length > 0) {
+      setActiveKey(entityTypesList[0].key);
+    }
+  }, [entityTypesList]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const { data: allSchemas = {} as MetaFieldSchemas } = useQuery<MetaFieldSchemas>({
     queryKey: ["meta-field-schemas"],
     queryFn: metaFieldSchemaApi.getAll,
   });
 
-  const fields = allSchemas[selectedEntity] || [];
+  const fields = schemaKey ? (allSchemas[schemaKey] || []) : [];
 
   const updateMutation = useMutation({
     mutationFn: (newFields: MetaFieldDefinition[]) =>
-      metaFieldSchemaApi.update(selectedEntity, newFields),
+      metaFieldSchemaApi.update(schemaKey, newFields),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["meta-field-schemas"] });
-      toast.success("Custom fields updated");
+      toast.success("Form fields updated");
     },
     onError: () => toast.error("Failed to update"),
   });
@@ -150,104 +197,246 @@ export default function MetaFieldsPage() {
 
   const showOptions = fieldForm.type === "select" || fieldForm.type === "multiselect";
 
+  // Build label for the currently selected schema
+  const selectedLabel = useMemo(() => {
+    switch (activeSection) {
+      case "entity": return entityTypesList.find((et) => et.key === activeKey)?.name || activeKey;
+      case "dimension": return nonSystemDimensions.find((d) => d.key === activeKey) ? vDim(nonSystemDimensions.find((d) => d.key === activeKey)!) : activeKey;
+      case "other": return activeKey === "activity_type" ? vPlural("activity_type") : vPlural("enrollment");
+      case "activity": {
+        const cat = categories.find((c) => c.key === activeKey);
+        if (cat) return `Activity: ${cat.name} (all types)`;
+        const at = activityTypes.find((t) => t.name.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "") === activeKey);
+        return at ? `Activity: ${at.name}` : activeKey;
+      }
+      case "participant": {
+        const cat = categories.find((c) => c.key === activeKey);
+        if (cat) return `Participant: ${cat.name} (all types)`;
+        const at = activityTypes.find((t) => t.name.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "") === activeKey);
+        return at ? `Participant: ${at.name}` : activeKey;
+      }
+      default: return "";
+    }
+  }, [activeSection, activeKey, entityTypesList, nonSystemDimensions, categories, activityTypes, vPlural, vDim]);
+
+  // Section pills
+  const sections: { key: SectionKind; label: string }[] = [
+    { key: "entity", label: "Entity types" },
+    { key: "dimension", label: "Dimensions" },
+    { key: "other", label: "Other" },
+    { key: "activity", label: "Activity fields" },
+    { key: "participant", label: "Participant fields" },
+  ];
+
   return (
     <>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold">Custom Fields</h2>
+        <h2 className="text-lg font-semibold">Form Fields</h2>
       </div>
 
       <p className="text-sm text-gray-500 mb-4">
-        Define custom fields for each entity type. These fields appear in
-        create/edit forms and are stored as metadata.
+        Define form fields for entities, dimensions, activities, and participants.
+        Fields appear in create/edit forms and are stored as metadata.
       </p>
 
-      {/* Entity type selector */}
-      <div className="flex gap-2 mb-4 overflow-x-auto pb-1">
-        {entityTypes.map((et) => (
+      {/* Section selector */}
+      <div className="flex gap-2 mb-3 overflow-x-auto pb-1">
+        {sections.map((s) => (
           <button
-            key={et.value}
-            onClick={() => setSelectedEntity(et.value)}
+            key={s.key}
+            onClick={() => selectSection(s.key)}
             className={`px-3 py-1.5 text-sm rounded-full whitespace-nowrap transition-colors ${
-              selectedEntity === et.value
+              activeSection === s.key
                 ? "bg-purple-100 text-purple-700 font-medium"
                 : "bg-gray-100 text-gray-600 hover:bg-gray-200"
             }`}
           >
-            {et.label}
-            {(allSchemas[et.value]?.length || 0) > 0 && (
-              <span className="ml-1 text-xs">
-                ({allSchemas[et.value]!.length})
-              </span>
-            )}
+            {s.label}
           </button>
         ))}
       </div>
 
-      {/* Fields table */}
-      <div className="flex items-center justify-between mb-3">
-        <p className="text-sm font-medium text-gray-700">
-          Fields for{" "}
-          {entityTypes.find((e) => e.value === selectedEntity)?.label}
-        </p>
-        <Button size="sm" onClick={openAdd}>
-          <Plus className="h-4 w-4 mr-1" />
-          Add Field
-        </Button>
+      {/* Sub-selector based on active section */}
+      <div className="mb-4">
+        {activeSection === "entity" && (
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {entityTypesList.map((et) => (
+              <button
+                key={et.key}
+                onClick={() => setActiveKey(et.key)}
+                className={`px-3 py-1 text-sm rounded-md whitespace-nowrap transition-colors ${
+                  activeKey === et.key
+                    ? "bg-purple-50 text-purple-700 border border-purple-200 font-medium"
+                    : "bg-white text-gray-600 border border-gray-200 hover:border-gray-300"
+                }`}
+              >
+                {et.name}
+                {(allSchemas[`entity:${et.key}`]?.length || 0) > 0 && (
+                  <span className="ml-1 text-xs text-gray-400">
+                    ({allSchemas[`entity:${et.key}`]!.length})
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {activeSection === "dimension" && (
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {nonSystemDimensions.map((d) => (
+              <button
+                key={d.key}
+                onClick={() => setActiveKey(d.key)}
+                className={`px-3 py-1 text-sm rounded-md whitespace-nowrap transition-colors ${
+                  activeKey === d.key
+                    ? "bg-purple-50 text-purple-700 border border-purple-200 font-medium"
+                    : "bg-white text-gray-600 border border-gray-200 hover:border-gray-300"
+                }`}
+              >
+                {vDim(d)}
+                {(allSchemas[`dimension:${d.key}`]?.length || 0) > 0 && (
+                  <span className="ml-1 text-xs text-gray-400">
+                    ({allSchemas[`dimension:${d.key}`]!.length})
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {activeSection === "other" && (
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {[
+              { key: "activity_type", label: vPlural("activity_type") },
+              { key: "enrollment", label: vPlural("enrollment") },
+            ].map((item) => (
+              <button
+                key={item.key}
+                onClick={() => setActiveKey(item.key)}
+                className={`px-3 py-1 text-sm rounded-md whitespace-nowrap transition-colors ${
+                  activeKey === item.key
+                    ? "bg-purple-50 text-purple-700 border border-purple-200 font-medium"
+                    : "bg-white text-gray-600 border border-gray-200 hover:border-gray-300"
+                }`}
+              >
+                {item.label}
+                {(allSchemas[item.key]?.length || 0) > 0 && (
+                  <span className="ml-1 text-xs text-gray-400">
+                    ({allSchemas[item.key]!.length})
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {(activeSection === "activity" || activeSection === "participant") && (
+          <div className="flex items-center gap-3">
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">{v("activity_category")}</label>
+              <select
+                className="border rounded-md px-3 py-1.5 text-sm"
+                value={categories.find((c) => c.key === activeKey) ? activeKey : ""}
+                onChange={(e) => setActiveKey(e.target.value)}
+              >
+                {categories.map((cat) => (
+                  <option key={cat.key} value={cat.key}>
+                    {cat.name} (all types)
+                  </option>
+                ))}
+              </select>
+            </div>
+            <span className="text-gray-300 mt-4">or</span>
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">Specific {v("activity_type")}</label>
+              <select
+                className="border rounded-md px-3 py-1.5 text-sm"
+                value={categories.find((c) => c.key === activeKey) ? "" : activeKey}
+                onChange={(e) => setActiveKey(e.target.value)}
+              >
+                <option value="">Select a type...</option>
+                {activityTypes.map((at) => {
+                  const typeKey = at.name.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
+                  return (
+                    <option key={at.id} value={typeKey}>
+                      {at.name}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+          </div>
+        )}
       </div>
 
-      {fields.length === 0 ? (
-        <p className="text-gray-500 text-sm">
-          No custom fields defined yet for this entity type.
-        </p>
-      ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-8">{""}</TableHead>
-              <TableHead>Label</TableHead>
-              <TableHead>Key</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>Required</TableHead>
-              <TableHead>Options</TableHead>
-              <TableHead className="w-20">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {fields.map((field, index) => (
-              <TableRow key={field.key}>
-                <TableCell>
-                  <GripVertical className="h-4 w-4 text-gray-300" />
-                </TableCell>
-                <TableCell className="font-medium">{field.label}</TableCell>
-                <TableCell className="text-gray-500 text-xs font-mono">{field.key}</TableCell>
-                <TableCell>
-                  {FIELD_TYPES.find((ft) => ft.value === field.type)?.label || field.type}
-                </TableCell>
-                <TableCell>{field.required ? "Yes" : "No"}</TableCell>
-                <TableCell>
-                  {field.options?.length ? field.options.join(", ") : "—"}
-                </TableCell>
-                <TableCell>
-                  <div className="flex gap-1">
-                    <button onClick={() => openEdit(index)} className="text-gray-400 hover:text-purple-600">
-                      <Pencil className="h-4 w-4" />
-                    </button>
-                    <button onClick={() => handleDelete(index)} className="text-gray-400 hover:text-red-500">
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+      {/* Fields table */}
+      {schemaKey && (
+        <>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm font-medium text-gray-700">
+              Fields for {selectedLabel}
+            </p>
+            <Button size="sm" onClick={openAdd}>
+              <Plus className="h-4 w-4 mr-1" />
+              Add Field
+            </Button>
+          </div>
+
+          {fields.length === 0 ? (
+            <p className="text-gray-500 text-sm">
+              No form fields defined yet.
+            </p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-8">{""}</TableHead>
+                  <TableHead>Label</TableHead>
+                  <TableHead>Key</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Required</TableHead>
+                  <TableHead>Options</TableHead>
+                  <TableHead className="w-20">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {fields.map((field, index) => (
+                  <TableRow key={field.key}>
+                    <TableCell>
+                      <GripVertical className="h-4 w-4 text-gray-300" />
+                    </TableCell>
+                    <TableCell className="font-medium">{field.label}</TableCell>
+                    <TableCell className="text-gray-500 text-xs font-mono">{field.key}</TableCell>
+                    <TableCell>
+                      {FIELD_TYPES.find((ft) => ft.value === field.type)?.label || field.type}
+                    </TableCell>
+                    <TableCell>{field.required ? "Yes" : "No"}</TableCell>
+                    <TableCell>
+                      {field.options?.length ? field.options.join(", ") : "—"}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex gap-1">
+                        <button onClick={() => openEdit(index)} className="text-gray-400 hover:text-purple-600">
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                        <button onClick={() => handleDelete(index)} className="text-gray-400 hover:text-red-500">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </>
       )}
 
       {/* Add/Edit field modal */}
       <Dialog
         open={modalOpen}
         onClose={closeModal}
-        title={editingIndex !== null ? "Edit Field" : "Add Custom Field"}
+        title={editingIndex !== null ? "Edit Field" : "Add Form Field"}
       >
         <form onSubmit={handleSave} className="space-y-3">
           <div>

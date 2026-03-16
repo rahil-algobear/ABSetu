@@ -65,7 +65,7 @@ export default function AdminLayout({
     { href: "/admin/activity-types", label: vPlural("activity_type"), icon: ClipboardList, permission: "activity_type:view" },
     { href: "/admin/roles", label: "Roles", icon: Shield, permission: "role:view" },
     { href: "/admin/users", label: "Users", icon: Users, permission: "user:view" },
-    { href: "/admin/meta-fields", label: "Custom Fields", icon: SlidersHorizontal, permission: "org:settings" },
+    { href: "/admin/meta-fields", label: "Form Fields", icon: SlidersHorizontal, permission: "org:settings" },
   ];
 
   const allTabs = [...dimensionTabs, ...entityTypeTabs, ...staticTabs];
