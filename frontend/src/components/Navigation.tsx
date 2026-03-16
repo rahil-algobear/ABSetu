@@ -26,8 +26,8 @@ import {
 /* ── Settings dropdown items ── */
 
 const settingsItems = [
-  { href: "/admin/centres", label: "Centres", icon: Building2, permission: "center:view" },
-  { href: "/admin/programmes", label: "Programmes", icon: Building2, permission: "programme:view" },
+  { href: "/admin/dimensions", label: "Dimensions", icon: Building2, permission: "dimension:view" },
+  { href: "/admin/activity-types", label: "Activity Types", icon: Building2, permission: "activity_type:view" },
   { href: "/admin/facilitators", label: "Facilitators", icon: UserCog, permission: "facilitator:view" },
   { href: "/admin/beneficiaries", label: "Beneficiaries", icon: Users, permission: "beneficiary:view" },
   { href: "/admin/roles", label: "Roles", icon: Shield, permission: "role:view" },
@@ -310,18 +310,18 @@ export default function Navigation() {
                   Dashboard
                 </Link>
 
-                <Can permission="session:view">
+                <Can permission="activity:view">
                   <Link
-                    href="/sessions"
+                    href="/activities"
                     className={clsx(
                       "flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-                      pathname.startsWith("/sessions")
+                      pathname.startsWith("/activities")
                         ? "text-purple-700 bg-purple-50"
                         : "text-gray-500 hover:text-gray-900 hover:bg-gray-100",
                     )}
                   >
                     <CalendarDays size={15} />
-                    Sessions
+                    Activities
                   </Link>
                 </Can>
 
@@ -380,19 +380,19 @@ export default function Navigation() {
               Dashboard
             </Link>
 
-            {/* Sessions */}
-            <Can permission="session:view">
+            {/* Activities */}
+            <Can permission="activity:view">
               <Link
-                href="/sessions"
+                href="/activities"
                 className={clsx(
                   "flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
-                  pathname.startsWith("/sessions")
+                  pathname.startsWith("/activities")
                     ? "text-purple-700 bg-purple-50"
                     : "text-gray-500 hover:text-gray-900 hover:bg-gray-100",
                 )}
               >
                 <CalendarDays size={16} />
-                Sessions
+                Activities
               </Link>
             </Can>
 

@@ -1,0 +1,202 @@
+"use client";
+
+import { useState } from "react";
+import { useParams } from "next/navigation";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { dimensionApi } from "@/services/api";
+import { Dimension, DimensionValue } from "@/types";
+import { Can } from "@/components/Auth/Permissions";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog } from "@/components/ui/dialog";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from "@/components/ui/page-table";
+import { Plus, Pencil, Trash2 } from "lucide-react";
+import toast from "react-hot-toast";
+
+export default function DimensionValuesPage() {
+  const params = useParams();
+  const dimensionKey = params.key as string;
+  const queryClient = useQueryClient();
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingValue, setEditingValue] = useState<DimensionValue | null>(null);
+  const [form, setForm] = useState({ name: "", code: "" });
+
+  const { data: dimensions = [] } = useQuery<Dimension[]>({
+    queryKey: ["dimensions"],
+    queryFn: dimensionApi.list,
+  });
+
+  const dimension = dimensions.find((d) => d.key === dimensionKey);
+
+  const { data: values = [], isLoading } = useQuery<DimensionValue[]>({
+    queryKey: ["dimension-values", dimension?.id],
+    queryFn: () => dimensionApi.listValues(dimension!.id),
+    enabled: !!dimension,
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (data: { name: string; code: string }) =>
+      dimensionApi.createValue(dimension!.id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["dimension-values", dimension?.id] });
+      closeModal();
+      toast.success("Value added");
+    },
+    onError: () => toast.error("Failed to add value"),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<DimensionValue> }) =>
+      dimensionApi.updateValue(dimension!.id, id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["dimension-values", dimension?.id] });
+      closeModal();
+      toast.success("Value updated");
+    },
+    onError: () => toast.error("Failed to update value"),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => dimensionApi.deleteValue(dimension!.id, id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["dimension-values", dimension?.id] });
+      toast.success("Value deleted");
+    },
+    onError: () => toast.error("Failed to delete value"),
+  });
+
+  const openAdd = () => {
+    setEditingValue(null);
+    setForm({ name: "", code: "" });
+    setModalOpen(true);
+  };
+
+  const openEdit = (value: DimensionValue) => {
+    setEditingValue(value);
+    setForm({ name: value.name, code: value.code });
+    setModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setModalOpen(false);
+    setEditingValue(null);
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editingValue) {
+      updateMutation.mutate({ id: editingValue.id, data: form });
+    } else {
+      createMutation.mutate(form);
+    }
+  };
+
+  if (!dimension) {
+    return <p className="text-gray-500 text-sm">Dimension not found.</p>;
+  }
+
+  return (
+    <>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-semibold">{dimension.name}</h2>
+        <Can permission="dimension:manage">
+          <Button size="sm" onClick={openAdd}>
+            <Plus className="h-4 w-4 mr-1" />
+            Add {dimension.name}
+          </Button>
+        </Can>
+      </div>
+
+      {isLoading ? (
+        <p className="text-gray-500 text-sm">Loading...</p>
+      ) : values.length === 0 ? (
+        <p className="text-gray-500 text-sm">No values yet.</p>
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Name</TableHead>
+              <TableHead>Code</TableHead>
+              <TableHead className="w-20">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {values.map((v) => (
+              <TableRow key={v.id}>
+                <TableCell className="font-medium">{v.name}</TableCell>
+                <TableCell className="text-gray-500 text-sm font-mono">{v.code}</TableCell>
+                <TableCell>
+                  <Can permission="dimension:manage">
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => openEdit(v)}
+                        className="text-gray-400 hover:text-purple-600"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (confirm(`Delete "${v.name}"?`))
+                            deleteMutation.mutate(v.id);
+                        }}
+                        className="text-gray-400 hover:text-red-500"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </Can>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
+
+      <Dialog
+        open={modalOpen}
+        onClose={closeModal}
+        title={editingValue ? `Edit ${dimension.name}` : `Add ${dimension.name}`}
+      >
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div>
+            <Label htmlFor="value-name">Name</Label>
+            <Input
+              id="value-name"
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              placeholder="e.g. Thane"
+              required
+            />
+          </div>
+          <div>
+            <Label htmlFor="value-code">Code</Label>
+            <Input
+              id="value-code"
+              value={form.code}
+              onChange={(e) => setForm({ ...form, code: e.target.value })}
+              placeholder="e.g. THANE"
+              className="font-mono"
+              required
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="outline" onClick={closeModal}>
+              Cancel
+            </Button>
+            <Button type="submit">
+              {editingValue ? "Save" : "Add"}
+            </Button>
+          </div>
+        </form>
+      </Dialog>
+    </>
+  );
+}

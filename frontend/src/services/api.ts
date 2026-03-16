@@ -1,22 +1,21 @@
 import authAxios, { publicAxios } from './axios';
 import {
-  Attendance,
+  Activity,
+  ActivityType,
   Beneficiary,
-  Center,
+  Dimension,
+  DimensionValue,
   Enrollment,
-  EntityType,
   Facilitator,
   LoginResponse,
   MetaFieldDefinition,
   MetaFieldSchemas,
   OTPVerifyData,
   Organization,
+  Participation,
   Permission,
-  Programme,
-  ProgrammeCenter,
   Role,
-  Session,
-  SessionTemplate,
+  TagRule,
   UserAccess,
   UserListItem,
   UserLoginData,
@@ -94,13 +93,13 @@ export const metaFieldSchemaApi = {
     const response = await authAxios.get<MetaFieldSchemas>('/organization/meta-field-schemas');
     return response.data;
   },
-  get: async (entityType: EntityType): Promise<MetaFieldDefinition[]> => {
+  get: async (entityType: string): Promise<MetaFieldDefinition[]> => {
     const response = await authAxios.get<MetaFieldDefinition[]>(
       `/organization/meta-field-schemas/${entityType}`
     );
     return response.data;
   },
-  update: async (entityType: EntityType, fields: MetaFieldDefinition[]): Promise<MetaFieldDefinition[]> => {
+  update: async (entityType: string, fields: MetaFieldDefinition[]): Promise<MetaFieldDefinition[]> => {
     const response = await authAxios.put<MetaFieldDefinition[]>(
       `/organization/meta-field-schemas/${entityType}`,
       fields
@@ -109,94 +108,93 @@ export const metaFieldSchemaApi = {
   },
 };
 
-// --- Centers ---
+// --- Dimensions ---
 
-export const centerApi = {
-  list: async (): Promise<Center[]> => {
-    const response = await authAxios.get<Center[]>('/organization/centers');
+export const dimensionApi = {
+  list: async (): Promise<Dimension[]> => {
+    const response = await authAxios.get<Dimension[]>('/dimensions/');
     return response.data;
   },
-  get: async (id: string): Promise<Center> => {
-    const response = await authAxios.get<Center>(`/organization/centers/${id}`);
+  get: async (id: string): Promise<Dimension> => {
+    const response = await authAxios.get<Dimension>(`/dimensions/${id}`);
     return response.data;
   },
-  create: async (data: { name: string; code: string; address?: string; meta?: Record<string, unknown> }): Promise<Center> => {
-    const response = await authAxios.post<Center>('/organization/centers', data);
+  create: async (data: { name: string; key: string; sort_order?: number }): Promise<Dimension> => {
+    const response = await authAxios.post<Dimension>('/dimensions/', data);
     return response.data;
   },
-  update: async (id: string, data: Partial<Center>): Promise<Center> => {
-    const response = await authAxios.put<Center>(`/organization/centers/${id}`, data);
+  update: async (id: string, data: Partial<Dimension>): Promise<Dimension> => {
+    const response = await authAxios.put<Dimension>(`/dimensions/${id}`, data);
     return response.data;
   },
   delete: async (id: string) => {
-    const response = await authAxios.delete(`/organization/centers/${id}`);
+    const response = await authAxios.delete(`/dimensions/${id}`);
+    return response.data;
+  },
+  // Dimension values
+  listValues: async (dimensionId: string): Promise<DimensionValue[]> => {
+    const response = await authAxios.get<DimensionValue[]>(`/dimensions/${dimensionId}/values`);
+    return response.data;
+  },
+  createValue: async (dimensionId: string, data: { name: string; code: string; sort_order?: number; meta?: Record<string, unknown> }): Promise<DimensionValue> => {
+    const response = await authAxios.post<DimensionValue>(`/dimensions/${dimensionId}/values`, data);
+    return response.data;
+  },
+  updateValue: async (dimensionId: string, valueId: string, data: Partial<DimensionValue>): Promise<DimensionValue> => {
+    const response = await authAxios.put<DimensionValue>(`/dimensions/${dimensionId}/values/${valueId}`, data);
+    return response.data;
+  },
+  deleteValue: async (dimensionId: string, valueId: string) => {
+    const response = await authAxios.delete(`/dimensions/${dimensionId}/values/${valueId}`);
     return response.data;
   },
 };
 
-// --- Programmes ---
+// --- Tag Rules ---
 
-export const programmeApi = {
-  list: async (): Promise<Programme[]> => {
-    const response = await authAxios.get<Programme[]>('/organization/programmes');
+export const tagRuleApi = {
+  list: async (dimensionId1?: string, dimensionId2?: string): Promise<TagRule[]> => {
+    const params = new URLSearchParams();
+    if (dimensionId1) params.set('dimension_id_1', dimensionId1);
+    if (dimensionId2) params.set('dimension_id_2', dimensionId2);
+    const response = await authAxios.get<TagRule[]>(`/tag-rules/?${params.toString()}`);
     return response.data;
   },
-  get: async (id: string): Promise<Programme> => {
-    const response = await authAxios.get<Programme>(`/organization/programmes/${id}`);
-    return response.data;
-  },
-  create: async (data: { name: string; description?: string; meta?: Record<string, unknown> }): Promise<Programme> => {
-    const response = await authAxios.post<Programme>('/organization/programmes', data);
-    return response.data;
-  },
-  update: async (id: string, data: Partial<Programme>): Promise<Programme> => {
-    const response = await authAxios.put<Programme>(`/organization/programmes/${id}`, data);
+  create: async (data: { dimension_value_id_1: string; dimension_value_id_2: string }): Promise<TagRule> => {
+    const response = await authAxios.post<TagRule>('/tag-rules/', data);
     return response.data;
   },
   delete: async (id: string) => {
-    const response = await authAxios.delete(`/organization/programmes/${id}`);
+    const response = await authAxios.delete(`/tag-rules/${id}`);
+    return response.data;
+  },
+  bulkSync: async (data: { dimension_id_1: string; dimension_id_2: string; pairs: [string, string][] }): Promise<TagRule[]> => {
+    const response = await authAxios.post<TagRule[]>('/tag-rules/bulk', data);
     return response.data;
   },
 };
 
-// --- Programme-Centers ---
+// --- Activity Types ---
 
-export const programmeCenterApi = {
-  list: async (): Promise<ProgrammeCenter[]> => {
-    const response = await authAxios.get<ProgrammeCenter[]>('/organization/programme-centers');
+export const activityTypeApi = {
+  list: async (): Promise<ActivityType[]> => {
+    const response = await authAxios.get<ActivityType[]>('/activity-types/');
     return response.data;
   },
-  create: async (data: { programme_id: string; center_id: string }): Promise<ProgrammeCenter> => {
-    const response = await authAxios.post<ProgrammeCenter>('/organization/programme-centers', data);
+  get: async (id: string): Promise<ActivityType> => {
+    const response = await authAxios.get<ActivityType>(`/activity-types/${id}`);
+    return response.data;
+  },
+  create: async (data: { name: string; description?: string; meta?: Record<string, unknown> }): Promise<ActivityType> => {
+    const response = await authAxios.post<ActivityType>('/activity-types/', data);
+    return response.data;
+  },
+  update: async (id: string, data: Partial<ActivityType>): Promise<ActivityType> => {
+    const response = await authAxios.put<ActivityType>(`/activity-types/${id}`, data);
     return response.data;
   },
   delete: async (id: string) => {
-    const response = await authAxios.delete(`/organization/programme-centers/${id}`);
-    return response.data;
-  },
-};
-
-// --- Session Templates ---
-
-export const sessionTemplateApi = {
-  list: async (): Promise<SessionTemplate[]> => {
-    const response = await authAxios.get<SessionTemplate[]>('/session-templates/');
-    return response.data;
-  },
-  get: async (id: string): Promise<SessionTemplate> => {
-    const response = await authAxios.get<SessionTemplate>(`/session-templates/${id}`);
-    return response.data;
-  },
-  create: async (data: { name: string; description?: string; meta?: Record<string, unknown> }): Promise<SessionTemplate> => {
-    const response = await authAxios.post<SessionTemplate>('/session-templates/', data);
-    return response.data;
-  },
-  update: async (id: string, data: Partial<SessionTemplate>): Promise<SessionTemplate> => {
-    const response = await authAxios.put<SessionTemplate>(`/session-templates/${id}`, data);
-    return response.data;
-  },
-  delete: async (id: string) => {
-    const response = await authAxios.delete(`/session-templates/${id}`);
+    const response = await authAxios.delete(`/activity-types/${id}`);
     return response.data;
   },
 };
@@ -226,42 +224,42 @@ export const facilitatorApi = {
   },
 };
 
-// --- Sessions ---
+// --- Activities ---
 
-export const sessionApi = {
-  list: async (): Promise<Session[]> => {
-    const response = await authAxios.get<Session[]>('/sessions/');
+export const activityApi = {
+  list: async (): Promise<Activity[]> => {
+    const response = await authAxios.get<Activity[]>('/activities/');
     return response.data;
   },
-  get: async (id: string): Promise<Session> => {
-    const response = await authAxios.get<Session>(`/sessions/${id}`);
+  get: async (id: string): Promise<Activity> => {
+    const response = await authAxios.get<Activity>(`/activities/${id}`);
     return response.data;
   },
   create: async (data: {
-    session_template_id: string;
-    programme_center_id: string;
+    activity_type_id: string;
     date: string;
     notes?: string;
     facilitator_ids?: string[];
+    dimension_value_ids?: string[];
     meta?: Record<string, unknown>;
-  }): Promise<Session> => {
-    const response = await authAxios.post<Session>('/sessions/', data);
+  }): Promise<Activity> => {
+    const response = await authAxios.post<Activity>('/activities/', data);
     return response.data;
   },
-  update: async (id: string, data: Partial<Session>): Promise<Session> => {
-    const response = await authAxios.put<Session>(`/sessions/${id}`, data);
+  update: async (id: string, data: Partial<Activity>): Promise<Activity> => {
+    const response = await authAxios.put<Activity>(`/activities/${id}`, data);
     return response.data;
   },
   delete: async (id: string) => {
-    const response = await authAxios.delete(`/sessions/${id}`);
+    const response = await authAxios.delete(`/activities/${id}`);
     return response.data;
   },
-  getAttendance: async (sessionId: string): Promise<Attendance[]> => {
-    const response = await authAxios.get<Attendance[]>(`/sessions/${sessionId}/attendance`);
+  getParticipations: async (activityId: string): Promise<Participation[]> => {
+    const response = await authAxios.get<Participation[]>(`/activities/${activityId}/participations`);
     return response.data;
   },
-  markAttendance: async (sessionId: string, records: { beneficiary_id: string; status: string }[]): Promise<Attendance[]> => {
-    const response = await authAxios.post<Attendance[]>(`/sessions/${sessionId}/attendance`, { records });
+  markParticipations: async (activityId: string, records: { beneficiary_id: string; status: string; meta?: Record<string, unknown> }[]): Promise<Participation[]> => {
+    const response = await authAxios.post<Participation[]>(`/activities/${activityId}/participations`, { records });
     return response.data;
   },
 };
@@ -277,7 +275,7 @@ export const beneficiaryApi = {
     const response = await authAxios.get<Beneficiary>(`/beneficiaries/${id}`);
     return response.data;
   },
-  create: async (data: { name: string; meta?: Record<string, unknown> }): Promise<Beneficiary> => {
+  create: async (data: { name: string; dimension_value_ids?: string[]; meta?: Record<string, unknown> }): Promise<Beneficiary> => {
     const response = await authAxios.post<Beneficiary>('/beneficiaries/', data);
     return response.data;
   },
@@ -366,9 +364,9 @@ export const enrollmentApi = {
   },
   create: async (data: {
     beneficiary_id: string;
-    programme_center_id: string;
     admission_date: string;
     release_date?: string;
+    dimension_value_ids?: string[];
     meta?: Record<string, unknown>;
   }): Promise<Enrollment> => {
     const response = await authAxios.post<Enrollment>('/enrollments/', data);

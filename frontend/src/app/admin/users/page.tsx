@@ -5,11 +5,9 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   userApi,
   roleApi,
-  centerApi,
-  programmeApi,
-  sessionTemplateApi,
+  dimensionApi,
 } from "@/services/api";
-import { UserListItem, Role, Center, Programme, SessionTemplate } from "@/types";
+import { UserListItem, Role, Dimension, DimensionValue } from "@/types";
 import { Can } from "@/components/Auth/Permissions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -124,15 +122,11 @@ export default function UsersPage() {
     mobile_number: "",
     role_id: "",
   });
-  const [createCenterIds, setCreateCenterIds] = useState<Set<string>>(new Set());
-  const [createProgrammeIds, setCreateProgrammeIds] = useState<Set<string>>(new Set());
-  const [createTemplateIds, setCreateTemplateIds] = useState<Set<string>>(new Set());
+  const [createDvIds, setCreateDvIds] = useState<Set<string>>(new Set());
 
   // Access modal state
   const [accessUser, setAccessUser] = useState<UserListItem | null>(null);
-  const [selectedCenterIds, setSelectedCenterIds] = useState<Set<string>>(new Set());
-  const [selectedProgrammeIds, setSelectedProgrammeIds] = useState<Set<string>>(new Set());
-  const [selectedTemplateIds, setSelectedTemplateIds] = useState<Set<string>>(new Set());
+  const [selectedDvIds, setSelectedDvIds] = useState<Set<string>>(new Set());
 
   const { data: users = [], isLoading } = useQuery({
     queryKey: ["users"],
@@ -144,30 +138,31 @@ export default function UsersPage() {
     queryFn: roleApi.list,
   });
 
-  const { data: centers = [] } = useQuery<Center[]>({
-    queryKey: ["centers"],
-    queryFn: centerApi.list,
+  const { data: dimensions = [] } = useQuery<Dimension[]>({
+    queryKey: ["dimensions"],
+    queryFn: dimensionApi.list,
   });
 
-  const { data: programmes = [] } = useQuery<Programme[]>({
-    queryKey: ["programmes"],
-    queryFn: programmeApi.list,
+  // Load all dimension values
+  const { data: allDimensionValues = [] } = useQuery<DimensionValue[]>({
+    queryKey: ["all-dimension-values", dimensions.map((d) => d.id).join(",")],
+    queryFn: async () => {
+      const results = await Promise.all(
+        dimensions.map((d) => dimensionApi.listValues(d.id))
+      );
+      return results.flat();
+    },
+    enabled: dimensions.length > 0,
   });
 
-  const { data: sessionTemplates = [] } = useQuery<SessionTemplate[]>({
-    queryKey: ["sessionTemplates"],
-    queryFn: sessionTemplateApi.list,
-  });
+  const dvMap = new Map(allDimensionValues.map((dv) => [dv.id, dv]));
 
   const createMutation = useMutation({
     mutationFn: async (data: typeof createForm) => {
       const user = await userApi.create(data);
-      const hasAccess = createCenterIds.size > 0 || createProgrammeIds.size > 0 || createTemplateIds.size > 0;
-      if (hasAccess) {
+      if (createDvIds.size > 0) {
         await userApi.updateAccess(user.id, {
-          center_ids: Array.from(createCenterIds),
-          programme_ids: Array.from(createProgrammeIds),
-          session_template_ids: Array.from(createTemplateIds),
+          dimension_value_ids: Array.from(createDvIds),
         });
       }
       return user;
@@ -205,7 +200,7 @@ export default function UsersPage() {
       data,
     }: {
       userId: string;
-      data: { center_ids: string[]; programme_ids: string[]; session_template_ids: string[] };
+      data: { dimension_value_ids: string[] };
     }) => userApi.updateAccess(userId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users"] });
@@ -233,15 +228,11 @@ export default function UsersPage() {
       mobile_number: "",
       role_id: defaultRole?.id || "",
     });
-    setCreateCenterIds(new Set());
-    setCreateProgrammeIds(new Set());
-    setCreateTemplateIds(new Set());
+    setCreateDvIds(new Set());
     setCreateModalOpen(true);
   };
 
-  const closeCreateModal = () => {
-    setCreateModalOpen(false);
-  };
+  const closeCreateModal = () => setCreateModalOpen(false);
 
   const openEdit = (user: UserListItem) => {
     setEditingUser(user);
@@ -262,9 +253,7 @@ export default function UsersPage() {
 
   const openAccess = (user: UserListItem) => {
     setAccessUser(user);
-    setSelectedCenterIds(new Set(user.center_ids || []));
-    setSelectedProgrammeIds(new Set(user.programme_ids || []));
-    setSelectedTemplateIds(new Set(user.session_template_ids || []));
+    setSelectedDvIds(new Set(user.dimension_value_ids || []));
     setAccessModalOpen(true);
   };
 
@@ -281,10 +270,7 @@ export default function UsersPage() {
   const handleEditSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingUser || !editForm.role_id) return;
-    updateUserMutation.mutate({
-      userId: editingUser.id,
-      data: editForm,
-    });
+    updateUserMutation.mutate({ userId: editingUser.id, data: editForm });
   };
 
   const handleAccessSubmit = (e: React.FormEvent) => {
@@ -292,11 +278,7 @@ export default function UsersPage() {
     if (!accessUser) return;
     updateAccessMutation.mutate({
       userId: accessUser.id,
-      data: {
-        center_ids: Array.from(selectedCenterIds),
-        programme_ids: Array.from(selectedProgrammeIds),
-        session_template_ids: Array.from(selectedTemplateIds),
-      },
+      data: { dimension_value_ids: Array.from(selectedDvIds) },
     });
   };
 
@@ -318,15 +300,22 @@ export default function UsersPage() {
   ) => {
     const allSelected = items.every((i) => set.has(i.id));
     if (allSelected) {
-      setter(new Set());
+      // Remove only these items
+      const next = new Set(set);
+      items.forEach((i) => next.delete(i.id));
+      setter(next);
     } else {
-      setter(new Set(items.map((i) => i.id)));
+      const next = new Set(set);
+      items.forEach((i) => next.add(i.id));
+      setter(next);
     }
   };
 
-  const centerMap = new Map(centers.map((c) => [c.id, c.name]));
-  const programmeMap = new Map(programmes.map((p) => [p.id, p.name]));
-  const templateMap = new Map(sessionTemplates.map((t) => [t.id, t.name]));
+  // Group dimension values by dimension for display
+  const dvsByDimension = dimensions.map((dim) => ({
+    dimension: dim,
+    values: allDimensionValues.filter((dv) => dv.dimension_id === dim.id),
+  }));
 
   return (
     <>
@@ -351,9 +340,7 @@ export default function UsersPage() {
               <TableHead>Name</TableHead>
               <TableHead>Mobile</TableHead>
               <TableHead>Role</TableHead>
-              <TableHead>Centers</TableHead>
-              <TableHead>Programmes</TableHead>
-              <TableHead>Templates</TableHead>
+              <TableHead>Access</TableHead>
               <TableHead className="w-24">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -382,38 +369,15 @@ export default function UsersPage() {
                 </TableCell>
                 <TableCell>
                   <div className="flex flex-wrap gap-1">
-                    {user.center_ids?.length ? (
-                      user.center_ids.map((id) => (
-                        <span key={id} className="inline-block text-sm bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">
-                          {centerMap.get(id) || "Unknown"}
-                        </span>
-                      ))
-                    ) : (
-                      <span className="text-sm text-gray-400">All</span>
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <div className="flex flex-wrap gap-1">
-                    {user.programme_ids?.length ? (
-                      user.programme_ids.map((id) => (
-                        <span key={id} className="inline-block text-sm bg-green-50 text-green-700 px-2 py-0.5 rounded-full">
-                          {programmeMap.get(id) || "Unknown"}
-                        </span>
-                      ))
-                    ) : (
-                      <span className="text-sm text-gray-400">All</span>
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <div className="flex flex-wrap gap-1">
-                    {user.session_template_ids?.length ? (
-                      user.session_template_ids.map((id) => (
-                        <span key={id} className="inline-block text-sm bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full">
-                          {templateMap.get(id) || "Unknown"}
-                        </span>
-                      ))
+                    {user.dimension_value_ids?.length ? (
+                      user.dimension_value_ids.map((id) => {
+                        const dv = dvMap.get(id);
+                        return (
+                          <span key={id} className="inline-block text-sm bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">
+                            {dv ? dv.name : "Unknown"}
+                          </span>
+                        );
+                      })
                     ) : (
                       <span className="text-sm text-gray-400">All</span>
                     )}
@@ -425,7 +389,7 @@ export default function UsersPage() {
                       <button
                         onClick={() => openEdit(user)}
                         className="text-gray-400 hover:text-purple-600"
-                        title="Change role"
+                        title="Edit user"
                       >
                         <Pencil className="h-4 w-4" />
                       </button>
@@ -456,11 +420,7 @@ export default function UsersPage() {
       )}
 
       {/* Add User Modal */}
-      <Dialog
-        open={createModalOpen}
-        onClose={closeCreateModal}
-        title="Add User"
-      >
+      <Dialog open={createModalOpen} onClose={closeCreateModal} title="Add User">
         <form onSubmit={handleCreate} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -468,9 +428,7 @@ export default function UsersPage() {
               <Input
                 id="first-name"
                 value={createForm.first_name}
-                onChange={(e) =>
-                  setCreateForm({ ...createForm, first_name: e.target.value })
-                }
+                onChange={(e) => setCreateForm({ ...createForm, first_name: e.target.value })}
                 required
               />
             </div>
@@ -479,9 +437,7 @@ export default function UsersPage() {
               <Input
                 id="last-name"
                 value={createForm.last_name}
-                onChange={(e) =>
-                  setCreateForm({ ...createForm, last_name: e.target.value })
-                }
+                onChange={(e) => setCreateForm({ ...createForm, last_name: e.target.value })}
                 required
               />
             </div>
@@ -493,9 +449,7 @@ export default function UsersPage() {
               <Input
                 id="country-code"
                 value={createForm.country_code}
-                onChange={(e) =>
-                  setCreateForm({ ...createForm, country_code: e.target.value })
-                }
+                onChange={(e) => setCreateForm({ ...createForm, country_code: e.target.value })}
                 placeholder="+91"
                 required
               />
@@ -505,12 +459,7 @@ export default function UsersPage() {
               <Input
                 id="mobile"
                 value={createForm.mobile_number}
-                onChange={(e) =>
-                  setCreateForm({
-                    ...createForm,
-                    mobile_number: e.target.value,
-                  })
-                }
+                onChange={(e) => setCreateForm({ ...createForm, mobile_number: e.target.value })}
                 placeholder="9876543210"
                 required
               />
@@ -522,71 +471,45 @@ export default function UsersPage() {
             <select
               id="create-role"
               value={createForm.role_id}
-              onChange={(e) =>
-                setCreateForm({ ...createForm, role_id: e.target.value })
-              }
+              onChange={(e) => setCreateForm({ ...createForm, role_id: e.target.value })}
               className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
               required
             >
               <option value="">Select a role...</option>
               {roles.map((role) => (
                 <option key={role.id} value={role.id}>
-                  {role.name}
-                  {role.is_default ? " (Default)" : ""}
+                  {role.name}{role.is_default ? " (Default)" : ""}
                 </option>
               ))}
             </select>
           </div>
 
           <p className="text-xs text-gray-500 pt-1">
-            Restrict access to specific entities. Leave empty for full access.
+            Restrict access to specific dimension values. Leave empty for full access.
           </p>
 
-          <AccessCheckboxSection
-            title="Centers"
-            items={centers}
-            selectedIds={createCenterIds}
-            onToggle={(id) => toggleId(createCenterIds, setCreateCenterIds, id)}
-            onToggleAll={() => toggleAll(centers, createCenterIds, setCreateCenterIds)}
-            getId={(i) => i.id}
-            getLabel={(i) => i.name}
-          />
-
-          <AccessCheckboxSection
-            title="Programmes"
-            items={programmes}
-            selectedIds={createProgrammeIds}
-            onToggle={(id) => toggleId(createProgrammeIds, setCreateProgrammeIds, id)}
-            onToggleAll={() => toggleAll(programmes, createProgrammeIds, setCreateProgrammeIds)}
-            getId={(i) => i.id}
-            getLabel={(i) => i.name}
-          />
-
-          <AccessCheckboxSection
-            title="Session Templates"
-            items={sessionTemplates}
-            selectedIds={createTemplateIds}
-            onToggle={(id) => toggleId(createTemplateIds, setCreateTemplateIds, id)}
-            onToggleAll={() => toggleAll(sessionTemplates, createTemplateIds, setCreateTemplateIds)}
-            getId={(i) => i.id}
-            getLabel={(i) => i.name}
-          />
+          {dvsByDimension.map(({ dimension, values }) => (
+            <AccessCheckboxSection
+              key={dimension.id}
+              title={dimension.name}
+              items={values}
+              selectedIds={createDvIds}
+              onToggle={(id) => toggleId(createDvIds, setCreateDvIds, id)}
+              onToggleAll={() => toggleAll(values, createDvIds, setCreateDvIds)}
+              getId={(i) => i.id}
+              getLabel={(i) => i.name}
+            />
+          ))}
 
           <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="outline" onClick={closeCreateModal}>
-              Cancel
-            </Button>
+            <Button type="button" variant="outline" onClick={closeCreateModal}>Cancel</Button>
             <Button type="submit">Add User</Button>
           </div>
         </form>
       </Dialog>
 
       {/* Edit User Modal */}
-      <Dialog
-        open={editModalOpen}
-        onClose={closeEditModal}
-        title="Edit User"
-      >
+      <Dialog open={editModalOpen} onClose={closeEditModal} title="Edit User">
         {editingUser && (
           <form onSubmit={handleEditSubmit} className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
@@ -595,9 +518,7 @@ export default function UsersPage() {
                 <Input
                   id="edit-first-name"
                   value={editForm.first_name}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, first_name: e.target.value })
-                  }
+                  onChange={(e) => setEditForm({ ...editForm, first_name: e.target.value })}
                   required
                 />
               </div>
@@ -606,9 +527,7 @@ export default function UsersPage() {
                 <Input
                   id="edit-last-name"
                   value={editForm.last_name}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, last_name: e.target.value })
-                  }
+                  onChange={(e) => setEditForm({ ...editForm, last_name: e.target.value })}
                   required
                 />
               </div>
@@ -620,9 +539,7 @@ export default function UsersPage() {
                 <Input
                   id="edit-country-code"
                   value={editForm.country_code}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, country_code: e.target.value })
-                  }
+                  onChange={(e) => setEditForm({ ...editForm, country_code: e.target.value })}
                   required
                 />
               </div>
@@ -631,9 +548,7 @@ export default function UsersPage() {
                 <Input
                   id="edit-mobile"
                   value={editForm.mobile_number}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, mobile_number: e.target.value })
-                  }
+                  onChange={(e) => setEditForm({ ...editForm, mobile_number: e.target.value })}
                   required
                 />
               </div>
@@ -644,89 +559,55 @@ export default function UsersPage() {
               <select
                 id="edit-role"
                 value={editForm.role_id}
-                onChange={(e) =>
-                  setEditForm({ ...editForm, role_id: e.target.value })
-                }
+                onChange={(e) => setEditForm({ ...editForm, role_id: e.target.value })}
                 className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
                 required
               >
                 <option value="">Select a role...</option>
                 {roles.map((role) => (
                   <option key={role.id} value={role.id}>
-                    {role.name}
-                    {role.is_default ? " (Default)" : ""}
+                    {role.name}{role.is_default ? " (Default)" : ""}
                   </option>
                 ))}
               </select>
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={closeEditModal}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={!editForm.role_id}>
-                Save
-              </Button>
+              <Button type="button" variant="outline" onClick={closeEditModal}>Cancel</Button>
+              <Button type="submit" disabled={!editForm.role_id}>Save</Button>
             </div>
           </form>
         )}
       </Dialog>
 
       {/* Manage Access Modal */}
-      <Dialog
-        open={accessModalOpen}
-        onClose={closeAccessModal}
-        title="Manage Access"
-      >
+      <Dialog open={accessModalOpen} onClose={closeAccessModal} title="Manage Access">
         {accessUser && (
           <form onSubmit={handleAccessSubmit} className="space-y-4">
             <div className="bg-gray-50 rounded-lg p-3">
-              <p className="font-medium">
-                {accessUser.first_name} {accessUser.last_name}
-              </p>
-              <p className="text-sm text-gray-500">
-                {accessUser.role_name || "No role"}
-              </p>
+              <p className="font-medium">{accessUser.first_name} {accessUser.last_name}</p>
+              <p className="text-sm text-gray-500">{accessUser.role_name || "No role"}</p>
             </div>
 
             <p className="text-xs text-gray-500">
-              Select which entities this user can access. Leave a section empty for unrestricted access to that entity type.
+              Select which dimension values this user can access. Leave a section empty for unrestricted access.
             </p>
 
-            <AccessCheckboxSection
-              title="Centers"
-              items={centers}
-              selectedIds={selectedCenterIds}
-              onToggle={(id) => toggleId(selectedCenterIds, setSelectedCenterIds, id)}
-              onToggleAll={() => toggleAll(centers, selectedCenterIds, setSelectedCenterIds)}
-              getId={(i) => i.id}
-              getLabel={(i) => i.name}
-            />
-
-            <AccessCheckboxSection
-              title="Programmes"
-              items={programmes}
-              selectedIds={selectedProgrammeIds}
-              onToggle={(id) => toggleId(selectedProgrammeIds, setSelectedProgrammeIds, id)}
-              onToggleAll={() => toggleAll(programmes, selectedProgrammeIds, setSelectedProgrammeIds)}
-              getId={(i) => i.id}
-              getLabel={(i) => i.name}
-            />
-
-            <AccessCheckboxSection
-              title="Session Templates"
-              items={sessionTemplates}
-              selectedIds={selectedTemplateIds}
-              onToggle={(id) => toggleId(selectedTemplateIds, setSelectedTemplateIds, id)}
-              onToggleAll={() => toggleAll(sessionTemplates, selectedTemplateIds, setSelectedTemplateIds)}
-              getId={(i) => i.id}
-              getLabel={(i) => i.name}
-            />
+            {dvsByDimension.map(({ dimension, values }) => (
+              <AccessCheckboxSection
+                key={dimension.id}
+                title={dimension.name}
+                items={values}
+                selectedIds={selectedDvIds}
+                onToggle={(id) => toggleId(selectedDvIds, setSelectedDvIds, id)}
+                onToggleAll={() => toggleAll(values, selectedDvIds, setSelectedDvIds)}
+                getId={(i) => i.id}
+                getLabel={(i) => i.name}
+              />
+            ))}
 
             <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={closeAccessModal}>
-                Cancel
-              </Button>
+              <Button type="button" variant="outline" onClick={closeAccessModal}>Cancel</Button>
               <Button type="submit">Save Access</Button>
             </div>
           </form>

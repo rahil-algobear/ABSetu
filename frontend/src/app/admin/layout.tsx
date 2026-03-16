@@ -2,32 +2,21 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import { PageLayout } from "@/components/ui/page-layout";
 import { usePermissions } from "@/components/Auth/Permissions";
+import { dimensionApi } from "@/services/api";
 import { cn } from "@/utils/cn";
 import {
-  Building2,
-  BookOpen,
-  Link2,
+  Layers,
   ClipboardList,
   UserCheck,
   Users,
   Shield,
   SlidersHorizontal,
+  Link2,
   ShieldAlert,
 } from "lucide-react";
-
-const tabs = [
-  { href: "/admin/centres", label: "Centres", icon: Building2, permission: "center:view" },
-  { href: "/admin/programmes", label: "Programmes", icon: BookOpen, permission: "programme:view" },
-  { href: "/admin/programme-centres", label: "Programme-Centres", icon: Link2, permission: "programme:view" },
-  { href: "/admin/session-templates", label: "Session Templates", icon: ClipboardList, permission: "session_template:view" },
-  { href: "/admin/facilitators", label: "Facilitators", icon: UserCheck, permission: "facilitator:view" },
-  { href: "/admin/beneficiaries", label: "Beneficiaries", icon: Users, permission: "beneficiary:view" },
-  { href: "/admin/roles", label: "Roles", icon: Shield, permission: "role:view" },
-  { href: "/admin/users", label: "Users", icon: Users, permission: "user:view" },
-  { href: "/admin/meta-fields", label: "Custom Fields", icon: SlidersHorizontal, permission: "org:settings" },
-];
 
 export default function AdminLayout({
   children,
@@ -37,10 +26,36 @@ export default function AdminLayout({
   const pathname = usePathname();
   const { can, loading } = usePermissions();
 
-  const visibleTabs = tabs.filter((tab) => can(tab.permission));
+  const { data: dimensions = [] } = useQuery({
+    queryKey: ["dimensions"],
+    queryFn: dimensionApi.list,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Build tabs: one per dimension + static tabs
+  const dimensionTabs = dimensions.map((d) => ({
+    href: `/admin/dimensions/${d.key}`,
+    label: d.name,
+    icon: Layers,
+    permission: "dimension:view",
+    dimensionId: d.id,
+  }));
+
+  const staticTabs = [
+    { href: "/admin/tag-rules", label: "Tag Rules", icon: Link2, permission: "dimension:view" },
+    { href: "/admin/activity-types", label: "Activity Types", icon: ClipboardList, permission: "activity_type:view" },
+    { href: "/admin/facilitators", label: "Facilitators", icon: UserCheck, permission: "facilitator:view" },
+    { href: "/admin/beneficiaries", label: "Beneficiaries", icon: Users, permission: "beneficiary:view" },
+    { href: "/admin/roles", label: "Roles", icon: Shield, permission: "role:view" },
+    { href: "/admin/users", label: "Users", icon: Users, permission: "user:view" },
+    { href: "/admin/meta-fields", label: "Custom Fields", icon: SlidersHorizontal, permission: "org:settings" },
+  ];
+
+  const allTabs = [...dimensionTabs, ...staticTabs];
+  const visibleTabs = allTabs.filter((tab) => can(tab.permission));
 
   // Check if user has permission for the current page
-  const currentTab = tabs.find((tab) => pathname === tab.href);
+  const currentTab = allTabs.find((tab) => pathname === tab.href || pathname.startsWith(tab.href + "/"));
   const hasAccess = !currentTab || can(currentTab.permission);
 
   return (
@@ -51,7 +66,7 @@ export default function AdminLayout({
       <div className="flex overflow-x-auto gap-1 mb-6 border-b border-gray-200 pb-px -mx-4 px-4 no-scrollbar">
         {visibleTabs.map((tab) => {
           const Icon = tab.icon;
-          const active = pathname === tab.href;
+          const active = pathname === tab.href || pathname.startsWith(tab.href + "/");
           return (
             <Link
               key={tab.href}

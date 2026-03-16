@@ -34,7 +34,17 @@ export default function BeneficiaryDetailPage() {
   return (
     <PageLayout className="p-4">
       <h1 className="text-2xl font-bold mb-1">{beneficiary.name}</h1>
-      <p className="text-gray-500 mb-4">{beneficiary.case_number}</p>
+      <p className="text-gray-500 mb-2">{beneficiary.case_number}</p>
+
+      {beneficiary.tags?.length > 0 && (
+        <div className="flex gap-1 mb-4">
+          {beneficiary.tags.map((tag) => (
+            <Badge key={tag.value_id} variant="secondary">
+              {tag.dimension_name}: {tag.value_name}
+            </Badge>
+          ))}
+        </div>
+      )}
 
       {beneficiary.meta && Object.keys(beneficiary.meta).length > 0 && (
         <Card className="mb-4">
@@ -65,9 +75,13 @@ export default function BeneficiaryDetailPage() {
                   className="flex justify-between items-center p-2 border rounded"
                 >
                   <div>
-                    <p className="font-medium text-sm">
-                      {e.programme_name} - {e.center_name}
-                    </p>
+                    <div className="flex gap-1 mb-0.5">
+                      {e.tags?.map((tag) => (
+                        <Badge key={tag.value_id} variant="secondary" className="text-xs">
+                          {tag.value_name}
+                        </Badge>
+                      ))}
+                    </div>
                     <p className="text-xs text-gray-500">
                       {e.admission_date}
                       {e.release_date ? ` to ${e.release_date}` : ""}

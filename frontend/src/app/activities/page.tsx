@@ -3,37 +3,39 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  sessionApi,
-  sessionTemplateApi,
-  programmeCenterApi,
+  activityApi,
+  activityTypeApi,
+  dimensionApi,
   facilitatorApi,
 } from "@/services/api";
+import { Dimension, DimensionValue } from "@/types";
 import { Can } from "@/components/Auth/Permissions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { PageLayout } from "@/components/ui/page-layout";
 import { Plus } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 
-export default function SessionsPage() {
+export default function ActivitiesPage() {
   const [showCreate, setShowCreate] = useState(false);
   const queryClient = useQueryClient();
 
-  const { data: sessions = [], isLoading } = useQuery({
-    queryKey: ["sessions"],
-    queryFn: sessionApi.list,
+  const { data: activities = [], isLoading } = useQuery({
+    queryKey: ["activities"],
+    queryFn: activityApi.list,
   });
 
-  const { data: templates = [] } = useQuery({
-    queryKey: ["session-templates"],
-    queryFn: sessionTemplateApi.list,
+  const { data: activityTypes = [] } = useQuery({
+    queryKey: ["activity-types"],
+    queryFn: activityTypeApi.list,
   });
 
-  const { data: programmeCenters = [] } = useQuery({
-    queryKey: ["programme-centers"],
-    queryFn: programmeCenterApi.list,
+  const { data: dimensions = [] } = useQuery<Dimension[]>({
+    queryKey: ["dimensions"],
+    queryFn: dimensionApi.list,
   });
 
   const { data: facilitators = [] } = useQuery({
@@ -41,39 +43,56 @@ export default function SessionsPage() {
     queryFn: facilitatorApi.list,
   });
 
+  // Load dimension values for each dimension
+  const dimensionValuesQueries = dimensions.map((d) => ({
+    dimension: d,
+    queryKey: ["dimension-values", d.id],
+  }));
+
+  const { data: allDimensionValues = [] } = useQuery<DimensionValue[]>({
+    queryKey: ["all-dimension-values", dimensions.map((d) => d.id).join(",")],
+    queryFn: async () => {
+      const results = await Promise.all(
+        dimensions.map((d) => dimensionApi.listValues(d.id))
+      );
+      return results.flat();
+    },
+    enabled: dimensions.length > 0,
+  });
+
   const [formData, setFormData] = useState({
-    session_template_id: "",
-    programme_center_id: "",
+    activity_type_id: "",
     date: new Date().toISOString().split("T")[0],
     notes: "",
     facilitator_ids: [] as string[],
+    dimension_value_ids: [] as string[],
   });
 
   const createMutation = useMutation({
-    mutationFn: sessionApi.create,
+    mutationFn: activityApi.create,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["sessions"] });
+      queryClient.invalidateQueries({ queryKey: ["activities"] });
       setShowCreate(false);
       setFormData({
-        session_template_id: "",
-        programme_center_id: "",
+        activity_type_id: "",
         date: new Date().toISOString().split("T")[0],
         notes: "",
         facilitator_ids: [],
+        dimension_value_ids: [],
       });
-      toast.success("Session created");
+      toast.success("Activity created");
     },
-    onError: () => toast.error("Failed to create session"),
+    onError: () => toast.error("Failed to create activity"),
   });
 
   return (
     <PageLayout className="p-4">
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold">Sessions</h1>
-        <Can permission="session:create">
+        <h1 className="text-2xl font-bold">Activities</h1>
+        <Can permission="activity:create">
           <Button size="sm" onClick={() => setShowCreate(true)}>
             <Plus className="h-4 w-4 mr-1" />
-            New Session
+            New Activity
           </Button>
         </Can>
       </div>
@@ -81,7 +100,7 @@ export default function SessionsPage() {
       {showCreate && (
         <Card className="mb-4">
           <CardHeader>
-            <CardTitle className="text-lg">Create Session</CardTitle>
+            <CardTitle className="text-lg">Create Activity</CardTitle>
           </CardHeader>
           <CardContent>
             <form
@@ -92,17 +111,17 @@ export default function SessionsPage() {
               className="space-y-3"
             >
               <div>
-                <label className="text-sm font-medium">Session Type</label>
+                <label className="text-sm font-medium">Activity Type</label>
                 <select
                   className="w-full mt-1 border rounded-md p-2 text-sm"
-                  value={formData.session_template_id}
+                  value={formData.activity_type_id}
                   onChange={(e) =>
-                    setFormData({ ...formData, session_template_id: e.target.value })
+                    setFormData({ ...formData, activity_type_id: e.target.value })
                   }
                   required
                 >
                   <option value="">Select...</option>
-                  {templates.map((t) => (
+                  {activityTypes.map((t) => (
                     <option key={t.id} value={t.id}>
                       {t.name}
                     </option>
@@ -110,24 +129,44 @@ export default function SessionsPage() {
                 </select>
               </div>
 
-              <div>
-                <label className="text-sm font-medium">Programme - Center</label>
-                <select
-                  className="w-full mt-1 border rounded-md p-2 text-sm"
-                  value={formData.programme_center_id}
-                  onChange={(e) =>
-                    setFormData({ ...formData, programme_center_id: e.target.value })
-                  }
-                  required
-                >
-                  <option value="">Select...</option>
-                  {programmeCenters.map((pc) => (
-                    <option key={pc.id} value={pc.id}>
-                      {pc.programme_name} - {pc.center_name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {/* Dimension selectors */}
+              {dimensions.map((dim) => {
+                const dimValues = allDimensionValues.filter(
+                  (dv) => dv.dimension_id === dim.id
+                );
+                return (
+                  <div key={dim.id}>
+                    <label className="text-sm font-medium">{dim.name}</label>
+                    <select
+                      className="w-full mt-1 border rounded-md p-2 text-sm"
+                      value={
+                        formData.dimension_value_ids.find((id) =>
+                          dimValues.some((dv) => dv.id === id)
+                        ) || ""
+                      }
+                      onChange={(e) => {
+                        const newId = e.target.value;
+                        const otherIds = formData.dimension_value_ids.filter(
+                          (id) => !dimValues.some((dv) => dv.id === id)
+                        );
+                        setFormData({
+                          ...formData,
+                          dimension_value_ids: newId
+                            ? [...otherIds, newId]
+                            : otherIds,
+                        });
+                      }}
+                    >
+                      <option value="">Select {dim.name}...</option>
+                      {dimValues.map((dv) => (
+                        <option key={dv.id} value={dv.id}>
+                          {dv.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                );
+              })}
 
               <div>
                 <label className="text-sm font-medium">Date</label>
@@ -192,26 +231,30 @@ export default function SessionsPage() {
 
       {isLoading ? (
         <p className="text-gray-500">Loading...</p>
-      ) : sessions.length === 0 ? (
-        <p className="text-gray-500">No sessions yet.</p>
+      ) : activities.length === 0 ? (
+        <p className="text-gray-500">No activities yet.</p>
       ) : (
         <div className="space-y-2">
-          {sessions.map((s) => (
-            <Link key={s.id} href={`/sessions/${s.id}`}>
+          {activities.map((a) => (
+            <Link key={a.id} href={`/activities/${a.id}`}>
               <Card className="hover:shadow-md transition-shadow cursor-pointer">
                 <CardContent className="py-3 px-4">
                   <div className="flex justify-between items-center">
                     <div>
-                      <p className="font-medium">{s.template_name}</p>
-                      <p className="text-sm text-gray-500">
-                        {s.programme_name} - {s.center_name}
-                      </p>
+                      <p className="font-medium">{a.type_name}</p>
+                      <div className="flex gap-1 mt-0.5">
+                        {a.tags.map((tag) => (
+                          <Badge key={tag.value_id} variant="secondary" className="text-xs">
+                            {tag.value_name}
+                          </Badge>
+                        ))}
+                      </div>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-medium">{s.date}</p>
-                      {s.facilitators.length > 0 && (
+                      <p className="text-sm font-medium">{a.date}</p>
+                      {a.facilitators.length > 0 && (
                         <p className="text-xs text-gray-500">
-                          {s.facilitators.map((f) => f.name).join(", ")}
+                          {a.facilitators.map((f) => f.name).join(", ")}
                         </p>
                       )}
                     </div>

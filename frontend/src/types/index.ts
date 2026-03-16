@@ -57,37 +57,48 @@ export interface Organization {
   updated_at: number | null;
 }
 
-export interface Center {
+// --- Dimensions ---
+
+export interface Dimension {
   id: string;
   organization_id: string;
+  name: string;
+  key: string;
+  sort_order: number;
+  is_system: string | null;
+  updated_at: number | null;
+}
+
+export interface DimensionValue {
+  id: string;
+  organization_id: string;
+  dimension_id: string;
   name: string;
   code: string;
-  address: string | null;
+  sort_order: number;
   meta: Record<string, unknown> | null;
+  dimension_name: string | null;
+  dimension_key: string | null;
   updated_at: number | null;
 }
 
-export interface Programme {
+export interface TagRule {
   id: string;
   organization_id: string;
-  name: string;
-  description: string | null;
-  meta: Record<string, unknown> | null;
+  dimension_value_id_1: string;
+  dimension_value_id_2: string;
+  value_1_name: string | null;
+  value_1_code: string | null;
+  value_1_dimension_key: string | null;
+  value_2_name: string | null;
+  value_2_code: string | null;
+  value_2_dimension_key: string | null;
   updated_at: number | null;
 }
 
-export interface ProgrammeCenter {
-  id: string;
-  programme_id: string;
-  center_id: string;
-  programme_name: string | null;
-  center_name: string | null;
-  updated_at: number | null;
-}
+// --- Activities ---
 
-// --- Sessions ---
-
-export interface SessionTemplate {
+export interface ActivityType {
   id: string;
   organization_id: string;
   name: string;
@@ -105,26 +116,34 @@ export interface Facilitator {
   updated_at: number | null;
 }
 
-export interface Session {
+export interface DimensionTagInfo {
+  dimension_key: string;
+  dimension_name: string;
+  value_id: string;
+  value_name: string;
+  value_code: string;
+}
+
+export interface Activity {
   id: string;
-  session_template_id: string;
-  programme_center_id: string;
+  organization_id: string;
+  activity_type_id: string;
   date: string;
   notes: string | null;
   created_by: string | null;
   meta: Record<string, unknown> | null;
-  template_name: string | null;
-  programme_name: string | null;
-  center_name: string | null;
+  type_name: string | null;
   facilitators: Facilitator[];
+  tags: DimensionTagInfo[];
   updated_at: number | null;
 }
 
-export interface Attendance {
+export interface Participation {
   id: string;
-  session_id: string;
+  activity_id: string;
   beneficiary_id: string;
   status: string;
+  meta: Record<string, unknown> | null;
   beneficiary_name: string | null;
   updated_at: number | null;
 }
@@ -141,14 +160,9 @@ export interface MetaFieldDefinition {
   options?: string[]; // for select/multiselect
 }
 
-export type EntityType =
-  | "centre"
-  | "programme"
-  | "session_template"
-  | "facilitator"
-  | "beneficiary";
+export type EntityType = string; // dynamic: "activity_type" | "facilitator" | "beneficiary" | "enrollment" | "activity" | "participation" | "dimension:{key}"
 
-export type MetaFieldSchemas = Partial<Record<EntityType, MetaFieldDefinition[]>>;
+export type MetaFieldSchemas = Partial<Record<string, MetaFieldDefinition[]>>;
 
 // --- Roles & Permissions ---
 
@@ -179,16 +193,12 @@ export interface UserListItem {
   is_verified: boolean;
   role_id: string | null;
   role_name: string | null;
-  center_ids: string[];
-  programme_ids: string[];
-  session_template_ids: string[];
+  dimension_value_ids: string[];
   updated_at: number | null;
 }
 
 export interface UserAccess {
-  center_ids: string[];
-  programme_ids: string[];
-  session_template_ids: string[];
+  dimension_value_ids: string[];
 }
 
 // --- Beneficiaries ---
@@ -199,19 +209,18 @@ export interface Beneficiary {
   case_number: string;
   name: string;
   meta: Record<string, unknown> | null;
+  tags: DimensionTagInfo[];
   updated_at: number | null;
 }
 
 export interface Enrollment {
   id: string;
+  organization_id: string;
   beneficiary_id: string;
-  programme_center_id: string;
   admission_date: string;
   release_date: string | null;
   meta: Record<string, unknown> | null;
   beneficiary_name: string | null;
-  programme_name: string | null;
-  center_name: string | null;
+  tags: DimensionTagInfo[];
   updated_at: number | null;
 }
-
