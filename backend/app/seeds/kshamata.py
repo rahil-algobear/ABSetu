@@ -502,6 +502,28 @@ def seed():
         new_rules += _ensure_tag_rules(
             db, org, LOCATION_ACTIVITY_TYPES, location_map, at_dv_map
         )
+        # Programme ↔ Activity Type (derived: union of activity types across
+        # all locations belonging to each programme)
+        programme_activity_types = {}
+        for prog_code, loc_codes in PROGRAMME_LOCATIONS.items():
+            at_set = set()
+            for loc_code in loc_codes:
+                at_set.update(LOCATION_ACTIVITY_TYPES.get(loc_code, []))
+            programme_activity_types[prog_code] = list(at_set)
+        new_rules += _ensure_tag_rules(
+            db, org, programme_activity_types, programme_map, at_dv_map
+        )
+        # Project ↔ Activity Type (derived: union of activity types across
+        # all locations belonging to each project)
+        project_activity_types = {}
+        for proj_code, loc_codes in PROJECT_LOCATIONS.items():
+            at_set = set()
+            for loc_code in loc_codes:
+                at_set.update(LOCATION_ACTIVITY_TYPES.get(loc_code, []))
+            project_activity_types[proj_code] = list(at_set)
+        new_rules += _ensure_tag_rules(
+            db, org, project_activity_types, project_map, at_dv_map
+        )
         print(f"  Ensured tag rules ({new_rules} new)")
 
         # 6. Admin role (all permissions — always syncs missing ones)
