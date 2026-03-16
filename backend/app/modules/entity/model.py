@@ -1,0 +1,63 @@
+"""
+Entity models: EntityType, Entity
+"""
+
+from sqlalchemy import Column, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.orm import relationship
+
+from app.common.models.base_model import BaseModel
+
+
+class EntityType(BaseModel):
+    __tablename__ = "entity_types"
+
+    organization_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    name = Column(String, nullable=False)
+    key = Column(String, nullable=False)
+    config = Column(JSONB, nullable=True, default=dict)
+    sort_order = Column(Integer, nullable=False, default=0)
+
+    organization = relationship("Organization", back_populates="entity_types")
+    entities = relationship("Entity", back_populates="entity_type", lazy="dynamic")
+
+    __table_args__ = (UniqueConstraint("organization_id", "key", name="uq_entity_type_org_key"),)
+
+
+class Entity(BaseModel):
+    __tablename__ = "entities"
+
+    organization_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    entity_type_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("entity_types.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    case_number = Column(String, nullable=True)
+    name = Column(String, nullable=False)
+    meta = Column(JSONB, nullable=True, default=dict)
+
+    organization = relationship("Organization", back_populates="entities")
+    entity_type = relationship("EntityType", back_populates="entities")
+    enrollments = relationship("Enrollment", back_populates="entity", lazy="dynamic")
+    tags = relationship(
+        "EntityTag",
+        back_populates="entity",
+        cascade="all, delete-orphan",
+        lazy="joined",
+    )
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", "case_number", name="uq_entity_case_number"),
+    )

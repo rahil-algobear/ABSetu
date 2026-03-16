@@ -1,5 +1,5 @@
 """
-Activity, ActivityType, Facilitator, Participation schemas
+Activity, ActivityType, ActivityCategory, ActivityParticipant schemas
 """
 
 import datetime
@@ -9,66 +9,57 @@ from pydantic import BaseModel, Field
 
 from app.common.schemas.base_response import BaseResponseSchema
 
+# --- Activity Category ---
+
+
+class ActivityCategoryCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=200)
+    key: str = Field(..., min_length=1, max_length=100)
+    sections: list[dict[str, Any]] | None = None
+    sort_order: int = 0
+
+
+class ActivityCategoryUpdate(BaseModel):
+    name: str | None = Field(None, min_length=1, max_length=200)
+    sections: list[dict[str, Any]] | None = None
+    sort_order: int | None = None
+
+
+class ActivityCategoryResponse(BaseResponseSchema):
+    organization_id: str
+    name: str
+    key: str
+    sections: list[dict[str, Any]] | None = None
+    sort_order: int = 0
+
+
 # --- Activity Type ---
 
 
 class ActivityTypeCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
+    category_id: str | None = None
     description: str | None = None
     meta: dict[str, Any] | None = None
 
 
 class ActivityTypeUpdate(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=200)
+    category_id: str | None = None
     description: str | None = None
     meta: dict[str, Any] | None = None
 
 
 class ActivityTypeResponse(BaseResponseSchema):
     organization_id: str
+    category_id: str | None = None
     name: str
     description: str | None = None
     meta: dict[str, Any] | None = None
-
-
-# --- Facilitator ---
-
-
-class FacilitatorCreate(BaseModel):
-    name: str = Field(..., min_length=1, max_length=200)
-    contact: str | None = None
-    meta: dict[str, Any] | None = None
-
-
-class FacilitatorUpdate(BaseModel):
-    name: str | None = Field(None, min_length=1, max_length=200)
-    contact: str | None = None
-    meta: dict[str, Any] | None = None
-
-
-class FacilitatorResponse(BaseResponseSchema):
-    organization_id: str
-    name: str
-    contact: str | None = None
-    meta: dict[str, Any] | None = None
+    category_name: str | None = None
 
 
 # --- Activity ---
-
-
-class ActivityCreate(BaseModel):
-    activity_type_id: str
-    dimension_value_ids: list[str] = []
-    date: datetime.date
-    notes: str | None = None
-    facilitator_ids: list[str] = []
-    meta: dict[str, Any] | None = None
-
-
-class ActivityUpdate(BaseModel):
-    date: Optional[datetime.date] = None
-    notes: str | None = None
-    meta: dict[str, Any] | None = None
 
 
 class DimensionTagInfo(BaseModel):
@@ -79,6 +70,20 @@ class DimensionTagInfo(BaseModel):
     value_code: str
 
 
+class ActivityCreate(BaseModel):
+    activity_type_id: str
+    dimension_value_ids: list[str] = []
+    date: datetime.date
+    notes: str | None = None
+    meta: dict[str, Any] | None = None
+
+
+class ActivityUpdate(BaseModel):
+    date: Optional[datetime.date] = None
+    notes: str | None = None
+    meta: dict[str, Any] | None = None
+
+
 class ActivityResponse(BaseResponseSchema):
     organization_id: str
     activity_type_id: str
@@ -87,26 +92,30 @@ class ActivityResponse(BaseResponseSchema):
     created_by: str | None = None
     meta: dict[str, Any] | None = None
     type_name: str | None = None
-    facilitators: list[FacilitatorResponse] = []
+    category_name: str | None = None
     tags: list[DimensionTagInfo] = []
 
 
-# --- Participation ---
+# --- Activity Participant ---
 
 
-class ParticipationRecord(BaseModel):
-    beneficiary_id: str
-    status: str = "present"
+class ParticipantRecord(BaseModel):
+    participant_type: str  # "entity" or "user"
+    participant_id: str
+    section_key: str
+    status: str | None = None
     meta: dict[str, Any] | None = None
 
 
-class ParticipationBulkCreate(BaseModel):
-    records: list[ParticipationRecord]
+class ParticipantBulkCreate(BaseModel):
+    records: list[ParticipantRecord]
 
 
-class ParticipationResponse(BaseResponseSchema):
+class ParticipantResponse(BaseResponseSchema):
     activity_id: str
-    beneficiary_id: str
-    status: str
+    participant_type: str
+    participant_id: str
+    section_key: str
+    status: str | None = None
     meta: dict[str, Any] | None = None
-    beneficiary_name: str | None = None
+    participant_name: str | None = None

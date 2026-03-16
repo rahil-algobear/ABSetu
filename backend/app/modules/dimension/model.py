@@ -2,7 +2,7 @@
 Dimension models: Dimension, DimensionValue, DimensionValueLink, UserDimensionAccess
 """
 
-from sqlalchemy import Column, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Column, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 
@@ -120,12 +120,12 @@ class ActivityTag(BaseModel):
     )
 
 
-class BeneficiaryTag(BaseModel):
-    __tablename__ = "beneficiary_tags"
+class EntityTag(BaseModel):
+    __tablename__ = "entity_tags"
 
-    beneficiary_id = Column(
+    entity_id = Column(
         UUID(as_uuid=True),
-        ForeignKey("beneficiaries.id", ondelete="CASCADE"),
+        ForeignKey("entities.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
@@ -136,12 +136,10 @@ class BeneficiaryTag(BaseModel):
         index=True,
     )
 
-    beneficiary = relationship("Beneficiary", back_populates="tags")
+    entity = relationship("Entity", back_populates="tags")
     dimension_value = relationship("DimensionValue")
 
-    __table_args__ = (
-        UniqueConstraint("beneficiary_id", "dimension_value_id", name="uq_beneficiary_tag"),
-    )
+    __table_args__ = (UniqueConstraint("entity_id", "dimension_value_id", name="uq_entity_tag"),)
 
 
 class EnrollmentTag(BaseModel):

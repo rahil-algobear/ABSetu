@@ -1,26 +1,13 @@
 """
-Beneficiary and Enrollment schemas
+Enrollment schemas (legacy beneficiary module — Beneficiary replaced by Entity)
 """
 
 from datetime import date
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from app.common.schemas.base_response import BaseResponseSchema
-
-# --- Beneficiary ---
-
-
-class BeneficiaryCreate(BaseModel):
-    name: str = Field(..., min_length=1, max_length=200)
-    meta: dict[str, Any] | None = None
-    dimension_value_ids: list[str] = []
-
-
-class BeneficiaryUpdate(BaseModel):
-    name: str | None = Field(None, min_length=1, max_length=200)
-    meta: dict[str, Any] | None = None
 
 
 class DimensionTagInfo(BaseModel):
@@ -31,19 +18,11 @@ class DimensionTagInfo(BaseModel):
     value_code: str
 
 
-class BeneficiaryResponse(BaseResponseSchema):
-    organization_id: str
-    case_number: str
-    name: str
-    meta: dict[str, Any] | None = None
-    tags: list[DimensionTagInfo] = []
-
-
 # --- Enrollment ---
 
 
 class EnrollmentCreate(BaseModel):
-    beneficiary_id: str
+    entity_id: str
     admission_date: date
     release_date: date | None = None
     meta: dict[str, Any] | None = None
@@ -58,9 +37,9 @@ class EnrollmentUpdate(BaseModel):
 
 class EnrollmentResponse(BaseResponseSchema):
     organization_id: str
-    beneficiary_id: str
+    entity_id: str
     admission_date: date
     release_date: date | None = None
     meta: dict[str, Any] | None = None
-    beneficiary_name: str | None = None
+    entity_name: str | None = None
     tags: list[DimensionTagInfo] = []

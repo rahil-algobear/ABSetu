@@ -2,8 +2,8 @@
 Organization model
 """
 
-from sqlalchemy import Column, ForeignKey, String, VARCHAR
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy import Column, String, VARCHAR
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 
 from app.common.models.base_model import BaseModel
@@ -20,6 +20,9 @@ class Organization(BaseModel):
 
     dimensions = relationship("Dimension", back_populates="organization", lazy="dynamic")
     activity_types = relationship("ActivityType", back_populates="organization", lazy="dynamic")
-    facilitators = relationship("Facilitator", back_populates="organization", lazy="dynamic")
-    beneficiaries = relationship("Beneficiary", back_populates="organization", lazy="dynamic")
+    activity_categories = relationship(
+        "ActivityCategory", back_populates="organization", lazy="dynamic"
+    )
+    entity_types = relationship("EntityType", back_populates="organization", lazy="dynamic")
+    entities = relationship("Entity", back_populates="organization", lazy="dynamic")
     roles = relationship("Role", back_populates="organization", lazy="dynamic")

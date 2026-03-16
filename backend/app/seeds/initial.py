@@ -16,8 +16,9 @@ from app.modules.auth.model import User
 
 # Import all models so SQLAlchemy can resolve relationship strings
 from app.modules.dimension.model import Dimension, DimensionValue  # noqa: F401
-from app.modules.activity.model import ActivityType, Facilitator, Activity  # noqa: F401
-from app.modules.beneficiary.model import Beneficiary, Enrollment  # noqa: F401
+from app.modules.activity.model import ActivityType, ActivityCategory, Activity  # noqa: F401
+from app.modules.entity.model import Entity, EntityType  # noqa: F401
+from app.modules.beneficiary.model import Enrollment  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
@@ -26,17 +27,17 @@ PERMISSIONS = [
     ("org:settings", "Manage organization settings"),
     ("dimension:view", "View dimensions and dimension values"),
     ("dimension:manage", "Create/edit/delete dimensions and values"),
-    ("activity_type:view", "View activity types"),
-    ("activity_type:manage", "Create/edit/delete activity types"),
+    ("activity_type:view", "View activity types and categories"),
+    ("activity_type:manage", "Create/edit/delete activity types and categories"),
     ("activity:view", "View activities"),
-    ("activity:create", "Create activities and record participation"),
-    ("beneficiary:view", "View beneficiaries"),
-    ("beneficiary:create", "Create beneficiaries"),
-    ("beneficiary:edit", "Edit beneficiary details"),
+    ("activity:create", "Create activities and record participants"),
+    ("entity:view", "View entities"),
+    ("entity:create", "Create entities"),
+    ("entity:edit", "Edit entity details"),
+    ("entity_type:view", "View entity types"),
+    ("entity_type:manage", "Create/edit/delete entity types"),
     ("enrollment:view", "View enrollments"),
     ("enrollment:manage", "Create/edit enrollments"),
-    ("facilitator:view", "View facilitators"),
-    ("facilitator:manage", "Create/edit/delete facilitators"),
     ("user:view", "View users"),
     ("user:manage", "Manage users and their roles"),
     ("role:view", "View roles"),
@@ -51,12 +52,12 @@ TEAM_MEMBER_PERMISSIONS = [
     "activity_type:view",
     "activity:view",
     "activity:create",
-    "beneficiary:view",
-    "beneficiary:create",
-    "beneficiary:edit",
+    "entity:view",
+    "entity:create",
+    "entity:edit",
+    "entity_type:view",
     "enrollment:view",
     "enrollment:manage",
-    "facilitator:view",
     "reports:view",
 ]
 
@@ -96,9 +97,9 @@ def seed():
         if stale_perms:
             stale_ids = [p.id for p in stale_perms]
             stale_keys = [p.key for p in stale_perms]
-            db.query(RolePermission).filter(
-                RolePermission.permission_id.in_(stale_ids)
-            ).delete(synchronize_session="fetch")
+            db.query(RolePermission).filter(RolePermission.permission_id.in_(stale_ids)).delete(
+                synchronize_session="fetch"
+            )
             db.query(Permission).filter(Permission.id.in_(stale_ids)).delete(
                 synchronize_session="fetch"
             )

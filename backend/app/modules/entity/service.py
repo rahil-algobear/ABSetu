@@ -1,0 +1,177 @@
+"""
+Entity and EntityType services
+"""
+
+import uuid
+from datetime import datetime
+
+from sqlalchemy import exists
+from sqlalchemy.orm import Session
+
+from app.common.exceptions import NotFoundError, ValidationError
+from app.modules.dimension.model import EntityTag
+from app.modules.entity.model import Entity, EntityType
+from app.modules.organization.model import Organization
+
+
+class EntityTypeService:
+    def __init__(self, db: Session):
+        self.db = db
+
+    def list_by_org(self, org_id: uuid.UUID) -> list[EntityType]:
+        return (
+            self.db.query(EntityType)
+            .filter_by(organization_id=org_id)
+            .order_by(EntityType.sort_order)
+            .all()
+        )
+
+    def get_by_id(self, entity_type_id: uuid.UUID, org_id: uuid.UUID) -> EntityType:
+        et = self.db.query(EntityType).filter_by(id=entity_type_id, organization_id=org_id).first()
+        if not et:
+            raise NotFoundError("Entity type not found")
+        return et
+
+    def create(self, org_id: uuid.UUID, data: dict) -> EntityType:
+        et = EntityType(organization_id=org_id, **data)
+        self.db.add(et)
+        self.db.commit()
+        self.db.refresh(et)
+        return et
+
+    def update(self, entity_type_id: uuid.UUID, org_id: uuid.UUID, data: dict) -> EntityType:
+        et = self.get_by_id(entity_type_id, org_id)
+        for key, value in data.items():
+            if value is not None:
+                setattr(et, key, value)
+        self.db.commit()
+        self.db.refresh(et)
+        return et
+
+    def delete(self, entity_type_id: uuid.UUID, org_id: uuid.UUID) -> None:
+        et = self.get_by_id(entity_type_id, org_id)
+        # Check if any entities exist for this type
+        count = self.db.query(Entity).filter_by(entity_type_id=entity_type_id).count()
+        if count > 0:
+            raise ValidationError(
+                f"Cannot delete entity type with {count} existing entities. Remove them first."
+            )
+        self.db.delete(et)
+        self.db.commit()
+
+
+class EntityService:
+    def __init__(self, db: Session):
+        self.db = db
+
+    def _generate_case_number(self, org: Organization, entity_type: EntityType) -> str | None:
+        """Generate a case number if the entity type has case_number_enabled."""
+        config = entity_type.config or {}
+        if not config.get("case_number_enabled", False):
+            return None
+
+        fmt = org.case_number_format or "{ORG_CODE}-{SERIAL}"
+        year_2 = datetime.now().strftime("%y")
+        year_4 = datetime.now().strftime("%Y")
+
+        count = self.db.query(Entity).filter_by(organization_id=org.id).count()
+        serial = str(count + 1).zfill(3)
+
+        return (
+            fmt.replace("{ORG_CODE}", org.code)
+            .replace("{YY}", year_2)
+            .replace("{YYYY}", year_4)
+            .replace("{SERIAL}", serial)
+        )
+
+    def list_by_org(
+        self,
+        org_id: uuid.UUID,
+        entity_type_id: uuid.UUID | None = None,
+        accessible_dv_ids: list[uuid.UUID] | None = None,
+    ) -> list[Entity]:
+        query = self.db.query(Entity).filter_by(organization_id=org_id)
+
+        if entity_type_id:
+            query = query.filter_by(entity_type_id=entity_type_id)
+
+        if accessible_dv_ids:
+            query = query.filter(
+                exists()
+                .where(EntityTag.entity_id == Entity.id)
+                .where(EntityTag.dimension_value_id.in_(accessible_dv_ids))
+            )
+
+        return query.order_by(Entity.created_at.desc()).all()
+
+    def get_by_id(self, entity_id: uuid.UUID, org_id: uuid.UUID) -> Entity:
+        entity = self.db.query(Entity).filter_by(id=entity_id, organization_id=org_id).first()
+        if not entity:
+            raise NotFoundError("Entity not found")
+        return entity
+
+    def create(
+        self,
+        org_id: uuid.UUID,
+        data: dict,
+        dimension_value_ids: list[str] | None = None,
+    ) -> Entity:
+        org = self.db.query(Organization).filter_by(id=org_id).first()
+        if not org:
+            raise NotFoundError("Organization not found")
+
+        entity_type = (
+            self.db.query(EntityType)
+            .filter_by(id=uuid.UUID(data["entity_type_id"]), organization_id=org_id)
+            .first()
+        )
+        if not entity_type:
+            raise ValidationError("Entity type not found in this organization")
+
+        case_number = self._generate_case_number(org, entity_type)
+        entity = Entity(
+            organization_id=org_id,
+            entity_type_id=entity_type.id,
+            case_number=case_number,
+            name=data["name"],
+            meta=data.get("meta"),
+        )
+        self.db.add(entity)
+        self.db.flush()
+
+        for dv_id in dimension_value_ids or []:
+            tag = EntityTag(
+                entity_id=entity.id,
+                dimension_value_id=uuid.UUID(dv_id),
+            )
+            self.db.add(tag)
+
+        self.db.commit()
+        self.db.refresh(entity)
+        return entity
+
+    def update(self, entity_id: uuid.UUID, org_id: uuid.UUID, data: dict) -> Entity:
+        entity = self.get_by_id(entity_id, org_id)
+        for key, value in data.items():
+            if value is not None:
+                setattr(entity, key, value)
+        self.db.commit()
+        self.db.refresh(entity)
+        return entity
+
+    def update_tags(
+        self, entity_id: uuid.UUID, org_id: uuid.UUID, dimension_value_ids: list[str]
+    ) -> Entity:
+        entity = self.get_by_id(entity_id, org_id)
+        # Remove existing tags
+        self.db.query(EntityTag).filter_by(entity_id=entity.id).delete()
+        # Add new tags
+        for dv_id in dimension_value_ids:
+            tag = EntityTag(
+                entity_id=entity.id,
+                dimension_value_id=uuid.UUID(dv_id),
+            )
+            self.db.add(tag)
+        self.db.commit()
+        self.db.refresh(entity)
+        return entity

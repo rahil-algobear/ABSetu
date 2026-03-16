@@ -1,7 +1,7 @@
 """
 Kshamata seed script: creates org, dimensions (Programme, Project, Location,
-Activity Type [system-managed]), activity types, dimension value links, vocabulary,
-and admin user using the generic dimension system.
+Activity Type [system-managed]), entity types, activity types, activity category,
+dimension value links, vocabulary, and admin user.
 
 Usage:
     cd backend
@@ -14,16 +14,13 @@ import sys
 from app.core.database import SessionLocal
 from app.modules.organization.model import Organization
 from app.modules.dimension.model import Dimension, DimensionValue, DimensionValueLink
-from app.modules.activity.model import ActivityType
+from app.modules.activity.model import ActivityCategory, ActivityType
+from app.modules.entity.model import EntityType
 from app.modules.auth.model import User
 from app.modules.role.model import Permission, Role, RolePermission
-from app.modules.beneficiary.model import Beneficiary, Enrollment  # noqa: F401
-from app.modules.activity.model import (  # noqa: F401
-    Activity,
-    ActivityFacilitator,
-    Facilitator,
-    Participation,
-)
+from app.modules.entity.model import Entity  # noqa: F401
+from app.modules.beneficiary.model import Enrollment  # noqa: F401
+from app.modules.activity.model import Activity, ActivityParticipant  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
@@ -46,10 +43,61 @@ ORG_LOGO_URL = "https://kshamata.org/wp-content/uploads/2022/06/revised-logo.png
 VOCABULARY = {
     "activity": "Session",
     "activity_type": "Intervention",
-    "participation": "Attendance",
-    "facilitator": "Facilitator",
-    "beneficiary": "Beneficiary",
+    "activity_category": "Activity Category",
+    "participant": "Participant",
+    "entity": "Person",
     "enrollment": "Enrollment",
+}
+
+# ---------------------------------------------------------------------------
+# Entity Types
+# ---------------------------------------------------------------------------
+ENTITY_TYPES = [
+    {
+        "name": "Beneficiary",
+        "key": "beneficiary",
+        "config": {"case_number_enabled": True, "can_enroll": True},
+        "sort_order": 0,
+    },
+    {
+        "name": "Facilitator",
+        "key": "facilitator",
+        "config": {"case_number_enabled": False, "can_enroll": False},
+        "sort_order": 1,
+    },
+]
+
+# ---------------------------------------------------------------------------
+# Activity Category: Sessions (form builder config)
+# ---------------------------------------------------------------------------
+SESSIONS_CATEGORY = {
+    "name": "Sessions",
+    "key": "sessions",
+    "sort_order": 0,
+    "sections": [
+        {
+            "key": "beneficiaries",
+            "label": "Beneficiaries",
+            "participant_source": "entity_type:beneficiary",
+            "selection_mode": "enrolled_checklist",
+            "min_count": 0,
+            "max_count": None,
+            "capture_status": True,
+            "statuses": ["present", "absent"],
+            "default_status": "present",
+        },
+        {
+            "key": "facilitators",
+            "label": "Facilitators",
+            "participant_source": "entity_type:facilitator",
+            "selection_mode": "multi_select",
+            "min_count": 1,
+            "max_count": None,
+            "capture_status": False,
+            "statuses": [],
+            "default_status": None,
+        },
+    ],
 }
 
 # ---------------------------------------------------------------------------
@@ -328,9 +376,6 @@ LOCATION_ACTIVITY_TYPES = {
 
 # ---------------------------------------------------------------------------
 # Programme → Activity Types (explicit, authoritative)
-# Derived automatically where possible, but explicit config avoids issues
-# when locations are shared between programmes (e.g. THANE is shared by
-# TRANSFORMATION and UNLIMITED, but only TRANSFORMATION has interventions).
 # ---------------------------------------------------------------------------
 PROGRAMME_ACTIVITY_TYPES = {
     "OUTREACH": [
@@ -405,11 +450,7 @@ def _ensure_dimension(db, org, key, name, sort_order, is_system=None):
 def _ensure_values(db, org, dimension, values_list):
     value_map = {}
     for idx, (code, name) in enumerate(values_list):
-        dv = (
-            db.query(DimensionValue)
-            .filter_by(dimension_id=dimension.id, code=code)
-            .first()
-        )
+        dv = db.query(DimensionValue).filter_by(dimension_id=dimension.id, code=code).first()
         if not dv:
             dv = DimensionValue(
                 organization_id=org.id,
@@ -462,13 +503,12 @@ def _ensure_dimension_value_links(db, org, mapping, source_map, target_map):
 
 
 def _remove_stale_programme_at_links(db, programme_map, at_dv_map, valid_mapping):
-    """Remove Programme↔ActivityType dimension value links for programmes not in valid_mapping."""
+    """Remove Programme<>ActivityType dimension value links for programmes not in valid_mapping."""
     all_at_dv_ids = {dv.id for dv in at_dv_map.values()}
     removed = 0
     for prog_code, prog_dv in programme_map.items():
         if prog_code in valid_mapping:
             continue
-        # This programme should have NO AT links — remove any that exist
         stale = (
             db.query(DimensionValueLink)
             .filter(
@@ -488,7 +528,7 @@ def _remove_stale_programme_at_links(db, programme_map, at_dv_map, valid_mapping
             removed += 1
     if removed:
         db.flush()
-        print(f"  Removed {removed} stale programme↔activity-type dimension value links")
+        print(f"  Removed {removed} stale programme<>activity-type dimension value links")
 
 
 def seed():
@@ -510,14 +550,49 @@ def seed():
         else:
             org.name = ORG_NAME
             org.logo_url = ORG_LOGO_URL
-            # Merge vocabulary into existing meta (deep copy to trigger change detection)
             meta = dict(org.meta or {})
             meta["vocabulary"] = VOCABULARY
             org.meta = meta
             db.flush()
             print(f"Updated organization: {org.name} ({org.code})")
 
-        # 2. Dimensions
+        # 2. Entity Types
+        for et_data in ENTITY_TYPES:
+            et = db.query(EntityType).filter_by(organization_id=org.id, key=et_data["key"]).first()
+            if not et:
+                et = EntityType(
+                    organization_id=org.id,
+                    name=et_data["name"],
+                    key=et_data["key"],
+                    config=et_data["config"],
+                    sort_order=et_data["sort_order"],
+                )
+                db.add(et)
+                db.flush()
+        print(f"  Ensured {len(ENTITY_TYPES)} entity types")
+
+        # 3. Activity Category: Sessions
+        sessions_cat = (
+            db.query(ActivityCategory)
+            .filter_by(organization_id=org.id, key=SESSIONS_CATEGORY["key"])
+            .first()
+        )
+        if not sessions_cat:
+            sessions_cat = ActivityCategory(
+                organization_id=org.id,
+                name=SESSIONS_CATEGORY["name"],
+                key=SESSIONS_CATEGORY["key"],
+                sections=SESSIONS_CATEGORY["sections"],
+                sort_order=SESSIONS_CATEGORY["sort_order"],
+            )
+            db.add(sessions_cat)
+            db.flush()
+        else:
+            sessions_cat.sections = SESSIONS_CATEGORY["sections"]
+            db.flush()
+        print(f"  Ensured activity category: {sessions_cat.name}")
+
+        # 4. Dimensions
         programme_dim = _ensure_dimension(db, org, "programme", "Programme", 0)
         project_dim = _ensure_dimension(db, org, "project", "Project", 1)
         location_dim = _ensure_dimension(db, org, "location", "Location", 2)
@@ -525,34 +600,31 @@ def seed():
             db, org, "activity_type", "Activity Type", 3, is_system="activity_type"
         )
 
-        # 3. Dimension values
+        # 5. Dimension values
         programme_map = _ensure_values(db, org, programme_dim, PROGRAMMES)
         project_map = _ensure_values(db, org, project_dim, PROJECTS)
         location_map = _ensure_values(db, org, location_dim, LOCATIONS)
 
-        # 4. Activity Types + mirrored dimension values
-        at_dv_map = {}  # activity type name → dimension value
+        # 6. Activity Types + mirrored dimension values
+        at_dv_map = {}
         for idx, at_name in enumerate(ACTIVITY_TYPES):
-            at = (
-                db.query(ActivityType)
-                .filter_by(organization_id=org.id, name=at_name)
-                .first()
-            )
+            at = db.query(ActivityType).filter_by(organization_id=org.id, name=at_name).first()
             if not at:
                 at = ActivityType(
                     organization_id=org.id,
                     name=at_name,
+                    category_id=sessions_cat.id,
                 )
                 db.add(at)
                 db.flush()
+            else:
+                # Assign to sessions category if not already
+                if not at.category_id:
+                    at.category_id = sessions_cat.id
+                    db.flush()
 
-            # Mirror as dimension value in the system Activity Type dimension
             at_code = _make_at_code(at_name)
-            dv = (
-                db.query(DimensionValue)
-                .filter_by(dimension_id=at_dim.id, code=at_code)
-                .first()
-            )
+            dv = db.query(DimensionValue).filter_by(dimension_id=at_dim.id, code=at_code).first()
             if not dv:
                 dv = DimensionValue(
                     organization_id=org.id,
@@ -566,36 +638,24 @@ def seed():
             at_dv_map[at_name] = dv
         print(f"  Ensured {len(ACTIVITY_TYPES)} activity types + dimension values")
 
-        # 5. Dimension Value Links
+        # 7. Dimension Value Links
         new_links = 0
-        # Programme ↔ Project
         new_links += _ensure_dimension_value_links(
             db, org, PROGRAMME_PROJECTS, programme_map, project_map
         )
-        # Project ↔ Location
         new_links += _ensure_dimension_value_links(
             db, org, PROJECT_LOCATIONS, project_map, location_map
         )
-        # Programme ↔ Location
         new_links += _ensure_dimension_value_links(
             db, org, PROGRAMME_LOCATIONS, programme_map, location_map
         )
-        # Location ↔ Activity Type
         new_links += _ensure_dimension_value_links(
             db, org, LOCATION_ACTIVITY_TYPES, location_map, at_dv_map
         )
-        # Programme ↔ Activity Type (explicit mapping — avoids issues when
-        # locations are shared between programmes)
         new_links += _ensure_dimension_value_links(
             db, org, PROGRAMME_ACTIVITY_TYPES, programme_map, at_dv_map
         )
-        # Clean up stale Programme↔ActivityType links for programmes not
-        # in the explicit mapping (e.g. UNLIMITED has no interventions)
-        _remove_stale_programme_at_links(
-            db, programme_map, at_dv_map, PROGRAMME_ACTIVITY_TYPES
-        )
-        # Project ↔ Activity Type (derived: union of activity types across
-        # all locations belonging to each project)
+        _remove_stale_programme_at_links(db, programme_map, at_dv_map, PROGRAMME_ACTIVITY_TYPES)
         project_activity_types = {}
         for proj_code, loc_codes in PROJECT_LOCATIONS.items():
             at_set = set()
@@ -607,7 +667,7 @@ def seed():
         )
         print(f"  Ensured dimension value links ({new_links} new)")
 
-        # 6. Admin role (all permissions — always syncs missing ones)
+        # 8. Admin role (all permissions — always syncs missing ones)
         admin_role = db.query(Role).filter_by(organization_id=org.id, name="Admin").first()
         if not admin_role:
             admin_role = Role(
@@ -619,8 +679,8 @@ def seed():
             db.flush()
             print(f"  Created Admin role")
 
-        # Sync: grant any current permissions the role doesn't have yet
         from app.seeds.initial import PERMISSIONS as CANONICAL_PERMISSIONS
+
         canonical_keys = [key for key, _ in CANONICAL_PERMISSIONS]
         all_perms = db.query(Permission).filter(Permission.key.in_(canonical_keys)).all()
         existing_perm_ids = {
@@ -638,7 +698,7 @@ def seed():
         else:
             print(f"  Admin role: all {len(all_perms)} permissions present")
 
-        # 7. Admin user
+        # 9. Admin user
         admin_user = db.query(User).filter_by(mobile_number=ADMIN_MOBILE).first()
         if not admin_user:
             admin_user = User(
@@ -670,16 +730,18 @@ def seed():
         print(f"\nKshamata seed completed successfully!")
         print(f"  Organisation        : {ORG_NAME}")
         print(f"  Vocabulary          : {len(VOCABULARY)} term overrides")
+        print(f"  Entity Types        : {len(ENTITY_TYPES)}")
+        print(f"  Activity Categories : 1 (Sessions)")
         print(f"  Dimensions          : 4 (Programme, Project, Location, Activity Type [system])")
         print(f"  Programmes          : {len(PROGRAMMES)}")
         print(f"  Projects            : {len(PROJECTS)}")
         print(f"  Locations           : {len(LOCATIONS)}")
         print(f"  Activity Types      : {len(ACTIVITY_TYPES)}")
         print(f"  Dimension Links     : {total_links} combos")
-        print(f"    Programme↔Project : {sum(len(v) for v in PROGRAMME_PROJECTS.values())}")
-        print(f"    Project↔Location  : {sum(len(v) for v in PROJECT_LOCATIONS.values())}")
-        print(f"    Programme↔Location: {sum(len(v) for v in PROGRAMME_LOCATIONS.values())}")
-        print(f"    Location↔Activity : {total_loc_at_links}")
+        print(f"    Programme<>Project : {sum(len(v) for v in PROGRAMME_PROJECTS.values())}")
+        print(f"    Project<>Location  : {sum(len(v) for v in PROJECT_LOCATIONS.values())}")
+        print(f"    Programme<>Location: {sum(len(v) for v in PROGRAMME_LOCATIONS.values())}")
+        print(f"    Location<>Activity : {total_loc_at_links}")
 
     except Exception as e:
         db.rollback()

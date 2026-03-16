@@ -1,12 +1,34 @@
 """
-Activity models: ActivityType, Activity, Facilitator, ActivityFacilitator, Participation
+Activity models: ActivityCategory, ActivityType, Activity, ActivityParticipant
 """
 
-from sqlalchemy import Column, Date, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import Column, Date, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 
 from app.common.models.base_model import BaseModel
+
+
+class ActivityCategory(BaseModel):
+    __tablename__ = "activity_categories"
+
+    organization_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    name = Column(String, nullable=False)
+    key = Column(String, nullable=False)
+    sections = Column(JSONB, nullable=True, default=list)
+    sort_order = Column(Integer, nullable=False, default=0)
+
+    organization = relationship("Organization", back_populates="activity_categories")
+    activity_types = relationship("ActivityType", back_populates="category", lazy="dynamic")
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", "key", name="uq_activity_category_org_key"),
+    )
 
 
 class ActivityType(BaseModel):
@@ -18,31 +40,19 @@ class ActivityType(BaseModel):
         nullable=False,
         index=True,
     )
+    category_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("activity_categories.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
     name = Column(String, nullable=False)
     description = Column(Text, nullable=True)
     meta = Column(JSONB, nullable=True, default=dict)
 
     organization = relationship("Organization", back_populates="activity_types")
+    category = relationship("ActivityCategory", back_populates="activity_types")
     activities = relationship("Activity", back_populates="activity_type", lazy="dynamic")
-
-
-class Facilitator(BaseModel):
-    __tablename__ = "facilitators"
-
-    organization_id = Column(
-        UUID(as_uuid=True),
-        ForeignKey("organizations.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-    name = Column(String, nullable=False)
-    contact = Column(String, nullable=True)
-    meta = Column(JSONB, nullable=True, default=dict)
-
-    organization = relationship("Organization", back_populates="facilitators")
-    activity_facilitators = relationship(
-        "ActivityFacilitator", back_populates="facilitator", lazy="dynamic"
-    )
 
 
 class Activity(BaseModel):
@@ -70,10 +80,7 @@ class Activity(BaseModel):
     meta = Column(JSONB, nullable=True, default=dict)
 
     activity_type = relationship("ActivityType", back_populates="activities")
-    activity_facilitators = relationship(
-        "ActivityFacilitator", back_populates="activity", lazy="joined"
-    )
-    participations = relationship("Participation", back_populates="activity", lazy="dynamic")
+    participants = relationship("ActivityParticipant", back_populates="activity", lazy="dynamic")
     tags = relationship(
         "ActivityTag",
         back_populates="activity",
@@ -82,8 +89,8 @@ class Activity(BaseModel):
     )
 
 
-class ActivityFacilitator(BaseModel):
-    __tablename__ = "activity_facilitators"
+class ActivityParticipant(BaseModel):
+    __tablename__ = "activity_participants"
 
     activity_id = Column(
         UUID(as_uuid=True),
@@ -91,42 +98,19 @@ class ActivityFacilitator(BaseModel):
         nullable=False,
         index=True,
     )
-    facilitator_id = Column(
-        UUID(as_uuid=True),
-        ForeignKey("facilitators.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-
-    activity = relationship("Activity", back_populates="activity_facilitators")
-    facilitator = relationship("Facilitator", back_populates="activity_facilitators")
-
-    __table_args__ = (
-        UniqueConstraint("activity_id", "facilitator_id", name="uq_activity_facilitator"),
-    )
-
-
-class Participation(BaseModel):
-    __tablename__ = "participations"
-
-    activity_id = Column(
-        UUID(as_uuid=True),
-        ForeignKey("activities.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-    beneficiary_id = Column(
-        UUID(as_uuid=True),
-        ForeignKey("beneficiaries.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-    status = Column(String, nullable=False, default="present")
+    participant_type = Column(String, nullable=False)  # "entity" or "user"
+    participant_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+    section_key = Column(String, nullable=False)
+    status = Column(String, nullable=True)
     meta = Column(JSONB, nullable=True, default=dict)
 
-    activity = relationship("Activity", back_populates="participations")
-    beneficiary = relationship("Beneficiary", back_populates="participations")
+    activity = relationship("Activity", back_populates="participants")
 
     __table_args__ = (
-        UniqueConstraint("activity_id", "beneficiary_id", name="uq_activity_beneficiary"),
+        UniqueConstraint(
+            "activity_id",
+            "participant_type",
+            "participant_id",
+            name="uq_activity_participant",
+        ),
     )
