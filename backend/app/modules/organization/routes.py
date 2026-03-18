@@ -63,17 +63,25 @@ STATIC_ENTITY_TYPES = {
 
 
 def _validate_entity_type(entity_type: str, org_id, db: Session) -> None:
-    """Validate entity type — allow static types and dimension:{key} types."""
+    """Validate entity type — allow static types, dimension:{key}, and entity:{key} types."""
     if entity_type in STATIC_ENTITY_TYPES:
         return
     if entity_type.startswith("dimension:"):
-        # Validate the dimension exists for this org
         from app.modules.dimension.model import Dimension
 
         dim_key = entity_type.split(":", 1)[1]
         dim = db.query(Dimension).filter_by(organization_id=org_id, key=dim_key).first()
         if dim:
             return
+    
+    if entity_type.startswith("entity:"):
+        from app.modules.entity.model import EntityType
+
+        et_key = entity_type.split(":", 1)[1]
+        et = db.query(EntityType).filter_by(organization_id=org_id, key=et_key).first()
+        if et:
+            return
+
     from fastapi import HTTPException
 
     raise HTTPException(status_code=400, detail=f"Invalid entity type: {entity_type}")
