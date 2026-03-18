@@ -176,6 +176,7 @@ from app.modules.dimension.routes import router as dimension_router
 from app.modules.activity.routes import router as activity_router
 from app.modules.entity.routes import router as entity_router
 from app.modules.beneficiary.routes import router as enrollment_router
+from app.modules.dashboard.routes import router as dashboard_router
 
 app.include_router(auth_router, prefix="/api", tags=["auth"])
 app.include_router(user_router, prefix="/api", tags=["user"])
@@ -185,6 +186,7 @@ app.include_router(dimension_router, prefix="/api", tags=["dimensions"])
 app.include_router(activity_router, prefix="/api", tags=["activities"])
 app.include_router(entity_router, prefix="/api", tags=["entities"])
 app.include_router(enrollment_router, prefix="/api", tags=["enrollments"])
+app.include_router(dashboard_router, prefix="/api", tags=["dashboard"])
 
 
 if __name__ == "__main__":

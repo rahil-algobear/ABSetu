@@ -1,13 +1,9 @@
 import type { Metadata } from 'next';
 import { createPageMetadata } from '@/utils/metadata';
+import DashboardContent from '@/components/Dashboard/DashboardContent';
 
 export const metadata: Metadata = createPageMetadata('Dashboard', 'Overview of your organization');
 
 export default function DashboardPage() {
-  return (
-    <div className="max-w-screen-xl mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-      <p className="mt-2 text-gray-500">Welcome to ABSetu.</p>
-    </div>
-  );
+  return <DashboardContent />;
 }

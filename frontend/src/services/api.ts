@@ -6,6 +6,7 @@ import {
   ActivityFormElement,
   ActivityParticipant,
   ActivityType,
+  DashboardStats,
   Dimension,
   DimensionValue,
   Enrollment,
@@ -401,6 +402,15 @@ export const userApi = {
   },
   delete: async (id: string) => {
     const response = await authAxios.delete(`/user/${id}`);
+    return response.data;
+  },
+};
+
+// --- Dashboard ---
+
+export const dashboardApi = {
+  getStats: async (): Promise<DashboardStats> => {
+    const response = await authAxios.get<DashboardStats>('/dashboard/stats');
     return response.data;
   },
 };

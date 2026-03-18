@@ -252,6 +252,40 @@ export interface UserAccess {
   dimension_value_ids: string[];
 }
 
+// --- Dashboard ---
+
+export interface CountByItem {
+  label: string;
+  count: number;
+}
+
+export interface TimeSeriesPoint {
+  period: string; // YYYY-MM
+  count: number;
+}
+
+export interface RecentActivity {
+  id: string;
+  date: string;
+  type_name: string | null;
+  category_name: string | null;
+  notes: string | null;
+  participant_count: number;
+}
+
+export interface DashboardStats {
+  total_entities: number;
+  total_activities: number;
+  total_enrollments: number;
+  active_enrollments: number;
+  total_users: number;
+  entities_by_type: CountByItem[];
+  activities_by_category: CountByItem[];
+  activities_over_time: TimeSeriesPoint[];
+  enrollments_over_time: TimeSeriesPoint[];
+  recent_activities: RecentActivity[];
+}
+
 // --- Enrollments ---
 
 export interface Enrollment {
