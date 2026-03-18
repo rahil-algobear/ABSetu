@@ -230,6 +230,17 @@ export default function ActivityTypesPage() {
     if (!systemDimension) return;
     const systemDvIdSet = new Set(systemDvs.map((dv) => dv.id));
 
+    // Group selected values by dimension
+    const selectedByDim = new Map<string, string[]>();
+    for (const dvId of selected) {
+      const dv = dvMap.get(dvId);
+      if (dv) {
+        if (!selectedByDim.has(dv.dimension_id)) selectedByDim.set(dv.dimension_id, []);
+        selectedByDim.get(dv.dimension_id)!.push(dvId);
+      }
+    }
+
+    // 1. Sync system ↔ non-system links (places AT in matrix columns)
     for (const dim of nonSystemDimensions) {
       const dimValueIds = new Set(
         allNonSystemDvs.filter((dv) => dv.dimension_id === dim.id).map((dv) => dv.id)
@@ -257,6 +268,54 @@ export default function ActivityTypesPage() {
         pairs: [...otherPairs, ...thisPairs],
       });
     }
+
+    // 2. Additively create cross-dimension links (builds matrix column structure)
+    //    For every pair of non-system dimensions that have selected values,
+    //    ensure links exist between all combinations of selected values.
+    const dimIds = Array.from(selectedByDim.keys());
+    for (let i = 0; i < dimIds.length; i++) {
+      for (let j = i + 1; j < dimIds.length; j++) {
+        const dimA = dimIds[i];
+        const dimB = dimIds[j];
+        const valsA = selectedByDim.get(dimA) || [];
+        const valsB = selectedByDim.get(dimB) || [];
+
+        if (valsA.length === 0 || valsB.length === 0) continue;
+
+        // Get existing links between these two dimensions
+        const dimAValueIds = new Set(
+          allNonSystemDvs.filter((dv) => dv.dimension_id === dimA).map((dv) => dv.id)
+        );
+        const dimBValueIds = new Set(
+          allNonSystemDvs.filter((dv) => dv.dimension_id === dimB).map((dv) => dv.id)
+        );
+
+        const existingPairs: [string, string][] = allDimensionValueLinks
+          .filter((link) => {
+            const { dimension_value_id_1: id1, dimension_value_id_2: id2 } = link;
+            return (
+              (dimAValueIds.has(id1) && dimBValueIds.has(id2)) ||
+              (dimAValueIds.has(id2) && dimBValueIds.has(id1))
+            );
+          })
+          .map((link) => [link.dimension_value_id_1, link.dimension_value_id_2]);
+
+        // Build new cross-dimension pairs from selected values
+        const newPairs: [string, string][] = [];
+        for (const a of valsA) {
+          for (const b of valsB) {
+            newPairs.push([a, b]);
+          }
+        }
+
+        // Merge: existing + new (bulkSync deduplicates via normalization)
+        await dimensionValueLinkApi.bulkSync({
+          dimension_id_1: dimA,
+          dimension_id_2: dimB,
+          pairs: [...existingPairs, ...newPairs],
+        });
+      }
+    }
   };
 
   const createMutation = useMutation({
@@ -277,6 +336,7 @@ export default function ActivityTypesPage() {
       queryClient.invalidateQueries({ queryKey: ["activity-types"] });
       queryClient.invalidateQueries({ queryKey: ["dimension-values"] });
       queryClient.invalidateQueries({ queryKey: ["dimension-value-links-all"] });
+      queryClient.invalidateQueries({ queryKey: ["dimension-value-links"] });
       closeModal();
       toast.success(`${v("activity_type")} created`);
     },
@@ -299,6 +359,7 @@ export default function ActivityTypesPage() {
       queryClient.invalidateQueries({ queryKey: ["activity-types"] });
       queryClient.invalidateQueries({ queryKey: ["dimension-values"] });
       queryClient.invalidateQueries({ queryKey: ["dimension-value-links-all"] });
+      queryClient.invalidateQueries({ queryKey: ["dimension-value-links"] });
       closeModal();
       toast.success(`${v("activity_type")} updated`);
     },
