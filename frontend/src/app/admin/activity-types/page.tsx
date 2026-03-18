@@ -23,6 +23,79 @@ import { Plus, Pencil, Trash2, LayoutGrid } from "lucide-react";
 import toast from "react-hot-toast";
 import { ActivityTypeMatrixDialog } from "@/components/ActivityTypeMatrixDialog";
 
+function DimensionCheckboxSection({
+  title,
+  items,
+  selectedIds,
+  onToggle,
+  onToggleAll,
+}: {
+  title: string;
+  items: { id: string; name: string }[];
+  selectedIds: Set<string>;
+  onToggle: (id: string) => void;
+  onToggleAll: () => void;
+}) {
+  const [search, setSearch] = useState("");
+  const sorted = [...items].sort((a, b) => a.name.localeCompare(b.name));
+  const filtered = search
+    ? sorted.filter((i) => i.name.toLowerCase().includes(search.toLowerCase()))
+    : sorted;
+  const allSelected = items.length > 0 && items.every((i) => selectedIds.has(i.id));
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <label className="text-sm font-medium">{title}</label>
+        <button
+          type="button"
+          onClick={onToggleAll}
+          className="text-xs text-purple-600 hover:text-purple-800"
+        >
+          {allSelected ? "Clear All" : "Select All"}
+        </button>
+      </div>
+      {items.length === 0 ? (
+        <p className="text-xs text-gray-400 py-2">No {title.toLowerCase()} available</p>
+      ) : (
+        <>
+          {items.length > 5 && (
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={`Search ${title.toLowerCase()}...`}
+              className="w-full mb-1 px-2 py-1 text-sm border rounded-md border-gray-300 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
+            />
+          )}
+          <div className="space-y-1 max-h-36 overflow-y-auto border rounded-md p-2">
+            {filtered.length === 0 ? (
+              <p className="text-xs text-gray-400 py-1">No matches</p>
+            ) : (
+              filtered.map((item) => (
+                <label key={item.id} className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(item.id)}
+                    onChange={() => onToggle(item.id)}
+                    className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                  />
+                  {item.name}
+                </label>
+              ))
+            )}
+          </div>
+        </>
+      )}
+      <p className="text-xs text-gray-400 mt-1">
+        {selectedIds.size === 0
+          ? "No dimensions selected"
+          : `${Array.from(selectedIds).filter((id) => items.some((i) => i.id === id)).length} of ${items.length} selected`}
+      </p>
+    </div>
+  );
+}
+
 export default function ActivityTypesPage() {
   const queryClient = useQueryClient();
   const { v, vPlural, vDim } = useVocabulary();
@@ -31,6 +104,7 @@ export default function ActivityTypesPage() {
   const [editing, setEditing] = useState<ActivityType | null>(null);
   const [form, setForm] = useState({ name: "", description: "", category_id: "" });
   const [metaValues, setMetaValues] = useState<Record<string, unknown>>({});
+  const [selectedDvIds, setSelectedDvIds] = useState<Set<string>>(new Set());
 
   const { data: types = [], isLoading } = useQuery({
     queryKey: ["activity-types"],
@@ -119,8 +193,86 @@ export default function ActivityTypesPage() {
     [allNonSystemDvs]
   );
 
+  // Group non-system dimension values by dimension for checkbox sections
+  const dvsByDimension = useMemo(
+    () =>
+      nonSystemDimensions.map((dim) => ({
+        dimension: dim,
+        values: allNonSystemDvs.filter((dv) => dv.dimension_id === dim.id),
+      })),
+    [nonSystemDimensions, allNonSystemDvs]
+  );
+
+  const toggleDvId = (id: string) => {
+    setSelectedDvIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAllForDimension = (values: { id: string }[]) => {
+    setSelectedDvIds((prev) => {
+      const next = new Set(prev);
+      const allSelected = values.every((v) => next.has(v.id));
+      if (allSelected) {
+        values.forEach((v) => next.delete(v.id));
+      } else {
+        values.forEach((v) => next.add(v.id));
+      }
+      return next;
+    });
+  };
+
+  // Sync dimension value links for a given activity type's system DV
+  const syncDimensionLinks = async (sysDvId: string, selected: Set<string>) => {
+    if (!systemDimension) return;
+    const systemDvIdSet = new Set(systemDvs.map((dv) => dv.id));
+
+    for (const dim of nonSystemDimensions) {
+      const dimValueIds = new Set(
+        allNonSystemDvs.filter((dv) => dv.dimension_id === dim.id).map((dv) => dv.id)
+      );
+
+      // Keep existing pairs between system dim and this dim that DON'T involve this AT
+      const otherPairs: [string, string][] = allDimensionValueLinks
+        .filter((link) => {
+          const { dimension_value_id_1: id1, dimension_value_id_2: id2 } = link;
+          const involvesSystemDim = systemDvIdSet.has(id1) || systemDvIdSet.has(id2);
+          const involvesThisDim = dimValueIds.has(id1) || dimValueIds.has(id2);
+          const involvesThisAt = id1 === sysDvId || id2 === sysDvId;
+          return involvesSystemDim && involvesThisDim && !involvesThisAt;
+        })
+        .map((link) => [link.dimension_value_id_1, link.dimension_value_id_2]);
+
+      // Add this AT's new pairs
+      const thisPairs: [string, string][] = Array.from(selected)
+        .filter((id) => dimValueIds.has(id))
+        .map((id) => [sysDvId, id]);
+
+      await dimensionValueLinkApi.bulkSync({
+        dimension_id_1: systemDimension.id,
+        dimension_id_2: dim.id,
+        pairs: [...otherPairs, ...thisPairs],
+      });
+    }
+  };
+
   const createMutation = useMutation({
-    mutationFn: activityTypeApi.create,
+    mutationFn: async (data: { name: string; category_id?: string; description?: string; meta?: Record<string, unknown> }) => {
+      const at = await activityTypeApi.create(data);
+      // After creation, the backend auto-creates a system dimension value.
+      // Fetch it and sync dimension links.
+      if (systemDimension && selectedDvIds.size > 0) {
+        const sysDvs = await dimensionApi.listValues(systemDimension.id);
+        const newSysDv = sysDvs.find((dv) => dv.name === at.name);
+        if (newSysDv) {
+          await syncDimensionLinks(newSysDv.id, selectedDvIds);
+        }
+      }
+      return at;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["activity-types"] });
       queryClient.invalidateQueries({ queryKey: ["dimension-values"] });
@@ -132,8 +284,17 @@ export default function ActivityTypesPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<ActivityType> }) =>
-      activityTypeApi.update(id, data),
+    mutationFn: async ({ id, data }: { id: string; data: Partial<ActivityType> }) => {
+      const at = await activityTypeApi.update(id, data);
+      // Sync dimension links using the existing system DV
+      if (systemDimension && editing) {
+        const sysDvId = atNameToDvId.get(editing.name);
+        if (sysDvId) {
+          await syncDimensionLinks(sysDvId, selectedDvIds);
+        }
+      }
+      return at;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["activity-types"] });
       queryClient.invalidateQueries({ queryKey: ["dimension-values"] });
@@ -159,6 +320,7 @@ export default function ActivityTypesPage() {
     setEditing(null);
     setForm({ name: "", description: "", category_id: "" });
     setMetaValues({});
+    setSelectedDvIds(new Set());
     setModalOpen(true);
   };
 
@@ -166,6 +328,10 @@ export default function ActivityTypesPage() {
     setEditing(at);
     setForm({ name: at.name, description: at.description || "", category_id: at.category_id || "" });
     setMetaValues(at.meta || {});
+    // Populate selected dimension values from existing links
+    const sysDvId = atNameToDvId.get(at.name);
+    const connectedIds = sysDvId ? systemDvToConnected.get(sysDvId) : undefined;
+    setSelectedDvIds(connectedIds ? new Set(connectedIds) : new Set());
     setModalOpen(true);
   };
 
@@ -339,6 +505,23 @@ export default function ActivityTypesPage() {
             />
           </div>
           <DynamicMetaForm fields={metaFields} values={metaValues} onChange={setMetaValues} />
+          {dvsByDimension.length > 0 && (
+            <div className="space-y-3 pt-1">
+              <p className="text-xs text-gray-500">
+                Select which {nonSystemDimensions.length === 1 ? vDim(nonSystemDimensions[0]).toLowerCase() + " values" : "dimension values"} this {v("activity_type").toLowerCase()} is mapped to.
+              </p>
+              {dvsByDimension.map(({ dimension, values }) => (
+                <DimensionCheckboxSection
+                  key={dimension.id}
+                  title={vDim(dimension)}
+                  items={values}
+                  selectedIds={selectedDvIds}
+                  onToggle={toggleDvId}
+                  onToggleAll={() => toggleAllForDimension(values)}
+                />
+              ))}
+            </div>
+          )}
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={closeModal}>
               Cancel
