@@ -238,7 +238,10 @@ export default function ActivitiesPage() {
       case "activity_type":
         return (
           <div key="activity_type">
-            <label className="text-sm font-medium">{v("activity_type")}</label>
+            <label className="text-sm font-medium">
+              {v("activity_type")}
+              {el.required && <span className="text-red-500 ml-0.5">*</span>}
+            </label>
             <select
               className="w-full mt-1 border rounded-md p-2 text-sm"
               value={formData.activity_type_id}
@@ -246,7 +249,7 @@ export default function ActivitiesPage() {
                 setFormData({ ...formData, activity_type_id: e.target.value });
                 setMetaValues({});
               }}
-              required
+              required={el.required}
             >
               <option value="">Select...</option>
               {filteredActivityTypes.map((t) => (
@@ -277,7 +280,10 @@ export default function ActivitiesPage() {
 
         return (
           <div key={`dimension-${dim.id}`}>
-            <label className="text-sm font-medium">{vDim(dim)}</label>
+            <label className="text-sm font-medium">
+              {vDim(dim)}
+              {el.required && <span className="text-red-500 ml-0.5">*</span>}
+            </label>
             <select
               className="w-full mt-1 border rounded-md p-2 text-sm"
               value={currentSelection}
@@ -293,6 +299,7 @@ export default function ActivitiesPage() {
                     : otherIds,
                 });
               }}
+              required={el.required}
             >
               <option value="">Select {vDim(dim)}...</option>
               {filtered.map((dv) => (

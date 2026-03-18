@@ -196,6 +196,18 @@ export default function ActivityDetailPage() {
   };
 
   const handleSave = () => {
+    // Validate required sections have at least one participant
+    for (const el of entityTypeElements) {
+      if (el.required) {
+        const sectionKey = getSectionKey(el);
+        const sectionState = participantState[sectionKey] || [];
+        if (sectionState.length === 0) {
+          toast.error(`${getElementLabel(el)} is required — add at least one participant`);
+          return;
+        }
+      }
+    }
+
     const records: { participant_type: string; participant_id: string; section_key: string; status?: string; meta?: Record<string, unknown> }[] = [];
     for (const el of entityTypeElements) {
       const sectionKey = getSectionKey(el);
@@ -321,7 +333,10 @@ export default function ActivityDetailPage() {
 
                   return (
                     <div key={sectionKey}>
-                      <h3 className="text-sm font-semibold mb-2">{getElementLabel(el)}</h3>
+                      <h3 className="text-sm font-semibold mb-2">
+                        {getElementLabel(el)}
+                        {el.required && <span className="text-red-500 ml-0.5">*</span>}
+                      </h3>
                       {useSearchSelect ? (
                         <SearchSelectParticipants
                           sectionKey={sectionKey}
@@ -434,7 +449,10 @@ export default function ActivityDetailPage() {
 
                 return (
                   <div key={sectionKey}>
-                    <h3 className="text-sm font-semibold mb-1">{getElementLabel(el)}</h3>
+                    <h3 className="text-sm font-semibold mb-1">
+                      {getElementLabel(el)}
+                      {el.required && <span className="text-red-500 ml-0.5">*</span>}
+                    </h3>
                     {sectionParticipants.length === 0 ? (
                       <p className="text-gray-500 text-xs">None recorded</p>
                     ) : useTable ? (
