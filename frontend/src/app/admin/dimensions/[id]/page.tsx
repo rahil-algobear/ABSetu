@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { dimensionApi } from "@/services/api";
-import { Dimension, DimensionValue } from "@/types";
+import { dimensionApi, metaFieldSchemaApi } from "@/services/api";
+import { Dimension, DimensionValue, MetaFieldDefinition } from "@/types";
 import { Can } from "@/components/Auth/Permissions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +18,7 @@ import {
   TableHead,
   TableCell,
 } from "@/components/ui/page-table";
+import { DynamicMetaForm } from "@/components/DynamicMetaForm";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { useVocabulary } from "@/hooks/useVocabulary";
 import toast from "react-hot-toast";
@@ -30,6 +31,7 @@ export default function DimensionValuesPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingValue, setEditingValue] = useState<DimensionValue | null>(null);
   const [form, setForm] = useState({ name: "" });
+  const [metaValues, setMetaValues] = useState<Record<string, unknown>>({});
 
   const { data: dimensions = [] } = useQuery<Dimension[]>({
     queryKey: ["dimensions"],
@@ -44,8 +46,15 @@ export default function DimensionValuesPage() {
     enabled: !!dimension,
   });
 
+  const metaSchemaKey = `dimension:${dimensionId}`;
+  const { data: metaFields = [] } = useQuery<MetaFieldDefinition[]>({
+    queryKey: ["meta-field-schemas", metaSchemaKey],
+    queryFn: () => metaFieldSchemaApi.get(metaSchemaKey),
+    enabled: !!dimension,
+  });
+
   const createMutation = useMutation({
-    mutationFn: (data: { name: string }) =>
+    mutationFn: (data: { name: string; meta?: Record<string, unknown> }) =>
       dimensionApi.createValue(dimension!.id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["dimension-values", dimension?.id] });
@@ -78,12 +87,14 @@ export default function DimensionValuesPage() {
   const openAdd = () => {
     setEditingValue(null);
     setForm({ name: "" });
+    setMetaValues({});
     setModalOpen(true);
   };
 
   const openEdit = (value: DimensionValue) => {
     setEditingValue(value);
     setForm({ name: value.name });
+    setMetaValues(value.meta || {});
     setModalOpen(true);
   };
 
@@ -94,10 +105,11 @@ export default function DimensionValuesPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const meta = Object.keys(metaValues).length > 0 ? metaValues : undefined;
     if (editingValue) {
-      updateMutation.mutate({ id: editingValue.id, data: form });
+      updateMutation.mutate({ id: editingValue.id, data: { name: form.name, meta: meta || null } });
     } else {
-      createMutation.mutate(form);
+      createMutation.mutate({ name: form.name, meta });
     }
   };
 
@@ -126,6 +138,9 @@ export default function DimensionValuesPage() {
           <TableHeader>
             <TableRow>
               <TableHead>Name</TableHead>
+              {metaFields.map((f) => (
+                <TableHead key={f.key}>{f.label}</TableHead>
+              ))}
               <TableHead className="w-20">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -133,6 +148,13 @@ export default function DimensionValuesPage() {
             {values.map((v) => (
               <TableRow key={v.id}>
                 <TableCell className="font-medium">{v.name}</TableCell>
+                {metaFields.map((f) => (
+                  <TableCell key={f.key}>
+                    {v.meta?.[f.key] !== undefined
+                      ? String(v.meta[f.key])
+                      : "—"}
+                  </TableCell>
+                ))}
                 <TableCell>
                   <Can permission="dimension:manage">
                     <div className="flex gap-1">
@@ -176,6 +198,11 @@ export default function DimensionValuesPage() {
               required
             />
           </div>
+          <DynamicMetaForm
+            fields={metaFields}
+            values={metaValues}
+            onChange={setMetaValues}
+          />
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={closeModal}>
               Cancel
