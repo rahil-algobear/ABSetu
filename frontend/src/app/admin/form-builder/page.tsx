@@ -30,6 +30,7 @@ import {
   Trash2,
   Eye,
   EyeOff,
+  Asterisk,
   Save,
   ClipboardList,
   Layers,
@@ -173,6 +174,7 @@ export default function FormBuilderPage() {
       sort_order: elements.length,
       display_type: addDisplayType,
       visible: true,
+      required: false,
     };
 
     setElements([...elements, newElement]);
@@ -355,6 +357,11 @@ export default function FormBuilderPage() {
                           {ELEMENT_TYPES.find((t) => t.value === el.type)?.label}
                           {" \u00b7 "}
                           {DISPLAY_TYPES[el.type]?.find((d) => d.value === el.display_type)?.label || el.display_type}
+                          {el.required && (
+                            <span className="ml-1 text-red-500">
+                              {" \u00b7 "}required
+                            </span>
+                          )}
                           {metaCount > 0 && (
                             <span className="ml-1 text-purple-500">
                               {" \u00b7 "}{metaCount} participation field{metaCount !== 1 ? "s" : ""}
@@ -374,6 +381,16 @@ export default function FormBuilderPage() {
                         <option key={d.value} value={d.value}>{d.label}</option>
                       ))}
                     </select>
+
+                    {/* Required toggle */}
+                    <button
+                      type="button"
+                      onClick={() => updateElement(idx, { required: !el.required })}
+                      className={el.required ? "text-red-500 hover:text-red-700" : "text-gray-300 hover:text-red-500"}
+                      title={el.required ? "Required (click to make optional)" : "Optional (click to make required)"}
+                    >
+                      <Asterisk className="h-4 w-4" />
+                    </button>
 
                     {/* Visibility toggle */}
                     <button

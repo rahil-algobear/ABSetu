@@ -149,6 +149,7 @@ export interface ActivityFormElement {
   sort_order: number;
   display_type: string; // "dropdown", "checklist", "radio", "search_select"
   visible: boolean;
+  required: boolean;
   config?: Record<string, unknown>;
 }
 
