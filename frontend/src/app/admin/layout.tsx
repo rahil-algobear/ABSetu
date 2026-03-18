@@ -58,31 +58,67 @@ export default function AdminLayout({
     permission: "entity:view",
   }));
 
-  const staticTabs = [
+  const mastersTabs = [
+    ...dimensionTabs,
+    ...entityTypeTabs,
+    { href: "/admin/users", label: "Users", icon: Users, permission: "user:view" },
+    { href: "/admin/activity-types", label: vPlural("activity_type"), icon: ClipboardList, permission: "activity_type:view" },
+  ];
+
+  const settingsTabs = [
+    { href: "/admin/meta-fields", label: "Form Fields", icon: SlidersHorizontal, permission: "org:settings" },
+    { href: "/admin/roles", label: "Roles", icon: Shield, permission: "role:view" },
     { href: "/admin/manage-dimensions", label: "Dimensions", icon: Layers, permission: "dimension:manage" },
     { href: "/admin/dimension-linking", label: "Dimension Linking", icon: Link2, permission: "dimension:view" },
     { href: "/admin/entity-types", label: vPlural("entity_type"), icon: UserCheck, permission: "entity_type:view" },
     { href: "/admin/activity-categories", label: vPlural("activity_category"), icon: ClipboardList, permission: "activity_type:view" },
-    { href: "/admin/activity-types", label: vPlural("activity_type"), icon: ClipboardList, permission: "activity_type:view" },
-    { href: "/admin/roles", label: "Roles", icon: Shield, permission: "role:view" },
-    { href: "/admin/users", label: "Users", icon: Users, permission: "user:view" },
-    { href: "/admin/meta-fields", label: "Form Fields", icon: SlidersHorizontal, permission: "org:settings" },
   ];
 
-  const allTabs = [...dimensionTabs, ...entityTypeTabs, ...staticTabs];
-  const visibleTabs = allTabs.filter((tab) => can(tab.permission));
+  const allTabs = [...mastersTabs, ...settingsTabs];
+  const visibleMastersTabs = mastersTabs.filter((tab) => can(tab.permission));
+  const visibleSettingsTabs = settingsTabs.filter((tab) => can(tab.permission));
 
   // Check if user has permission for the current page
   const currentTab = allTabs.find((tab) => pathname === tab.href || pathname.startsWith(tab.href + "/"));
   const hasAccess = !currentTab || can(currentTab.permission);
 
+  // Determine current section for heading
+  const isMastersPage = mastersTabs.some((tab) => pathname === tab.href || pathname.startsWith(tab.href + "/"));
+  const pageHeading = isMastersPage ? "Masters" : "Settings";
+
   return (
     <PageLayout className="p-4">
-      <h1 className="text-2xl font-bold mb-4">Settings</h1>
+      <h1 className="text-2xl font-bold mb-4">{pageHeading}</h1>
 
-      {/* Scrollable tab bar — only show tabs the user has permission for */}
+      {/* Scrollable tab bar — grouped into Masters and Settings */}
       <div className="flex overflow-x-auto gap-1 mb-6 border-b border-gray-200 pb-px -mx-4 px-4 no-scrollbar">
-        {visibleTabs.map((tab) => {
+        {visibleMastersTabs.map((tab) => {
+          const Icon = tab.icon;
+          const active = pathname === tab.href || pathname.startsWith(tab.href + "/");
+          return (
+            <Link
+              key={tab.href}
+              href={tab.href}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-2 text-sm font-medium whitespace-nowrap border-b-2 transition-colors shrink-0",
+                active
+                  ? "border-purple-600 text-purple-700"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              )}
+            >
+              <Icon size={14} />
+              {tab.label}
+            </Link>
+          );
+        })}
+
+        {visibleMastersTabs.length > 0 && visibleSettingsTabs.length > 0 && (
+          <div className="flex items-center px-2 shrink-0">
+            <div className="w-px h-5 bg-gray-300" />
+          </div>
+        )}
+
+        {visibleSettingsTabs.map((tab) => {
           const Icon = tab.icon;
           const active = pathname === tab.href || pathname.startsWith(tab.href + "/");
           return (

@@ -15,13 +15,17 @@ import {
   CalendarDays,
   Settings,
   Users,
-  Building2,
   ChevronDown,
   LogOut,
   Menu,
   X,
   UserCog,
   Shield,
+  Database,
+  Layers,
+  Link2,
+  SlidersHorizontal,
+  ClipboardList,
 } from "lucide-react";
 
 /* ── NavDropdown ── */
@@ -192,14 +196,20 @@ export default function Navigation() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const settingsItems = [
-    { href: "/admin/dimensions", label: "Dimensions", icon: Building2, permission: "dimension:view" },
-    { href: "/admin/entity-types", label: vPlural("entity_type"), icon: UserCog, permission: "entity_type:view" },
+  const mastersItems = [
+    { href: "/admin/dimensions", label: "Dimensions", icon: Layers, permission: "dimension:view" },
     { href: "/admin/entities", label: vPlural("entity"), icon: Users, permission: "entity:view" },
-    { href: "/admin/activity-categories", label: vPlural("activity_category"), icon: Building2, permission: "activity_type:view" },
-    { href: "/admin/activity-types", label: vPlural("activity_type"), icon: Building2, permission: "activity_type:view" },
-    { href: "/admin/roles", label: "Roles", icon: Shield, permission: "role:view" },
     { href: "/admin/users", label: "Users", icon: Users, permission: "user:view" },
+    { href: "/admin/activity-types", label: vPlural("activity_type"), icon: ClipboardList, permission: "activity_type:view" },
+  ];
+
+  const settingsItems = [
+    { href: "/admin/meta-fields", label: "Form Fields", icon: SlidersHorizontal, permission: "org:settings" },
+    { href: "/admin/roles", label: "Roles", icon: Shield, permission: "role:view" },
+    { href: "/admin/manage-dimensions", label: "Dimensions", icon: Layers, permission: "dimension:manage" },
+    { href: "/admin/dimension-linking", label: "Dimension Linking", icon: Link2, permission: "dimension:view" },
+    { href: "/admin/entity-types", label: vPlural("entity_type"), icon: UserCog, permission: "entity_type:view" },
+    { href: "/admin/activity-categories", label: vPlural("activity_category"), icon: ClipboardList, permission: "activity_type:view" },
   ];
 
   // Close mobile menu on navigation
@@ -327,6 +337,13 @@ export default function Navigation() {
                 </Can>
 
                 <NavDropdown
+                  label="Masters"
+                  icon={Database}
+                  items={mastersItems}
+                  pathname={pathname}
+                />
+
+                <NavDropdown
                   label="Settings"
                   icon={Settings}
                   items={settingsItems}
@@ -396,6 +413,33 @@ export default function Navigation() {
                 Activities
               </Link>
             </Can>
+
+            {/* Masters section */}
+            <div className="pt-2">
+              <p className="px-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">
+                Masters
+              </p>
+              {mastersItems.map((item) => {
+                if (!can(item.permission)) return null;
+                const ItemIcon = item.icon;
+                const active = pathname.startsWith(item.href);
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={clsx(
+                      "flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                      active
+                        ? "text-purple-700 bg-purple-50"
+                        : "text-gray-500 hover:text-gray-900 hover:bg-gray-100",
+                    )}
+                  >
+                    <ItemIcon size={16} />
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </div>
 
             {/* Settings section */}
             <div className="pt-2">
