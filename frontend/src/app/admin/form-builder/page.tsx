@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   activityCategoryApi,
@@ -108,22 +108,21 @@ export default function FormBuilderPage() {
   );
 
   // Load form when category changes
-  const { isLoading: formLoading } = useQuery({
+  const { data: formData, isLoading: formLoading } = useQuery({
     queryKey: ["activity-form", selectedCategoryId],
     queryFn: () => activityFormApi.get(selectedCategoryId),
     enabled: !!selectedCategoryId,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    select: (data: any) => {
-      // Only set if not dirty (user hasn't made changes)
-      if (!isDirty) {
-        setElements(data.elements || []);
-      }
-      return data;
-    },
   });
 
+  // Sync form data into local state when it loads (only if user hasn't made changes)
+  useEffect(() => {
+    if (formData && !isDirty) {
+      setElements(formData.elements || []);
+    }
+  }, [formData]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Auto-select first category
-  useMemo(() => {
+  useEffect(() => {
     if (!selectedCategoryId && categories.length > 0) {
       setSelectedCategoryId(categories[0].id);
     }
