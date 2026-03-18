@@ -287,7 +287,7 @@ export default function Navigation() {
 
   // Activity categories as top-level nav links
   const activityCategoryLinks = activityCategories.map((cat) => ({
-    href: `/activities?category=${cat.id}`,
+    href: `/activities?category=${cat.key}`,
     label: cat.name,
     icon: CalendarDays,
     permission: "activity:view",
@@ -295,7 +295,7 @@ export default function Navigation() {
 
   // People dropdown: one item per entity type
   const peopleItems = entityTypes.map((et) => ({
-    href: `/admin/entities/${et.id}`,
+    href: `/admin/entities/${et.key}`,
     label: et.name,
     icon: Users,
     permission: "entity:view",
@@ -307,7 +307,7 @@ export default function Navigation() {
     ...dimensions
       .filter((d) => !d.is_system)
       .map((d) => ({
-        href: `/admin/dimensions/${d.id}`,
+        href: `/admin/dimensions/${d.key}`,
         label: vDim(d),
         icon: Layers,
         permission: "dimension:view",

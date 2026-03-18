@@ -25,7 +25,7 @@ import Link from "next/link";
 import toast from "react-hot-toast";
 
 export default function EntityTypeEntitiesPage() {
-  const { id: entityTypeId } = useParams<{ id: string }>();
+  const { key: entityTypeKey } = useParams<{ key: string }>();
   const queryClient = useQueryClient();
   const { v } = useVocabulary();
   const [modalOpen, setModalOpen] = useState(false);
@@ -34,22 +34,22 @@ export default function EntityTypeEntitiesPage() {
   const [metaValues, setMetaValues] = useState<Record<string, unknown>>({});
   const [search, setSearch] = useState("");
 
-  // Find the entity type by ID
+  // Find the entity type by key
   const { data: entityTypes = [] } = useQuery({
     queryKey: ["entity-types"],
     queryFn: entityTypeApi.list,
   });
 
-  const entityType = entityTypes.find((et) => et.id === entityTypeId);
+  const entityType = entityTypes.find((et) => et.key === entityTypeKey);
 
   const { data: entities = [], isLoading } = useQuery({
-    queryKey: ["entities", entityTypeId],
-    queryFn: () => entityApi.list(entityTypeId),
+    queryKey: ["entities", entityType?.id],
+    queryFn: () => entityApi.list(entityType!.id),
     enabled: !!entityType,
   });
 
   // Use entity-type-specific meta fields if available
-  const metaSchemaKey = `entity:${entityTypeId}`;
+  const metaSchemaKey = entityType ? `entity:${entityType.id}` : "";
   const { data: metaFields = [] } = useQuery<MetaFieldDefinition[]>({
     queryKey: ["meta-field-schemas", metaSchemaKey],
     queryFn: () => metaFieldSchemaApi.get(metaSchemaKey),

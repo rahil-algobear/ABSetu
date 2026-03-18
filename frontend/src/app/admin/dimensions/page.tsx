@@ -14,7 +14,7 @@ export default function DimensionsIndexPage() {
 
   useEffect(() => {
     if (dimensions.length > 0) {
-      router.replace(`/admin/dimensions/${dimensions[0].id}`);
+      router.replace(`/admin/dimensions/${dimensions[0].key}`);
     }
   }, [dimensions, router]);
 

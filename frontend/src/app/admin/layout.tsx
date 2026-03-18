@@ -44,7 +44,7 @@ export default function AdminLayout({
   const dimensionTabs = dimensions
     .filter((d) => !d.is_system)
     .map((d) => ({
-      href: `/admin/dimensions/${d.id}`,
+      href: `/admin/dimensions/${d.key}`,
       label: vDim(d),
       icon: Layers,
       permission: "dimension:view",
@@ -52,7 +52,7 @@ export default function AdminLayout({
 
   // Build tabs: one per entity type (like dimensions)
   const entityTypeTabs = entityTypes.map((et) => ({
-    href: `/admin/entities/${et.id}`,
+    href: `/admin/entities/${et.key}`,
     label: et.name,
     icon: Users,
     permission: "entity:view",
