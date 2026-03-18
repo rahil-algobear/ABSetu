@@ -62,7 +62,7 @@ function LoginContent() {
         mobile_number: mobileNumber,
         otp_code: otp,
       });
-      login(data.access_token, data.refresh_token, redirectTo);
+      login(data.access_token, data.refresh_token, data.refresh_token_expires_in_days, redirectTo);
       // Navigate immediately — don't rely solely on the useEffect.
       // router.refresh() invalidates the Router Cache so server
       // components re-render with the new auth cookies.

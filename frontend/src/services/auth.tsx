@@ -8,9 +8,9 @@ interface AuthContextType {
   isAuthenticated: boolean;
   accessToken: string | null;
   refreshToken: string | null;
-  login: (accessToken: string, refreshToken: string, redirectUrl?: string) => void;
+  login: (accessToken: string, refreshToken: string, refreshTokenExpiresInDays?: number, redirectUrl?: string) => void;
   logout: () => void;
-  updateTokens: (accessToken: string, refreshToken: string) => void;
+  updateTokens: (accessToken: string, refreshToken: string, refreshTokenExpiresInDays?: number) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -34,8 +34,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const login = (newAccessToken: string, newRefreshToken: string, redirectUrl?: string) => {
-    setTokens(newAccessToken, newRefreshToken);
+  const login = (newAccessToken: string, newRefreshToken: string, refreshTokenExpiresInDays?: number, redirectUrl?: string) => {
+    setTokens(newAccessToken, newRefreshToken, refreshTokenExpiresInDays);
     setAccessToken(newAccessToken);
     setRefreshToken(newRefreshToken);
     setIsAuthenticated(true);
@@ -54,8 +54,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsAuthenticated(false);
   };
 
-  const updateTokens = (newAccessToken: string, newRefreshToken: string) => {
-    setTokens(newAccessToken, newRefreshToken);
+  const updateTokens = (newAccessToken: string, newRefreshToken: string, refreshTokenExpiresInDays?: number) => {
+    setTokens(newAccessToken, newRefreshToken, refreshTokenExpiresInDays);
     setAccessToken(newAccessToken);
     setRefreshToken(newRefreshToken);
   };

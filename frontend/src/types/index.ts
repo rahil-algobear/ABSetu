@@ -25,6 +25,7 @@ export interface LoginResponse {
 export interface VerifyOTPResponse {
   access_token: string;
   refresh_token: string;
+  refresh_token_expires_in_days: number;
 }
 
 export interface UserProfileResponse {

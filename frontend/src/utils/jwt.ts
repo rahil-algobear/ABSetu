@@ -7,8 +7,8 @@ interface JWTPayload {
   token_type: string;
 }
 
-/** Default refresh token lifetime in days (must match backend REFRESH_TOKEN_EXPIRE_DAYS). */
-const REFRESH_TOKEN_EXPIRE_DAYS = 30;
+/** Fallback refresh token lifetime if backend doesn't provide one. */
+const DEFAULT_REFRESH_TOKEN_EXPIRE_DAYS = 30;
 
 export function decodeToken(token: string): JWTPayload {
   return jwtDecode<JWTPayload>(token);
@@ -26,10 +26,14 @@ export function getTokenExpirationDate(token: string): Date {
   return expirationDate;
 }
 
-export function setTokens(access_token: string, refresh_token: string) {
-  // Refresh token is an opaque string (not JWT), so use a fixed expiry
+export function setTokens(
+  access_token: string,
+  refresh_token: string,
+  refresh_token_expires_in_days: number = DEFAULT_REFRESH_TOKEN_EXPIRE_DAYS
+) {
+  // Refresh token is an opaque string (not JWT), so use the backend-provided expiry
   const refreshExpiry = new Date(
-    Date.now() + REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60 * 1000
+    Date.now() + refresh_token_expires_in_days * 24 * 60 * 60 * 1000
   );
 
   // Set access token cookie — use refreshExpiry so the cookie outlives the JWT.

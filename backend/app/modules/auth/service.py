@@ -216,6 +216,7 @@ class AuthService:
         return user, {
             "access_token": access_token,
             "refresh_token": refresh_token,
+            "refresh_token_expires_in_days": settings.REFRESH_TOKEN_EXPIRE_DAYS,
         }
 
     def refresh_access_token(
@@ -273,6 +274,7 @@ class AuthService:
         return {
             "access_token": new_access_token,
             "refresh_token": new_refresh_token,
+            "refresh_token_expires_in_days": settings.REFRESH_TOKEN_EXPIRE_DAYS,
         }
 
     def revoke_refresh_token(self, raw_refresh_token: str) -> None:

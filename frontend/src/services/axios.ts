@@ -4,6 +4,7 @@ import { fetchTokens, setTokens, removeTokens } from '../utils/jwt';
 interface TokenResponse {
   access_token: string;
   refresh_token: string;
+  refresh_token_expires_in_days: number;
 }
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8100/api';
@@ -69,8 +70,8 @@ authAxios.interceptors.response.use(
             });
         }
 
-        const { access_token, refresh_token: new_refresh_token } = await refreshPromise;
-        setTokens(access_token, new_refresh_token);
+        const { access_token, refresh_token: new_refresh_token, refresh_token_expires_in_days } = await refreshPromise;
+        setTokens(access_token, new_refresh_token, refresh_token_expires_in_days);
 
         // Retry the original request with new token
         if (originalRequest.headers) {
