@@ -783,7 +783,7 @@ def seed():
         if not admin_user:
             admin_user = User(
                 first_name="Rahil",
-                last_name="Admin",
+                last_name="Bhansali",
                 country_code=ADMIN_COUNTRY_CODE,
                 mobile_number=ADMIN_MOBILE,
                 is_verified=True,
