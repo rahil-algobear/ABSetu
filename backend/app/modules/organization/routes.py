@@ -63,7 +63,7 @@ STATIC_ENTITY_TYPES = {
 
 
 def _validate_entity_type(entity_type: str, org_id, db: Session) -> None:
-    """Validate entity type — allow static types, dimension:{key}, and entity:{key} types."""
+    """Validate entity type — allow static types, dimension:{key}, entity:{key}, activity:{key}, and participant:{key} types."""
     if entity_type in STATIC_ENTITY_TYPES:
         return
     if entity_type.startswith("dimension:"):
@@ -80,6 +80,14 @@ def _validate_entity_type(entity_type: str, org_id, db: Session) -> None:
         et_key = entity_type.split(":", 1)[1]
         et = db.query(EntityType).filter_by(organization_id=org_id, key=et_key).first()
         if et:
+            return
+
+    if entity_type.startswith("activity:") or entity_type.startswith("participant:"):
+        from app.modules.activity.model import ActivityCategory
+
+        cat_key = entity_type.split(":", 1)[1]
+        cat = db.query(ActivityCategory).filter_by(organization_id=org_id, key=cat_key).first()
+        if cat:
             return
 
     from fastapi import HTTPException
