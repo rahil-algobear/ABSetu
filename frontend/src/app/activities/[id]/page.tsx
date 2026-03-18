@@ -23,6 +23,7 @@ import {
 import { Can } from "@/components/Auth/Permissions";
 import { useVocabulary } from "@/hooks/useVocabulary";
 import { DynamicMetaForm, MetaFieldDisplay } from "@/components/DynamicMetaForm";
+import { SearchSelectParticipants } from "@/components/SearchSelectParticipants";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -316,9 +317,28 @@ export default function ActivityDetailPage() {
                   const statuses = (el.config?.statuses as string[]) || ["present", "absent"];
                   const defaultStatus = (el.config?.default_status as string) || statuses[0];
 
+                  const useSearchSelect = el.display_type === "search_select";
+
                   return (
                     <div key={sectionKey}>
                       <h3 className="text-sm font-semibold mb-2">{getElementLabel(el)}</h3>
+                      {useSearchSelect ? (
+                        <SearchSelectParticipants
+                          sectionKey={sectionKey}
+                          options={options}
+                          participantType={participantType}
+                          selected={sectionState}
+                          onChange={(records) =>
+                            setParticipantState({ ...participantState, [sectionKey]: records })
+                          }
+                          captureStatus={captureStatus}
+                          statuses={statuses}
+                          defaultStatus={defaultStatus}
+                          metaFields={metaFields}
+                          entityTypeId={isUserSource ? null : (el.ref_id || null)}
+                          entityTypeName={getElementLabel(el)}
+                        />
+                      ) : (
                       <div className="space-y-1 max-h-64 overflow-y-auto border rounded-md p-2">
                         {options.map((opt) => {
                           const existing = sectionState.find((s) => s.participant_id === opt.id);
@@ -390,6 +410,7 @@ export default function ActivityDetailPage() {
                           );
                         })}
                       </div>
+                      )}
                     </div>
                   );
                 })}
