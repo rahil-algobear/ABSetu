@@ -27,18 +27,21 @@ export default function AdminLayout({
     staleTime: 5 * 60 * 1000,
   });
 
-  // Permission mapping for routes
-  const allTabs = [
-    ...dimensions
-      .filter((d) => !d.is_system)
-      .map((d) => ({
-        href: `/admin/dimensions/${d.key}`,
-        permission: "dimension:view",
-      })),
-    ...entityTypes.map((et) => ({
-      href: `/admin/entities/${et.key}`,
-      permission: "entity:view",
-    })),
+  // Build tabs: one per non-system dimension
+  const dimensionTabs = dimensions
+    .filter((d) => !d.is_system)
+    .map((d) => ({
+      href: `/admin/dimensions/${d.id}`,
+      permission: "dimension:view",
+    }));
+
+  // Build tabs: one per entity type (like dimensions)
+  const entityTypeTabs = entityTypes.map((et) => ({
+    href: `/admin/entities/${et.id}`,
+    permission: "entity:view",
+  }));
+
+  const staticTabs = [
     { href: "/admin/manage-dimensions", permission: "dimension:manage" },
     { href: "/admin/dimension-linking", permission: "dimension:view" },
     { href: "/admin/entity-types", permission: "entity_type:view" },
@@ -48,6 +51,8 @@ export default function AdminLayout({
     { href: "/admin/users", permission: "user:view" },
     { href: "/admin/meta-fields", permission: "org:settings" },
   ];
+
+  const allTabs = [...dimensionTabs, ...entityTypeTabs, ...staticTabs];
 
   const currentTab = allTabs.find(
     (tab) => pathname === tab.href || pathname.startsWith(tab.href + "/")

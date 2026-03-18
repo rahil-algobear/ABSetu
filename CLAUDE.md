@@ -32,7 +32,7 @@ Session → Attendance records, Facilitator assignments
 ```bash
 cd backend
 make install        # Install dependencies
-make run-local      # Run on port 8000
+make run-local      # Run on port 8100
 make migrate msg='description'  # Create migration
 make upgrade        # Apply migrations
 make lint           # Lint
@@ -43,7 +43,7 @@ make format         # Format
 ```bash
 cd frontend
 npm install         # Install dependencies
-npm run dev         # Run on port 3000
+npm run dev         # Run on port 3100
 npm run build       # Production build
 npm run lint        # Lint
 ```

@@ -23,7 +23,7 @@ import toast from "react-hot-toast";
 interface SectionConfig {
   key: string;
   label: string;
-  participant_source: string; // "entity_type:{key}" or "user"
+  participant_source: string; // "entity_type:{id}" or "user"
   selection_mode: string; // "multi_select" | "enrolled_checklist" | "single_select"
   capture_status?: boolean;
   statuses?: string[];
@@ -75,7 +75,7 @@ export default function ActivityDetailPage() {
   }, [activity, activityTypes, categories]);
 
   // Load entities/users for each section's participant source
-  const entitySourceKeys = useMemo(() => {
+  const entitySourceIds = useMemo(() => {
     return sections
       .filter((s) => s.participant_source.startsWith("entity_type:"))
       .map((s) => s.participant_source.split(":")[1]);
@@ -83,15 +83,14 @@ export default function ActivityDetailPage() {
 
   const hasUserSection = sections.some((s) => s.participant_source === "user");
 
-  // Find entity type IDs for entity source keys
+  // Map entity type IDs from participant_source (already UUIDs)
   const entityTypeIdMap = useMemo(() => {
     const map: Record<string, string> = {};
-    for (const key of entitySourceKeys) {
-      const et = entityTypes.find((t) => t.key === key);
-      if (et) map[key] = et.id;
+    for (const id of entitySourceIds) {
+      map[id] = id;
     }
     return map;
-  }, [entitySourceKeys, entityTypes]);
+  }, [entitySourceIds]);
 
   // Load entities for each entity type
   const { data: entitiesByType = {} } = useQuery({

@@ -89,45 +89,53 @@ export default function MetaFieldsPage() {
     [dimensions]
   );
 
-  // Derive the schema key from section + activeKey
+  // Derive the schema key from section + activeKey (now uses IDs)
+  const isCategory = (id: string) => categories.some((c) => c.id === id);
+
   const schemaKey = useMemo(() => {
     if (!activeKey) return "";
     switch (activeSection) {
       case "entity": return `entity:${activeKey}`;
       case "dimension": return `dimension:${activeKey}`;
       case "other": return activeKey; // "activity_type", "enrollment"
-      case "activity": return `activity:${activeKey}`;
-      case "participant": return `participant:${activeKey}`;
+      case "activity": {
+        const sub = isCategory(activeKey) ? "category" : "type";
+        return `activity:${sub}:${activeKey}`;
+      }
+      case "participant": {
+        const sub = isCategory(activeKey) ? "category" : "type";
+        return `participant:${sub}:${activeKey}`;
+      }
       default: return "";
     }
-  }, [activeSection, activeKey]);
+  }, [activeSection, activeKey, categories]);
 
-  // Auto-select first key when section changes
+  // Auto-select first ID when section changes
   const selectSection = (section: SectionKind) => {
     setActiveSection(section);
     switch (section) {
       case "entity":
-        setActiveKey(entityTypesList[0]?.key || "");
+        setActiveKey(entityTypesList[0]?.id || "");
         break;
       case "dimension":
-        setActiveKey(nonSystemDimensions[0]?.key || "");
+        setActiveKey(nonSystemDimensions[0]?.id || "");
         break;
       case "other":
         setActiveKey("activity_type");
         break;
       case "activity":
-        setActiveKey(categories[0]?.key || "");
+        setActiveKey(categories[0]?.id || "");
         break;
       case "participant":
-        setActiveKey(categories[0]?.key || "");
+        setActiveKey(categories[0]?.id || "");
         break;
     }
   };
 
-  // Set initial key on first load
+  // Set initial ID on first load
   useMemo(() => {
     if (!activeKey && entityTypesList.length > 0) {
-      setActiveKey(entityTypesList[0].key);
+      setActiveKey(entityTypesList[0].id);
     }
   }, [entityTypesList]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -170,13 +178,19 @@ export default function MetaFieldsPage() {
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    const key = fieldForm.key || fieldForm.label.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
+    const key = editingIndex !== null
+      ? fieldForm.key
+      : fieldForm.label.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
     const options =
       fieldForm.type === "select" || fieldForm.type === "multiselect"
         ? optionsText.split("\n").map((o) => o.trim()).filter(Boolean)
         : undefined;
 
-    const field: MetaFieldDefinition = { ...fieldForm, key, options };
+    const defaultVal = fieldForm.default != null && fieldForm.default !== "" &&
+      !(Array.isArray(fieldForm.default) && fieldForm.default.length === 0)
+      ? fieldForm.default
+      : undefined;
+    const field: MetaFieldDefinition = { ...fieldForm, key, options, default: defaultVal };
 
     let updated: MetaFieldDefinition[];
     if (editingIndex !== null) {
@@ -200,19 +214,22 @@ export default function MetaFieldsPage() {
   // Build label for the currently selected schema
   const selectedLabel = useMemo(() => {
     switch (activeSection) {
-      case "entity": return entityTypesList.find((et) => et.key === activeKey)?.name || activeKey;
-      case "dimension": return nonSystemDimensions.find((d) => d.key === activeKey) ? vDim(nonSystemDimensions.find((d) => d.key === activeKey)!) : activeKey;
+      case "entity": return entityTypesList.find((et) => et.id === activeKey)?.name || activeKey;
+      case "dimension": {
+        const dim = nonSystemDimensions.find((d) => d.id === activeKey);
+        return dim ? vDim(dim) : activeKey;
+      }
       case "other": return activeKey === "activity_type" ? vPlural("activity_type") : vPlural("enrollment");
       case "activity": {
-        const cat = categories.find((c) => c.key === activeKey);
+        const cat = categories.find((c) => c.id === activeKey);
         if (cat) return `Activity: ${cat.name} (all types)`;
-        const at = activityTypes.find((t) => t.name.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "") === activeKey);
+        const at = activityTypes.find((t) => t.id === activeKey);
         return at ? `Activity: ${at.name}` : activeKey;
       }
       case "participant": {
-        const cat = categories.find((c) => c.key === activeKey);
+        const cat = categories.find((c) => c.id === activeKey);
         if (cat) return `Participant: ${cat.name} (all types)`;
-        const at = activityTypes.find((t) => t.name.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "") === activeKey);
+        const at = activityTypes.find((t) => t.id === activeKey);
         return at ? `Participant: ${at.name}` : activeKey;
       }
       default: return "";
@@ -262,18 +279,18 @@ export default function MetaFieldsPage() {
           <div className="flex gap-2 overflow-x-auto pb-1">
             {entityTypesList.map((et) => (
               <button
-                key={et.key}
-                onClick={() => setActiveKey(et.key)}
+                key={et.id}
+                onClick={() => setActiveKey(et.id)}
                 className={`px-3 py-1 text-sm rounded-md whitespace-nowrap transition-colors ${
-                  activeKey === et.key
+                  activeKey === et.id
                     ? "bg-purple-50 text-purple-700 border border-purple-200 font-medium"
                     : "bg-white text-gray-600 border border-gray-200 hover:border-gray-300"
                 }`}
               >
                 {et.name}
-                {(allSchemas[`entity:${et.key}`]?.length || 0) > 0 && (
+                {(allSchemas[`entity:${et.id}`]?.length || 0) > 0 && (
                   <span className="ml-1 text-xs text-gray-400">
-                    ({allSchemas[`entity:${et.key}`]!.length})
+                    ({allSchemas[`entity:${et.id}`]!.length})
                   </span>
                 )}
               </button>
@@ -285,18 +302,18 @@ export default function MetaFieldsPage() {
           <div className="flex gap-2 overflow-x-auto pb-1">
             {nonSystemDimensions.map((d) => (
               <button
-                key={d.key}
-                onClick={() => setActiveKey(d.key)}
+                key={d.id}
+                onClick={() => setActiveKey(d.id)}
                 className={`px-3 py-1 text-sm rounded-md whitespace-nowrap transition-colors ${
-                  activeKey === d.key
+                  activeKey === d.id
                     ? "bg-purple-50 text-purple-700 border border-purple-200 font-medium"
                     : "bg-white text-gray-600 border border-gray-200 hover:border-gray-300"
                 }`}
               >
                 {vDim(d)}
-                {(allSchemas[`dimension:${d.key}`]?.length || 0) > 0 && (
+                {(allSchemas[`dimension:${d.id}`]?.length || 0) > 0 && (
                   <span className="ml-1 text-xs text-gray-400">
-                    ({allSchemas[`dimension:${d.key}`]!.length})
+                    ({allSchemas[`dimension:${d.id}`]!.length})
                   </span>
                 )}
               </button>
@@ -336,11 +353,11 @@ export default function MetaFieldsPage() {
               <label className="text-xs text-gray-500 block mb-1">{v("activity_category")}</label>
               <select
                 className="border rounded-md px-3 py-1.5 text-sm"
-                value={categories.find((c) => c.key === activeKey) ? activeKey : ""}
+                value={categories.find((c) => c.id === activeKey) ? activeKey : ""}
                 onChange={(e) => setActiveKey(e.target.value)}
               >
                 {categories.map((cat) => (
-                  <option key={cat.key} value={cat.key}>
+                  <option key={cat.id} value={cat.id}>
                     {cat.name} (all types)
                   </option>
                 ))}
@@ -351,18 +368,15 @@ export default function MetaFieldsPage() {
               <label className="text-xs text-gray-500 block mb-1">Specific {v("activity_type")}</label>
               <select
                 className="border rounded-md px-3 py-1.5 text-sm"
-                value={categories.find((c) => c.key === activeKey) ? "" : activeKey}
+                value={categories.find((c) => c.id === activeKey) ? "" : activeKey}
                 onChange={(e) => setActiveKey(e.target.value)}
               >
                 <option value="">Select a type...</option>
-                {activityTypes.map((at) => {
-                  const typeKey = at.name.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
-                  return (
-                    <option key={at.id} value={typeKey}>
-                      {at.name}
-                    </option>
-                  );
-                })}
+                {activityTypes.map((at) => (
+                  <option key={at.id} value={at.id}>
+                    {at.name}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
@@ -392,9 +406,9 @@ export default function MetaFieldsPage() {
                 <TableRow>
                   <TableHead className="w-8">{""}</TableHead>
                   <TableHead>Label</TableHead>
-                  <TableHead>Key</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Required</TableHead>
+                  <TableHead>Default</TableHead>
                   <TableHead>Options</TableHead>
                   <TableHead className="w-20">Actions</TableHead>
                 </TableRow>
@@ -406,11 +420,19 @@ export default function MetaFieldsPage() {
                       <GripVertical className="h-4 w-4 text-gray-300" />
                     </TableCell>
                     <TableCell className="font-medium">{field.label}</TableCell>
-                    <TableCell className="text-gray-500 text-xs font-mono">{field.key}</TableCell>
                     <TableCell>
                       {FIELD_TYPES.find((ft) => ft.value === field.type)?.label || field.type}
                     </TableCell>
                     <TableCell>{field.required ? "Yes" : "No"}</TableCell>
+                    <TableCell className="text-sm text-gray-500">
+                      {field.default != null && field.default !== ""
+                        ? field.type === "boolean"
+                          ? (field.default ? "Yes" : "No")
+                          : Array.isArray(field.default)
+                            ? field.default.join(", ")
+                            : String(field.default)
+                        : "—"}
+                    </TableCell>
                     <TableCell>
                       {field.options?.length ? field.options.join(", ") : "—"}
                     </TableCell>
@@ -449,18 +471,9 @@ export default function MetaFieldsPage() {
               required
             />
           </div>
-          <div>
-            <Label htmlFor="field-key">
-              Key <span className="text-gray-400 text-xs font-normal">(auto-generated if empty)</span>
-            </Label>
-            <Input
-              id="field-key"
-              value={fieldForm.key}
-              onChange={(e) => setFieldForm({ ...fieldForm, key: e.target.value })}
-              placeholder="e.g. nationality"
-              className="font-mono text-sm"
-            />
-          </div>
+          {editingIndex !== null && (
+            <p className="text-xs text-gray-400 font-mono">Key: {fieldForm.key}</p>
+          )}
           <div>
             <Label htmlFor="field-type">Type</Label>
             <select
@@ -495,6 +508,73 @@ export default function MetaFieldsPage() {
               />
             </div>
           )}
+          <div>
+            <Label htmlFor="field-default">
+              Default value <span className="text-gray-400 text-xs font-normal">(optional)</span>
+            </Label>
+            {fieldForm.type === "boolean" ? (
+              <div className="flex items-center gap-2 mt-1">
+                <Switch
+                  checked={fieldForm.default === true}
+                  onCheckedChange={(checked) => setFieldForm({ ...fieldForm, default: checked })}
+                />
+                <span className="text-sm text-gray-600">{fieldForm.default === true ? "Yes" : "No"}</span>
+              </div>
+            ) : fieldForm.type === "select" ? (
+              <select
+                id="field-default"
+                className="w-full border rounded-md p-2 text-sm"
+                value={(fieldForm.default as string) || ""}
+                onChange={(e) => setFieldForm({ ...fieldForm, default: e.target.value || undefined })}
+              >
+                <option value="">None</option>
+                {optionsText.split("\n").map((o) => o.trim()).filter(Boolean).map((opt) => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
+              </select>
+            ) : fieldForm.type === "multiselect" ? (
+              <div className="space-y-1 mt-1">
+                {optionsText.split("\n").map((o) => o.trim()).filter(Boolean).map((opt) => {
+                  const selected = Array.isArray(fieldForm.default) ? fieldForm.default : [];
+                  return (
+                    <label key={opt} className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={selected.includes(opt)}
+                        onChange={(e) => {
+                          const next = e.target.checked
+                            ? [...selected, opt]
+                            : selected.filter((s) => s !== opt);
+                          setFieldForm({ ...fieldForm, default: next.length ? next : undefined });
+                        }}
+                      />
+                      {opt}
+                    </label>
+                  );
+                })}
+                {!optionsText.trim() && (
+                  <p className="text-xs text-gray-400">Add options above first</p>
+                )}
+              </div>
+            ) : (
+              <Input
+                id="field-default"
+                type={fieldForm.type === "number" ? "number" : fieldForm.type === "date" ? "date" : "text"}
+                value={fieldForm.default != null ? String(fieldForm.default) : ""}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (!val) {
+                    setFieldForm({ ...fieldForm, default: undefined });
+                  } else if (fieldForm.type === "number") {
+                    setFieldForm({ ...fieldForm, default: Number(val) });
+                  } else {
+                    setFieldForm({ ...fieldForm, default: val });
+                  }
+                }}
+                placeholder={fieldForm.type === "date" ? "" : "Leave blank for no default"}
+              />
+            )}
+          </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={closeModal}>Cancel</Button>
             <Button type="submit">{editingIndex !== null ? "Save" : "Add"}</Button>
