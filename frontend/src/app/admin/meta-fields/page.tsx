@@ -170,7 +170,9 @@ export default function MetaFieldsPage() {
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    const key = fieldForm.key || fieldForm.label.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
+    const key = editingIndex !== null
+      ? fieldForm.key
+      : fieldForm.label.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
     const options =
       fieldForm.type === "select" || fieldForm.type === "multiselect"
         ? optionsText.split("\n").map((o) => o.trim()).filter(Boolean)
@@ -449,18 +451,9 @@ export default function MetaFieldsPage() {
               required
             />
           </div>
-          <div>
-            <Label htmlFor="field-key">
-              Key <span className="text-gray-400 text-xs font-normal">(auto-generated if empty)</span>
-            </Label>
-            <Input
-              id="field-key"
-              value={fieldForm.key}
-              onChange={(e) => setFieldForm({ ...fieldForm, key: e.target.value })}
-              placeholder="e.g. nationality"
-              className="font-mono text-sm"
-            />
-          </div>
+          {editingIndex !== null && (
+            <p className="text-xs text-gray-400 font-mono">Key: {fieldForm.key}</p>
+          )}
           <div>
             <Label htmlFor="field-type">Type</Label>
             <select
