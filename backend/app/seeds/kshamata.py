@@ -12,7 +12,7 @@ import logging
 import sys
 
 from app.core.database import SessionLocal
-from app.modules.organization.model import Organization
+from app.modules.organization.model import MetaFieldSchema, Organization
 from app.modules.dimension.model import Dimension, DimensionValue, DimensionValueLink
 from app.modules.activity.model import ActivityCategory, ActivityType
 from app.modules.entity.model import EntityType
@@ -417,9 +417,54 @@ PROGRAMME_ACTIVITY_TYPES = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Meta Field Schemas — custom fields for Beneficiary entity type
+# ---------------------------------------------------------------------------
+BENEFICIARY_CUSTOM_FIELDS = [
+    {
+        "key": "nationality",
+        "label": "Nationality",
+        "type": "select",
+        "required": False,
+        "options": ["Indian", "Bangladeshi"],
+    },
+    {
+        "key": "contact_number",
+        "label": "Contact No.",
+        "type": "text",
+        "required": False,
+    },
+    {
+        "key": "current_address",
+        "label": "Current Address",
+        "type": "text",
+        "required": False,
+    },
+    {
+        "key": "native_place",
+        "label": "Native Place",
+        "type": "text",
+        "required": False,
+    },
+    {
+        "key": "age",
+        "label": "Age",
+        "type": "number",
+        "required": False,
+    },
+    {
+        "key": "education",
+        "label": "Education",
+        "type": "text",
+        "required": False,
+    },
+]
+
+
 def _make_at_code(name: str) -> str:
     """Convert activity type name to a slugified dimension value code."""
     import re
+
     slug = name.lower().strip()
     slug = re.sub(r"[^a-z0-9]+", "_", slug)
     return slug.strip("_")
@@ -447,8 +492,6 @@ def _ensure_dimension(db, org, key, name, sort_order, is_system=None):
     return dim
 
 
-
-
 def _ensure_values(db, org, dimension, values_list):
     value_map = {}
     for idx, (seed_key, name) in enumerate(values_list):
@@ -456,7 +499,9 @@ def _ensure_values(db, org, dimension, values_list):
         # Look up by slug (current convention) or legacy seed_key
         dv = db.query(DimensionValue).filter_by(dimension_id=dimension.id, code=slug).first()
         if not dv:
-            dv = db.query(DimensionValue).filter_by(dimension_id=dimension.id, code=seed_key).first()
+            dv = (
+                db.query(DimensionValue).filter_by(dimension_id=dimension.id, code=seed_key).first()
+            )
             if dv:
                 # Migrate legacy code to slugified name
                 dv.code = slug
@@ -584,22 +629,50 @@ def seed():
             entity_type_map[et_data["name"]] = et
         print(f"  Ensured {len(ENTITY_TYPES)} entity types")
 
+        # 2b. Meta Field Schemas — Beneficiary custom fields
+        beneficiary_et = entity_type_map["Beneficiary"]
+        beneficiary_scope_key = f"entity:{beneficiary_et.id}"
+        mfs = (
+            db.query(MetaFieldSchema)
+            .filter_by(organization_id=org.id, scope_key=beneficiary_scope_key)
+            .first()
+        )
+        if not mfs:
+            mfs = MetaFieldSchema(
+                organization_id=org.id,
+                scope_key=beneficiary_scope_key,
+                fields=BENEFICIARY_CUSTOM_FIELDS,
+            )
+            db.add(mfs)
+            db.flush()
+            print(
+                f"  Created beneficiary meta field schema ({len(BENEFICIARY_CUSTOM_FIELDS)} fields)"
+            )
+        else:
+            mfs.fields = BENEFICIARY_CUSTOM_FIELDS
+            db.flush()
+            print(
+                f"  Updated beneficiary meta field schema ({len(BENEFICIARY_CUSTOM_FIELDS)} fields)"
+            )
+
         # 3. Activity Category: Sessions
         # Build sections with UUID-based participant_source
         sections = []
         for tmpl in SESSIONS_SECTIONS_TEMPLATE:
             et = entity_type_map[tmpl["entity_type_name"]]
-            sections.append({
-                "key": tmpl["key"],
-                "label": tmpl["label"],
-                "participant_source": f"entity_type:{et.id}",
-                "selection_mode": tmpl["selection_mode"],
-                "min_count": tmpl["min_count"],
-                "max_count": tmpl["max_count"],
-                "capture_status": tmpl["capture_status"],
-                "statuses": tmpl["statuses"],
-                "default_status": tmpl["default_status"],
-            })
+            sections.append(
+                {
+                    "key": tmpl["key"],
+                    "label": tmpl["label"],
+                    "participant_source": f"entity_type:{et.id}",
+                    "selection_mode": tmpl["selection_mode"],
+                    "min_count": tmpl["min_count"],
+                    "max_count": tmpl["max_count"],
+                    "capture_status": tmpl["capture_status"],
+                    "statuses": tmpl["statuses"],
+                    "default_status": tmpl["default_status"],
+                }
+            )
 
         sessions_cat_key = slugify(SESSIONS_CATEGORY_NAME)
         sessions_cat = (
@@ -657,8 +730,18 @@ def seed():
             dv = db.query(DimensionValue).filter_by(dimension_id=at_dim.id, code=at_code).first()
             if not dv:
                 # Check for legacy uppercase code
-                legacy_code = at_name.upper().replace(" ", "_").replace("-", "_").replace("/", "_").replace(",", "")
-                dv = db.query(DimensionValue).filter_by(dimension_id=at_dim.id, code=legacy_code).first()
+                legacy_code = (
+                    at_name.upper()
+                    .replace(" ", "_")
+                    .replace("-", "_")
+                    .replace("/", "_")
+                    .replace(",", "")
+                )
+                dv = (
+                    db.query(DimensionValue)
+                    .filter_by(dimension_id=at_dim.id, code=legacy_code)
+                    .first()
+                )
                 if dv:
                     dv.code = at_code
                     db.flush()

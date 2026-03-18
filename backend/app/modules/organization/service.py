@@ -52,9 +52,7 @@ class MetaFieldSchemaService:
         rows = self.db.query(MetaFieldSchema).filter_by(organization_id=org_id).all()
         return {row.scope_key: row.fields for row in rows}
 
-    def update_schema(
-        self, org_id: uuid.UUID, scope_key: str, fields: list[dict]
-    ) -> list[dict]:
+    def update_schema(self, org_id: uuid.UUID, scope_key: str, fields: list[dict]) -> list[dict]:
         from app.modules.organization.model import MetaFieldSchema
 
         row = (
@@ -65,9 +63,7 @@ class MetaFieldSchemaService:
         if row:
             row.fields = fields
         else:
-            row = MetaFieldSchema(
-                organization_id=org_id, scope_key=scope_key, fields=fields
-            )
+            row = MetaFieldSchema(organization_id=org_id, scope_key=scope_key, fields=fields)
             self.db.add(row)
         self.db.commit()
         return fields
