@@ -421,8 +421,11 @@ PROGRAMME_ACTIVITY_TYPES = {
 
 
 def _make_at_code(name: str) -> str:
-    """Convert activity type name to a dimension value code."""
-    return name.upper().replace(" ", "_").replace("-", "_").replace("/", "_").replace(",", "")
+    """Convert activity type name to a slugified dimension value code."""
+    import re
+    slug = name.lower().strip()
+    slug = re.sub(r"[^a-z0-9]+", "_", slug)
+    return slug.strip("_")
 
 
 def _ensure_dimension(db, org, key, name, sort_order, is_system=None):
@@ -447,21 +450,37 @@ def _ensure_dimension(db, org, key, name, sort_order, is_system=None):
     return dim
 
 
+def _slugify(name):
+    """Generate a slug/code from a name."""
+    import re
+    slug = name.lower().strip()
+    slug = re.sub(r"[^a-z0-9]+", "_", slug)
+    return slug.strip("_")
+
+
 def _ensure_values(db, org, dimension, values_list):
     value_map = {}
-    for idx, (code, name) in enumerate(values_list):
-        dv = db.query(DimensionValue).filter_by(dimension_id=dimension.id, code=code).first()
+    for idx, (seed_key, name) in enumerate(values_list):
+        slug = _slugify(name)
+        # Look up by slug (current convention) or legacy seed_key
+        dv = db.query(DimensionValue).filter_by(dimension_id=dimension.id, code=slug).first()
+        if not dv:
+            dv = db.query(DimensionValue).filter_by(dimension_id=dimension.id, code=seed_key).first()
+            if dv:
+                # Migrate legacy code to slugified name
+                dv.code = slug
+                db.flush()
         if not dv:
             dv = DimensionValue(
                 organization_id=org.id,
                 dimension_id=dimension.id,
                 name=name,
-                code=code,
+                code=slug,
                 sort_order=idx,
             )
             db.add(dv)
             db.flush()
-        value_map[code] = dv
+        value_map[seed_key] = dv
     print(f"  Ensured {len(values_list)} {dimension.name.lower()} values")
     return value_map
 
@@ -625,6 +644,13 @@ def seed():
 
             at_code = _make_at_code(at_name)
             dv = db.query(DimensionValue).filter_by(dimension_id=at_dim.id, code=at_code).first()
+            if not dv:
+                # Check for legacy uppercase code
+                legacy_code = at_name.upper().replace(" ", "_").replace("-", "_").replace("/", "_").replace(",", "")
+                dv = db.query(DimensionValue).filter_by(dimension_id=at_dim.id, code=legacy_code).first()
+                if dv:
+                    dv.code = at_code
+                    db.flush()
             if not dv:
                 dv = DimensionValue(
                     organization_id=org.id,
