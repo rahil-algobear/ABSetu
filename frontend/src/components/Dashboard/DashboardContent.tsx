@@ -1,9 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/services/auth";
 import { dashboardApi } from "@/services/api";
 import { useVocabulary } from "@/hooks/useVocabulary";
+import { DashboardFilters } from "@/types";
 import { PageContent } from "@/components/ui/page-content";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -13,20 +15,26 @@ import {
   ClipboardList,
   Calendar,
   TrendingUp,
+  Layers,
+  BarChart3,
 } from "lucide-react";
+import { DashboardFiltersBar } from "./DashboardFilters";
 import { ActivityTimelineChart } from "./charts/ActivityTimelineChart";
 import { EntitiesByTypeChart } from "./charts/EntitiesByTypeChart";
 import { ActivitiesByCategoryChart } from "./charts/ActivitiesByCategoryChart";
+import { ActivitiesByTypeChart } from "./charts/ActivitiesByTypeChart";
 import { EnrollmentStatusChart } from "./charts/EnrollmentStatusChart";
+import { DimensionBreakdownChart } from "./charts/DimensionBreakdownChart";
 import { RecentActivitiesTable } from "./RecentActivitiesTable";
 
 export default function DashboardContent() {
   const { isAuthenticated } = useAuth();
   const { v, vPlural } = useVocabulary();
+  const [filters, setFilters] = useState<DashboardFilters>({});
 
   const { data: stats, isLoading } = useQuery({
-    queryKey: ["dashboard-stats"],
-    queryFn: dashboardApi.getStats,
+    queryKey: ["dashboard-stats", filters],
+    queryFn: () => dashboardApi.getStats(filters),
     staleTime: 2 * 60 * 1000,
     enabled: isAuthenticated,
   });
@@ -34,6 +42,13 @@ export default function DashboardContent() {
   if (!isAuthenticated) {
     return null;
   }
+
+  const hasFilters =
+    (filters.dimension_value_ids?.length ?? 0) > 0 ||
+    !!filters.activity_category_id ||
+    !!filters.activity_type_id;
+
+  const dimensionEntries = Object.entries(stats?.activities_by_dimension ?? {});
 
   return (
     <PageContent>
@@ -43,6 +58,9 @@ export default function DashboardContent() {
           Overview of your organization&apos;s data
         </p>
       </div>
+
+      {/* Filters */}
+      <DashboardFiltersBar filters={filters} onChange={setFilters} />
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -54,7 +72,7 @@ export default function DashboardContent() {
           loading={isLoading}
         />
         <StatCard
-          title={`Total ${vPlural("activity")}`}
+          title={`${hasFilters ? "Filtered" : "Total"} ${vPlural("activity")}`}
           value={stats?.total_activities}
           icon={<Activity className="h-5 w-5 text-emerald-600" />}
           color="emerald"
@@ -63,11 +81,7 @@ export default function DashboardContent() {
         <StatCard
           title={`Active ${vPlural("enrollment")}`}
           value={stats?.active_enrollments}
-          subtitle={
-            stats
-              ? `${stats.total_enrollments} total`
-              : undefined
-          }
+          subtitle={stats ? `${stats.total_enrollments} total` : undefined}
           icon={<UserCheck className="h-5 w-5 text-violet-600" />}
           color="violet"
           loading={isLoading}
@@ -127,7 +141,76 @@ export default function DashboardContent() {
         </div>
       </div>
 
-      {/* Charts Row 2: Entities by Type + Activities by Category */}
+      {/* Charts Row 2: By Category + By Type */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <Calendar className="h-4 w-4 text-gray-500" />
+              {vPlural("activity")} by {v("activity_category")}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <ChartSkeleton height={280} />
+            ) : (
+              <ActivitiesByCategoryChart
+                data={stats?.activities_by_category ?? []}
+              />
+            )}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <BarChart3 className="h-4 w-4 text-gray-500" />
+              {vPlural("activity")} by {v("activity_type")}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <ChartSkeleton height={280} />
+            ) : (
+              <ActivitiesByTypeChart
+                data={stats?.activities_by_type ?? []}
+              />
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Dimension Breakdowns */}
+      {dimensionEntries.length > 0 && (
+        <div
+          className={`grid grid-cols-1 ${
+            dimensionEntries.length > 1 ? "lg:grid-cols-2" : ""
+          } gap-4 mb-4`}
+        >
+          {dimensionEntries.map(([dimName, items], idx) => (
+            <Card key={dimName}>
+              <CardHeader>
+                <CardTitle className="text-base font-semibold flex items-center gap-2">
+                  <Layers className="h-4 w-4 text-gray-500" />
+                  {vPlural("activity")} by {dimName}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {isLoading ? (
+                  <ChartSkeleton height={240} />
+                ) : (
+                  <DimensionBreakdownChart
+                    dimensionName={dimName}
+                    data={items}
+                    colorIndex={idx}
+                  />
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Entities by Type + Enrollments Over Time */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
         <Card>
           <CardHeader>
@@ -144,28 +227,7 @@ export default function DashboardContent() {
             )}
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base font-semibold flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-gray-500" />
-              {vPlural("activity")} by Category
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <ChartSkeleton height={280} />
-            ) : (
-              <ActivitiesByCategoryChart
-                data={stats?.activities_by_category ?? []}
-              />
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Enrollments over time */}
-      {(stats?.enrollments_over_time?.length ?? 0) > 0 && (
-        <div className="mb-4">
+        {(stats?.enrollments_over_time?.length ?? 0) > 0 && (
           <Card>
             <CardHeader>
               <CardTitle className="text-base font-semibold flex items-center gap-2">
@@ -180,8 +242,8 @@ export default function DashboardContent() {
               />
             </CardContent>
           </Card>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Recent Activities */}
       <Card>
@@ -189,6 +251,11 @@ export default function DashboardContent() {
           <CardTitle className="text-base font-semibold flex items-center gap-2">
             <Activity className="h-4 w-4 text-gray-500" />
             Recent {vPlural("activity")}
+            {hasFilters && (
+              <span className="text-xs font-normal text-gray-400 ml-1">
+                (filtered)
+              </span>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent>

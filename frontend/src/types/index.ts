@@ -273,6 +273,12 @@ export interface RecentActivity {
   participant_count: number;
 }
 
+export interface DashboardFilters {
+  dimension_value_ids?: string[];
+  activity_category_id?: string;
+  activity_type_id?: string;
+}
+
 export interface DashboardStats {
   total_entities: number;
   total_activities: number;
@@ -281,6 +287,8 @@ export interface DashboardStats {
   total_users: number;
   entities_by_type: CountByItem[];
   activities_by_category: CountByItem[];
+  activities_by_type: CountByItem[];
+  activities_by_dimension: Record<string, CountByItem[]>;
   activities_over_time: TimeSeriesPoint[];
   enrollments_over_time: TimeSeriesPoint[];
   recent_activities: RecentActivity[];

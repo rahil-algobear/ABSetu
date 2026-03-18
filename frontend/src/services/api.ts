@@ -6,6 +6,7 @@ import {
   ActivityFormElement,
   ActivityParticipant,
   ActivityType,
+  DashboardFilters,
   DashboardStats,
   Dimension,
   DimensionValue,
@@ -409,8 +410,21 @@ export const userApi = {
 // --- Dashboard ---
 
 export const dashboardApi = {
-  getStats: async (): Promise<DashboardStats> => {
-    const response = await authAxios.get<DashboardStats>('/dashboard/stats');
+  getStats: async (filters?: DashboardFilters): Promise<DashboardStats> => {
+    const params = new URLSearchParams();
+    if (filters?.dimension_value_ids?.length) {
+      for (const id of filters.dimension_value_ids) {
+        params.append('dimension_value_ids', id);
+      }
+    }
+    if (filters?.activity_category_id) {
+      params.set('activity_category_id', filters.activity_category_id);
+    }
+    if (filters?.activity_type_id) {
+      params.set('activity_type_id', filters.activity_type_id);
+    }
+    const qs = params.toString();
+    const response = await authAxios.get<DashboardStats>(`/dashboard/stats${qs ? `?${qs}` : ''}`);
     return response.data;
   },
 };

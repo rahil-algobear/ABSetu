@@ -32,6 +32,8 @@ class DashboardStats(BaseModel):
     total_users: int
     entities_by_type: list[CountByItem]
     activities_by_category: list[CountByItem]
+    activities_by_type: list[CountByItem]
+    activities_by_dimension: dict[str, list[CountByItem]]
     activities_over_time: list[TimeSeriesPoint]
     enrollments_over_time: list[TimeSeriesPoint]
     recent_activities: list[RecentActivity]
