@@ -38,6 +38,11 @@ authAxios.interceptors.request.use(
   }
 );
 
+// Shared refresh state — ensures only one refresh request is in-flight at a time.
+// Without this, concurrent 401s each try to rotate the refresh token independently,
+// which triggers the backend's reuse-attack detection and revokes all tokens.
+let refreshPromise: Promise<TokenResponse> | null = null;
+
 // Response interceptor for handling token refresh
 authAxios.interceptors.response.use(
   (response) => response,
@@ -49,16 +54,22 @@ authAxios.interceptors.response.use(
       originalRequest._retry = true;
 
       try {
-        const { refresh_token } = fetchTokens();
-        if (!refresh_token) {
-          throw new Error('No refresh token available');
+        // If a refresh is already in progress, wait for it instead of starting another
+        if (!refreshPromise) {
+          const { refresh_token } = fetchTokens();
+          if (!refresh_token) {
+            throw new Error('No refresh token available');
+          }
+
+          refreshPromise = publicAxios
+            .post<TokenResponse>('/auth/refresh-token', { refresh_token })
+            .then((res) => res.data)
+            .finally(() => {
+              refreshPromise = null;
+            });
         }
 
-        const response = await publicAxios.post<TokenResponse>('/auth/refresh-token', {
-          refresh_token,
-        });
-
-        const { access_token, refresh_token: new_refresh_token } = response.data;
+        const { access_token, refresh_token: new_refresh_token } = await refreshPromise;
         setTokens(access_token, new_refresh_token);
 
         // Retry the original request with new token
@@ -67,6 +78,7 @@ authAxios.interceptors.response.use(
         }
         return authAxios(originalRequest);
       } catch (refreshError) {
+        refreshPromise = null;
         // If refresh token fails, redirect to login
         removeTokens();
         window.location.href = '/login';

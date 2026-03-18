@@ -74,9 +74,4 @@ class TokenHelper:
             jwt.ExpiredSignatureError: If token has expired
             jwt.InvalidTokenError: If token is invalid
         """
-        try:
-            return jwt.decode(token, self.secret_key, algorithms=[self.algorithm])
-        except jwt.ExpiredSignatureError:
-            raise jwt.InvalidTokenError("Token has expired")
-        except jwt.InvalidTokenError as e:
-            raise jwt.InvalidTokenError(f"Invalid token: {str(e)}")
+        return jwt.decode(token, self.secret_key, algorithms=[self.algorithm])
