@@ -19,7 +19,7 @@ import {
   TableHead,
   TableCell,
 } from "@/components/ui/page-table";
-import { Plus, Pencil, Trash2, GripVertical } from "lucide-react";
+import { Plus, Pencil, Trash2, ChevronUp, ChevronDown } from "lucide-react";
 import toast from "react-hot-toast";
 
 interface SectionConfig {
@@ -166,6 +166,14 @@ export default function ActivityCategoriesPage() {
     setSections(sections.filter((_, i) => i !== index));
   };
 
+  const moveSection = (index: number, direction: "up" | "down") => {
+    const target = direction === "up" ? index - 1 : index + 1;
+    if (target < 0 || target >= sections.length) return;
+    const updated = [...sections];
+    [updated[index], updated[target]] = [updated[target], updated[index]];
+    setSections(updated);
+  };
+
   return (
     <>
       <div className="flex items-center justify-between mb-4">
@@ -297,7 +305,24 @@ export default function ActivityCategoriesPage() {
                   <div key={idx} className="border rounded-lg p-3 space-y-3 bg-gray-50">
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-1 text-gray-400">
-                        <GripVertical className="h-4 w-4" />
+                        <div className="flex flex-col -space-y-1">
+                          <button
+                            type="button"
+                            onClick={() => moveSection(idx, "up")}
+                            disabled={idx === 0}
+                            className="text-gray-400 hover:text-purple-600 disabled:opacity-30 disabled:cursor-not-allowed"
+                          >
+                            <ChevronUp className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => moveSection(idx, "down")}
+                            disabled={idx === sections.length - 1}
+                            className="text-gray-400 hover:text-purple-600 disabled:opacity-30 disabled:cursor-not-allowed"
+                          >
+                            <ChevronDown className="h-4 w-4" />
+                          </button>
+                        </div>
                         <span className="text-xs font-medium">Section {idx + 1}</span>
                       </div>
                       <button
