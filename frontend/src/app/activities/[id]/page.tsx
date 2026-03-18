@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   activityApi,
@@ -27,11 +27,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PageLayout } from "@/components/ui/page-layout";
+import { Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
 
 export default function ActivityDetailPage() {
   const params = useParams();
   const id = params.id as string;
+  const router = useRouter();
   const queryClient = useQueryClient();
   const { v } = useVocabulary();
   const [editingSections, setEditingSections] = useState(false);
@@ -160,6 +162,22 @@ export default function ActivityDetailPage() {
     onError: () => toast.error("Failed to save participants"),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: () => activityApi.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["activities"] });
+      toast.success(`${v("activity")} deleted`);
+      router.push("/activities");
+    },
+    onError: () => toast.error(`Failed to delete ${v("activity").toLowerCase()}`),
+  });
+
+  const handleDelete = () => {
+    if (confirm(`Delete this ${v("activity").toLowerCase()}? This cannot be undone.`)) {
+      deleteMutation.mutate();
+    }
+  };
+
   const openEditing = () => {
     const state: typeof participantState = {};
     for (const el of entityTypeElements) {
@@ -216,7 +234,21 @@ export default function ActivityDetailPage() {
 
   return (
     <PageLayout className="p-4">
-      <h1 className="text-2xl font-bold mb-1">{activity.type_name}</h1>
+      <div className="flex items-center justify-between mb-1">
+        <h1 className="text-2xl font-bold">{activity.type_name}</h1>
+        <Can permission="activity:create">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleDelete}
+            disabled={deleteMutation.isPending}
+            className="text-red-500 hover:text-red-700 hover:bg-red-50"
+          >
+            <Trash2 className="h-4 w-4 mr-1" />
+            Delete
+          </Button>
+        </Can>
+      </div>
       <div className="flex gap-1 mb-1 flex-wrap">
         {activity.tags
           .filter((tag) => tag.dimension_key !== "activity_type")
