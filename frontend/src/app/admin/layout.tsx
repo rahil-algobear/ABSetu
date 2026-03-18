@@ -1,12 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { PageLayout } from "@/components/ui/page-layout";
 import { usePermissions } from "@/components/Auth/Permissions";
 import { dimensionApi, entityTypeApi } from "@/services/api";
-import { cn } from "@/utils/cn";
 import { useVocabulary } from "@/hooks/useVocabulary";
 import {
   Layers,
@@ -40,7 +38,7 @@ export default function AdminLayout({
     staleTime: 5 * 60 * 1000,
   });
 
-  // Build tabs: one per non-system dimension
+  // Build tabs for permission checking
   const dimensionTabs = dimensions
     .filter((d) => !d.is_system)
     .map((d) => ({
@@ -50,7 +48,6 @@ export default function AdminLayout({
       permission: "dimension:view",
     }));
 
-  // Build tabs: one per entity type (like dimensions)
   const entityTypeTabs = entityTypes.map((et) => ({
     href: `/admin/entities/${et.key}`,
     label: et.name,
@@ -75,47 +72,13 @@ export default function AdminLayout({
   ];
 
   const allTabs = [...mastersTabs, ...adminTabs];
-  const visibleAdminTabs = adminTabs.filter((tab) => can(tab.permission));
 
   // Check if user has permission for the current page
   const currentTab = allTabs.find((tab) => pathname === tab.href || pathname.startsWith(tab.href + "/"));
   const hasAccess = !currentTab || can(currentTab.permission);
 
-  // Determine current section
-  const isMastersPage = mastersTabs.some((tab) => pathname === tab.href || pathname.startsWith(tab.href + "/"));
-  const isAdminPage = !isMastersPage;
-
   return (
     <PageLayout className="p-4">
-      {/* Admin pages get heading + tab bar; Settings/Masters pages get neither */}
-      {isAdminPage && (
-        <>
-          <h1 className="text-2xl font-bold mb-4">Admin</h1>
-
-          <div className="flex overflow-x-auto gap-1 mb-6 border-b border-gray-200 pb-px -mx-4 px-4 no-scrollbar">
-            {visibleAdminTabs.map((tab) => {
-              const Icon = tab.icon;
-              const active = pathname === tab.href || pathname.startsWith(tab.href + "/");
-              return (
-                <Link
-                  key={tab.href}
-                  href={tab.href}
-                  className={cn(
-                    "flex items-center gap-1.5 px-3 py-2 text-sm font-medium whitespace-nowrap border-b-2 transition-colors shrink-0",
-                    active
-                      ? "border-purple-600 text-purple-700"
-                      : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                  )}
-                >
-                  <Icon size={14} />
-                  {tab.label}
-                </Link>
-              );
-            })}
-          </div>
-        </>
-      )}
-
       {!loading && !hasAccess ? (
         <div className="flex flex-col items-center justify-center py-16 text-gray-400">
           <ShieldAlert className="h-12 w-12 mb-3" />
