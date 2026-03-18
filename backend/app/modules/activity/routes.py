@@ -15,6 +15,8 @@ from app.modules.activity.schemas import (
     ActivityCategoryResponse,
     ActivityCategoryUpdate,
     ActivityCreate,
+    ActivityFormResponse,
+    ActivityFormUpdate,
     ActivityResponse,
     ActivityTypeCreate,
     ActivityTypeResponse,
@@ -26,6 +28,7 @@ from app.modules.activity.schemas import (
 )
 from app.modules.activity.service import (
     ActivityCategoryService,
+    ActivityFormService,
     ActivityParticipantService,
     ActivityService,
     ActivityTypeService,
@@ -407,7 +410,62 @@ def save_participants(
     ]
 
 
+# --- Activity Forms ---
+
+form_router = APIRouter(prefix="/activity-forms")
+
+
+@form_router.get(
+    "/{category_id}",
+    dependencies=[Depends(require_permissions("activity_type:view"))],
+)
+def get_activity_form(
+    category_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    service = ActivityFormService(db)
+    form = service.get_by_category(category_id, current_user.organization_id)
+    if not form:
+        return {"activity_category_id": str(category_id), "elements": []}
+    return ActivityFormResponse.dump_from_model(form)
+
+
+@form_router.put(
+    "/{category_id}",
+    dependencies=[Depends(require_permissions("activity_type:manage"))],
+)
+def upsert_activity_form(
+    category_id: uuid.UUID,
+    data: ActivityFormUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    service = ActivityFormService(db)
+    form = service.upsert(
+        current_user.organization_id,
+        category_id,
+        [e.model_dump() for e in data.elements],
+    )
+    return ActivityFormResponse.dump_from_model(form)
+
+
+@form_router.delete(
+    "/{category_id}",
+    dependencies=[Depends(require_permissions("activity_type:manage"))],
+)
+def delete_activity_form(
+    category_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    service = ActivityFormService(db)
+    service.delete(category_id, current_user.organization_id)
+    return {"message": "Activity form deleted"}
+
+
 # Include sub-routers
 router.include_router(category_router)
 router.include_router(type_router)
 router.include_router(activity_router)
+router.include_router(form_router)

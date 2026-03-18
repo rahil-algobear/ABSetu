@@ -14,13 +14,11 @@ from app.common.schemas.base_response import BaseResponseSchema
 
 class ActivityCategoryCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
-    sections: list[dict[str, Any]] | None = None
     sort_order: int = 0
 
 
 class ActivityCategoryUpdate(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=200)
-    sections: list[dict[str, Any]] | None = None
     sort_order: int | None = None
 
 
@@ -28,8 +26,34 @@ class ActivityCategoryResponse(BaseResponseSchema):
     organization_id: str
     name: str
     key: str
-    sections: list[dict[str, Any]] | None = None
     sort_order: int = 0
+
+
+# --- Activity Form ---
+
+
+class ActivityFormElement(BaseModel):
+    type: str  # "activity_type", "dimension", "entity_type", "activity_meta"
+    ref_id: str | None = None  # dimension_id, entity_type_id, or "user"
+    sort_order: int = 0
+    display_type: str = "dropdown"  # "dropdown", "checklist", "radio", "search_select"
+    visible: bool = True
+    config: dict[str, Any] | None = None  # element-specific config
+
+
+class ActivityFormCreate(BaseModel):
+    activity_category_id: str
+    elements: list[ActivityFormElement] = []
+
+
+class ActivityFormUpdate(BaseModel):
+    elements: list[ActivityFormElement] = []
+
+
+class ActivityFormResponse(BaseResponseSchema):
+    organization_id: str
+    activity_category_id: str
+    elements: list[dict[str, Any]] = []
 
 
 # --- Activity Type ---

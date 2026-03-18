@@ -2,6 +2,8 @@ import authAxios, { publicAxios } from './axios';
 import {
   Activity,
   ActivityCategory,
+  ActivityForm,
+  ActivityFormElement,
   ActivityParticipant,
   ActivityType,
   Dimension,
@@ -237,16 +239,33 @@ export const activityCategoryApi = {
     const response = await authAxios.get<ActivityCategory>(`/activity-categories/${id}`);
     return response.data;
   },
-  create: async (data: { name: string; key: string; sections?: Record<string, unknown>[]; sort_order?: number }): Promise<ActivityCategory> => {
+  create: async (data: { name: string; sort_order?: number }): Promise<ActivityCategory> => {
     const response = await authAxios.post<ActivityCategory>('/activity-categories/', data);
     return response.data;
   },
-  update: async (id: string, data: { name?: string; sections?: Record<string, unknown>[]; sort_order?: number }): Promise<ActivityCategory> => {
+  update: async (id: string, data: { name?: string; sort_order?: number }): Promise<ActivityCategory> => {
     const response = await authAxios.put<ActivityCategory>(`/activity-categories/${id}`, data);
     return response.data;
   },
   delete: async (id: string) => {
     const response = await authAxios.delete(`/activity-categories/${id}`);
+    return response.data;
+  },
+};
+
+// --- Activity Forms (Form Builder) ---
+
+export const activityFormApi = {
+  get: async (categoryId: string): Promise<ActivityForm> => {
+    const response = await authAxios.get<ActivityForm>(`/activity-forms/${categoryId}`);
+    return response.data;
+  },
+  upsert: async (categoryId: string, elements: ActivityFormElement[]): Promise<ActivityForm> => {
+    const response = await authAxios.put<ActivityForm>(`/activity-forms/${categoryId}`, { elements });
+    return response.data;
+  },
+  delete: async (categoryId: string) => {
+    const response = await authAxios.delete(`/activity-forms/${categoryId}`);
     return response.data;
   },
 };

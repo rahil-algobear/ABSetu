@@ -138,9 +138,27 @@ export interface ActivityCategory {
   organization_id: string;
   name: string;
   key: string;
-  sections: Record<string, unknown>[] | null;
   sort_order: number;
   updated_at: number | null;
+}
+
+// --- Activity Form (Form Builder) ---
+
+export interface ActivityFormElement {
+  type: "activity_type" | "dimension" | "entity_type" | "activity_meta";
+  ref_id: string | null; // dimension_id, entity_type_id, or "user"
+  sort_order: number;
+  display_type: string; // "dropdown", "checklist", "radio", "search_select"
+  visible: boolean;
+  config?: Record<string, unknown>;
+}
+
+export interface ActivityForm {
+  id?: string;
+  organization_id?: string;
+  activity_category_id: string;
+  elements: ActivityFormElement[];
+  updated_at?: number | null;
 }
 
 export interface ActivityType {

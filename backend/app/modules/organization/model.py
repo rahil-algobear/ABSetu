@@ -29,6 +29,7 @@ class Organization(BaseModel):
     meta_field_schemas = relationship(
         "MetaFieldSchema", back_populates="organization", lazy="dynamic"
     )
+    activity_forms = relationship("ActivityForm", back_populates="organization", lazy="dynamic")
 
 
 class MetaFieldSchema(BaseModel):

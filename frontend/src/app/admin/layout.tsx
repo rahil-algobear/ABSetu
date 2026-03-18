@@ -15,6 +15,7 @@ import {
   SlidersHorizontal,
   Link2,
   ShieldAlert,
+  LayoutTemplate,
 } from "lucide-react";
 
 export default function AdminLayout({
@@ -69,6 +70,7 @@ export default function AdminLayout({
     { href: "/admin/dimension-linking", label: "Dimension Linking", icon: Link2, permission: "dimension:view" },
     { href: "/admin/entity-types", label: vPlural("entity_type"), icon: UserCheck, permission: "entity_type:view" },
     { href: "/admin/activity-categories", label: vPlural("activity_category"), icon: ClipboardList, permission: "activity_type:view" },
+    { href: "/admin/form-builder", label: "Form Builder", icon: LayoutTemplate, permission: "activity_type:manage" },
   ];
 
   const allTabs = [...mastersTabs, ...adminTabs];
