@@ -18,6 +18,7 @@ from app.modules.activity.model import ActivityCategory, ActivityType
 from app.modules.entity.model import EntityType
 from app.modules.auth.model import User
 from app.modules.role.model import Permission, Role, RolePermission
+from app.common.helpers.slugify import slugify
 from app.modules.entity.model import Entity  # noqa: F401
 from app.modules.beneficiary.model import Enrollment  # noqa: F401
 from app.modules.activity.model import Activity, ActivityParticipant  # noqa: F401
@@ -446,18 +447,12 @@ def _ensure_dimension(db, org, key, name, sort_order, is_system=None):
     return dim
 
 
-def _slugify(name):
-    """Generate a slug/code from a name."""
-    import re
-    slug = name.lower().strip()
-    slug = re.sub(r"[^a-z0-9]+", "_", slug)
-    return slug.strip("_")
 
 
 def _ensure_values(db, org, dimension, values_list):
     value_map = {}
     for idx, (seed_key, name) in enumerate(values_list):
-        slug = _slugify(name)
+        slug = slugify(name)
         # Look up by slug (current convention) or legacy seed_key
         dv = db.query(DimensionValue).filter_by(dimension_id=dimension.id, code=slug).first()
         if not dv:
@@ -574,7 +569,7 @@ def seed():
         # 2. Entity Types
         entity_type_map = {}  # name -> EntityType
         for et_data in ENTITY_TYPES:
-            slug = _slugify(et_data["name"])
+            slug = slugify(et_data["name"])
             et = db.query(EntityType).filter_by(organization_id=org.id, key=slug).first()
             if not et:
                 et = EntityType(
@@ -606,7 +601,7 @@ def seed():
                 "default_status": tmpl["default_status"],
             })
 
-        sessions_cat_key = _slugify(SESSIONS_CATEGORY_NAME)
+        sessions_cat_key = slugify(SESSIONS_CATEGORY_NAME)
         sessions_cat = (
             db.query(ActivityCategory)
             .filter_by(organization_id=org.id, key=sessions_cat_key)
