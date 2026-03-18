@@ -1,4 +1,4 @@
-.PHONY: help install install-dev test test-coverage lint format type-check run run-local run-local-port migrate upgrade downgrade kill-server clean
+.PHONY: help install install-dev test test-coverage lint format type-check run run-local run-local-port migrate upgrade downgrade kill-server clean db-reset db-fresh seed seed-org
 
 # Use venv python if available, otherwise fall back to python3
 PYTHON := $(shell if [ -f venv/bin/python ]; then echo venv/bin/python; else echo python3; fi)
@@ -20,6 +20,8 @@ help:
 	@echo "  make upgrade              - Apply database migrations"
 	@echo "  make downgrade            - Rollback last migration"
 	@echo "  make kill-server          - Kill server running on port 8000"
+	@echo "  make db-reset             - Drop and recreate the database (WARNING: destroys all data)"
+	@echo "  make db-fresh             - Reset DB + run migrations + seed all (fresh start)"
 	@echo "  make clean                - Clean up cache and temporary files"
 
 install:
@@ -85,6 +87,26 @@ seed-org:
 		exit 1; \
 	fi
 	$(PYTHON) -m app.seeds.$(file)
+
+db-reset:
+	@echo "WARNING: This will destroy ALL data in the database!"
+	@echo "Dropping and recreating database..."
+	$(PYTHON) -c "from app.core.config import settings; \
+		url = settings.DATABASE_URL; \
+		db_name = url.rsplit('/', 1)[-1].split('?')[0]; \
+		base_url = url.rsplit('/', 1)[0]; \
+		from sqlalchemy import create_engine, text; \
+		eng = create_engine(base_url + '/postgres', isolation_level='AUTOCOMMIT'); \
+		conn = eng.connect(); \
+		conn.execute(text(f\"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='{db_name}' AND pid <> pg_backend_pid()\")); \
+		conn.execute(text(f'DROP DATABASE IF EXISTS {db_name}')); \
+		conn.execute(text(f'CREATE DATABASE {db_name}')); \
+		conn.close(); \
+		print(f'Database {db_name} reset successfully')"
+
+db-fresh: db-reset upgrade seed
+	$(PYTHON) -m app.seeds.kshamata
+	@echo "Fresh database ready with all seeds!"
 
 kill-server:
 	@echo "Killing server on port $(PORT)..."

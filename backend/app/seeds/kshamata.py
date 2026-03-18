@@ -693,38 +693,81 @@ def seed():
         )
         print(f"  Ensured dimension value links ({new_links} new)")
 
-        # 8. Admin role (all permissions — always syncs missing ones)
+        # 8. Ensure permissions exist (in case initial seed hasn't run)
+        from app.seeds.initial import PERMISSIONS as CANONICAL_PERMISSIONS
+        from app.seeds.initial import TEAM_MEMBER_PERMISSIONS
+
+        permission_map = {}
+        for key, description in CANONICAL_PERMISSIONS:
+            perm = db.query(Permission).filter_by(key=key).first()
+            if not perm:
+                perm = Permission(key=key, description=description)
+                db.add(perm)
+                db.flush()
+            permission_map[key] = perm
+        print(f"  Ensured {len(CANONICAL_PERMISSIONS)} permissions exist")
+
+        # 9. Admin role (all permissions — always syncs missing ones)
         admin_role = db.query(Role).filter_by(organization_id=org.id, name="Admin").first()
         if not admin_role:
             admin_role = Role(
                 organization_id=org.id,
                 name="Admin",
                 is_default=False,
+                is_system=True,
             )
             db.add(admin_role)
             db.flush()
             print(f"  Created Admin role")
+        else:
+            if not admin_role.is_system:
+                admin_role.is_system = True
+                db.flush()
 
-        from app.seeds.initial import PERMISSIONS as CANONICAL_PERMISSIONS
-
-        canonical_keys = [key for key, _ in CANONICAL_PERMISSIONS]
-        all_perms = db.query(Permission).filter(Permission.key.in_(canonical_keys)).all()
-        existing_perm_ids = {
+        existing_admin_perm_ids = {
             rp.permission_id
             for rp in db.query(RolePermission).filter_by(role_id=admin_role.id).all()
         }
         added = 0
-        for perm in all_perms:
-            if perm.id not in existing_perm_ids:
+        for perm in permission_map.values():
+            if perm.id not in existing_admin_perm_ids:
                 db.add(RolePermission(role_id=admin_role.id, permission_id=perm.id))
                 added += 1
         if added:
             db.flush()
-            print(f"  Admin role: added {added} missing permissions (total: {len(all_perms)})")
+            print(f"  Admin role: added {added} missing permissions (total: {len(permission_map)})")
         else:
-            print(f"  Admin role: all {len(all_perms)} permissions present")
+            print(f"  Admin role: all {len(permission_map)} permissions present")
 
-        # 9. Admin user
+        # 10. Team Member role (default role for new users)
+        team_role = db.query(Role).filter_by(organization_id=org.id, name="Team Member").first()
+        if not team_role:
+            team_role = Role(
+                organization_id=org.id,
+                name="Team Member",
+                is_default=True,
+            )
+            db.add(team_role)
+            db.flush()
+            print("  Created Team Member role")
+
+        existing_team_perm_ids = {
+            rp.permission_id
+            for rp in db.query(RolePermission).filter_by(role_id=team_role.id).all()
+        }
+        added = 0
+        for key in TEAM_MEMBER_PERMISSIONS:
+            perm = permission_map[key]
+            if perm.id not in existing_team_perm_ids:
+                db.add(RolePermission(role_id=team_role.id, permission_id=perm.id))
+                added += 1
+        if added:
+            db.flush()
+            print(f"  Team Member role: added {added} missing permissions")
+        else:
+            print(f"  Team Member role: all {len(TEAM_MEMBER_PERMISSIONS)} permissions present")
+
+        # 11. Admin user
         admin_user = db.query(User).filter_by(mobile_number=ADMIN_MOBILE).first()
         if not admin_user:
             admin_user = User(
@@ -758,6 +801,7 @@ def seed():
         print(f"  Vocabulary          : {len(VOCABULARY)} term overrides")
         print(f"  Entity Types        : {len(ENTITY_TYPES)}")
         print(f"  Activity Categories : 1 (Sessions)")
+        print(f"  Roles               : 2 (Admin [system], Team Member [default])")
         print(f"  Dimensions          : 4 (Programme, Project, Location, Activity Type [system])")
         print(f"  Programmes          : {len(PROGRAMMES)}")
         print(f"  Projects            : {len(PROJECTS)}")
