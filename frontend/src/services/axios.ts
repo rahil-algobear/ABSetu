@@ -6,7 +6,7 @@ interface TokenResponse {
   refresh_token: string;
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8100/api';
 
 // Base axios instance for public endpoints
 export const publicAxios = axios.create({
