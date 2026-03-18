@@ -428,12 +428,61 @@ export default function ActivityDetailPage() {
                 const sectionKey = getSectionKey(el);
                 const sectionParticipants = participantsBySection[sectionKey] || [];
                 const metaFields = getParticipationMetaFields(el);
+                const captureStatus = el.config?.capture_status as boolean || false;
+                const hasStatus = captureStatus || sectionParticipants.some((p) => p.status);
+                const useTable = hasStatus || metaFields.length > 0;
 
                 return (
                   <div key={sectionKey}>
                     <h3 className="text-sm font-semibold mb-1">{getElementLabel(el)}</h3>
                     {sectionParticipants.length === 0 ? (
                       <p className="text-gray-500 text-xs">None recorded</p>
+                    ) : useTable ? (
+                      <div className="border rounded-md overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead className="bg-gray-50 border-b">
+                            <tr>
+                              <th className="text-left px-3 py-2 font-medium">Name</th>
+                              {hasStatus && (
+                                <th className="text-left px-3 py-2 font-medium">Status</th>
+                              )}
+                              {metaFields.map((f) => (
+                                <th key={f.key} className="text-left px-3 py-2 font-medium">{f.label}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {sectionParticipants.map((p) => (
+                              <tr key={p.id} className="border-b last:border-0">
+                                <td className="px-3 py-2">{p.participant_name || p.participant_id}</td>
+                                {hasStatus && (
+                                  <td className="px-3 py-2">
+                                    {p.status && (
+                                      <Badge variant={p.status === "present" ? "default" : "secondary"}>
+                                        {p.status}
+                                      </Badge>
+                                    )}
+                                  </td>
+                                )}
+                                {metaFields.map((f) => {
+                                  const val = p.meta?.[f.key];
+                                  return (
+                                    <td key={f.key} className="px-3 py-2 text-gray-700">
+                                      {val === undefined || val === null || val === ""
+                                        ? "—"
+                                        : f.type === "boolean"
+                                          ? (val ? "Yes" : "No")
+                                          : Array.isArray(val)
+                                            ? val.join(", ")
+                                            : String(val)}
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     ) : (
                       <div className="space-y-1">
                         {sectionParticipants.map((p) => (
@@ -441,21 +490,7 @@ export default function ActivityDetailPage() {
                             key={p.id}
                             className="p-2 border rounded text-sm"
                           >
-                            <div className="flex justify-between items-center">
-                              <span>{p.participant_name || p.participant_id}</span>
-                              {p.status && (
-                                <Badge
-                                  variant={p.status === "present" ? "default" : "secondary"}
-                                >
-                                  {p.status}
-                                </Badge>
-                              )}
-                            </div>
-                            {p.meta && Object.keys(p.meta).length > 0 && metaFields.length > 0 && (
-                              <div className="mt-1 ml-2">
-                                <MetaFieldDisplay fields={metaFields} values={p.meta} />
-                              </div>
-                            )}
+                            <span>{p.participant_name || p.participant_id}</span>
                           </div>
                         ))}
                       </div>
