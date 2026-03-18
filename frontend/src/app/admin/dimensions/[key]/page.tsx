@@ -29,7 +29,7 @@ export default function DimensionValuesPage() {
   const { vDim } = useVocabulary();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingValue, setEditingValue] = useState<DimensionValue | null>(null);
-  const [form, setForm] = useState({ name: "", code: "" });
+  const [form, setForm] = useState({ name: "" });
 
   const { data: dimensions = [] } = useQuery<Dimension[]>({
     queryKey: ["dimensions"],
@@ -45,7 +45,7 @@ export default function DimensionValuesPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: (data: { name: string; code: string }) =>
+    mutationFn: (data: { name: string }) =>
       dimensionApi.createValue(dimension!.id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["dimension-values", dimension?.id] });
@@ -77,13 +77,13 @@ export default function DimensionValuesPage() {
 
   const openAdd = () => {
     setEditingValue(null);
-    setForm({ name: "", code: "" });
+    setForm({ name: "" });
     setModalOpen(true);
   };
 
   const openEdit = (value: DimensionValue) => {
     setEditingValue(value);
-    setForm({ name: value.name, code: value.code });
+    setForm({ name: value.name });
     setModalOpen(true);
   };
 
@@ -126,7 +126,6 @@ export default function DimensionValuesPage() {
           <TableHeader>
             <TableRow>
               <TableHead>Name</TableHead>
-              <TableHead>Code</TableHead>
               <TableHead className="w-20">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -134,7 +133,6 @@ export default function DimensionValuesPage() {
             {values.map((v) => (
               <TableRow key={v.id}>
                 <TableCell className="font-medium">{v.name}</TableCell>
-                <TableCell className="text-gray-500 text-sm font-mono">{v.code}</TableCell>
                 <TableCell>
                   <Can permission="dimension:manage">
                     <div className="flex gap-1">
@@ -175,17 +173,6 @@ export default function DimensionValuesPage() {
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               placeholder="e.g. Thane"
-              required
-            />
-          </div>
-          <div>
-            <Label htmlFor="value-code">Code</Label>
-            <Input
-              id="value-code"
-              value={form.code}
-              onChange={(e) => setForm({ ...form, code: e.target.value })}
-              placeholder="e.g. THANE"
-              className="font-mono"
               required
             />
           </div>

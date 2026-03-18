@@ -2,6 +2,7 @@
 Dimension, DimensionValue, DimensionValueLink services
 """
 
+import re
 import uuid
 
 from sqlalchemy.orm import Session
@@ -64,6 +65,13 @@ class DimensionService:
         self.db.commit()
 
 
+def _slugify(name: str) -> str:
+    """Generate a slug/code from a name."""
+    slug = name.lower().strip()
+    slug = re.sub(r"[^a-z0-9]+", "_", slug)
+    return slug.strip("_")
+
+
 class DimensionValueService:
     def __init__(self, db: Session):
         self.db = db
@@ -83,6 +91,7 @@ class DimensionValueService:
         return value
 
     def create(self, org_id: uuid.UUID, dimension_id: uuid.UUID, data: dict) -> DimensionValue:
+        data["code"] = _slugify(data["name"])
         value = DimensionValue(organization_id=org_id, dimension_id=dimension_id, **data)
         self.db.add(value)
         self.db.commit()
@@ -91,6 +100,8 @@ class DimensionValueService:
 
     def update(self, value_id: uuid.UUID, data: dict) -> DimensionValue:
         value = self.get_by_id(value_id)
+        if "name" in data and data["name"] is not None:
+            data["code"] = _slugify(data["name"])
         for key, val in data.items():
             if val is not None:
                 setattr(value, key, val)
