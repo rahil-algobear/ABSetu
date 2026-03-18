@@ -58,10 +58,11 @@ export function SearchSelectParticipants({
   const [newEntityMeta, setNewEntityMeta] = useState<Record<string, unknown>>({});
   const queryClient = useQueryClient();
 
-  // Meta fields for entity creation
+  // Entity-type-specific meta fields (matches admin entity page: entity:{typeId})
+  const entityMetaSchemaKey = entityTypeId ? `entity:${entityTypeId}` : "";
   const { data: entityMetaFields = [] } = useQuery<MetaFieldDefinition[]>({
-    queryKey: ["meta-field-schemas", "entity"],
-    queryFn: () => metaFieldSchemaApi.get("entity"),
+    queryKey: ["meta-field-schemas", entityMetaSchemaKey],
+    queryFn: () => metaFieldSchemaApi.get(entityMetaSchemaKey),
     enabled: !!entityTypeId,
   });
 
