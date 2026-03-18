@@ -178,6 +178,74 @@ function UserDropdown({
   );
 }
 
+/* ── MobileSection (collapsible) ── */
+
+type NavItem = { href: string; label: string; icon: React.ComponentType<{ size?: number; className?: string }>; permission: string };
+
+function MobileSection({
+  label,
+  icon: Icon,
+  items,
+  defaultOpen,
+  pathname,
+}: {
+  label: string;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+  items: NavItem[];
+  defaultOpen: boolean;
+  pathname: string;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  const { can } = usePermissions();
+
+  const visibleItems = items.filter((i) => can(i.permission));
+  if (visibleItems.length === 0) return null;
+
+  return (
+    <div className="pt-2">
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center justify-between w-full px-3 py-1.5 group"
+      >
+        <span className="flex items-center gap-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+          <Icon size={12} />
+          {label}
+        </span>
+        <ChevronDown
+          size={12}
+          className={clsx(
+            "text-gray-400 transition-transform",
+            open && "rotate-180",
+          )}
+        />
+      </button>
+      {open && (
+        <div className="mt-1 space-y-0.5">
+          {visibleItems.map((item) => {
+            const ItemIcon = item.icon;
+            const active = pathname.startsWith(item.href.split("?")[0]);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={clsx(
+                  "flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                  active
+                    ? "text-purple-700 bg-purple-50"
+                    : "text-gray-500 hover:text-gray-900 hover:bg-gray-100",
+                )}
+              >
+                <ItemIcon size={16} />
+                {item.label}
+              </Link>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── Main Navigation ── */
 
 export default function Navigation() {
@@ -225,8 +293,8 @@ export default function Navigation() {
     permission: "activity:view",
   }));
 
-  // Entity types as top-level nav links
-  const entityTypeLinks = entityTypes.map((et) => ({
+  // People dropdown: one item per entity type
+  const peopleItems = entityTypes.map((et) => ({
     href: `/admin/entities/${et.id}`,
     label: et.name,
     icon: Users,
@@ -384,23 +452,12 @@ export default function Navigation() {
                   </Can>
                 ))}
 
-                {/* Entity types as top-level links */}
-                {entityTypeLinks.map((item) => (
-                  <Can key={item.href} permission={item.permission}>
-                    <Link
-                      href={item.href}
-                      className={clsx(
-                        "flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-                        pathname.startsWith(item.href)
-                          ? "text-purple-700 bg-purple-50"
-                          : "text-gray-500 hover:text-gray-900 hover:bg-gray-100",
-                      )}
-                    >
-                      <Users size={15} />
-                      {item.label}
-                    </Link>
-                  </Can>
-                ))}
+                <NavDropdown
+                  label="People"
+                  icon={Users}
+                  items={peopleItems}
+                  pathname={pathname}
+                />
 
                 <NavDropdown
                   label="Settings"
@@ -485,80 +542,32 @@ export default function Navigation() {
               );
             })}
 
-            {/* Entity types as top-level links */}
-            {entityTypeLinks.map((item) => {
-              if (!can(item.permission)) return null;
-              const active = pathname.startsWith(item.href);
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={clsx(
-                    "flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
-                    active
-                      ? "text-purple-700 bg-purple-50"
-                      : "text-gray-500 hover:text-gray-900 hover:bg-gray-100",
-                  )}
-                >
-                  <Users size={16} />
-                  {item.label}
-                </Link>
-              );
-            })}
+            {/* People — expanded by default */}
+            <MobileSection
+              label="People"
+              icon={Users}
+              items={peopleItems}
+              defaultOpen={true}
+              pathname={pathname}
+            />
 
-            {/* Settings section (formerly Masters) */}
-            <div className="pt-2">
-              <p className="px-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">
-                Settings
-              </p>
-              {settingsItems.map((item) => {
-                if (!can(item.permission)) return null;
-                const ItemIcon = item.icon;
-                const active = pathname.startsWith(item.href);
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={clsx(
-                      "flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
-                      active
-                        ? "text-purple-700 bg-purple-50"
-                        : "text-gray-500 hover:text-gray-900 hover:bg-gray-100",
-                    )}
-                  >
-                    <ItemIcon size={16} />
-                    {item.label}
-                  </Link>
-                );
-              })}
-            </div>
+            {/* Settings — collapsed by default */}
+            <MobileSection
+              label="Settings"
+              icon={Settings}
+              items={settingsItems}
+              defaultOpen={false}
+              pathname={pathname}
+            />
 
-            {/* Admin section (formerly Settings) */}
-            <div className="pt-2">
-              <p className="px-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">
-                Admin
-              </p>
-              {adminItems.map((item) => {
-                if (!can(item.permission)) return null;
-                const ItemIcon = item.icon;
-                const active = pathname.startsWith(item.href);
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={clsx(
-                      "flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
-                      active
-                        ? "text-purple-700 bg-purple-50"
-                        : "text-gray-500 hover:text-gray-900 hover:bg-gray-100",
-                    )}
-                  >
-                    <ItemIcon size={16} />
-                    {item.label}
-                  </Link>
-                );
-              })}
-            </div>
+            {/* Admin — collapsed by default */}
+            <MobileSection
+              label="Admin"
+              icon={Database}
+              items={adminItems}
+              defaultOpen={false}
+              pathname={pathname}
+            />
 
             {/* Sign out */}
             <div className="pt-2 mt-1 border-t border-gray-200">
