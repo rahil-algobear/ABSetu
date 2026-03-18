@@ -2,12 +2,12 @@
 Activity, ActivityType, ActivityCategory, ActivityParticipant services
 """
 
-import re
 import uuid
 
 from sqlalchemy.orm import Session, joinedload
 
 from app.common.exceptions import NotFoundError, ValidationError
+from app.common.helpers.slugify import slugify
 from app.modules.activity.model import (
     Activity,
     ActivityCategory,
@@ -19,13 +19,6 @@ from app.modules.dimension.model import (
     Dimension,
     DimensionValue,
 )
-
-
-def _slugify(name: str) -> str:
-    """Generate a slug/key from a name."""
-    slug = name.lower().strip()
-    slug = re.sub(r"[^a-z0-9]+", "_", slug)
-    return slug.strip("_")
 
 
 def _make_at_code(name: str) -> str:
@@ -55,8 +48,18 @@ class ActivityCategoryService:
             raise NotFoundError("Activity category not found")
         return cat
 
+    @staticmethod
+    def _slugify_section_keys(sections: list[dict] | None) -> list[dict] | None:
+        if not sections:
+            return sections
+        for section in sections:
+            if "label" in section:
+                section["key"] = slugify(section["label"])
+        return sections
+
     def create(self, org_id: uuid.UUID, data: dict) -> ActivityCategory:
-        data["key"] = _slugify(data["name"])
+        data["key"] = slugify(data["name"])
+        data["sections"] = self._slugify_section_keys(data.get("sections"))
         cat = ActivityCategory(organization_id=org_id, **data)
         self.db.add(cat)
         self.db.commit()
@@ -66,7 +69,9 @@ class ActivityCategoryService:
     def update(self, category_id: uuid.UUID, org_id: uuid.UUID, data: dict) -> ActivityCategory:
         cat = self.get_by_id(category_id, org_id)
         if "name" in data and data["name"] is not None:
-            data["key"] = _slugify(data["name"])
+            data["key"] = slugify(data["name"])
+        if "sections" in data:
+            data["sections"] = self._slugify_section_keys(data["sections"])
         for key, value in data.items():
             if value is not None:
                 setattr(cat, key, value)

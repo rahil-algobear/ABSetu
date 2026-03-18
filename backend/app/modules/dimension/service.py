@@ -2,12 +2,12 @@
 Dimension, DimensionValue, DimensionValueLink services
 """
 
-import re
 import uuid
 
 from sqlalchemy.orm import Session
 
 from app.common.exceptions import NotFoundError, ValidationError
+from app.common.helpers.slugify import slugify
 from app.modules.dimension.model import (
     Dimension,
     DimensionValue,
@@ -37,7 +37,7 @@ class DimensionService:
         return dimension
 
     def create(self, org_id: uuid.UUID, data: dict) -> Dimension:
-        data["key"] = _slugify(data["name"])
+        data["key"] = slugify(data["name"])
         existing = (
             self.db.query(Dimension).filter_by(organization_id=org_id, key=data["key"]).first()
         )
@@ -52,7 +52,7 @@ class DimensionService:
     def update(self, dimension_id: uuid.UUID, org_id: uuid.UUID, data: dict) -> Dimension:
         dimension = self.get_by_id(dimension_id, org_id)
         if "name" in data and data["name"] is not None:
-            data["key"] = _slugify(data["name"])
+            data["key"] = slugify(data["name"])
         for key, value in data.items():
             if value is not None:
                 setattr(dimension, key, value)
@@ -66,13 +66,6 @@ class DimensionService:
             raise ValidationError("Cannot delete a system-managed dimension")
         self.db.delete(dimension)
         self.db.commit()
-
-
-def _slugify(name: str) -> str:
-    """Generate a slug/code from a name."""
-    slug = name.lower().strip()
-    slug = re.sub(r"[^a-z0-9]+", "_", slug)
-    return slug.strip("_")
 
 
 class DimensionValueService:
@@ -94,7 +87,7 @@ class DimensionValueService:
         return value
 
     def create(self, org_id: uuid.UUID, dimension_id: uuid.UUID, data: dict) -> DimensionValue:
-        data["code"] = _slugify(data["name"])
+        data["code"] = slugify(data["name"])
         value = DimensionValue(organization_id=org_id, dimension_id=dimension_id, **data)
         self.db.add(value)
         self.db.commit()
@@ -104,7 +97,7 @@ class DimensionValueService:
     def update(self, value_id: uuid.UUID, data: dict) -> DimensionValue:
         value = self.get_by_id(value_id)
         if "name" in data and data["name"] is not None:
-            data["code"] = _slugify(data["name"])
+            data["code"] = slugify(data["name"])
         for key, val in data.items():
             if val is not None:
                 setattr(value, key, val)

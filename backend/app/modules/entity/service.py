@@ -2,7 +2,6 @@
 Entity and EntityType services
 """
 
-import re
 import uuid
 from datetime import datetime
 
@@ -10,16 +9,10 @@ from sqlalchemy import exists
 from sqlalchemy.orm import Session
 
 from app.common.exceptions import NotFoundError, ValidationError
+from app.common.helpers.slugify import slugify
 from app.modules.dimension.model import EntityTag
 from app.modules.entity.model import Entity, EntityType
 from app.modules.organization.model import Organization
-
-
-def _slugify(name: str) -> str:
-    """Generate a slug/key from a name."""
-    slug = name.lower().strip()
-    slug = re.sub(r"[^a-z0-9]+", "_", slug)
-    return slug.strip("_")
 
 
 class EntityTypeService:
@@ -41,7 +34,7 @@ class EntityTypeService:
         return et
 
     def create(self, org_id: uuid.UUID, data: dict) -> EntityType:
-        data["key"] = _slugify(data["name"])
+        data["key"] = slugify(data["name"])
         et = EntityType(organization_id=org_id, **data)
         self.db.add(et)
         self.db.commit()
@@ -51,7 +44,7 @@ class EntityTypeService:
     def update(self, entity_type_id: uuid.UUID, org_id: uuid.UUID, data: dict) -> EntityType:
         et = self.get_by_id(entity_type_id, org_id)
         if "name" in data and data["name"] is not None:
-            data["key"] = _slugify(data["name"])
+            data["key"] = slugify(data["name"])
         for key, value in data.items():
             if value is not None:
                 setattr(et, key, value)

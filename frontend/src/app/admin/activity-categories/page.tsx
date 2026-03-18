@@ -316,30 +316,14 @@ export default function ActivityCategoriesPage() {
                       </button>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <Label className="text-xs">Label</Label>
-                        <Input
-                          value={section.label}
-                          onChange={(e) => {
-                            const label = e.target.value;
-                            const key = section.key || label.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
-                            updateSection(idx, { label, key });
-                          }}
-                          placeholder="e.g. Beneficiaries"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs">Key</Label>
-                        <Input
-                          value={section.key}
-                          onChange={(e) => updateSection(idx, { key: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "_") })}
-                          placeholder="auto-generated"
-                          className="font-mono text-sm"
-                          required
-                        />
-                      </div>
+                    <div>
+                      <Label className="text-xs">Label</Label>
+                      <Input
+                        value={section.label}
+                        onChange={(e) => updateSection(idx, { label: e.target.value })}
+                        placeholder="e.g. Beneficiaries"
+                        required
+                      />
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
