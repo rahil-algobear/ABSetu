@@ -1,19 +1,69 @@
 "use client";
 
+import { useState, useMemo } from "react";
 import { useParams } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
-import { entityApi, enrollmentApi, metaFieldSchemaApi } from "@/services/api";
-import { MetaFieldDefinition } from "@/types";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  entityApi,
+  enrollmentApi,
+  metaFieldSchemaApi,
+  dimensionApi,
+  dimensionValueLinkApi,
+} from "@/services/api";
+import {
+  Dimension,
+  DimensionValue,
+  DimensionValueLink,
+  Enrollment,
+  MetaFieldDefinition,
+} from "@/types";
 import { useVocabulary } from "@/hooks/useVocabulary";
+import { Can } from "@/components/Auth/Permissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageLayout } from "@/components/ui/page-layout";
 import { Badge } from "@/components/ui/badge";
-import { MetaFieldDisplay } from "@/components/DynamicMetaForm";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { DynamicMetaForm, MetaFieldDisplay } from "@/components/DynamicMetaForm";
+import { Plus, Pencil, X } from "lucide-react";
+import toast from "react-hot-toast";
+
+/**
+ * Cascading dimension filter — reused from activities page pattern.
+ */
+function getFilteredValues(
+  targetDimValues: DimensionValue[],
+  selectedByDim: Record<string, string>,
+  targetDimId: string,
+  dimensionValueLinks: DimensionValueLink[],
+): DimensionValue[] {
+  const otherSelections = Object.entries(selectedByDim)
+    .filter(([dimId, dvId]) => dimId !== targetDimId && dvId)
+    .map(([, dvId]) => dvId);
+
+  if (otherSelections.length === 0) return targetDimValues;
+
+  const linkPairs = new Set<string>();
+  for (const link of dimensionValueLinks) {
+    linkPairs.add(`${link.dimension_value_id_1}:${link.dimension_value_id_2}`);
+    linkPairs.add(`${link.dimension_value_id_2}:${link.dimension_value_id_1}`);
+  }
+
+  return targetDimValues.filter((dv) =>
+    otherSelections.every(
+      (selectedId) => linkPairs.has(`${dv.id}:${selectedId}`)
+    )
+  );
+}
 
 export default function EntityDetailPage() {
   const params = useParams();
   const id = params.id as string;
-  const { v, vPlural } = useVocabulary();
+  const queryClient = useQueryClient();
+  const { v, vPlural, vDim } = useVocabulary();
+
+  const [showCreate, setShowCreate] = useState(false);
+  const [editingEnrollment, setEditingEnrollment] = useState<Enrollment | null>(null);
 
   const { data: entity, isLoading } = useQuery({
     queryKey: ["entity", id],
@@ -30,6 +80,13 @@ export default function EntityDetailPage() {
     queryKey: ["meta-field-schemas", "entity"],
     queryFn: () => metaFieldSchemaApi.get("entity"),
   });
+
+  const { data: enrollmentMetaFields = [] } = useQuery<MetaFieldDefinition[]>({
+    queryKey: ["meta-field-schemas", "enrollment"],
+    queryFn: () => metaFieldSchemaApi.get("enrollment"),
+  });
+
+  const canEnroll = entity?.entity_type_config?.can_enroll !== false;
 
   if (isLoading) return <PageLayout className="p-4"><p>Loading...</p></PageLayout>;
   if (!entity) return <PageLayout className="p-4"><p>Not found</p></PageLayout>;
@@ -70,42 +127,313 @@ export default function EntityDetailPage() {
         </Card>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">{vPlural("enrollment")}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {enrollments.length === 0 ? (
-            <p className="text-gray-500 text-sm">No {vPlural("enrollment").toLowerCase()}</p>
-          ) : (
-            <div className="space-y-2">
-              {enrollments.map((e) => (
-                <div
-                  key={e.id}
-                  className="flex justify-between items-center p-2 border rounded"
-                >
-                  <div>
-                    <div className="flex gap-1 mb-0.5">
-                      {e.tags?.map((tag) => (
-                        <Badge key={tag.value_id} variant="secondary" className="text-xs">
-                          {tag.value_name}
-                        </Badge>
-                      ))}
-                    </div>
-                    <p className="text-xs text-gray-500">
-                      {e.admission_date}
-                      {e.release_date ? ` to ${e.release_date}` : ""}
-                    </p>
-                  </div>
-                  <Badge variant={e.release_date ? "secondary" : "default"}>
-                    {e.release_date ? "Released" : "Active"}
-                  </Badge>
-                </div>
-              ))}
+      {canEnroll && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg">{vPlural("enrollment")}</CardTitle>
+              <Can permission="enrollment:manage">
+                {!showCreate && !editingEnrollment && (
+                  <Button size="sm" onClick={() => setShowCreate(true)}>
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add
+                  </Button>
+                )}
+              </Can>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </CardHeader>
+          <CardContent>
+            {showCreate && (
+              <EnrollmentForm
+                entityId={id}
+                metaFields={enrollmentMetaFields}
+                onSuccess={() => {
+                  setShowCreate(false);
+                  queryClient.invalidateQueries({ queryKey: ["enrollments-entity", id] });
+                }}
+                onCancel={() => setShowCreate(false)}
+                v={v}
+                vDim={vDim}
+              />
+            )}
+
+            {editingEnrollment && (
+              <EnrollmentForm
+                entityId={id}
+                enrollment={editingEnrollment}
+                metaFields={enrollmentMetaFields}
+                onSuccess={() => {
+                  setEditingEnrollment(null);
+                  queryClient.invalidateQueries({ queryKey: ["enrollments-entity", id] });
+                }}
+                onCancel={() => setEditingEnrollment(null)}
+                v={v}
+                vDim={vDim}
+              />
+            )}
+
+            {!showCreate && !editingEnrollment && (
+              <>
+                {enrollments.length === 0 ? (
+                  <p className="text-gray-500 text-sm">No {vPlural("enrollment").toLowerCase()}</p>
+                ) : (
+                  <div className="space-y-2">
+                    {enrollments.map((e) => (
+                      <div
+                        key={e.id}
+                        className="flex justify-between items-center p-2 border rounded"
+                      >
+                        <div>
+                          <div className="flex gap-1 mb-0.5 flex-wrap">
+                            {e.tags?.map((tag) => (
+                              <Badge key={tag.value_id} variant="secondary" className="text-xs">
+                                {tag.value_name}
+                              </Badge>
+                            ))}
+                          </div>
+                          <p className="text-xs text-gray-500">
+                            {e.admission_date}
+                            {e.release_date ? ` to ${e.release_date}` : ""}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant={e.release_date ? "secondary" : "default"}>
+                            {e.release_date ? "Released" : "Active"}
+                          </Badge>
+                          <Can permission="enrollment:manage">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => setEditingEnrollment(e)}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                          </Can>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </PageLayout>
+  );
+}
+
+// --- Enrollment Create / Edit Form ---
+
+function EnrollmentForm({
+  entityId,
+  enrollment,
+  metaFields,
+  onSuccess,
+  onCancel,
+  v,
+  vDim,
+}: {
+  entityId: string;
+  enrollment?: Enrollment;
+  metaFields: MetaFieldDefinition[];
+  onSuccess: () => void;
+  onCancel: () => void;
+  v: (key: string) => string;
+  vDim: (dim: { key: string; name: string }) => string;
+}) {
+  const isEdit = !!enrollment;
+
+  const { data: dimensions = [] } = useQuery<Dimension[]>({
+    queryKey: ["dimensions"],
+    queryFn: dimensionApi.list,
+  });
+
+  const { data: allDimensionValues = [] } = useQuery<DimensionValue[]>({
+    queryKey: ["all-dimension-values", dimensions.map((d) => d.id).join(",")],
+    queryFn: async () => {
+      const results = await Promise.all(
+        dimensions.map((d) => dimensionApi.listValues(d.id))
+      );
+      return results.flat();
+    },
+    enabled: dimensions.length > 0,
+  });
+
+  const { data: dimensionValueLinks = [] } = useQuery<DimensionValueLink[]>({
+    queryKey: ["dimension-value-links-all"],
+    queryFn: () => dimensionValueLinkApi.list(),
+  });
+
+  const selectableDimensions = useMemo(
+    () => dimensions.filter((d) => !d.is_system),
+    [dimensions]
+  );
+
+  // Initialize form data from enrollment if editing
+  const [admissionDate, setAdmissionDate] = useState(
+    enrollment?.admission_date || new Date().toISOString().split("T")[0]
+  );
+  const [releaseDate, setReleaseDate] = useState(enrollment?.release_date || "");
+  const [dimensionValueIds, setDimensionValueIds] = useState<string[]>(
+    () => enrollment?.tags?.map((t) => t.value_id) || []
+  );
+  const [metaValues, setMetaValues] = useState<Record<string, unknown>>(
+    () => enrollment?.meta || {}
+  );
+
+  const selectedByDim = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const dim of dimensions) {
+      const dimValues = allDimensionValues.filter(
+        (dv) => dv.dimension_id === dim.id
+      );
+      const selected = dimensionValueIds.find((id) =>
+        dimValues.some((dv) => dv.id === id)
+      );
+      if (selected) {
+        map[dim.id] = selected;
+      }
+    }
+    return map;
+  }, [dimensions, allDimensionValues, dimensionValueIds]);
+
+  const createMutation = useMutation({
+    mutationFn: (data: Parameters<typeof enrollmentApi.create>[0]) =>
+      enrollmentApi.create(data),
+    onSuccess: () => {
+      toast.success(`${v("enrollment")} created`);
+      onSuccess();
+    },
+    onError: () => toast.error(`Failed to create ${v("enrollment").toLowerCase()}`),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: (data: { id: string; updates: Partial<Enrollment>; tagIds: string[] }) =>
+      Promise.all([
+        enrollmentApi.update(data.id, data.updates),
+        enrollmentApi.updateTags(data.id, data.tagIds),
+      ]),
+    onSuccess: () => {
+      toast.success(`${v("enrollment")} updated`);
+      onSuccess();
+    },
+    onError: () => toast.error(`Failed to update ${v("enrollment").toLowerCase()}`),
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isEdit && enrollment) {
+      updateMutation.mutate({
+        id: enrollment.id,
+        updates: {
+          admission_date: admissionDate,
+          release_date: releaseDate || null,
+          meta: metaFields.length > 0 ? metaValues : undefined,
+        },
+        tagIds: dimensionValueIds,
+      });
+    } else {
+      const payload: Parameters<typeof enrollmentApi.create>[0] = {
+        entity_id: entityId,
+        admission_date: admissionDate,
+        dimension_value_ids: dimensionValueIds,
+      };
+      if (releaseDate) payload.release_date = releaseDate;
+      if (metaFields.length > 0) payload.meta = metaValues;
+      createMutation.mutate(payload);
+    }
+  };
+
+  const isPending = createMutation.isPending || updateMutation.isPending;
+
+  return (
+    <div className="border rounded p-3 mb-3 bg-gray-50">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-medium text-sm">
+          {isEdit ? `Edit ${v("enrollment")}` : `New ${v("enrollment")}`}
+        </h3>
+        <Button size="sm" variant="ghost" onClick={onCancel}>
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
+      <form onSubmit={handleSubmit} className="space-y-3">
+        {/* Dimension selectors (non-system only) — cascading */}
+        {selectableDimensions.map((dim) => {
+          const dimValues = allDimensionValues.filter(
+            (dv) => dv.dimension_id === dim.id
+          );
+          const filtered = getFilteredValues(
+            dimValues,
+            selectedByDim,
+            dim.id,
+            dimensionValueLinks
+          );
+          const currentSelection =
+            dimensionValueIds.find((dvId) =>
+              dimValues.some((dv) => dv.id === dvId)
+            ) || "";
+          return (
+            <div key={dim.id}>
+              <label className="text-sm font-medium">{vDim(dim)}</label>
+              <select
+                className="w-full mt-1 border rounded-md p-2 text-sm"
+                value={currentSelection}
+                onChange={(e) => {
+                  const newId = e.target.value;
+                  const otherIds = dimensionValueIds.filter(
+                    (dvId) => !dimValues.some((dv) => dv.id === dvId)
+                  );
+                  setDimensionValueIds(
+                    newId ? [...otherIds, newId] : otherIds
+                  );
+                }}
+              >
+                <option value="">Select {vDim(dim)}...</option>
+                {filtered.map((dv) => (
+                  <option key={dv.id} value={dv.id}>
+                    {dv.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          );
+        })}
+
+        <div>
+          <label className="text-sm font-medium">Admission Date</label>
+          <Input
+            type="date"
+            value={admissionDate}
+            onChange={(e) => setAdmissionDate(e.target.value)}
+            required
+          />
+        </div>
+
+        <div>
+          <label className="text-sm font-medium">Release Date</label>
+          <Input
+            type="date"
+            value={releaseDate}
+            onChange={(e) => setReleaseDate(e.target.value)}
+          />
+        </div>
+
+        <DynamicMetaForm
+          fields={metaFields}
+          values={metaValues}
+          onChange={setMetaValues}
+        />
+
+        <div className="flex gap-2">
+          <Button type="submit" disabled={isPending}>
+            {isEdit ? "Save" : "Create"}
+          </Button>
+          <Button type="button" variant="outline" onClick={onCancel}>
+            Cancel
+          </Button>
+        </div>
+      </form>
+    </div>
   );
 }

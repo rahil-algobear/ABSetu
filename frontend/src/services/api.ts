@@ -411,4 +411,8 @@ export const enrollmentApi = {
     const response = await authAxios.put<Enrollment>(`/enrollments/${id}`, data);
     return response.data;
   },
+  updateTags: async (id: string, dimensionValueIds: string[]): Promise<Enrollment> => {
+    const response = await authAxios.put<Enrollment>(`/enrollments/${id}/tags`, dimensionValueIds);
+    return response.data;
+  },
 };

@@ -52,6 +52,7 @@ def _build_entity_response(e) -> dict:
         meta=e.meta,
         entity_type_name=e.entity_type.name if e.entity_type else None,
         entity_type_key=e.entity_type.key if e.entity_type else None,
+        entity_type_config=e.entity_type.config if e.entity_type else None,
         tags=tag_infos,
     ).dump()
 
