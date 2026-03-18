@@ -89,18 +89,59 @@ export function ActivityTypeMatrixDialog({ open, onClose }: ActivityTypeMatrixDi
     enabled: open,
   });
 
-  // Bidirectional link lookup: dvId → Set<connected dvId>
-  const linkMap = useMemo(() => {
-    const map = new Map<string, Set<string>>();
-    for (const link of allDimensionValueLinks) {
-      const { dimension_value_id_1: id1, dimension_value_id_2: id2 } = link;
-      if (!map.has(id1)) map.set(id1, new Set());
-      if (!map.has(id2)) map.set(id2, new Set());
-      map.get(id1)!.add(id2);
-      map.get(id2)!.add(id1);
+  // Build a lookup: non-system dvId → dimensionId
+  const nonSystemDvDimMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const [dimId, dvs] of Object.entries(allDvsByDim)) {
+      for (const dv of dvs) {
+        map.set(dv.id, dimId);
+      }
     }
     return map;
-  }, [allDimensionValueLinks]);
+  }, [allDvsByDim]);
+
+  // Bidirectional link lookup: dvId → Set<connected dvId>
+  // Includes both explicit DB links AND implicit cross-links derived from
+  // system DV connections (if a system DV connects to both X and Y from
+  // different dimensions, we infer X ↔ Y as a valid combination).
+  const linkMap = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    const addLink = (a: string, b: string) => {
+      if (!map.has(a)) map.set(a, new Set());
+      if (!map.has(b)) map.set(b, new Set());
+      map.get(a)!.add(b);
+      map.get(b)!.add(a);
+    };
+
+    // 1. Explicit links from DB
+    for (const link of allDimensionValueLinks) {
+      addLink(link.dimension_value_id_1, link.dimension_value_id_2);
+    }
+
+    // 2. Derive implicit cross-links from system DV connections:
+    //    If an activity type's system DV connects to KTP (programme) and
+    //    Thane (location), infer KTP ↔ Thane as a valid column combination.
+    const systemDvIdSet = new Set(systemDvs.map((dv) => dv.id));
+    for (const sysDv of systemDvs) {
+      const conn = map.get(sysDv.id);
+      if (!conn) continue;
+      const connectedNonSystem = Array.from(conn).filter(
+        (id) => !systemDvIdSet.has(id) && nonSystemDvDimMap.has(id)
+      );
+      for (let i = 0; i < connectedNonSystem.length; i++) {
+        for (let j = i + 1; j < connectedNonSystem.length; j++) {
+          const a = connectedNonSystem[i];
+          const b = connectedNonSystem[j];
+          // Only link values from different dimensions
+          if (nonSystemDvDimMap.get(a) !== nonSystemDvDimMap.get(b)) {
+            addLink(a, b);
+          }
+        }
+      }
+    }
+
+    return map;
+  }, [allDimensionValueLinks, systemDvs, nonSystemDvDimMap]);
 
   // Map system dv id → activity type (matched by name)
   const sysDvToActivityType = useMemo(() => {
