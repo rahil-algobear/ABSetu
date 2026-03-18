@@ -75,44 +75,46 @@ export default function AdminLayout({
   ];
 
   const allTabs = [...mastersTabs, ...settingsTabs];
-  const visibleMastersTabs = mastersTabs.filter((tab) => can(tab.permission));
   const visibleSettingsTabs = settingsTabs.filter((tab) => can(tab.permission));
 
   // Check if user has permission for the current page
   const currentTab = allTabs.find((tab) => pathname === tab.href || pathname.startsWith(tab.href + "/"));
   const hasAccess = !currentTab || can(currentTab.permission);
 
-  // Determine current section — show only relevant tabs
+  // Determine current section
   const isMastersPage = mastersTabs.some((tab) => pathname === tab.href || pathname.startsWith(tab.href + "/"));
-  const pageHeading = isMastersPage ? "Masters" : "Settings";
-  const visibleTabs = isMastersPage ? visibleMastersTabs : visibleSettingsTabs;
+  const isSettingsPage = !isMastersPage;
 
   return (
     <PageLayout className="p-4">
-      <h1 className="text-2xl font-bold mb-4">{pageHeading}</h1>
+      {/* Settings pages get heading + tab bar; Masters pages get neither */}
+      {isSettingsPage && (
+        <>
+          <h1 className="text-2xl font-bold mb-4">Settings</h1>
 
-      {/* Scrollable tab bar — only tabs for current section */}
-      <div className="flex overflow-x-auto gap-1 mb-6 border-b border-gray-200 pb-px -mx-4 px-4 no-scrollbar">
-        {visibleTabs.map((tab) => {
-          const Icon = tab.icon;
-          const active = pathname === tab.href || pathname.startsWith(tab.href + "/");
-          return (
-            <Link
-              key={tab.href}
-              href={tab.href}
-              className={cn(
-                "flex items-center gap-1.5 px-3 py-2 text-sm font-medium whitespace-nowrap border-b-2 transition-colors shrink-0",
-                active
-                  ? "border-purple-600 text-purple-700"
-                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-              )}
-            >
-              <Icon size={14} />
-              {tab.label}
-            </Link>
-          );
-        })}
-      </div>
+          <div className="flex overflow-x-auto gap-1 mb-6 border-b border-gray-200 pb-px -mx-4 px-4 no-scrollbar">
+            {visibleSettingsTabs.map((tab) => {
+              const Icon = tab.icon;
+              const active = pathname === tab.href || pathname.startsWith(tab.href + "/");
+              return (
+                <Link
+                  key={tab.href}
+                  href={tab.href}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-2 text-sm font-medium whitespace-nowrap border-b-2 transition-colors shrink-0",
+                    active
+                      ? "border-purple-600 text-purple-700"
+                      : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                  )}
+                >
+                  <Icon size={14} />
+                  {tab.label}
+                </Link>
+              );
+            })}
+          </div>
+        </>
+      )}
 
       {!loading && !hasAccess ? (
         <div className="flex flex-col items-center justify-center py-16 text-gray-400">

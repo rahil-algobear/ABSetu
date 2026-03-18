@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { useAuth } from "../services/auth";
 import { usePermissions, Can } from "./Auth/Permissions";
 import { useQuery } from "@tanstack/react-query";
-import { organizationApi, dimensionApi, entityTypeApi } from "../services/api";
+import { organizationApi, dimensionApi, entityTypeApi, activityCategoryApi } from "../services/api";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import Image from "next/image";
@@ -210,8 +210,32 @@ export default function Navigation() {
     staleTime: 5 * 60 * 1000,
   });
 
+  const { data: activityCategories = [] } = useQuery({
+    queryKey: ["activity-categories"],
+    queryFn: activityCategoryApi.list,
+    enabled: isAuthenticated,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Activities dropdown: one item per activity category
+  const activitiesItems = activityCategories.map((cat) => ({
+    href: `/activities?category=${cat.id}`,
+    label: cat.name,
+    icon: CalendarDays,
+    permission: "activity:view",
+  }));
+
+  // Entity Types dropdown: one item per entity type
+  const entityTypeItems = entityTypes.map((et) => ({
+    href: `/admin/entities/${et.id}`,
+    label: et.name,
+    icon: Users,
+    permission: "entity:view",
+  }));
+
+  // Masters: Users, dynamic dimensions, Activity Types
   const mastersItems = [
-    // Dynamic dimensions (non-system)
+    { href: "/admin/users", label: "Users", icon: Users, permission: "user:view" },
     ...dimensions
       .filter((d) => !d.is_system)
       .map((d) => ({
@@ -220,14 +244,6 @@ export default function Navigation() {
         icon: Layers,
         permission: "dimension:view",
       })),
-    // Dynamic entity types
-    ...entityTypes.map((et) => ({
-      href: `/admin/entities/${et.id}`,
-      label: et.name,
-      icon: Users,
-      permission: "entity:view",
-    })),
-    { href: "/admin/users", label: "Users", icon: Users, permission: "user:view" },
     { href: "/admin/activity-types", label: vPlural("activity_type"), icon: ClipboardList, permission: "activity_type:view" },
   ];
 
@@ -349,20 +365,36 @@ export default function Navigation() {
                   Dashboard
                 </Link>
 
-                <Can permission="activity:view">
-                  <Link
-                    href="/activities"
-                    className={clsx(
-                      "flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-                      pathname.startsWith("/activities")
-                        ? "text-purple-700 bg-purple-50"
-                        : "text-gray-500 hover:text-gray-900 hover:bg-gray-100",
-                    )}
-                  >
-                    <CalendarDays size={15} />
-                    {vPlural("activity")}
-                  </Link>
-                </Can>
+                {activitiesItems.length > 0 ? (
+                  <NavDropdown
+                    label={vPlural("activity")}
+                    icon={CalendarDays}
+                    items={activitiesItems}
+                    pathname={pathname}
+                  />
+                ) : (
+                  <Can permission="activity:view">
+                    <Link
+                      href="/activities"
+                      className={clsx(
+                        "flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                        pathname.startsWith("/activities")
+                          ? "text-purple-700 bg-purple-50"
+                          : "text-gray-500 hover:text-gray-900 hover:bg-gray-100",
+                      )}
+                    >
+                      <CalendarDays size={15} />
+                      {vPlural("activity")}
+                    </Link>
+                  </Can>
+                )}
+
+                <NavDropdown
+                  label={vPlural("entity_type")}
+                  icon={Users}
+                  items={entityTypeItems}
+                  pathname={pathname}
+                />
 
                 <NavDropdown
                   label="Masters"
@@ -426,21 +458,78 @@ export default function Navigation() {
               Dashboard
             </Link>
 
-            {/* Activities */}
-            <Can permission="activity:view">
-              <Link
-                href="/activities"
-                className={clsx(
-                  "flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
-                  pathname.startsWith("/activities")
-                    ? "text-purple-700 bg-purple-50"
-                    : "text-gray-500 hover:text-gray-900 hover:bg-gray-100",
-                )}
-              >
-                <CalendarDays size={16} />
-                Activities
-              </Link>
-            </Can>
+            {/* Activities section */}
+            {activitiesItems.length > 0 ? (
+              <div className="pt-2">
+                <p className="px-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">
+                  {vPlural("activity")}
+                </p>
+                {activitiesItems.map((item) => {
+                  if (!can(item.permission)) return null;
+                  const ItemIcon = item.icon;
+                  const active = pathname.startsWith(item.href);
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={clsx(
+                        "flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                        active
+                          ? "text-purple-700 bg-purple-50"
+                          : "text-gray-500 hover:text-gray-900 hover:bg-gray-100",
+                      )}
+                    >
+                      <ItemIcon size={16} />
+                      {item.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            ) : (
+              <Can permission="activity:view">
+                <Link
+                  href="/activities"
+                  className={clsx(
+                    "flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                    pathname.startsWith("/activities")
+                      ? "text-purple-700 bg-purple-50"
+                      : "text-gray-500 hover:text-gray-900 hover:bg-gray-100",
+                  )}
+                >
+                  <CalendarDays size={16} />
+                  {vPlural("activity")}
+                </Link>
+              </Can>
+            )}
+
+            {/* Entity Types section */}
+            {entityTypeItems.length > 0 && (
+              <div className="pt-2">
+                <p className="px-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">
+                  {vPlural("entity_type")}
+                </p>
+                {entityTypeItems.map((item) => {
+                  if (!can(item.permission)) return null;
+                  const ItemIcon = item.icon;
+                  const active = pathname.startsWith(item.href);
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={clsx(
+                        "flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                        active
+                          ? "text-purple-700 bg-purple-50"
+                          : "text-gray-500 hover:text-gray-900 hover:bg-gray-100",
+                      )}
+                    >
+                      <ItemIcon size={16} />
+                      {item.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
 
             {/* Masters section */}
             <div className="pt-2">
