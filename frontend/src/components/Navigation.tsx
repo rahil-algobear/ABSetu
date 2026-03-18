@@ -217,24 +217,24 @@ export default function Navigation() {
     staleTime: 5 * 60 * 1000,
   });
 
-  // Activities dropdown: one item per activity category
-  const activitiesItems = activityCategories.map((cat) => ({
+  // Activity categories as top-level nav links
+  const activityCategoryLinks = activityCategories.map((cat) => ({
     href: `/activities?category=${cat.id}`,
     label: cat.name,
     icon: CalendarDays,
     permission: "activity:view",
   }));
 
-  // Entity Types dropdown: one item per entity type
-  const entityTypeItems = entityTypes.map((et) => ({
+  // Entity types as top-level nav links
+  const entityTypeLinks = entityTypes.map((et) => ({
     href: `/admin/entities/${et.id}`,
     label: et.name,
     icon: Users,
     permission: "entity:view",
   }));
 
-  // Masters: Users, dynamic dimensions, Activity Types
-  const mastersItems = [
+  // Settings dropdown (formerly Masters): Users, dynamic dimensions, Activity Types
+  const settingsItems = [
     { href: "/admin/users", label: "Users", icon: Users, permission: "user:view" },
     ...dimensions
       .filter((d) => !d.is_system)
@@ -247,7 +247,8 @@ export default function Navigation() {
     { href: "/admin/activity-types", label: vPlural("activity_type"), icon: ClipboardList, permission: "activity_type:view" },
   ];
 
-  const settingsItems = [
+  // Admin dropdown (formerly Settings)
+  const adminItems = [
     { href: "/admin/meta-fields", label: "Form Fields", icon: SlidersHorizontal, permission: "org:settings" },
     { href: "/admin/roles", label: "Roles", icon: Shield, permission: "role:view" },
     { href: "/admin/manage-dimensions", label: "Dimensions", icon: Layers, permission: "dimension:manage" },
@@ -365,48 +366,53 @@ export default function Navigation() {
                   Dashboard
                 </Link>
 
-                {activitiesItems.length > 0 ? (
-                  <NavDropdown
-                    label={vPlural("activity")}
-                    icon={CalendarDays}
-                    items={activitiesItems}
-                    pathname={pathname}
-                  />
-                ) : (
-                  <Can permission="activity:view">
+                {/* Activity categories as top-level links */}
+                {activityCategoryLinks.map((item) => (
+                  <Can key={item.href} permission={item.permission}>
                     <Link
-                      href="/activities"
+                      href={item.href}
                       className={clsx(
                         "flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-                        pathname.startsWith("/activities")
+                        pathname.startsWith(item.href.split("?")[0])
                           ? "text-purple-700 bg-purple-50"
                           : "text-gray-500 hover:text-gray-900 hover:bg-gray-100",
                       )}
                     >
                       <CalendarDays size={15} />
-                      {vPlural("activity")}
+                      {item.label}
                     </Link>
                   </Can>
-                )}
+                ))}
 
-                <NavDropdown
-                  label={vPlural("entity_type")}
-                  icon={Users}
-                  items={entityTypeItems}
-                  pathname={pathname}
-                />
-
-                <NavDropdown
-                  label="Masters"
-                  icon={Database}
-                  items={mastersItems}
-                  pathname={pathname}
-                />
+                {/* Entity types as top-level links */}
+                {entityTypeLinks.map((item) => (
+                  <Can key={item.href} permission={item.permission}>
+                    <Link
+                      href={item.href}
+                      className={clsx(
+                        "flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                        pathname.startsWith(item.href)
+                          ? "text-purple-700 bg-purple-50"
+                          : "text-gray-500 hover:text-gray-900 hover:bg-gray-100",
+                      )}
+                    >
+                      <Users size={15} />
+                      {item.label}
+                    </Link>
+                  </Can>
+                ))}
 
                 <NavDropdown
                   label="Settings"
                   icon={Settings}
                   items={settingsItems}
+                  pathname={pathname}
+                />
+
+                <NavDropdown
+                  label="Admin"
+                  icon={Database}
+                  items={adminItems}
                   pathname={pathname}
                 />
               </nav>
@@ -458,85 +464,54 @@ export default function Navigation() {
               Dashboard
             </Link>
 
-            {/* Activities section */}
-            {activitiesItems.length > 0 ? (
-              <div className="pt-2">
-                <p className="px-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">
-                  {vPlural("activity")}
-                </p>
-                {activitiesItems.map((item) => {
-                  if (!can(item.permission)) return null;
-                  const ItemIcon = item.icon;
-                  const active = pathname.startsWith(item.href);
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      className={clsx(
-                        "flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
-                        active
-                          ? "text-purple-700 bg-purple-50"
-                          : "text-gray-500 hover:text-gray-900 hover:bg-gray-100",
-                      )}
-                    >
-                      <ItemIcon size={16} />
-                      {item.label}
-                    </Link>
-                  );
-                })}
-              </div>
-            ) : (
-              <Can permission="activity:view">
+            {/* Activity categories as top-level links */}
+            {activityCategoryLinks.map((item) => {
+              if (!can(item.permission)) return null;
+              const active = pathname.startsWith(item.href.split("?")[0]);
+              return (
                 <Link
-                  href="/activities"
+                  key={item.href}
+                  href={item.href}
                   className={clsx(
                     "flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
-                    pathname.startsWith("/activities")
+                    active
                       ? "text-purple-700 bg-purple-50"
                       : "text-gray-500 hover:text-gray-900 hover:bg-gray-100",
                   )}
                 >
                   <CalendarDays size={16} />
-                  {vPlural("activity")}
+                  {item.label}
                 </Link>
-              </Can>
-            )}
+              );
+            })}
 
-            {/* Entity Types section */}
-            {entityTypeItems.length > 0 && (
-              <div className="pt-2">
-                <p className="px-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">
-                  {vPlural("entity_type")}
-                </p>
-                {entityTypeItems.map((item) => {
-                  if (!can(item.permission)) return null;
-                  const ItemIcon = item.icon;
-                  const active = pathname.startsWith(item.href);
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      className={clsx(
-                        "flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
-                        active
-                          ? "text-purple-700 bg-purple-50"
-                          : "text-gray-500 hover:text-gray-900 hover:bg-gray-100",
-                      )}
-                    >
-                      <ItemIcon size={16} />
-                      {item.label}
-                    </Link>
-                  );
-                })}
-              </div>
-            )}
+            {/* Entity types as top-level links */}
+            {entityTypeLinks.map((item) => {
+              if (!can(item.permission)) return null;
+              const active = pathname.startsWith(item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={clsx(
+                    "flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                    active
+                      ? "text-purple-700 bg-purple-50"
+                      : "text-gray-500 hover:text-gray-900 hover:bg-gray-100",
+                  )}
+                >
+                  <Users size={16} />
+                  {item.label}
+                </Link>
+              );
+            })}
 
-            {/* Masters section */}
+            {/* Settings section (formerly Masters) */}
             <div className="pt-2">
               <p className="px-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">
-                Masters
+                Settings
               </p>
-              {mastersItems.map((item) => {
+              {settingsItems.map((item) => {
                 if (!can(item.permission)) return null;
                 const ItemIcon = item.icon;
                 const active = pathname.startsWith(item.href);
@@ -558,12 +533,12 @@ export default function Navigation() {
               })}
             </div>
 
-            {/* Settings section */}
+            {/* Admin section (formerly Settings) */}
             <div className="pt-2">
               <p className="px-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">
-                Settings
+                Admin
               </p>
-              {settingsItems.map((item) => {
+              {adminItems.map((item) => {
                 if (!can(item.permission)) return null;
                 const ItemIcon = item.icon;
                 const active = pathname.startsWith(item.href);

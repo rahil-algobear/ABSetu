@@ -65,7 +65,7 @@ export default function AdminLayout({
     { href: "/admin/activity-types", label: vPlural("activity_type"), icon: ClipboardList, permission: "activity_type:view" },
   ];
 
-  const settingsTabs = [
+  const adminTabs = [
     { href: "/admin/meta-fields", label: "Form Fields", icon: SlidersHorizontal, permission: "org:settings" },
     { href: "/admin/roles", label: "Roles", icon: Shield, permission: "role:view" },
     { href: "/admin/manage-dimensions", label: "Dimensions", icon: Layers, permission: "dimension:manage" },
@@ -74,8 +74,8 @@ export default function AdminLayout({
     { href: "/admin/activity-categories", label: vPlural("activity_category"), icon: ClipboardList, permission: "activity_type:view" },
   ];
 
-  const allTabs = [...mastersTabs, ...settingsTabs];
-  const visibleSettingsTabs = settingsTabs.filter((tab) => can(tab.permission));
+  const allTabs = [...mastersTabs, ...adminTabs];
+  const visibleAdminTabs = adminTabs.filter((tab) => can(tab.permission));
 
   // Check if user has permission for the current page
   const currentTab = allTabs.find((tab) => pathname === tab.href || pathname.startsWith(tab.href + "/"));
@@ -83,17 +83,17 @@ export default function AdminLayout({
 
   // Determine current section
   const isMastersPage = mastersTabs.some((tab) => pathname === tab.href || pathname.startsWith(tab.href + "/"));
-  const isSettingsPage = !isMastersPage;
+  const isAdminPage = !isMastersPage;
 
   return (
     <PageLayout className="p-4">
-      {/* Settings pages get heading + tab bar; Masters pages get neither */}
-      {isSettingsPage && (
+      {/* Admin pages get heading + tab bar; Settings/Masters pages get neither */}
+      {isAdminPage && (
         <>
-          <h1 className="text-2xl font-bold mb-4">Settings</h1>
+          <h1 className="text-2xl font-bold mb-4">Admin</h1>
 
           <div className="flex overflow-x-auto gap-1 mb-6 border-b border-gray-200 pb-px -mx-4 px-4 no-scrollbar">
-            {visibleSettingsTabs.map((tab) => {
+            {visibleAdminTabs.map((tab) => {
               const Icon = tab.icon;
               const active = pathname === tab.href || pathname.startsWith(tab.href + "/");
               return (
