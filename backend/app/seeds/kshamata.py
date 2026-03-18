@@ -461,6 +461,19 @@ BENEFICIARY_CUSTOM_FIELDS = [
 ]
 
 
+# ---------------------------------------------------------------------------
+# Meta Field Schemas — custom fields for Facilitator entity type
+# ---------------------------------------------------------------------------
+FACILITATOR_CUSTOM_FIELDS = [
+    {
+        "key": "contact_number",
+        "label": "Contact No.",
+        "type": "text",
+        "required": False,
+    },
+]
+
+
 def _make_at_code(name: str) -> str:
     """Convert activity type name to a slugified dimension value code."""
     import re
@@ -653,6 +666,37 @@ def seed():
             db.flush()
             print(
                 f"  Updated beneficiary meta field schema ({len(BENEFICIARY_CUSTOM_FIELDS)} fields)"
+            )
+
+        # 2c. Meta Field Schemas — Facilitator custom fields
+        facilitator_et = entity_type_map["Facilitator"]
+        facilitator_scope_key = f"entity:{facilitator_et.id}"
+        mfs_f = (
+            db.query(MetaFieldSchema)
+            .filter_by(
+                organization_id=org.id,
+                scope_key=facilitator_scope_key,
+            )
+            .first()
+        )
+        if not mfs_f:
+            mfs_f = MetaFieldSchema(
+                organization_id=org.id,
+                scope_key=facilitator_scope_key,
+                fields=FACILITATOR_CUSTOM_FIELDS,
+            )
+            db.add(mfs_f)
+            db.flush()
+            print(
+                f"  Created facilitator meta field schema"
+                f" ({len(FACILITATOR_CUSTOM_FIELDS)} fields)"
+            )
+        else:
+            mfs_f.fields = FACILITATOR_CUSTOM_FIELDS
+            db.flush()
+            print(
+                f"  Updated facilitator meta field schema"
+                f" ({len(FACILITATOR_CUSTOM_FIELDS)} fields)"
             )
 
         # 3. Activity Category: Sessions
