@@ -90,17 +90,25 @@ export default function MetaFieldsPage() {
   );
 
   // Derive the schema key from section + activeKey (now uses IDs)
+  const isCategory = (id: string) => categories.some((c) => c.id === id);
+
   const schemaKey = useMemo(() => {
     if (!activeKey) return "";
     switch (activeSection) {
       case "entity": return `entity:${activeKey}`;
       case "dimension": return `dimension:${activeKey}`;
       case "other": return activeKey; // "activity_type", "enrollment"
-      case "activity": return `activity:${activeKey}`;
-      case "participant": return `participant:${activeKey}`;
+      case "activity": {
+        const sub = isCategory(activeKey) ? "category" : "type";
+        return `activity:${sub}:${activeKey}`;
+      }
+      case "participant": {
+        const sub = isCategory(activeKey) ? "category" : "type";
+        return `participant:${sub}:${activeKey}`;
+      }
       default: return "";
     }
-  }, [activeSection, activeKey]);
+  }, [activeSection, activeKey, categories]);
 
   // Auto-select first ID when section changes
   const selectSection = (section: SectionKind) => {

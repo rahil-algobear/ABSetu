@@ -63,35 +63,41 @@ STATIC_ENTITY_TYPES = {
 
 
 def _validate_entity_type(entity_type: str, org_id, db: Session) -> None:
-    """Validate entity type — allow static types, dimension:{id}, entity:{id}, activity:{id}, and participant:{id} types."""
+    """Validate entity type — allow static types and scoped keys like
+    dimension:{id}, entity:{id}, activity:category:{id}, activity:type:{id},
+    participant:category:{id}, participant:type:{id}."""
     if entity_type in STATIC_ENTITY_TYPES:
         return
 
-    ref_id = entity_type.split(":", 1)[1] if ":" in entity_type else None
+    parts = entity_type.split(":")
 
-    if entity_type.startswith("dimension:") and ref_id:
-        from app.modules.dimension.model import Dimension
+    if len(parts) == 2:
+        prefix, ref_id = parts
 
-        dim = db.query(Dimension).filter_by(organization_id=org_id, id=ref_id).first()
-        if dim:
-            return
+        if prefix == "dimension":
+            from app.modules.dimension.model import Dimension
 
-    if entity_type.startswith("entity:") and ref_id:
-        from app.modules.entity.model import EntityType
+            if db.query(Dimension).filter_by(organization_id=org_id, id=ref_id).first():
+                return
 
-        et = db.query(EntityType).filter_by(organization_id=org_id, id=ref_id).first()
-        if et:
-            return
+        if prefix == "entity":
+            from app.modules.entity.model import EntityType
 
-    if (entity_type.startswith("activity:") or entity_type.startswith("participant:")) and ref_id:
-        from app.modules.activity.model import ActivityCategory, ActivityType
+            if db.query(EntityType).filter_by(organization_id=org_id, id=ref_id).first():
+                return
 
-        cat = db.query(ActivityCategory).filter_by(organization_id=org_id, id=ref_id).first()
-        if cat:
-            return
-        at = db.query(ActivityType).filter_by(organization_id=org_id, id=ref_id).first()
-        if at:
-            return
+    if len(parts) == 3:
+        prefix, sub, ref_id = parts
+
+        if prefix in ("activity", "participant"):
+            from app.modules.activity.model import ActivityCategory, ActivityType
+
+            if sub == "category":
+                if db.query(ActivityCategory).filter_by(organization_id=org_id, id=ref_id).first():
+                    return
+            elif sub == "type":
+                if db.query(ActivityType).filter_by(organization_id=org_id, id=ref_id).first():
+                    return
 
     from fastapi import HTTPException
 
