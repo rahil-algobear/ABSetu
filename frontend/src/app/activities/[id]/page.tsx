@@ -6,29 +6,28 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   activityApi,
   activityCategoryApi,
+  activityFormApi,
   activityTypeApi,
   entityApi,
   entityTypeApi,
+  metaFieldSchemaApi,
   userApi,
 } from "@/services/api";
-import { ActivityParticipant } from "@/types";
+import {
+  ActivityForm,
+  ActivityFormElement,
+  ActivityParticipant,
+  MetaFieldDefinition,
+  MetaFieldSchemas,
+} from "@/types";
 import { Can } from "@/components/Auth/Permissions";
 import { useVocabulary } from "@/hooks/useVocabulary";
+import { DynamicMetaForm, MetaFieldDisplay } from "@/components/DynamicMetaForm";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PageLayout } from "@/components/ui/page-layout";
 import toast from "react-hot-toast";
-
-interface SectionConfig {
-  key: string;
-  label: string;
-  participant_source: string; // "entity_type:{id}" or "user"
-  selection_mode: string; // "multi_select" | "enrolled_checklist" | "single_select"
-  capture_status?: boolean;
-  statuses?: string[];
-  default_status?: string;
-}
 
 export default function ActivityDetailPage() {
   const params = useParams();
@@ -37,7 +36,7 @@ export default function ActivityDetailPage() {
   const { v } = useVocabulary();
   const [editingSections, setEditingSections] = useState(false);
   const [participantState, setParticipantState] = useState<
-    Record<string, { participant_id: string; participant_type: string; status?: string }[]>
+    Record<string, { participant_id: string; participant_type: string; status?: string; meta?: Record<string, unknown> }[]>
   >({});
 
   const { data: activity, isLoading } = useQuery({
@@ -65,45 +64,54 @@ export default function ActivityDetailPage() {
     queryFn: entityTypeApi.list,
   });
 
-  // Resolve the activity's category sections config
-  const sections: SectionConfig[] = useMemo(() => {
-    if (!activity) return [];
+  const { data: allMetaSchemas = {} } = useQuery<MetaFieldSchemas>({
+    queryKey: ["meta-field-schemas-all"],
+    queryFn: metaFieldSchemaApi.getAll,
+  });
+
+  // Resolve category ID for this activity
+  const categoryId = useMemo(() => {
+    if (!activity) return "";
     const at = activityTypes.find((t) => t.id === activity.activity_type_id);
-    if (!at?.category_id) return [];
-    const cat = categories.find((c) => c.id === at.category_id);
-    return (cat?.sections as SectionConfig[]) || [];
-  }, [activity, activityTypes, categories]);
+    return at?.category_id || "";
+  }, [activity, activityTypes]);
 
-  // Load entities/users for each section's participant source
+  // Load form builder config
+  const { data: formConfig } = useQuery<ActivityForm>({
+    queryKey: ["activity-form", categoryId],
+    queryFn: () => activityFormApi.get(categoryId),
+    enabled: !!categoryId,
+  });
+
+  // Get entity_type elements from form config (these are participant sections)
+  const entityTypeElements: ActivityFormElement[] = useMemo(() => {
+    if (!formConfig?.elements?.length) return [];
+    return formConfig.elements
+      .filter((el) => el.type === "entity_type" && el.visible)
+      .sort((a, b) => a.sort_order - b.sort_order);
+  }, [formConfig]);
+
+  // Entity type source IDs from form elements
   const entitySourceIds = useMemo(() => {
-    return sections
-      .filter((s) => s.participant_source.startsWith("entity_type:"))
-      .map((s) => s.participant_source.split(":")[1]);
-  }, [sections]);
+    return entityTypeElements
+      .filter((el) => el.ref_id && el.ref_id !== "user")
+      .map((el) => el.ref_id!);
+  }, [entityTypeElements]);
 
-  const hasUserSection = sections.some((s) => s.participant_source === "user");
-
-  // Map entity type IDs from participant_source (already UUIDs)
-  const entityTypeIdMap = useMemo(() => {
-    const map: Record<string, string> = {};
-    for (const id of entitySourceIds) {
-      map[id] = id;
-    }
-    return map;
-  }, [entitySourceIds]);
+  const hasUserSection = entityTypeElements.some((el) => el.ref_id === "user");
 
   // Load entities for each entity type
   const { data: entitiesByType = {} } = useQuery({
-    queryKey: ["entities-for-sections", Object.values(entityTypeIdMap).join(",")],
+    queryKey: ["entities-for-sections", entitySourceIds.join(",")],
     queryFn: async () => {
       const result: Record<string, { id: string; name: string }[]> = {};
-      for (const [key, typeId] of Object.entries(entityTypeIdMap)) {
+      for (const typeId of entitySourceIds) {
         const entities = await entityApi.list(typeId);
-        result[key] = entities.map((e) => ({ id: e.id, name: e.name }));
+        result[typeId] = entities.map((e) => ({ id: e.id, name: e.name }));
       }
       return result;
     },
-    enabled: Object.keys(entityTypeIdMap).length > 0,
+    enabled: entitySourceIds.length > 0,
   });
 
   const { data: users = [] } = useQuery({
@@ -112,8 +120,37 @@ export default function ActivityDetailPage() {
     enabled: hasUserSection,
   });
 
+  // Get participation meta fields for an entity type element
+  const getParticipationMetaFields = (el: ActivityFormElement): MetaFieldDefinition[] => {
+    if (!el.ref_id) return [];
+    const fields: MetaFieldDefinition[] = [];
+
+    // participant:entity:{ref_id} — all categories
+    const baseKey = `participant:entity:${el.ref_id}`;
+    fields.push(...(allMetaSchemas[baseKey] || []));
+
+    // participant:entity:{ref_id}:category:{categoryId}
+    if (categoryId) {
+      const catKey = `${baseKey}:category:${categoryId}`;
+      fields.push(...(allMetaSchemas[catKey] || []));
+    }
+
+    // participant:entity:{ref_id}:type:{activityTypeId}
+    if (activity?.activity_type_id) {
+      const typeKey = `${baseKey}:type:${activity.activity_type_id}`;
+      fields.push(...(allMetaSchemas[typeKey] || []));
+    }
+
+    return fields;
+  };
+
+  // Use ref_id as section_key for participant records
+  const getSectionKey = (el: ActivityFormElement): string => {
+    return el.ref_id || el.type;
+  };
+
   const saveMutation = useMutation({
-    mutationFn: (records: { participant_type: string; participant_id: string; section_key: string; status?: string }[]) =>
+    mutationFn: (records: { participant_type: string; participant_id: string; section_key: string; status?: string; meta?: Record<string, unknown> }[]) =>
       activityApi.saveParticipants(id, records),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["participants", id] });
@@ -124,14 +161,15 @@ export default function ActivityDetailPage() {
   });
 
   const openEditing = () => {
-    // Initialize state from existing participants
     const state: typeof participantState = {};
-    for (const section of sections) {
-      const sectionParticipants = participants.filter((p) => p.section_key === section.key);
-      state[section.key] = sectionParticipants.map((p) => ({
+    for (const el of entityTypeElements) {
+      const sectionKey = getSectionKey(el);
+      const sectionParticipants = participants.filter((p) => p.section_key === sectionKey);
+      state[sectionKey] = sectionParticipants.map((p) => ({
         participant_id: p.participant_id,
         participant_type: p.participant_type,
         status: p.status || undefined,
+        meta: p.meta || undefined,
       }));
     }
     setParticipantState(state);
@@ -139,15 +177,17 @@ export default function ActivityDetailPage() {
   };
 
   const handleSave = () => {
-    const records: { participant_type: string; participant_id: string; section_key: string; status?: string }[] = [];
-    for (const section of sections) {
-      const sectionState = participantState[section.key] || [];
+    const records: { participant_type: string; participant_id: string; section_key: string; status?: string; meta?: Record<string, unknown> }[] = [];
+    for (const el of entityTypeElements) {
+      const sectionKey = getSectionKey(el);
+      const sectionState = participantState[sectionKey] || [];
       for (const p of sectionState) {
         records.push({
           participant_type: p.participant_type,
           participant_id: p.participant_id,
-          section_key: section.key,
+          section_key: sectionKey,
           status: p.status,
+          meta: p.meta,
         });
       }
     }
@@ -163,6 +203,13 @@ export default function ActivityDetailPage() {
     }
     return map;
   }, [participants]);
+
+  // Get label for an entity type element
+  const getElementLabel = (el: ActivityFormElement): string => {
+    if (el.ref_id === "user") return "Users (staff)";
+    const et = entityTypes.find((t) => t.id === el.ref_id);
+    return et?.name || "Participants";
+  };
 
   if (isLoading) return <PageLayout className="p-4"><p>Loading...</p></PageLayout>;
   if (!activity) return <PageLayout className="p-4"><p>Not found</p></PageLayout>;
@@ -189,8 +236,25 @@ export default function ActivityDetailPage() {
         <p className="text-sm text-gray-600 mb-4">{activity.notes}</p>
       )}
 
-      {/* Participant sections */}
-      {sections.length > 0 ? (
+      {/* Activity meta display */}
+      {activity.meta && Object.keys(activity.meta).length > 0 && (() => {
+        const at = activityTypes.find((t) => t.id === activity.activity_type_id);
+        const categoryFields = at?.category_id
+          ? allMetaSchemas[`activity:category:${at.category_id}`] || []
+          : [];
+        const typeFields = allMetaSchemas[`activity:type:${activity.activity_type_id}`] || [];
+        const fields = [...categoryFields, ...typeFields];
+        return fields.length > 0 ? (
+          <Card className="mb-4">
+            <CardContent className="py-3">
+              <MetaFieldDisplay fields={fields} values={activity.meta} />
+            </CardContent>
+          </Card>
+        ) : null;
+      })()}
+
+      {/* Participant sections from form builder */}
+      {entityTypeElements.length > 0 ? (
         <Card>
           <CardHeader className="flex-row items-center justify-between">
             <CardTitle className="text-lg">{v("participant")}s</CardTitle>
@@ -205,65 +269,90 @@ export default function ActivityDetailPage() {
           <CardContent className="space-y-4">
             {editingSections ? (
               <>
-                {sections.map((section) => {
-                  const sourceKey = section.participant_source.startsWith("entity_type:")
-                    ? section.participant_source.split(":")[1]
-                    : null;
-                  const isUserSource = section.participant_source === "user";
+                {entityTypeElements.map((el) => {
+                  const sectionKey = getSectionKey(el);
+                  const isUserSource = el.ref_id === "user";
                   const options = isUserSource
                     ? users.map((u) => ({ id: u.id, name: `${u.first_name} ${u.last_name}` }))
-                    : (entitiesByType[sourceKey || ""] || []);
-                  const sectionState = participantState[section.key] || [];
+                    : (entitiesByType[el.ref_id || ""] || []);
+                  const sectionState = participantState[sectionKey] || [];
                   const participantType = isUserSource ? "user" : "entity";
+                  const metaFields = getParticipationMetaFields(el);
+
+                  // Check element config for status capture
+                  const captureStatus = el.config?.capture_status as boolean || false;
+                  const statuses = (el.config?.statuses as string[]) || ["present", "absent"];
+                  const defaultStatus = (el.config?.default_status as string) || statuses[0];
 
                   return (
-                    <div key={section.key}>
-                      <h3 className="text-sm font-semibold mb-2">{section.label}</h3>
-                      <div className="space-y-1 max-h-48 overflow-y-auto border rounded-md p-2">
+                    <div key={sectionKey}>
+                      <h3 className="text-sm font-semibold mb-2">{getElementLabel(el)}</h3>
+                      <div className="space-y-1 max-h-64 overflow-y-auto border rounded-md p-2">
                         {options.map((opt) => {
                           const existing = sectionState.find((s) => s.participant_id === opt.id);
                           const isSelected = !!existing;
 
                           return (
-                            <div key={opt.id} className="flex items-center justify-between gap-2 text-sm py-1">
-                              <label className="flex items-center gap-2 flex-1">
-                                <input
-                                  type="checkbox"
-                                  checked={isSelected}
-                                  onChange={(e) => {
-                                    const newState = [...sectionState];
-                                    if (e.target.checked) {
-                                      newState.push({
-                                        participant_id: opt.id,
-                                        participant_type: participantType,
-                                        status: section.default_status || undefined,
-                                      });
-                                    } else {
-                                      const idx = newState.findIndex((s) => s.participant_id === opt.id);
-                                      if (idx >= 0) newState.splice(idx, 1);
-                                    }
-                                    setParticipantState({ ...participantState, [section.key]: newState });
-                                  }}
-                                />
-                                {opt.name}
-                              </label>
-                              {section.capture_status && isSelected && section.statuses && (
-                                <select
-                                  className="border rounded px-2 py-0.5 text-xs"
-                                  value={existing?.status || ""}
-                                  onChange={(e) => {
-                                    const newState = sectionState.map((s) =>
-                                      s.participant_id === opt.id
-                                        ? { ...s, status: e.target.value }
-                                        : s
-                                    );
-                                    setParticipantState({ ...participantState, [section.key]: newState });
-                                  }}
-                                >
-                                  {section.statuses.map((st) => (
-                                    <option key={st} value={st}>{st}</option>
-                                  ))}
-                                </select>
+                            <div key={opt.id} className="border-b last:border-0 pb-2 mb-2 last:pb-0 last:mb-0">
+                              <div className="flex items-center justify-between gap-2 text-sm">
+                                <label className="flex items-center gap-2 flex-1">
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={(e) => {
+                                      const newState = [...sectionState];
+                                      if (e.target.checked) {
+                                        newState.push({
+                                          participant_id: opt.id,
+                                          participant_type: participantType,
+                                          status: captureStatus ? defaultStatus : undefined,
+                                          meta: {},
+                                        });
+                                      } else {
+                                        const idx = newState.findIndex((s) => s.participant_id === opt.id);
+                                        if (idx >= 0) newState.splice(idx, 1);
+                                      }
+                                      setParticipantState({ ...participantState, [sectionKey]: newState });
+                                    }}
+                                  />
+                                  {opt.name}
+                                </label>
+                                {captureStatus && isSelected && (
+                                  <select
+                                    className="border rounded px-2 py-0.5 text-xs"
+                                    value={existing?.status || ""}
+                                    onChange={(e) => {
+                                      const newState = sectionState.map((s) =>
+                                        s.participant_id === opt.id
+                                          ? { ...s, status: e.target.value }
+                                          : s
+                                      );
+                                      setParticipantState({ ...participantState, [sectionKey]: newState });
+                                    }}
+                                  >
+                                    {statuses.map((st) => (
+                                      <option key={st} value={st}>{st}</option>
+                                    ))}
+                                  </select>
+                                )}
+                              </div>
+
+                              {/* Participation meta fields per participant */}
+                              {isSelected && metaFields.length > 0 && (
+                                <div className="ml-6 mt-2">
+                                  <DynamicMetaForm
+                                    fields={metaFields}
+                                    values={existing?.meta || {}}
+                                    onChange={(newMeta) => {
+                                      const newState = sectionState.map((s) =>
+                                        s.participant_id === opt.id
+                                          ? { ...s, meta: newMeta }
+                                          : s
+                                      );
+                                      setParticipantState({ ...participantState, [sectionKey]: newState });
+                                    }}
+                                  />
+                                </div>
                               )}
                             </div>
                           );
@@ -282,11 +371,14 @@ export default function ActivityDetailPage() {
                 </div>
               </>
             ) : (
-              sections.map((section) => {
-                const sectionParticipants = participantsBySection[section.key] || [];
+              entityTypeElements.map((el) => {
+                const sectionKey = getSectionKey(el);
+                const sectionParticipants = participantsBySection[sectionKey] || [];
+                const metaFields = getParticipationMetaFields(el);
+
                 return (
-                  <div key={section.key}>
-                    <h3 className="text-sm font-semibold mb-1">{section.label}</h3>
+                  <div key={sectionKey}>
+                    <h3 className="text-sm font-semibold mb-1">{getElementLabel(el)}</h3>
                     {sectionParticipants.length === 0 ? (
                       <p className="text-gray-500 text-xs">None recorded</p>
                     ) : (
@@ -294,15 +386,22 @@ export default function ActivityDetailPage() {
                         {sectionParticipants.map((p) => (
                           <div
                             key={p.id}
-                            className="flex justify-between items-center p-2 border rounded text-sm"
+                            className="p-2 border rounded text-sm"
                           >
-                            <span>{p.participant_name || p.participant_id}</span>
-                            {p.status && (
-                              <Badge
-                                variant={p.status === "present" ? "default" : "secondary"}
-                              >
-                                {p.status}
-                              </Badge>
+                            <div className="flex justify-between items-center">
+                              <span>{p.participant_name || p.participant_id}</span>
+                              {p.status && (
+                                <Badge
+                                  variant={p.status === "present" ? "default" : "secondary"}
+                                >
+                                  {p.status}
+                                </Badge>
+                              )}
+                            </div>
+                            {p.meta && Object.keys(p.meta).length > 0 && metaFields.length > 0 && (
+                              <div className="mt-1 ml-2">
+                                <MetaFieldDisplay fields={metaFields} values={p.meta} />
+                              </div>
                             )}
                           </div>
                         ))}
@@ -315,7 +414,7 @@ export default function ActivityDetailPage() {
           </CardContent>
         </Card>
       ) : (
-        /* No sections config — show flat participant list */
+        /* No form config — show flat participant list */
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">{v("participant")}s</CardTitle>

@@ -1,15 +1,26 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   activityApi,
+  activityFormApi,
   activityTypeApi,
   dimensionApi,
   dimensionValueLinkApi,
+  entityTypeApi,
   metaFieldSchemaApi,
 } from "@/services/api";
-import { Dimension, DimensionValue, DimensionValueLink, MetaFieldDefinition, MetaFieldSchemas } from "@/types";
+import {
+  ActivityForm,
+  ActivityFormElement,
+  Dimension,
+  DimensionValue,
+  DimensionValueLink,
+  EntityType,
+  MetaFieldDefinition,
+  MetaFieldSchemas,
+} from "@/types";
 import { Can } from "@/components/Auth/Permissions";
 import { useVocabulary } from "@/hooks/useVocabulary";
 import { Button } from "@/components/ui/button";
@@ -23,7 +34,7 @@ import Link from "next/link";
 import toast from "react-hot-toast";
 
 /**
- * Given a set of tag rules and the currently selected dimension value IDs,
+ * Given a set of dimension value links and the currently selected dimension value IDs,
  * return the filtered list of allowed values for a target dimension.
  */
 function getFilteredValues(
@@ -73,7 +84,11 @@ export default function ActivitiesPage() {
     queryFn: dimensionApi.list,
   });
 
-  // Load all dimension values
+  const { data: entityTypes = [] } = useQuery<EntityType[]>({
+    queryKey: ["entity-types"],
+    queryFn: entityTypeApi.list,
+  });
+
   const { data: allDimensionValues = [] } = useQuery<DimensionValue[]>({
     queryKey: ["all-dimension-values", dimensions.map((d) => d.id).join(",")],
     queryFn: async () => {
@@ -85,25 +100,21 @@ export default function ActivitiesPage() {
     enabled: dimensions.length > 0,
   });
 
-  // Load all dimension value links (used for cascading filters)
   const { data: dimensionValueLinks = [] } = useQuery<DimensionValueLink[]>({
     queryKey: ["dimension-value-links-all"],
     queryFn: () => dimensionValueLinkApi.list(),
   });
 
-  // Load all meta field schemas (keyed by scope like "activity:category:{id}")
   const { data: allMetaSchemas = {} } = useQuery<MetaFieldSchemas>({
     queryKey: ["meta-field-schemas-all"],
     queryFn: metaFieldSchemaApi.getAll,
   });
 
-  // Non-system dimensions shown as selectable dropdowns
   const selectableDimensions = useMemo(
     () => dimensions.filter((d) => !d.is_system),
     [dimensions]
   );
 
-  // The system Activity Type dimension (if it exists)
   const atDimension = useMemo(
     () => dimensions.find((d) => d.is_system === "activity_type"),
     [dimensions]
@@ -117,16 +128,35 @@ export default function ActivitiesPage() {
   });
   const [metaValues, setMetaValues] = useState<Record<string, unknown>>({});
 
+  // Determine category from selected activity type
+  const selectedType = activityTypes.find((t) => t.id === formData.activity_type_id);
+  const selectedCategoryId = selectedType?.category_id || "";
+
+  // Load form builder config for the selected category
+  const { data: formConfig } = useQuery<ActivityForm>({
+    queryKey: ["activity-form", selectedCategoryId],
+    queryFn: () => activityFormApi.get(selectedCategoryId),
+    enabled: !!selectedCategoryId,
+  });
+
+  // Sorted visible elements from form config
+  const formElements: ActivityFormElement[] = useMemo(() => {
+    if (!formConfig?.elements?.length) return [];
+    return [...formConfig.elements]
+      .filter((el) => el.visible)
+      .sort((a, b) => a.sort_order - b.sort_order);
+  }, [formConfig]);
+
   // Derive meta fields for the selected activity type (category-level + type-level)
   const activityMetaFields = useMemo((): MetaFieldDefinition[] => {
     if (!formData.activity_type_id) return [];
-    const selectedType = activityTypes.find((t) => t.id === formData.activity_type_id);
-    if (!selectedType) return [];
+    const st = activityTypes.find((t) => t.id === formData.activity_type_id);
+    if (!st) return [];
 
-    const categoryFields = selectedType.category_id
-      ? allMetaSchemas[`activity:category:${selectedType.category_id}`] || []
+    const categoryFields = st.category_id
+      ? allMetaSchemas[`activity:category:${st.category_id}`] || []
       : [];
-    const typeFields = allMetaSchemas[`activity:type:${selectedType.id}`] || [];
+    const typeFields = allMetaSchemas[`activity:type:${st.id}`] || [];
 
     return [...categoryFields, ...typeFields];
   }, [formData.activity_type_id, activityTypes, allMetaSchemas]);
@@ -163,7 +193,6 @@ export default function ActivitiesPage() {
     );
     const allowedNames = new Set(filteredDvs.map((dv) => dv.name));
 
-    // If no filtering applied (no selections), return all
     if (Object.keys(selectedByDim).length === 0) return activityTypes;
 
     return activityTypes.filter((at) => allowedNames.has(at.name));
@@ -185,6 +214,182 @@ export default function ActivitiesPage() {
     },
     onError: () => toast.error(`Failed to create ${v("activity").toLowerCase()}`),
   });
+
+  // Render a single form element based on its type
+  const renderElement = (el: ActivityFormElement) => {
+    switch (el.type) {
+      case "activity_type":
+        return (
+          <div key="activity_type">
+            <label className="text-sm font-medium">{v("activity_type")}</label>
+            <select
+              className="w-full mt-1 border rounded-md p-2 text-sm"
+              value={formData.activity_type_id}
+              onChange={(e) => {
+                setFormData({ ...formData, activity_type_id: e.target.value });
+                setMetaValues({});
+              }}
+              required
+            >
+              <option value="">Select...</option>
+              {filteredActivityTypes.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        );
+
+      case "dimension": {
+        const dim = dimensions.find((d) => d.id === el.ref_id);
+        if (!dim || dim.is_system) return null;
+        const dimValues = allDimensionValues.filter(
+          (dv) => dv.dimension_id === dim.id
+        );
+        const filtered = getFilteredValues(
+          dimValues,
+          selectedByDim,
+          dim.id,
+          dimensionValueLinks
+        );
+        const currentSelection =
+          formData.dimension_value_ids.find((id) =>
+            dimValues.some((dv) => dv.id === id)
+          ) || "";
+
+        return (
+          <div key={`dimension-${dim.id}`}>
+            <label className="text-sm font-medium">{vDim(dim)}</label>
+            <select
+              className="w-full mt-1 border rounded-md p-2 text-sm"
+              value={currentSelection}
+              onChange={(e) => {
+                const newId = e.target.value;
+                const otherIds = formData.dimension_value_ids.filter(
+                  (id) => !dimValues.some((dv) => dv.id === id)
+                );
+                setFormData({
+                  ...formData,
+                  dimension_value_ids: newId
+                    ? [...otherIds, newId]
+                    : otherIds,
+                });
+              }}
+            >
+              <option value="">Select {vDim(dim)}...</option>
+              {filtered.map((dv) => (
+                <option key={dv.id} value={dv.id}>
+                  {dv.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        );
+      }
+
+      case "entity_type":
+        // Entity types are rendered on the activity detail page (participants)
+        // On create, we just show a note
+        return null;
+
+      case "activity_meta":
+        if (activityMetaFields.length === 0) return null;
+        return (
+          <div key="activity_meta">
+            <DynamicMetaForm
+              fields={activityMetaFields}
+              values={metaValues}
+              onChange={setMetaValues}
+            />
+          </div>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  // Fallback rendering when no form config exists
+  const renderDefaultForm = () => (
+    <>
+      {/* Dimension selectors */}
+      {selectableDimensions.map((dim) => {
+        const dimValues = allDimensionValues.filter(
+          (dv) => dv.dimension_id === dim.id
+        );
+        const filtered = getFilteredValues(
+          dimValues,
+          selectedByDim,
+          dim.id,
+          dimensionValueLinks
+        );
+        const currentSelection =
+          formData.dimension_value_ids.find((id) =>
+            dimValues.some((dv) => dv.id === id)
+          ) || "";
+        return (
+          <div key={dim.id}>
+            <label className="text-sm font-medium">{vDim(dim)}</label>
+            <select
+              className="w-full mt-1 border rounded-md p-2 text-sm"
+              value={currentSelection}
+              onChange={(e) => {
+                const newId = e.target.value;
+                const otherIds = formData.dimension_value_ids.filter(
+                  (id) => !dimValues.some((dv) => dv.id === id)
+                );
+                setFormData({
+                  ...formData,
+                  dimension_value_ids: newId
+                    ? [...otherIds, newId]
+                    : otherIds,
+                });
+              }}
+            >
+              <option value="">Select {vDim(dim)}...</option>
+              {filtered.map((dv) => (
+                <option key={dv.id} value={dv.id}>
+                  {dv.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        );
+      })}
+
+      {/* Activity Type */}
+      <div>
+        <label className="text-sm font-medium">{v("activity_type")}</label>
+        <select
+          className="w-full mt-1 border rounded-md p-2 text-sm"
+          value={formData.activity_type_id}
+          onChange={(e) => {
+            setFormData({ ...formData, activity_type_id: e.target.value });
+            setMetaValues({});
+          }}
+          required
+        >
+          <option value="">Select...</option>
+          {filteredActivityTypes.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Activity Meta */}
+      <DynamicMetaForm
+        fields={activityMetaFields}
+        values={metaValues}
+        onChange={setMetaValues}
+      />
+    </>
+  );
+
+  // Use form builder elements if available, otherwise fallback
+  const hasFormConfig = formElements.length > 0;
 
   return (
     <PageLayout className="p-4">
@@ -214,71 +419,10 @@ export default function ActivitiesPage() {
               }}
               className="space-y-3"
             >
-              {/* Dimension selectors (non-system only) — cascading */}
-              {selectableDimensions.map((dim) => {
-                const dimValues = allDimensionValues.filter(
-                  (dv) => dv.dimension_id === dim.id
-                );
-                const filtered = getFilteredValues(
-                  dimValues,
-                  selectedByDim,
-                  dim.id,
-                  dimensionValueLinks
-                );
-                const currentSelection =
-                  formData.dimension_value_ids.find((id) =>
-                    dimValues.some((dv) => dv.id === id)
-                  ) || "";
-                return (
-                  <div key={dim.id}>
-                    <label className="text-sm font-medium">{vDim(dim)}</label>
-                    <select
-                      className="w-full mt-1 border rounded-md p-2 text-sm"
-                      value={currentSelection}
-                      onChange={(e) => {
-                        const newId = e.target.value;
-                        const otherIds = formData.dimension_value_ids.filter(
-                          (id) => !dimValues.some((dv) => dv.id === id)
-                        );
-                        setFormData({
-                          ...formData,
-                          dimension_value_ids: newId
-                            ? [...otherIds, newId]
-                            : otherIds,
-                        });
-                      }}
-                    >
-                      <option value="">Select {vDim(dim)}...</option>
-                      {filtered.map((dv) => (
-                        <option key={dv.id} value={dv.id}>
-                          {dv.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                );
-              })}
-
-              {/* Activity Type — filtered by tag rules */}
-              <div>
-                <label className="text-sm font-medium">{v("activity_type")}</label>
-                <select
-                  className="w-full mt-1 border rounded-md p-2 text-sm"
-                  value={formData.activity_type_id}
-                  onChange={(e) => {
-                    setFormData({ ...formData, activity_type_id: e.target.value });
-                    setMetaValues({});
-                  }}
-                  required
-                >
-                  <option value="">Select...</option>
-                  {filteredActivityTypes.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {hasFormConfig
+                ? formElements.map(renderElement)
+                : renderDefaultForm()
+              }
 
               <div>
                 <label className="text-sm font-medium">Date</label>
@@ -302,12 +446,6 @@ export default function ActivitiesPage() {
                   }
                 />
               </div>
-
-              <DynamicMetaForm
-                fields={activityMetaFields}
-                values={metaValues}
-                onChange={setMetaValues}
-              />
 
               <div className="flex gap-2">
                 <Button type="submit" disabled={createMutation.isPending}>
