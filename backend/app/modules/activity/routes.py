@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.common.dependencies import get_current_user, require_permissions
+from app.common.exceptions import ValidationError
 from app.modules.auth.model import User
 from app.modules.activity.schemas import (
     ActivityCategoryCreate,
@@ -33,6 +34,8 @@ from app.modules.activity.service import (
     ActivityService,
     ActivityTypeService,
 )
+from app.modules.activity.model import Activity, ActivityType
+from app.modules.dimension.model import Dimension, DimensionValue
 from app.modules.dimension.service import UserDimensionAccessService
 
 router = APIRouter(tags=["activities"])
@@ -295,6 +298,31 @@ def create_activity(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    # Validate required form elements from form builder config
+    at = db.query(ActivityType).filter_by(id=data.activity_type_id).first()
+    if at and at.category_id:
+        form_service = ActivityFormService(db)
+        form = form_service.get_by_category(at.category_id, current_user.organization_id)
+        if form and form.elements:
+            # Resolve which dimension IDs are covered by the submitted values
+            submitted_dim_ids = set()
+            if data.dimension_value_ids:
+                dvs = db.query(DimensionValue.dimension_id).filter(
+                    DimensionValue.id.in_([uuid.UUID(v) for v in data.dimension_value_ids])
+                ).all()
+                submitted_dim_ids = {str(row[0]) for row in dvs}
+
+            for el in form.elements:
+                if not el.get("required") or not el.get("visible", True):
+                    continue
+                el_type = el.get("type")
+                if el_type == "dimension":
+                    ref_id = el.get("ref_id")
+                    if ref_id and ref_id not in submitted_dim_ids:
+                        dim = db.query(Dimension).filter_by(id=ref_id).first()
+                        dim_name = dim.name if dim else "Dimension"
+                        raise ValidationError(f"{dim_name} is required")
+
     service = ActivityService(db)
     activity = service.create(
         current_user.organization_id,
@@ -388,8 +416,40 @@ def get_participants(
 def save_participants(
     activity_id: uuid.UUID,
     data: ParticipantBulkCreate,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    # Validate required entity_type sections from form builder config
+    activity = db.query(Activity).filter_by(id=activity_id).first()
+    if activity:
+        at = db.query(ActivityType).filter_by(id=activity.activity_type_id).first()
+        if at and at.category_id:
+            form_service = ActivityFormService(db)
+            form = form_service.get_by_category(at.category_id, current_user.organization_id)
+            if form and form.elements:
+                # Build set of section_keys that have at least one participant
+                submitted_sections = {r.section_key for r in data.records}
+                for el in form.elements:
+                    if (
+                        el.get("type") == "entity_type"
+                        and el.get("required")
+                        and el.get("visible", True)
+                    ):
+                        section_key = el.get("ref_id") or el.get("type")
+                        if section_key not in submitted_sections:
+                            # Resolve label
+                            ref_id = el.get("ref_id")
+                            if ref_id == "user":
+                                label = "Users (staff)"
+                            else:
+                                from app.modules.entity.model import EntityType
+
+                                et = db.query(EntityType).filter_by(id=ref_id).first()
+                                label = et.name if et else "Participants"
+                            raise ValidationError(
+                                f"{label} is required — add at least one participant"
+                            )
+
     service = ActivityParticipantService(db)
     participants = service.bulk_create(
         activity_id,
