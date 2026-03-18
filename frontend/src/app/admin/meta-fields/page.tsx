@@ -394,7 +394,6 @@ export default function MetaFieldsPage() {
                 <TableRow>
                   <TableHead className="w-8">{""}</TableHead>
                   <TableHead>Label</TableHead>
-                  <TableHead>Key</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Required</TableHead>
                   <TableHead>Options</TableHead>
@@ -408,7 +407,6 @@ export default function MetaFieldsPage() {
                       <GripVertical className="h-4 w-4 text-gray-300" />
                     </TableCell>
                     <TableCell className="font-medium">{field.label}</TableCell>
-                    <TableCell className="text-gray-500 text-xs font-mono">{field.key}</TableCell>
                     <TableCell>
                       {FIELD_TYPES.find((ft) => ft.value === field.type)?.label || field.type}
                     </TableCell>
