@@ -37,6 +37,7 @@ class DimensionService:
         return dimension
 
     def create(self, org_id: uuid.UUID, data: dict) -> Dimension:
+        data["key"] = _slugify(data["name"])
         existing = (
             self.db.query(Dimension).filter_by(organization_id=org_id, key=data["key"]).first()
         )
@@ -50,6 +51,8 @@ class DimensionService:
 
     def update(self, dimension_id: uuid.UUID, org_id: uuid.UUID, data: dict) -> Dimension:
         dimension = self.get_by_id(dimension_id, org_id)
+        if "name" in data and data["name"] is not None:
+            data["key"] = _slugify(data["name"])
         for key, value in data.items():
             if value is not None:
                 setattr(dimension, key, value)

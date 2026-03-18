@@ -24,7 +24,7 @@ import toast from "react-hot-toast";
 
 export default function DimensionValuesPage() {
   const params = useParams();
-  const dimensionKey = params.key as string;
+  const dimensionId = params.id as string;
   const queryClient = useQueryClient();
   const { vDim } = useVocabulary();
   const [modalOpen, setModalOpen] = useState(false);
@@ -36,7 +36,7 @@ export default function DimensionValuesPage() {
     queryFn: dimensionApi.list,
   });
 
-  const dimension = dimensions.find((d) => d.key === dimensionKey);
+  const dimension = dimensions.find((d) => d.id === dimensionId);
 
   const { data: values = [], isLoading } = useQuery<DimensionValue[]>({
     queryKey: ["dimension-values", dimension?.id],

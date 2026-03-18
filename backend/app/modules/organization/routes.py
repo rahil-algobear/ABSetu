@@ -63,30 +63,30 @@ STATIC_ENTITY_TYPES = {
 
 
 def _validate_entity_type(entity_type: str, org_id, db: Session) -> None:
-    """Validate entity type — allow static types, dimension:{key}, entity:{key}, activity:{key}, and participant:{key} types."""
+    """Validate entity type — allow static types, dimension:{id}, entity:{id}, activity:{id}, and participant:{id} types."""
     if entity_type in STATIC_ENTITY_TYPES:
         return
-    if entity_type.startswith("dimension:"):
+
+    ref_id = entity_type.split(":", 1)[1] if ":" in entity_type else None
+
+    if entity_type.startswith("dimension:") and ref_id:
         from app.modules.dimension.model import Dimension
 
-        dim_key = entity_type.split(":", 1)[1]
-        dim = db.query(Dimension).filter_by(organization_id=org_id, key=dim_key).first()
+        dim = db.query(Dimension).filter_by(organization_id=org_id, id=ref_id).first()
         if dim:
             return
-    
-    if entity_type.startswith("entity:"):
+
+    if entity_type.startswith("entity:") and ref_id:
         from app.modules.entity.model import EntityType
 
-        et_key = entity_type.split(":", 1)[1]
-        et = db.query(EntityType).filter_by(organization_id=org_id, key=et_key).first()
+        et = db.query(EntityType).filter_by(organization_id=org_id, id=ref_id).first()
         if et:
             return
 
-    if entity_type.startswith("activity:") or entity_type.startswith("participant:"):
+    if (entity_type.startswith("activity:") or entity_type.startswith("participant:")) and ref_id:
         from app.modules.activity.model import ActivityCategory
 
-        cat_key = entity_type.split(":", 1)[1]
-        cat = db.query(ActivityCategory).filter_by(organization_id=org_id, key=cat_key).first()
+        cat = db.query(ActivityCategory).filter_by(organization_id=org_id, id=ref_id).first()
         if cat:
             return
 

@@ -89,7 +89,7 @@ export default function MetaFieldsPage() {
     [dimensions]
   );
 
-  // Derive the schema key from section + activeKey
+  // Derive the schema key from section + activeKey (now uses IDs)
   const schemaKey = useMemo(() => {
     if (!activeKey) return "";
     switch (activeSection) {
@@ -102,32 +102,32 @@ export default function MetaFieldsPage() {
     }
   }, [activeSection, activeKey]);
 
-  // Auto-select first key when section changes
+  // Auto-select first ID when section changes
   const selectSection = (section: SectionKind) => {
     setActiveSection(section);
     switch (section) {
       case "entity":
-        setActiveKey(entityTypesList[0]?.key || "");
+        setActiveKey(entityTypesList[0]?.id || "");
         break;
       case "dimension":
-        setActiveKey(nonSystemDimensions[0]?.key || "");
+        setActiveKey(nonSystemDimensions[0]?.id || "");
         break;
       case "other":
         setActiveKey("activity_type");
         break;
       case "activity":
-        setActiveKey(categories[0]?.key || "");
+        setActiveKey(categories[0]?.id || "");
         break;
       case "participant":
-        setActiveKey(categories[0]?.key || "");
+        setActiveKey(categories[0]?.id || "");
         break;
     }
   };
 
-  // Set initial key on first load
+  // Set initial ID on first load
   useMemo(() => {
     if (!activeKey && entityTypesList.length > 0) {
-      setActiveKey(entityTypesList[0].key);
+      setActiveKey(entityTypesList[0].id);
     }
   }, [entityTypesList]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -200,19 +200,22 @@ export default function MetaFieldsPage() {
   // Build label for the currently selected schema
   const selectedLabel = useMemo(() => {
     switch (activeSection) {
-      case "entity": return entityTypesList.find((et) => et.key === activeKey)?.name || activeKey;
-      case "dimension": return nonSystemDimensions.find((d) => d.key === activeKey) ? vDim(nonSystemDimensions.find((d) => d.key === activeKey)!) : activeKey;
+      case "entity": return entityTypesList.find((et) => et.id === activeKey)?.name || activeKey;
+      case "dimension": {
+        const dim = nonSystemDimensions.find((d) => d.id === activeKey);
+        return dim ? vDim(dim) : activeKey;
+      }
       case "other": return activeKey === "activity_type" ? vPlural("activity_type") : vPlural("enrollment");
       case "activity": {
-        const cat = categories.find((c) => c.key === activeKey);
+        const cat = categories.find((c) => c.id === activeKey);
         if (cat) return `Activity: ${cat.name} (all types)`;
-        const at = activityTypes.find((t) => t.name.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "") === activeKey);
+        const at = activityTypes.find((t) => t.id === activeKey);
         return at ? `Activity: ${at.name}` : activeKey;
       }
       case "participant": {
-        const cat = categories.find((c) => c.key === activeKey);
+        const cat = categories.find((c) => c.id === activeKey);
         if (cat) return `Participant: ${cat.name} (all types)`;
-        const at = activityTypes.find((t) => t.name.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "") === activeKey);
+        const at = activityTypes.find((t) => t.id === activeKey);
         return at ? `Participant: ${at.name}` : activeKey;
       }
       default: return "";
@@ -262,18 +265,18 @@ export default function MetaFieldsPage() {
           <div className="flex gap-2 overflow-x-auto pb-1">
             {entityTypesList.map((et) => (
               <button
-                key={et.key}
-                onClick={() => setActiveKey(et.key)}
+                key={et.id}
+                onClick={() => setActiveKey(et.id)}
                 className={`px-3 py-1 text-sm rounded-md whitespace-nowrap transition-colors ${
-                  activeKey === et.key
+                  activeKey === et.id
                     ? "bg-purple-50 text-purple-700 border border-purple-200 font-medium"
                     : "bg-white text-gray-600 border border-gray-200 hover:border-gray-300"
                 }`}
               >
                 {et.name}
-                {(allSchemas[`entity:${et.key}`]?.length || 0) > 0 && (
+                {(allSchemas[`entity:${et.id}`]?.length || 0) > 0 && (
                   <span className="ml-1 text-xs text-gray-400">
-                    ({allSchemas[`entity:${et.key}`]!.length})
+                    ({allSchemas[`entity:${et.id}`]!.length})
                   </span>
                 )}
               </button>
@@ -285,18 +288,18 @@ export default function MetaFieldsPage() {
           <div className="flex gap-2 overflow-x-auto pb-1">
             {nonSystemDimensions.map((d) => (
               <button
-                key={d.key}
-                onClick={() => setActiveKey(d.key)}
+                key={d.id}
+                onClick={() => setActiveKey(d.id)}
                 className={`px-3 py-1 text-sm rounded-md whitespace-nowrap transition-colors ${
-                  activeKey === d.key
+                  activeKey === d.id
                     ? "bg-purple-50 text-purple-700 border border-purple-200 font-medium"
                     : "bg-white text-gray-600 border border-gray-200 hover:border-gray-300"
                 }`}
               >
                 {vDim(d)}
-                {(allSchemas[`dimension:${d.key}`]?.length || 0) > 0 && (
+                {(allSchemas[`dimension:${d.id}`]?.length || 0) > 0 && (
                   <span className="ml-1 text-xs text-gray-400">
-                    ({allSchemas[`dimension:${d.key}`]!.length})
+                    ({allSchemas[`dimension:${d.id}`]!.length})
                   </span>
                 )}
               </button>
@@ -336,11 +339,11 @@ export default function MetaFieldsPage() {
               <label className="text-xs text-gray-500 block mb-1">{v("activity_category")}</label>
               <select
                 className="border rounded-md px-3 py-1.5 text-sm"
-                value={categories.find((c) => c.key === activeKey) ? activeKey : ""}
+                value={categories.find((c) => c.id === activeKey) ? activeKey : ""}
                 onChange={(e) => setActiveKey(e.target.value)}
               >
                 {categories.map((cat) => (
-                  <option key={cat.key} value={cat.key}>
+                  <option key={cat.id} value={cat.id}>
                     {cat.name} (all types)
                   </option>
                 ))}
@@ -351,18 +354,15 @@ export default function MetaFieldsPage() {
               <label className="text-xs text-gray-500 block mb-1">Specific {v("activity_type")}</label>
               <select
                 className="border rounded-md px-3 py-1.5 text-sm"
-                value={categories.find((c) => c.key === activeKey) ? "" : activeKey}
+                value={categories.find((c) => c.id === activeKey) ? "" : activeKey}
                 onChange={(e) => setActiveKey(e.target.value)}
               >
                 <option value="">Select a type...</option>
-                {activityTypes.map((at) => {
-                  const typeKey = at.name.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
-                  return (
-                    <option key={at.id} value={typeKey}>
-                      {at.name}
-                    </option>
-                  );
-                })}
+                {activityTypes.map((at) => (
+                  <option key={at.id} value={at.id}>
+                    {at.name}
+                  </option>
+                ))}
               </select>
             </div>
           </div>

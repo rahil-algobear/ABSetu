@@ -55,7 +55,7 @@ export default function ActivityCategoriesPage() {
   const { v, vPlural } = useVocabulary();
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<ActivityCategory | null>(null);
-  const [form, setForm] = useState({ name: "", key: "" });
+  const [form, setForm] = useState({ name: "" });
   const [sections, setSections] = useState<SectionConfig[]>([]);
 
   const { data: categories = [], isLoading } = useQuery({
@@ -71,7 +71,7 @@ export default function ActivityCategoriesPage() {
   // Build participant source options from entity types + "user"
   const participantSources = [
     ...entityTypes.map((et) => ({
-      value: `entity_type:${et.key}`,
+      value: `entity_type:${et.id}`,
       label: et.name,
     })),
     { value: "user", label: "Users (staff)" },
@@ -109,14 +109,14 @@ export default function ActivityCategoriesPage() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ name: "", key: "" });
+    setForm({ name: "" });
     setSections([]);
     setModalOpen(true);
   };
 
   const openEdit = (item: ActivityCategory) => {
     setEditing(item);
-    setForm({ name: item.name, key: item.key });
+    setForm({ name: item.name });
     setSections(
       (item.sections as SectionConfig[] | null)?.map((s) => ({
         ...emptySectionConfig,
@@ -148,7 +148,6 @@ export default function ActivityCategoriesPage() {
     } else {
       createMutation.mutate({
         name: form.name,
-        key: form.key,
         sections: cleanedSections,
       });
     }
@@ -200,7 +199,6 @@ export default function ActivityCategoriesPage() {
           <TableHeader>
             <TableRow>
               <TableHead>Name</TableHead>
-              <TableHead>Key</TableHead>
               <TableHead>Sections</TableHead>
               <TableHead className="w-20">Actions</TableHead>
             </TableRow>
@@ -209,7 +207,6 @@ export default function ActivityCategoriesPage() {
             {categories.map((cat) => (
               <TableRow key={cat.id}>
                 <TableCell className="font-medium">{cat.name}</TableCell>
-                <TableCell className="text-gray-500 text-sm font-mono">{cat.key}</TableCell>
                 <TableCell>
                   {(cat.sections as SectionConfig[] | null)?.length ? (
                     <div className="flex flex-wrap gap-1">
@@ -260,29 +257,14 @@ export default function ActivityCategoriesPage() {
         className="max-w-2xl"
       >
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label htmlFor="name">Name</Label>
-              <Input
-                id="name"
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                required
-              />
-            </div>
-            {!editing && (
-              <div>
-                <Label htmlFor="key">Key</Label>
-                <Input
-                  id="key"
-                  value={form.key}
-                  onChange={(e) => setForm({ ...form, key: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "_") })}
-                  required
-                  placeholder="e.g. sessions"
-                  className="font-mono text-sm"
-                />
-              </div>
-            )}
+          <div>
+            <Label htmlFor="name">Name</Label>
+            <Input
+              id="name"
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              required
+            />
           </div>
 
           {/* Sections builder */}

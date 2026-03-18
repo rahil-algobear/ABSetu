@@ -2,6 +2,7 @@
 Activity, ActivityType, ActivityCategory, ActivityParticipant services
 """
 
+import re
 import uuid
 
 from sqlalchemy.orm import Session, joinedload
@@ -18,6 +19,13 @@ from app.modules.dimension.model import (
     Dimension,
     DimensionValue,
 )
+
+
+def _slugify(name: str) -> str:
+    """Generate a slug/key from a name."""
+    slug = name.lower().strip()
+    slug = re.sub(r"[^a-z0-9]+", "_", slug)
+    return slug.strip("_")
 
 
 def _make_at_code(name: str) -> str:
@@ -48,6 +56,7 @@ class ActivityCategoryService:
         return cat
 
     def create(self, org_id: uuid.UUID, data: dict) -> ActivityCategory:
+        data["key"] = _slugify(data["name"])
         cat = ActivityCategory(organization_id=org_id, **data)
         self.db.add(cat)
         self.db.commit()
@@ -56,6 +65,8 @@ class ActivityCategoryService:
 
     def update(self, category_id: uuid.UUID, org_id: uuid.UUID, data: dict) -> ActivityCategory:
         cat = self.get_by_id(category_id, org_id)
+        if "name" in data and data["name"] is not None:
+            data["key"] = _slugify(data["name"])
         for key, value in data.items():
             if value is not None:
                 setattr(cat, key, value)

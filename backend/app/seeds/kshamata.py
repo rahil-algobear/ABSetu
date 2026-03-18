@@ -55,13 +55,11 @@ VOCABULARY = {
 ENTITY_TYPES = [
     {
         "name": "Beneficiary",
-        "key": "beneficiary",
         "config": {"case_number_enabled": True, "can_enroll": True},
         "sort_order": 0,
     },
     {
         "name": "Facilitator",
-        "key": "facilitator",
         "config": {"case_number_enabled": False, "can_enroll": False},
         "sort_order": 1,
     },
@@ -69,36 +67,34 @@ ENTITY_TYPES = [
 
 # ---------------------------------------------------------------------------
 # Activity Category: Sessions (form builder config)
+# participant_source UUIDs are populated at seed time after entity types are created
 # ---------------------------------------------------------------------------
-SESSIONS_CATEGORY = {
-    "name": "Sessions",
-    "key": "sessions",
-    "sort_order": 0,
-    "sections": [
-        {
-            "key": "beneficiaries",
-            "label": "Beneficiaries",
-            "participant_source": "entity_type:beneficiary",
-            "selection_mode": "enrolled_checklist",
-            "min_count": 0,
-            "max_count": None,
-            "capture_status": True,
-            "statuses": ["present", "absent"],
-            "default_status": "present",
-        },
-        {
-            "key": "facilitators",
-            "label": "Facilitators",
-            "participant_source": "entity_type:facilitator",
-            "selection_mode": "multi_select",
-            "min_count": 1,
-            "max_count": None,
-            "capture_status": False,
-            "statuses": [],
-            "default_status": None,
-        },
-    ],
-}
+SESSIONS_CATEGORY_NAME = "Sessions"
+SESSIONS_CATEGORY_SORT_ORDER = 0
+SESSIONS_SECTIONS_TEMPLATE = [
+    {
+        "key": "beneficiaries",
+        "label": "Beneficiaries",
+        "entity_type_name": "Beneficiary",  # resolved to UUID at seed time
+        "selection_mode": "enrolled_checklist",
+        "min_count": 0,
+        "max_count": None,
+        "capture_status": True,
+        "statuses": ["present", "absent"],
+        "default_status": "present",
+    },
+    {
+        "key": "facilitators",
+        "label": "Facilitators",
+        "entity_type_name": "Facilitator",  # resolved to UUID at seed time
+        "selection_mode": "multi_select",
+        "min_count": 1,
+        "max_count": None,
+        "capture_status": False,
+        "statuses": [],
+        "default_status": None,
+    },
+]
 
 # ---------------------------------------------------------------------------
 # Dimension: Programme
@@ -576,38 +572,58 @@ def seed():
             print(f"Updated organization: {org.name} ({org.code})")
 
         # 2. Entity Types
+        entity_type_map = {}  # name -> EntityType
         for et_data in ENTITY_TYPES:
-            et = db.query(EntityType).filter_by(organization_id=org.id, key=et_data["key"]).first()
+            slug = _slugify(et_data["name"])
+            et = db.query(EntityType).filter_by(organization_id=org.id, key=slug).first()
             if not et:
                 et = EntityType(
                     organization_id=org.id,
                     name=et_data["name"],
-                    key=et_data["key"],
+                    key=slug,
                     config=et_data["config"],
                     sort_order=et_data["sort_order"],
                 )
                 db.add(et)
                 db.flush()
+            entity_type_map[et_data["name"]] = et
         print(f"  Ensured {len(ENTITY_TYPES)} entity types")
 
         # 3. Activity Category: Sessions
+        # Build sections with UUID-based participant_source
+        sections = []
+        for tmpl in SESSIONS_SECTIONS_TEMPLATE:
+            et = entity_type_map[tmpl["entity_type_name"]]
+            sections.append({
+                "key": tmpl["key"],
+                "label": tmpl["label"],
+                "participant_source": f"entity_type:{et.id}",
+                "selection_mode": tmpl["selection_mode"],
+                "min_count": tmpl["min_count"],
+                "max_count": tmpl["max_count"],
+                "capture_status": tmpl["capture_status"],
+                "statuses": tmpl["statuses"],
+                "default_status": tmpl["default_status"],
+            })
+
+        sessions_cat_key = _slugify(SESSIONS_CATEGORY_NAME)
         sessions_cat = (
             db.query(ActivityCategory)
-            .filter_by(organization_id=org.id, key=SESSIONS_CATEGORY["key"])
+            .filter_by(organization_id=org.id, key=sessions_cat_key)
             .first()
         )
         if not sessions_cat:
             sessions_cat = ActivityCategory(
                 organization_id=org.id,
-                name=SESSIONS_CATEGORY["name"],
-                key=SESSIONS_CATEGORY["key"],
-                sections=SESSIONS_CATEGORY["sections"],
-                sort_order=SESSIONS_CATEGORY["sort_order"],
+                name=SESSIONS_CATEGORY_NAME,
+                key=sessions_cat_key,
+                sections=sections,
+                sort_order=SESSIONS_CATEGORY_SORT_ORDER,
             )
             db.add(sessions_cat)
             db.flush()
         else:
-            sessions_cat.sections = SESSIONS_CATEGORY["sections"]
+            sessions_cat.sections = sections
             db.flush()
         print(f"  Ensured activity category: {sessions_cat.name}")
 

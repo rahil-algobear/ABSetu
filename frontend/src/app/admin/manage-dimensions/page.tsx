@@ -26,7 +26,7 @@ export default function ManageDimensionsPage() {
   const { vDim } = useVocabulary();
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Dimension | null>(null);
-  const [form, setForm] = useState({ name: "", key: "" });
+  const [form, setForm] = useState({ name: "" });
 
   const { data: dimensions = [], isLoading } = useQuery<Dimension[]>({
     queryKey: ["dimensions"],
@@ -68,13 +68,13 @@ export default function ManageDimensionsPage() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ name: "", key: "" });
+    setForm({ name: "" });
     setModalOpen(true);
   };
 
   const openEdit = (dim: Dimension) => {
     setEditing(dim);
-    setForm({ name: dim.name, key: dim.key });
+    setForm({ name: dim.name });
     setModalOpen(true);
   };
 
@@ -88,8 +88,7 @@ export default function ManageDimensionsPage() {
     if (editing) {
       updateMutation.mutate({ id: editing.id, data: { name: form.name } });
     } else {
-      const key = form.key || form.name.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
-      createMutation.mutate({ name: form.name, key });
+      createMutation.mutate({ name: form.name });
     }
   };
 
@@ -120,7 +119,6 @@ export default function ManageDimensionsPage() {
           <TableHeader>
             <TableRow>
               <TableHead>Name</TableHead>
-              <TableHead>Key</TableHead>
               <TableHead>Values</TableHead>
               <TableHead className="w-20">Actions</TableHead>
             </TableRow>
@@ -158,26 +156,6 @@ export default function ManageDimensionsPage() {
               required
             />
           </div>
-          {!editing && (
-            <div>
-              <Label htmlFor="dim-key">Key</Label>
-              <Input
-                id="dim-key"
-                value={form.key}
-                onChange={(e) => setForm({ ...form, key: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "_") })}
-                placeholder="e.g. funder"
-                className="font-mono text-sm"
-              />
-              <p className="text-xs text-gray-400 mt-1">
-                Auto-generated from name if left empty. Immutable after creation.
-              </p>
-            </div>
-          )}
-          {editing && (
-            <p className="text-xs text-gray-400">
-              Key: <span className="font-mono">{editing.key}</span> (immutable)
-            </p>
-          )}
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={closeModal}>
               Cancel
@@ -211,7 +189,6 @@ function DimensionRow({
   return (
     <TableRow>
       <TableCell className="font-medium">{vDim(dimension)}</TableCell>
-      <TableCell className="text-gray-500 text-sm font-mono">{dimension.key}</TableCell>
       <TableCell className="text-gray-500">{values.length}</TableCell>
       <TableCell>
         <Can permission="dimension:manage">
