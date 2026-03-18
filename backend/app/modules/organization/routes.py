@@ -93,13 +93,10 @@ def _validate_entity_type(entity_type: str, org_id, db: Session) -> None:
         prefix, sub, ref_id = parts
 
         if prefix in ("activity", "participant"):
-            from app.modules.activity.model import ActivityCategory, ActivityType
+            from app.modules.activity.model import ActivityCategory
 
             if sub == "category":
                 if db.query(ActivityCategory).filter_by(organization_id=org_id, id=ref_id).first():
-                    return
-            elif sub == "type":
-                if db.query(ActivityType).filter_by(organization_id=org_id, id=ref_id).first():
                     return
 
         # participant:entity:{entity_type_id} — scoped to entity type, all categories
@@ -119,22 +116,20 @@ def _validate_entity_type(entity_type: str, org_id, db: Session) -> None:
         if prefix == "participant" and sub1 == "entity":
             from app.modules.entity.model import EntityType
 
-            entity_ok = ref_id1 == "user" or db.query(EntityType).filter_by(
-                organization_id=org_id, id=ref_id1
-            ).first()
+            entity_ok = (
+                ref_id1 == "user"
+                or db.query(EntityType).filter_by(organization_id=org_id, id=ref_id1).first()
+            )
 
             if entity_ok:
-                from app.modules.activity.model import ActivityCategory, ActivityType
+                from app.modules.activity.model import ActivityCategory
 
                 if sub2 == "category":
-                    if db.query(ActivityCategory).filter_by(
-                        organization_id=org_id, id=ref_id2
-                    ).first():
-                        return
-                elif sub2 == "type":
-                    if db.query(ActivityType).filter_by(
-                        organization_id=org_id, id=ref_id2
-                    ).first():
+                    if (
+                        db.query(ActivityCategory)
+                        .filter_by(organization_id=org_id, id=ref_id2)
+                        .first()
+                    ):
                         return
 
     from fastapi import HTTPException

@@ -60,7 +60,7 @@ export default function ActivityCategoriesPage() {
       queryClient.invalidateQueries({ queryKey: ["activity-categories"] });
       toast.success(`${v("activity_category")} deleted`);
     },
-    onError: () => toast.error("Failed to delete — it may have activity types"),
+    onError: () => toast.error("Failed to delete — it may have activities"),
   });
 
   const openCreate = () => {
@@ -102,7 +102,7 @@ export default function ActivityCategoriesPage() {
       </div>
 
       <p className="text-sm text-gray-500 mb-4">
-        Activity categories group activity types. Use the{" "}
+        Activity categories define the structural type of an activity. Use the{" "}
         <a href="/admin/form-builder" className="text-purple-600 underline">
           Form Builder
         </a>{" "}

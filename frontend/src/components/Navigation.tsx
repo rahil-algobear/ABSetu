@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { useAuth } from "../services/auth";
 import { usePermissions, Can } from "./Auth/Permissions";
 import { useQuery } from "@tanstack/react-query";
-import { organizationApi, dimensionApi, entityTypeApi, activityCategoryApi } from "../services/api";
+import { organizationApi, dimensionApi, entityTypeApi, activityCategoryApi } from "@/services/api";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import Image from "next/image";
@@ -302,18 +302,15 @@ export default function Navigation() {
     permission: "entity:view",
   }));
 
-  // Settings dropdown (formerly Masters): Users, dynamic dimensions, Activity Types
+  // Settings dropdown: Users, dynamic dimensions
   const settingsItems = [
     { href: "/admin/users", label: "Users", icon: Users, permission: "user:view" },
-    ...dimensions
-      .filter((d) => !d.is_system)
-      .map((d) => ({
-        href: `/admin/dimensions/${d.key}`,
-        label: vDim(d),
-        icon: Layers,
-        permission: "dimension:view",
-      })),
-    { href: "/admin/activity-types", label: vPlural("activity_type"), icon: ClipboardList, permission: "activity_type:view" },
+    ...dimensions.map((d) => ({
+      href: `/admin/dimensions/${d.key}`,
+      label: vDim(d),
+      icon: Layers,
+      permission: "dimension:view",
+    })),
   ];
 
   // Admin dropdown (formerly Settings)

@@ -5,9 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   activityApi,
-  activityCategoryApi,
   activityFormApi,
-  activityTypeApi,
   entityApi,
   entityTypeApi,
   metaFieldSchemaApi,
@@ -52,16 +50,6 @@ export default function ActivityDetailPage() {
     queryFn: () => activityApi.getParticipants(id),
   });
 
-  const { data: activityTypes = [] } = useQuery({
-    queryKey: ["activity-types"],
-    queryFn: () => activityTypeApi.list(),
-  });
-
-  const { data: categories = [] } = useQuery({
-    queryKey: ["activity-categories"],
-    queryFn: activityCategoryApi.list,
-  });
-
   const { data: entityTypes = [] } = useQuery({
     queryKey: ["entity-types"],
     queryFn: entityTypeApi.list,
@@ -72,12 +60,8 @@ export default function ActivityDetailPage() {
     queryFn: metaFieldSchemaApi.getAll,
   });
 
-  // Resolve category ID for this activity
-  const categoryId = useMemo(() => {
-    if (!activity) return "";
-    const at = activityTypes.find((t) => t.id === activity.activity_type_id);
-    return at?.category_id || "";
-  }, [activity, activityTypes]);
+  // Category ID comes directly from the activity
+  const categoryId = activity?.category_id || "";
 
   // Load form builder config
   const { data: formConfig } = useQuery<ActivityForm>({
@@ -136,12 +120,6 @@ export default function ActivityDetailPage() {
     if (categoryId) {
       const catKey = `${baseKey}:category:${categoryId}`;
       fields.push(...(allMetaSchemas[catKey] || []));
-    }
-
-    // participant:entity:{ref_id}:type:{activityTypeId}
-    if (activity?.activity_type_id) {
-      const typeKey = `${baseKey}:type:${activity.activity_type_id}`;
-      fields.push(...(allMetaSchemas[typeKey] || []));
     }
 
     return fields;
@@ -245,10 +223,18 @@ export default function ActivityDetailPage() {
   if (isLoading) return <PageLayout className="p-4"><p>Loading...</p></PageLayout>;
   if (!activity) return <PageLayout className="p-4"><p>Not found</p></PageLayout>;
 
+  // Use first tag as activity title
+  const activityTitle = activity.tags.length > 0 ? activity.tags[0].value_name : v("activity");
+
+  // Activity meta fields from category
+  const categoryFields = categoryId
+    ? allMetaSchemas[`activity:category:${categoryId}`] || []
+    : [];
+
   return (
     <PageLayout className="p-4">
       <div className="flex items-center justify-between mb-1">
-        <h1 className="text-2xl font-bold">{activity.type_name}</h1>
+        <h1 className="text-2xl font-bold">{activityTitle}</h1>
         <Can permission="activity:create">
           <Button
             size="sm"
@@ -263,13 +249,11 @@ export default function ActivityDetailPage() {
         </Can>
       </div>
       <div className="flex gap-1 mb-1 flex-wrap">
-        {activity.tags
-          .filter((tag) => tag.dimension_key !== "activity_type")
-          .map((tag) => (
-            <Badge key={tag.value_id} variant="secondary">
-              {tag.dimension_name}: {tag.value_name}
-            </Badge>
-          ))}
+        {activity.tags.slice(1).map((tag) => (
+          <Badge key={tag.value_id} variant="secondary">
+            {tag.dimension_name}: {tag.value_name}
+          </Badge>
+        ))}
       </div>
       <p className="text-gray-500 mb-4">{activity.date}</p>
 
@@ -282,21 +266,13 @@ export default function ActivityDetailPage() {
       )}
 
       {/* Activity meta display */}
-      {activity.meta && Object.keys(activity.meta).length > 0 && (() => {
-        const at = activityTypes.find((t) => t.id === activity.activity_type_id);
-        const categoryFields = at?.category_id
-          ? allMetaSchemas[`activity:category:${at.category_id}`] || []
-          : [];
-        const typeFields = allMetaSchemas[`activity:type:${activity.activity_type_id}`] || [];
-        const fields = [...categoryFields, ...typeFields];
-        return fields.length > 0 ? (
-          <Card className="mb-4">
-            <CardContent className="py-3">
-              <MetaFieldDisplay fields={fields} values={activity.meta} />
-            </CardContent>
-          </Card>
-        ) : null;
-      })()}
+      {activity.meta && Object.keys(activity.meta).length > 0 && categoryFields.length > 0 && (
+        <Card className="mb-4">
+          <CardContent className="py-3">
+            <MetaFieldDisplay fields={categoryFields} values={activity.meta} />
+          </CardContent>
+        </Card>
+      )}
 
       {/* Participant sections from form builder */}
       {entityTypeElements.length > 0 ? (

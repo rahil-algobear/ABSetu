@@ -16,7 +16,7 @@ from app.modules.auth.model import User
 
 # Import all models so SQLAlchemy can resolve relationship strings
 from app.modules.dimension.model import Dimension, DimensionValue  # noqa: F401
-from app.modules.activity.model import ActivityType, ActivityCategory, Activity  # noqa: F401
+from app.modules.activity.model import ActivityCategory, Activity  # noqa: F401
 from app.modules.entity.model import Entity, EntityType  # noqa: F401
 from app.modules.beneficiary.model import Enrollment  # noqa: F401
 

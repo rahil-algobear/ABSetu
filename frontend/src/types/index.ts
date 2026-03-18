@@ -130,7 +130,7 @@ export interface Entity {
   updated_at: number | null;
 }
 
-// --- Activity Categories & Types ---
+// --- Activity Categories ---
 
 export interface ActivityCategory {
   id: string;
@@ -144,7 +144,7 @@ export interface ActivityCategory {
 // --- Activity Form (Form Builder) ---
 
 export interface ActivityFormElement {
-  type: "activity_type" | "dimension" | "entity_type" | "activity_meta";
+  type: "dimension" | "entity_type" | "activity_meta";
   ref_id: string | null; // dimension_id, entity_type_id, or "user"
   sort_order: number;
   display_type: string; // "dropdown", "checklist", "radio", "search_select"
@@ -161,26 +161,14 @@ export interface ActivityForm {
   updated_at?: number | null;
 }
 
-export interface ActivityType {
-  id: string;
-  organization_id: string;
-  category_id: string | null;
-  name: string;
-  description: string | null;
-  meta: Record<string, unknown> | null;
-  category_name: string | null;
-  updated_at: number | null;
-}
-
 export interface Activity {
   id: string;
   organization_id: string;
-  activity_type_id: string;
+  category_id: string | null;
   date: string;
   notes: string | null;
   created_by: string | null;
   meta: Record<string, unknown> | null;
-  type_name: string | null;
   category_name: string | null;
   tags: DimensionTagInfo[];
   updated_at: number | null;

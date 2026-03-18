@@ -33,8 +33,7 @@ export default function ManageDimensionsPage() {
     queryFn: dimensionApi.list,
   });
 
-  // Only show non-system dimensions (system dimensions like activity_type are managed elsewhere)
-  const manageable = dimensions.filter((d) => !d.is_system);
+  const manageable = dimensions;
 
   const createMutation = useMutation({
     mutationFn: dimensionApi.create,

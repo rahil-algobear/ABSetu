@@ -7,7 +7,6 @@ import {
   activityApi,
   activityCategoryApi,
   activityFormApi,
-  activityTypeApi,
   dimensionApi,
   dimensionValueLinkApi,
   entityTypeApi,
@@ -78,11 +77,6 @@ export default function ActivitiesPage() {
     queryFn: activityApi.list,
   });
 
-  const { data: activityTypes = [] } = useQuery({
-    queryKey: ["activity-types"],
-    queryFn: () => activityTypeApi.list(),
-  });
-
   const { data: categories = [] } = useQuery({
     queryKey: ["activity-categories"],
     queryFn: activityCategoryApi.list,
@@ -119,28 +113,16 @@ export default function ActivitiesPage() {
     queryFn: metaFieldSchemaApi.getAll,
   });
 
-  const selectableDimensions = useMemo(
-    () => dimensions.filter((d) => !d.is_system),
-    [dimensions]
-  );
-
-  const atDimension = useMemo(
-    () => dimensions.find((d) => d.is_system === "activity_type"),
-    [dimensions]
-  );
-
   const [formData, setFormData] = useState({
-    activity_type_id: "",
     date: new Date().toISOString().split("T")[0],
     notes: "",
     dimension_value_ids: [] as string[],
   });
   const [metaValues, setMetaValues] = useState<Record<string, unknown>>({});
 
-  // Determine category: from URL param first, then from selected activity type
-  const selectedType = activityTypes.find((t) => t.id === formData.activity_type_id);
+  // Determine category from URL param
   const categoryFromUrl = categories.find((c) => c.key === categoryKey);
-  const selectedCategoryId = categoryFromUrl?.id || selectedType?.category_id || "";
+  const selectedCategoryId = categoryFromUrl?.id || "";
 
   // Load form builder config for the category
   const { data: formConfig } = useQuery<ActivityForm>({
@@ -157,19 +139,11 @@ export default function ActivitiesPage() {
       .sort((a, b) => a.sort_order - b.sort_order);
   }, [formConfig]);
 
-  // Derive meta fields for the selected activity type (category-level + type-level)
+  // Derive meta fields for the selected category
   const activityMetaFields = useMemo((): MetaFieldDefinition[] => {
-    if (!formData.activity_type_id) return [];
-    const st = activityTypes.find((t) => t.id === formData.activity_type_id);
-    if (!st) return [];
-
-    const categoryFields = st.category_id
-      ? allMetaSchemas[`activity:category:${st.category_id}`] || []
-      : [];
-    const typeFields = allMetaSchemas[`activity:type:${st.id}`] || [];
-
-    return [...categoryFields, ...typeFields];
-  }, [formData.activity_type_id, activityTypes, allMetaSchemas]);
+    if (!selectedCategoryId) return [];
+    return allMetaSchemas[`activity:category:${selectedCategoryId}`] || [];
+  }, [selectedCategoryId, allMetaSchemas]);
 
   // Track selection per dimension for cascading logic
   const selectedByDim = useMemo(() => {
@@ -188,40 +162,12 @@ export default function ActivitiesPage() {
     return map;
   }, [dimensions, allDimensionValues, formData.dimension_value_ids]);
 
-  // Filter activity types by category (if set) and tag rules
-  const filteredActivityTypes = useMemo(() => {
-    let types = activityTypes;
-
-    // Filter by category from URL
-    if (selectedCategoryId) {
-      types = types.filter((at) => at.category_id === selectedCategoryId);
-    }
-
-    if (!atDimension) return types;
-
-    const atDimValues = allDimensionValues.filter(
-      (dv) => dv.dimension_id === atDimension.id
-    );
-    const filteredDvs = getFilteredValues(
-      atDimValues,
-      selectedByDim,
-      atDimension.id,
-      dimensionValueLinks
-    );
-    const allowedNames = new Set(filteredDvs.map((dv) => dv.name));
-
-    if (Object.keys(selectedByDim).length === 0) return types;
-
-    return types.filter((at) => allowedNames.has(at.name));
-  }, [activityTypes, selectedCategoryId, atDimension, allDimensionValues, selectedByDim, dimensionValueLinks]);
-
   const createMutation = useMutation({
     mutationFn: activityApi.create,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["activities"] });
       setShowCreate(false);
       setFormData({
-        activity_type_id: "",
         date: new Date().toISOString().split("T")[0],
         notes: "",
         dimension_value_ids: [],
@@ -235,35 +181,9 @@ export default function ActivitiesPage() {
   // Render a single form element based on its type
   const renderElement = (el: ActivityFormElement) => {
     switch (el.type) {
-      case "activity_type":
-        return (
-          <div key="activity_type">
-            <label className="text-sm font-medium">
-              {v("activity_type")}
-              {el.required && <span className="text-red-500 ml-0.5">*</span>}
-            </label>
-            <select
-              className="w-full mt-1 border rounded-md p-2 text-sm"
-              value={formData.activity_type_id}
-              onChange={(e) => {
-                setFormData({ ...formData, activity_type_id: e.target.value });
-                setMetaValues({});
-              }}
-              required={el.required}
-            >
-              <option value="">Select...</option>
-              {filteredActivityTypes.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        );
-
       case "dimension": {
         const dim = dimensions.find((d) => d.id === el.ref_id);
-        if (!dim || dim.is_system) return null;
+        if (!dim) return null;
         const dimValues = allDimensionValues.filter(
           (dv) => dv.dimension_id === dim.id
         );
@@ -338,7 +258,7 @@ export default function ActivitiesPage() {
   const renderDefaultForm = () => (
     <>
       {/* Dimension selectors */}
-      {selectableDimensions.map((dim) => {
+      {dimensions.map((dim) => {
         const dimValues = allDimensionValues.filter(
           (dv) => dv.dimension_id === dim.id
         );
@@ -382,27 +302,6 @@ export default function ActivitiesPage() {
         );
       })}
 
-      {/* Activity Type */}
-      <div>
-        <label className="text-sm font-medium">{v("activity_type")}</label>
-        <select
-          className="w-full mt-1 border rounded-md p-2 text-sm"
-          value={formData.activity_type_id}
-          onChange={(e) => {
-            setFormData({ ...formData, activity_type_id: e.target.value });
-            setMetaValues({});
-          }}
-          required
-        >
-          <option value="">Select...</option>
-          {filteredActivityTypes.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name}
-            </option>
-          ))}
-        </select>
-      </div>
-
       {/* Activity Meta */}
       <DynamicMetaForm
         fields={activityMetaFields}
@@ -414,6 +313,13 @@ export default function ActivitiesPage() {
 
   // Use form builder elements if available, otherwise fallback
   const hasFormConfig = formElements.length > 0;
+
+  // Get the first tag name to use as activity title (e.g. intervention name)
+  const getActivityTitle = (a: typeof activities[0]) => {
+    // Use the first tag as the title (typically the intervention)
+    if (a.tags.length > 0) return a.tags[0].value_name;
+    return v("activity");
+  };
 
   return (
     <PageLayout className="p-4">
@@ -436,9 +342,11 @@ export default function ActivitiesPage() {
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                const payload = activityMetaFields.length > 0
-                  ? { ...formData, meta: metaValues }
-                  : formData;
+                const payload = {
+                  ...formData,
+                  category_id: selectedCategoryId || undefined,
+                  ...(activityMetaFields.length > 0 ? { meta: metaValues } : {}),
+                };
                 createMutation.mutate(payload);
               }}
               className="space-y-3"
@@ -500,15 +408,13 @@ export default function ActivitiesPage() {
                 <CardContent className="py-3 px-4">
                   <div className="flex justify-between items-center">
                     <div>
-                      <p className="font-medium">{a.type_name}</p>
+                      <p className="font-medium">{getActivityTitle(a)}</p>
                       <div className="flex gap-1 mt-0.5 flex-wrap">
-                        {a.tags
-                          .filter((tag) => tag.dimension_key !== "activity_type")
-                          .map((tag) => (
-                            <Badge key={tag.value_id} variant="secondary" className="text-xs">
-                              {tag.value_name}
-                            </Badge>
-                          ))}
+                        {a.tags.slice(1).map((tag) => (
+                          <Badge key={tag.value_id} variant="secondary" className="text-xs">
+                            {tag.value_name}
+                          </Badge>
+                        ))}
                       </div>
                     </div>
                     <div className="text-right">

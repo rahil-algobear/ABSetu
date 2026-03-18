@@ -1,5 +1,5 @@
 """
-Activity, ActivityType, ActivityCategory, ActivityParticipant schemas
+Activity, ActivityCategory, ActivityParticipant schemas
 """
 
 import datetime
@@ -33,7 +33,7 @@ class ActivityCategoryResponse(BaseResponseSchema):
 
 
 class ActivityFormElement(BaseModel):
-    type: str  # "activity_type", "dimension", "entity_type", "activity_meta"
+    type: str  # "dimension", "entity_type", "activity_meta"
     ref_id: str | None = None  # dimension_id, entity_type_id, or "user"
     sort_order: int = 0
     display_type: str = "dropdown"  # "dropdown", "checklist", "radio", "search_select"
@@ -57,32 +57,6 @@ class ActivityFormResponse(BaseResponseSchema):
     elements: list[dict[str, Any]] = []
 
 
-# --- Activity Type ---
-
-
-class ActivityTypeCreate(BaseModel):
-    name: str = Field(..., min_length=1, max_length=200)
-    category_id: str | None = None
-    description: str | None = None
-    meta: dict[str, Any] | None = None
-
-
-class ActivityTypeUpdate(BaseModel):
-    name: str | None = Field(None, min_length=1, max_length=200)
-    category_id: str | None = None
-    description: str | None = None
-    meta: dict[str, Any] | None = None
-
-
-class ActivityTypeResponse(BaseResponseSchema):
-    organization_id: str
-    category_id: str | None = None
-    name: str
-    description: str | None = None
-    meta: dict[str, Any] | None = None
-    category_name: str | None = None
-
-
 # --- Activity ---
 
 
@@ -95,7 +69,7 @@ class DimensionTagInfo(BaseModel):
 
 
 class ActivityCreate(BaseModel):
-    activity_type_id: str
+    category_id: str | None = None
     dimension_value_ids: list[str] = []
     date: datetime.date
     notes: str | None = None
@@ -110,12 +84,11 @@ class ActivityUpdate(BaseModel):
 
 class ActivityResponse(BaseResponseSchema):
     organization_id: str
-    activity_type_id: str
+    category_id: str | None = None
     date: datetime.date
     notes: str | None = None
     created_by: str | None = None
     meta: dict[str, Any] | None = None
-    type_name: str | None = None
     category_name: str | None = None
     tags: list[DimensionTagInfo] = []
 

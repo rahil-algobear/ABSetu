@@ -5,7 +5,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   activityCategoryApi,
   activityFormApi,
-  activityTypeApi,
   dimensionApi,
   entityTypeApi,
   metaFieldSchemaApi,
@@ -13,7 +12,6 @@ import {
 import {
   ActivityCategory,
   ActivityFormElement,
-  ActivityType,
   Dimension,
   EntityType,
   MetaFieldSchemas,
@@ -32,7 +30,6 @@ import {
   EyeOff,
   Asterisk,
   Save,
-  ClipboardList,
   Layers,
   Users,
   SlidersHorizontal,
@@ -40,17 +37,12 @@ import {
 import toast from "react-hot-toast";
 
 const ELEMENT_TYPES = [
-  { value: "activity_type", label: "Activity Type", icon: ClipboardList },
   { value: "dimension", label: "Dimension", icon: Layers },
   { value: "entity_type", label: "Entity Type / Users", icon: Users },
   { value: "activity_meta", label: "Activity Meta", icon: SlidersHorizontal },
 ];
 
 const DISPLAY_TYPES: Record<string, { value: string; label: string }[]> = {
-  activity_type: [
-    { value: "dropdown", label: "Dropdown" },
-    { value: "radio", label: "Radio buttons" },
-  ],
   dimension: [
     { value: "dropdown", label: "Dropdown" },
     { value: "radio", label: "Radio buttons" },
@@ -73,7 +65,7 @@ export default function FormBuilderPage() {
   const [elements, setElements] = useState<ActivityFormElement[]>([]);
   const [isDirty, setIsDirty] = useState(false);
   const [addModalOpen, setAddModalOpen] = useState(false);
-  const [addType, setAddType] = useState<string>("activity_type");
+  const [addType, setAddType] = useState<string>("dimension");
   const [addRefId, setAddRefId] = useState<string>("");
   const [addDisplayType, setAddDisplayType] = useState<string>("dropdown");
 
@@ -93,20 +85,10 @@ export default function FormBuilderPage() {
     queryFn: entityTypeApi.list,
   });
 
-  const { data: activityTypes = [] } = useQuery<ActivityType[]>({
-    queryKey: ["activity-types"],
-    queryFn: () => activityTypeApi.list(),
-  });
-
   const { data: allSchemas = {} as MetaFieldSchemas } = useQuery<MetaFieldSchemas>({
     queryKey: ["meta-field-schemas"],
     queryFn: metaFieldSchemaApi.getAll,
   });
-
-  const nonSystemDimensions = useMemo(
-    () => dimensions.filter((d) => !d.is_system),
-    [dimensions]
-  );
 
   // Load form when category changes
   const { data: formData, isLoading: formLoading } = useQuery({
@@ -183,7 +165,7 @@ export default function FormBuilderPage() {
   };
 
   const openAddModal = () => {
-    setAddType("activity_type");
+    setAddType("dimension");
     setAddRefId("");
     setAddDisplayType("dropdown");
     setAddModalOpen(false);
@@ -194,8 +176,6 @@ export default function FormBuilderPage() {
   // Resolve element label
   const getElementLabel = (el: ActivityFormElement): string => {
     switch (el.type) {
-      case "activity_type":
-        return v("activity_type");
       case "dimension": {
         const dim = dimensions.find((d) => d.id === el.ref_id);
         return dim ? vDim(dim) : "Dimension";
@@ -229,19 +209,13 @@ export default function FormBuilderPage() {
       const catKey = `${baseKey}:category:${selectedCategoryId}`;
       count += allSchemas[catKey]?.length || 0;
     }
-    // Check participant:entity:{id}:type:{typeId} for each type in this category
-    const typesInCategory = activityTypes.filter((at) => at.category_id === selectedCategoryId);
-    for (const at of typesInCategory) {
-      const typeKey = `${baseKey}:type:${at.id}`;
-      count += allSchemas[typeKey]?.length || 0;
-    }
     return count;
   };
 
   // Check if element already exists
   const isElementAdded = (type: string, refId?: string): boolean => {
     return elements.some(
-      (el) => el.type === type && (type === "activity_type" || type === "activity_meta" || el.ref_id === refId)
+      (el) => el.type === type && (type === "activity_meta" || el.ref_id === refId)
     );
   };
 
@@ -354,7 +328,7 @@ export default function FormBuilderPage() {
                           {getElementLabel(el)}
                         </p>
                         <p className="text-xs text-gray-400">
-                          {ELEMENT_TYPES.find((t) => t.value === el.type)?.label}
+                          {ELEMENT_TYPES.find((t) => t.value === el.type)?.label || el.type}
                           {" \u00b7 "}
                           {DISPLAY_TYPES[el.type]?.find((d) => d.value === el.display_type)?.label || el.display_type}
                           {el.required && (
@@ -442,7 +416,7 @@ export default function FormBuilderPage() {
             <div className="grid grid-cols-2 gap-2">
               {ELEMENT_TYPES.map((et) => {
                 const disabled =
-                  (et.value === "activity_type" || et.value === "activity_meta") &&
+                  et.value === "activity_meta" &&
                   isElementAdded(et.value);
                 return (
                   <button
@@ -481,7 +455,7 @@ export default function FormBuilderPage() {
                 onChange={(e) => setAddRefId(e.target.value)}
               >
                 <option value="">Select a dimension...</option>
-                {nonSystemDimensions
+                {dimensions
                   .filter((d) => !isElementAdded("dimension", d.id))
                   .map((d) => (
                     <option key={d.id} value={d.id}>

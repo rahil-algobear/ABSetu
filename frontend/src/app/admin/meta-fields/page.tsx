@@ -7,7 +7,6 @@ import {
   dimensionApi,
   entityTypeApi,
   activityCategoryApi,
-  activityTypeApi,
 } from "@/services/api";
 import {
   MetaFieldDefinition,
@@ -15,7 +14,6 @@ import {
   MetaFieldType,
   Dimension,
   ActivityCategory,
-  ActivityType,
 } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -83,22 +81,11 @@ export default function MetaFieldsPage() {
     queryFn: activityCategoryApi.list,
   });
 
-  const { data: activityTypes = [] } = useQuery<ActivityType[]>({
-    queryKey: ["activity-types"],
-    queryFn: () => activityTypeApi.list(),
-  });
-
-  const nonSystemDimensions = useMemo(
-    () => dimensions.filter((d) => !d.is_system),
-    [dimensions]
-  );
+  const nonSystemDimensions = dimensions;
 
   // Derive the schema key from section + activeKey
-  const isCategory = (id: string) => categories.some((c) => c.id === id);
-
   const schemaKey = useMemo(() => {
     if (activeSection === "participant") {
-      // New participant scope key pattern: participant:entity:{entity_type_id}[:category|type:{id}]
       if (!participantEntityId) return "";
       const base = `participant:entity:${participantEntityId}`;
       if (participantScope === "all" || !participantScopeId) return base;
@@ -110,13 +97,10 @@ export default function MetaFieldsPage() {
       case "entity": return `entity:${activeKey}`;
       case "dimension": return `dimension:${activeKey}`;
       case "other": return activeKey;
-      case "activity": {
-        const sub = isCategory(activeKey) ? "category" : "type";
-        return `activity:${sub}:${activeKey}`;
-      }
+      case "activity": return `activity:category:${activeKey}`;
       default: return "";
     }
-  }, [activeSection, activeKey, categories, participantEntityId, participantScope, participantScopeId]);
+  }, [activeSection, activeKey, participantEntityId, participantScope, participantScopeId]);
 
   // Auto-select first ID when section changes
   const selectSection = (section: SectionKind) => {
@@ -232,9 +216,7 @@ export default function MetaFieldsPage() {
       case "other": return activeKey === "activity_type" ? vPlural("activity_type") : vPlural("enrollment");
       case "activity": {
         const cat = categories.find((c) => c.id === activeKey);
-        if (cat) return `Activity: ${cat.name} (all types)`;
-        const at = activityTypes.find((t) => t.id === activeKey);
-        return at ? `Activity: ${at.name}` : activeKey;
+        return cat ? `Activity: ${cat.name}` : activeKey;
       }
       case "participant": {
         const entityLabel = participantEntityId === "user"
@@ -245,15 +227,11 @@ export default function MetaFieldsPage() {
           const cat = categories.find((c) => c.id === participantScopeId);
           return `Participant: ${entityLabel} \u2192 ${cat?.name || "category"}`;
         }
-        if (participantScope === "type") {
-          const at = activityTypes.find((t) => t.id === participantScopeId);
-          return `Participant: ${entityLabel} \u2192 ${at?.name || "type"}`;
-        }
         return `Participant: ${entityLabel}`;
       }
       default: return "";
     }
-  }, [activeSection, activeKey, entityTypesList, nonSystemDimensions, categories, activityTypes, vPlural, vDim, participantEntityId, participantScope, participantScopeId]);
+  }, [activeSection, activeKey, entityTypesList, nonSystemDimensions, categories, vPlural, vDim, participantEntityId, participantScope, participantScopeId]);
 
   // Section pills
   const sections: { key: SectionKind; label: string }[] = [
@@ -373,37 +351,19 @@ export default function MetaFieldsPage() {
         )}
 
         {activeSection === "activity" && (
-          <div className="flex items-center gap-3">
-            <div>
-              <label className="text-xs text-gray-500 block mb-1">{v("activity_category")}</label>
-              <select
-                className="border rounded-md px-3 py-1.5 text-sm"
-                value={categories.find((c) => c.id === activeKey) ? activeKey : ""}
-                onChange={(e) => setActiveKey(e.target.value)}
-              >
-                {categories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>
-                    {cat.name} (all types)
-                  </option>
-                ))}
-              </select>
-            </div>
-            <span className="text-gray-300 mt-4">or</span>
-            <div>
-              <label className="text-xs text-gray-500 block mb-1">Specific {v("activity_type")}</label>
-              <select
-                className="border rounded-md px-3 py-1.5 text-sm"
-                value={categories.find((c) => c.id === activeKey) ? "" : activeKey}
-                onChange={(e) => setActiveKey(e.target.value)}
-              >
-                <option value="">Select a type...</option>
-                {activityTypes.map((at) => (
-                  <option key={at.id} value={at.id}>
-                    {at.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">{v("activity_category")}</label>
+            <select
+              className="border rounded-md px-3 py-1.5 text-sm"
+              value={activeKey}
+              onChange={(e) => setActiveKey(e.target.value)}
+            >
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  {cat.name}
+                </option>
+              ))}
+            </select>
           </div>
         )}
 
@@ -441,14 +401,13 @@ export default function MetaFieldsPage() {
                   className="border rounded-md px-3 py-1.5 text-sm"
                   value={participantScope}
                   onChange={(e) => {
-                    const scope = e.target.value as "all" | "category" | "type";
+                    const scope = e.target.value as "all" | "category";
                     setParticipantScope(scope);
                     setParticipantScopeId("");
                   }}
                 >
                   <option value="all">All categories</option>
                   <option value="category">Specific category</option>
-                  <option value="type">Specific activity type</option>
                 </select>
               </div>
 
@@ -464,24 +423,6 @@ export default function MetaFieldsPage() {
                     {categories.map((cat) => (
                       <option key={cat.id} value={cat.id}>
                         {cat.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {participantScope === "type" && (
-                <div>
-                  <label className="text-xs text-gray-500 block mb-1">{v("activity_type")}</label>
-                  <select
-                    className="border rounded-md px-3 py-1.5 text-sm"
-                    value={participantScopeId}
-                    onChange={(e) => setParticipantScopeId(e.target.value)}
-                  >
-                    <option value="">Select...</option>
-                    {activityTypes.map((at) => (
-                      <option key={at.id} value={at.id}>
-                        {at.name}
                       </option>
                     ))}
                   </select>

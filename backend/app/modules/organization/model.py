@@ -19,7 +19,6 @@ class Organization(BaseModel):
     meta = Column(JSONB, nullable=True, default=dict)
 
     dimensions = relationship("Dimension", back_populates="organization", lazy="dynamic")
-    activity_types = relationship("ActivityType", back_populates="organization", lazy="dynamic")
     activity_categories = relationship(
         "ActivityCategory", back_populates="organization", lazy="dynamic"
     )

@@ -1,7 +1,9 @@
 """
 Kshamata seed script: creates org, dimensions (Programme, Project, Location,
-Activity Type [system-managed]), entity types, activity types, activity category,
-dimension value links, vocabulary, and admin user.
+Intervention), entity types, activity category, dimension value links,
+vocabulary, and admin user.
+
+Interventions are regular dimension values — no ActivityType entity needed.
 
 Usage:
     cd backend
@@ -14,7 +16,7 @@ import sys
 from app.core.database import SessionLocal
 from app.modules.organization.model import MetaFieldSchema, Organization
 from app.modules.dimension.model import Dimension, DimensionValue, DimensionValueLink
-from app.modules.activity.model import ActivityCategory, ActivityType
+from app.modules.activity.model import ActivityCategory
 from app.modules.entity.model import EntityType
 from app.modules.auth.model import User
 from app.modules.role.model import Permission, Role, RolePermission
@@ -141,9 +143,10 @@ LOCATIONS = [
 ]
 
 # ---------------------------------------------------------------------------
-# Activity Types (Interventions from the master sheet)
+# Dimension: Intervention (formerly ActivityType)
+# Now just regular dimension values like Location, Programme, etc.
 # ---------------------------------------------------------------------------
-ACTIVITY_TYPES = [
+INTERVENTIONS = [
     # Common across Institutions
     "Life Skill Education",
     "Job Readiness",
@@ -241,8 +244,8 @@ PROGRAMME_LOCATIONS = {
     ],
 }
 
-# Location → Activity Types (from the master spreadsheet)
-LOCATION_ACTIVITY_TYPES = {
+# Location → Interventions (from the master spreadsheet)
+LOCATION_INTERVENTIONS = {
     "SHANTISADAN": [
         "Life Skill Education",
         "Job Readiness",
@@ -372,9 +375,9 @@ LOCATION_ACTIVITY_TYPES = {
 }
 
 # ---------------------------------------------------------------------------
-# Programme → Activity Types (explicit, authoritative)
+# Programme → Interventions (explicit, authoritative)
 # ---------------------------------------------------------------------------
-PROGRAMME_ACTIVITY_TYPES = {
+PROGRAMME_INTERVENTIONS = {
     "OUTREACH": [
         # Institutions
         "Life Skill Education",
@@ -474,8 +477,8 @@ FACILITATOR_CUSTOM_FIELDS = [
 ]
 
 
-def _make_at_code(name: str) -> str:
-    """Convert activity type name to a slugified dimension value code."""
+def _make_intervention_code(name: str) -> str:
+    """Convert intervention name to a slugified dimension value code."""
     import re
 
     slug = name.lower().strip()
@@ -498,7 +501,10 @@ def _ensure_dimension(db, org, key, name, sort_order, is_system=None):
     else:
         if name and dim.name != name:
             dim.name = name
-        if is_system and not dim.is_system:
+        # Clear is_system if it was previously set (migration path)
+        if dim.is_system and not is_system:
+            dim.is_system = None
+        elif is_system and not dim.is_system:
             dim.is_system = is_system
         db.flush()
     print(f"  Ensured dimension: {dim.name}" + (" [system]" if dim.is_system else ""))
@@ -531,6 +537,40 @@ def _ensure_values(db, org, dimension, values_list):
             db.flush()
         value_map[seed_key] = dv
     print(f"  Ensured {len(values_list)} {dimension.name.lower()} values")
+    return value_map
+
+
+def _ensure_intervention_values(db, org, dimension, names):
+    """Create dimension values for interventions (name-based, no seed key)."""
+    value_map = {}
+    for idx, name in enumerate(names):
+        code = _make_intervention_code(name)
+        dv = db.query(DimensionValue).filter_by(dimension_id=dimension.id, code=code).first()
+        if not dv:
+            # Check for legacy uppercase code (from old ActivityType sync)
+            legacy_code = (
+                name.upper().replace(" ", "_").replace("-", "_").replace("/", "_").replace(",", "")
+            )
+            dv = (
+                db.query(DimensionValue)
+                .filter_by(dimension_id=dimension.id, code=legacy_code)
+                .first()
+            )
+            if dv:
+                dv.code = code
+                db.flush()
+        if not dv:
+            dv = DimensionValue(
+                organization_id=org.id,
+                dimension_id=dimension.id,
+                name=name,
+                code=code,
+                sort_order=idx,
+            )
+            db.add(dv)
+            db.flush()
+        value_map[name] = dv
+    print(f"  Ensured {len(names)} intervention dimension values")
     return value_map
 
 
@@ -570,9 +610,9 @@ def _ensure_dimension_value_links(db, org, mapping, source_map, target_map):
     return count
 
 
-def _remove_stale_programme_at_links(db, programme_map, at_dv_map, valid_mapping):
-    """Remove Programme<>ActivityType dimension value links for programmes not in valid_mapping."""
-    all_at_dv_ids = {dv.id for dv in at_dv_map.values()}
+def _remove_stale_programme_intervention_links(db, programme_map, intervention_map, valid_mapping):
+    """Remove Programme<>Intervention links for programmes not in valid_mapping."""
+    all_intervention_dv_ids = {dv.id for dv in intervention_map.values()}
     removed = 0
     for prog_code, prog_dv in programme_map.items():
         if prog_code in valid_mapping:
@@ -582,11 +622,11 @@ def _remove_stale_programme_at_links(db, programme_map, at_dv_map, valid_mapping
             .filter(
                 (
                     (DimensionValueLink.dimension_value_id_1 == prog_dv.id)
-                    & (DimensionValueLink.dimension_value_id_2.in_(all_at_dv_ids))
+                    & (DimensionValueLink.dimension_value_id_2.in_(all_intervention_dv_ids))
                 )
                 | (
                     (DimensionValueLink.dimension_value_id_2 == prog_dv.id)
-                    & (DimensionValueLink.dimension_value_id_1.in_(all_at_dv_ids))
+                    & (DimensionValueLink.dimension_value_id_1.in_(all_intervention_dv_ids))
                 )
             )
             .all()
@@ -596,7 +636,7 @@ def _remove_stale_programme_at_links(db, programme_map, at_dv_map, valid_mapping
             removed += 1
     if removed:
         db.flush()
-        print(f"  Removed {removed} stale programme<>activity-type dimension value links")
+        print(f"  Removed {removed} stale programme<>intervention dimension value links")
 
 
 def seed():
@@ -700,24 +740,6 @@ def seed():
             )
 
         # 3. Activity Category: Sessions
-        # Build sections with UUID-based participant_source
-        sections = []
-        for tmpl in SESSIONS_SECTIONS_TEMPLATE:
-            et = entity_type_map[tmpl["entity_type_name"]]
-            sections.append(
-                {
-                    "key": tmpl["key"],
-                    "label": tmpl["label"],
-                    "participant_source": f"entity_type:{et.id}",
-                    "selection_mode": tmpl["selection_mode"],
-                    "min_count": tmpl["min_count"],
-                    "max_count": tmpl["max_count"],
-                    "capture_status": tmpl["capture_status"],
-                    "statuses": tmpl["statuses"],
-                    "default_status": tmpl["default_status"],
-                }
-            )
-
         sessions_cat_key = slugify(SESSIONS_CATEGORY_NAME)
         sessions_cat = (
             db.query(ActivityCategory)
@@ -729,78 +751,25 @@ def seed():
                 organization_id=org.id,
                 name=SESSIONS_CATEGORY_NAME,
                 key=sessions_cat_key,
-                sections=sections,
                 sort_order=SESSIONS_CATEGORY_SORT_ORDER,
             )
             db.add(sessions_cat)
             db.flush()
-        else:
-            sessions_cat.sections = sections
-            db.flush()
         print(f"  Ensured activity category: {sessions_cat.name}")
 
-        # 4. Dimensions
+        # 4. Dimensions (intervention is now a regular dimension, not system)
         programme_dim = _ensure_dimension(db, org, "programme", "Programme", 0)
         project_dim = _ensure_dimension(db, org, "project", "Project", 1)
         location_dim = _ensure_dimension(db, org, "location", "Location", 2)
-        at_dim = _ensure_dimension(
-            db, org, "activity_type", "Activity Type", 3, is_system="activity_type"
-        )
+        intervention_dim = _ensure_dimension(db, org, "activity_type", "Intervention", 3)
 
         # 5. Dimension values
         programme_map = _ensure_values(db, org, programme_dim, PROGRAMMES)
         project_map = _ensure_values(db, org, project_dim, PROJECTS)
         location_map = _ensure_values(db, org, location_dim, LOCATIONS)
 
-        # 6. Activity Types + mirrored dimension values
-        at_dv_map = {}
-        for idx, at_name in enumerate(ACTIVITY_TYPES):
-            at = db.query(ActivityType).filter_by(organization_id=org.id, name=at_name).first()
-            if not at:
-                at = ActivityType(
-                    organization_id=org.id,
-                    name=at_name,
-                    category_id=sessions_cat.id,
-                )
-                db.add(at)
-                db.flush()
-            else:
-                # Assign to sessions category if not already
-                if not at.category_id:
-                    at.category_id = sessions_cat.id
-                    db.flush()
-
-            at_code = _make_at_code(at_name)
-            dv = db.query(DimensionValue).filter_by(dimension_id=at_dim.id, code=at_code).first()
-            if not dv:
-                # Check for legacy uppercase code
-                legacy_code = (
-                    at_name.upper()
-                    .replace(" ", "_")
-                    .replace("-", "_")
-                    .replace("/", "_")
-                    .replace(",", "")
-                )
-                dv = (
-                    db.query(DimensionValue)
-                    .filter_by(dimension_id=at_dim.id, code=legacy_code)
-                    .first()
-                )
-                if dv:
-                    dv.code = at_code
-                    db.flush()
-            if not dv:
-                dv = DimensionValue(
-                    organization_id=org.id,
-                    dimension_id=at_dim.id,
-                    name=at_name,
-                    code=at_code,
-                    sort_order=idx,
-                )
-                db.add(dv)
-                db.flush()
-            at_dv_map[at_name] = dv
-        print(f"  Ensured {len(ACTIVITY_TYPES)} activity types + dimension values")
+        # 6. Intervention dimension values (regular dimension values, no ActivityType)
+        intervention_map = _ensure_intervention_values(db, org, intervention_dim, INTERVENTIONS)
 
         # 7. Dimension Value Links
         new_links = 0
@@ -814,20 +783,22 @@ def seed():
             db, org, PROGRAMME_LOCATIONS, programme_map, location_map
         )
         new_links += _ensure_dimension_value_links(
-            db, org, LOCATION_ACTIVITY_TYPES, location_map, at_dv_map
+            db, org, LOCATION_INTERVENTIONS, location_map, intervention_map
         )
         new_links += _ensure_dimension_value_links(
-            db, org, PROGRAMME_ACTIVITY_TYPES, programme_map, at_dv_map
+            db, org, PROGRAMME_INTERVENTIONS, programme_map, intervention_map
         )
-        _remove_stale_programme_at_links(db, programme_map, at_dv_map, PROGRAMME_ACTIVITY_TYPES)
-        project_activity_types = {}
+        _remove_stale_programme_intervention_links(
+            db, programme_map, intervention_map, PROGRAMME_INTERVENTIONS
+        )
+        project_interventions = {}
         for proj_code, loc_codes in PROJECT_LOCATIONS.items():
-            at_set = set()
+            intervention_set = set()
             for loc_code in loc_codes:
-                at_set.update(LOCATION_ACTIVITY_TYPES.get(loc_code, []))
-            project_activity_types[proj_code] = list(at_set)
+                intervention_set.update(LOCATION_INTERVENTIONS.get(loc_code, []))
+            project_interventions[proj_code] = list(intervention_set)
         new_links += _ensure_dimension_value_links(
-            db, org, project_activity_types, project_map, at_dv_map
+            db, org, project_interventions, project_map, intervention_map
         )
         print(f"  Ensured dimension value links ({new_links} new)")
 
@@ -856,7 +827,7 @@ def seed():
             )
             db.add(admin_role)
             db.flush()
-            print(f"  Created Admin role")
+            print("  Created Admin role")
         else:
             if not admin_role.is_system:
                 admin_role.is_system = True
@@ -927,29 +898,29 @@ def seed():
         db.commit()
 
         # Summary
-        total_loc_at_links = sum(len(v) for v in LOCATION_ACTIVITY_TYPES.values())
+        total_loc_intervention_links = sum(len(v) for v in LOCATION_INTERVENTIONS.values())
         total_links = (
             sum(len(v) for v in PROGRAMME_PROJECTS.values())
             + sum(len(v) for v in PROJECT_LOCATIONS.values())
             + sum(len(v) for v in PROGRAMME_LOCATIONS.values())
-            + total_loc_at_links
+            + total_loc_intervention_links
         )
-        print(f"\nKshamata seed completed successfully!")
+        print("\nKshamata seed completed successfully!")
         print(f"  Organisation        : {ORG_NAME}")
         print(f"  Vocabulary          : {len(VOCABULARY)} term overrides")
         print(f"  Entity Types        : {len(ENTITY_TYPES)}")
         print(f"  Activity Categories : 1 (Sessions)")
         print(f"  Roles               : 2 (Admin [system], Team Member [default])")
-        print(f"  Dimensions          : 4 (Programme, Project, Location, Activity Type [system])")
+        print(f"  Dimensions          : 4 (Programme, Project, Location, Intervention)")
         print(f"  Programmes          : {len(PROGRAMMES)}")
         print(f"  Projects            : {len(PROJECTS)}")
         print(f"  Locations           : {len(LOCATIONS)}")
-        print(f"  Activity Types      : {len(ACTIVITY_TYPES)}")
+        print(f"  Interventions       : {len(INTERVENTIONS)}")
         print(f"  Dimension Links     : {total_links} combos")
-        print(f"    Programme<>Project : {sum(len(v) for v in PROGRAMME_PROJECTS.values())}")
-        print(f"    Project<>Location  : {sum(len(v) for v in PROJECT_LOCATIONS.values())}")
-        print(f"    Programme<>Location: {sum(len(v) for v in PROGRAMME_LOCATIONS.values())}")
-        print(f"    Location<>Activity : {total_loc_at_links}")
+        print(f"    Programme<>Project      : {sum(len(v) for v in PROGRAMME_PROJECTS.values())}")
+        print(f"    Project<>Location       : {sum(len(v) for v in PROJECT_LOCATIONS.values())}")
+        print(f"    Programme<>Location     : {sum(len(v) for v in PROGRAMME_LOCATIONS.values())}")
+        print(f"    Location<>Intervention  : {total_loc_intervention_links}")
 
     except Exception as e:
         db.rollback()

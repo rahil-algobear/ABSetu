@@ -5,7 +5,6 @@ import {
   ActivityForm,
   ActivityFormElement,
   ActivityParticipant,
-  ActivityType,
   Dimension,
   DimensionValue,
   Enrollment,
@@ -270,32 +269,6 @@ export const activityFormApi = {
   },
 };
 
-// --- Activity Types ---
-
-export const activityTypeApi = {
-  list: async (categoryId?: string): Promise<ActivityType[]> => {
-    const params = categoryId ? `?category_id=${categoryId}` : '';
-    const response = await authAxios.get<ActivityType[]>(`/activity-types/${params}`);
-    return response.data;
-  },
-  get: async (id: string): Promise<ActivityType> => {
-    const response = await authAxios.get<ActivityType>(`/activity-types/${id}`);
-    return response.data;
-  },
-  create: async (data: { name: string; category_id?: string; description?: string; meta?: Record<string, unknown> }): Promise<ActivityType> => {
-    const response = await authAxios.post<ActivityType>('/activity-types/', data);
-    return response.data;
-  },
-  update: async (id: string, data: Partial<ActivityType>): Promise<ActivityType> => {
-    const response = await authAxios.put<ActivityType>(`/activity-types/${id}`, data);
-    return response.data;
-  },
-  delete: async (id: string) => {
-    const response = await authAxios.delete(`/activity-types/${id}`);
-    return response.data;
-  },
-};
-
 // --- Activities ---
 
 export const activityApi = {
@@ -308,7 +281,7 @@ export const activityApi = {
     return response.data;
   },
   create: async (data: {
-    activity_type_id: string;
+    category_id?: string;
     date: string;
     notes?: string;
     dimension_value_ids?: string[];

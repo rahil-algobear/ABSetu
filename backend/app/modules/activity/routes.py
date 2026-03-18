@@ -1,10 +1,10 @@
 """
-Activity, ActivityType, ActivityCategory, ActivityParticipant routes
+Activity, ActivityCategory, ActivityParticipant routes
 """
 
 import uuid
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -19,9 +19,6 @@ from app.modules.activity.schemas import (
     ActivityFormResponse,
     ActivityFormUpdate,
     ActivityResponse,
-    ActivityTypeCreate,
-    ActivityTypeResponse,
-    ActivityTypeUpdate,
     ActivityUpdate,
     DimensionTagInfo,
     ParticipantBulkCreate,
@@ -32,9 +29,8 @@ from app.modules.activity.service import (
     ActivityFormService,
     ActivityParticipantService,
     ActivityService,
-    ActivityTypeService,
 )
-from app.modules.activity.model import Activity, ActivityType
+from app.modules.activity.model import Activity
 from app.modules.dimension.model import Dimension, DimensionValue
 from app.modules.dimension.service import UserDimensionAccessService
 
@@ -121,103 +117,6 @@ def delete_activity_category(
     return {"message": "Activity category deleted"}
 
 
-# --- Activity Types ---
-
-type_router = APIRouter(prefix="/activity-types")
-
-
-def _build_type_response(at) -> dict:
-    return ActivityTypeResponse(
-        id=str(at.id),
-        updated_at=at.updated_at,
-        organization_id=str(at.organization_id),
-        category_id=str(at.category_id) if at.category_id else None,
-        name=at.name,
-        description=at.description,
-        meta=at.meta,
-        category_name=at.category.name if at.category else None,
-    ).dump()
-
-
-@type_router.get("/", dependencies=[Depends(require_permissions("activity_type:view"))])
-def list_activity_types(
-    category_id: uuid.UUID | None = Query(None),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    service = ActivityTypeService(db)
-    types = service.list_by_org(
-        current_user.organization_id,
-        category_id=category_id,
-    )
-    return [_build_type_response(t) for t in types]
-
-
-@type_router.get(
-    "/{type_id}",
-    dependencies=[Depends(require_permissions("activity_type:view"))],
-)
-def get_activity_type(
-    type_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    service = ActivityTypeService(db)
-    at = service.get_by_id(type_id, current_user.organization_id)
-    return _build_type_response(at)
-
-
-@type_router.post(
-    "/",
-    dependencies=[Depends(require_permissions("activity_type:manage"))],
-    status_code=201,
-)
-def create_activity_type(
-    data: ActivityTypeCreate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    service = ActivityTypeService(db)
-    at = service.create(
-        current_user.organization_id,
-        data.model_dump(exclude_none=True),
-    )
-    return _build_type_response(at)
-
-
-@type_router.put(
-    "/{type_id}",
-    dependencies=[Depends(require_permissions("activity_type:manage"))],
-)
-def update_activity_type(
-    type_id: uuid.UUID,
-    data: ActivityTypeUpdate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    service = ActivityTypeService(db)
-    at = service.update(
-        type_id,
-        current_user.organization_id,
-        data.model_dump(exclude_none=True),
-    )
-    return _build_type_response(at)
-
-
-@type_router.delete(
-    "/{type_id}",
-    dependencies=[Depends(require_permissions("activity_type:manage"))],
-)
-def delete_activity_type(
-    type_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    service = ActivityTypeService(db)
-    service.delete(type_id, current_user.organization_id)
-    return {"message": "Activity type deleted"}
-
-
 # --- Activities ---
 
 activity_router = APIRouter(prefix="/activities")
@@ -238,21 +137,18 @@ def _build_activity_response(a) -> dict:
                     value_code=dv.code,
                 ).model_dump()
             )
-    at = a.activity_type
-    category_name = None
-    if at and at.category:
-        category_name = at.category.name
+
+    category_name = a.category.name if a.category else None
 
     return ActivityResponse(
         id=str(a.id),
         updated_at=a.updated_at,
         organization_id=str(a.organization_id),
-        activity_type_id=str(a.activity_type_id),
+        category_id=str(a.category_id) if a.category_id else None,
         date=a.date,
         notes=a.notes,
         created_by=str(a.created_by) if a.created_by else None,
         meta=a.meta,
-        type_name=at.name if at else None,
         category_name=category_name,
         tags=tag_infos,
     ).dump()
@@ -299,17 +195,19 @@ def create_activity(
     db: Session = Depends(get_db),
 ):
     # Validate required form elements from form builder config
-    at = db.query(ActivityType).filter_by(id=data.activity_type_id).first()
-    if at and at.category_id:
+    category_id = data.category_id
+    if category_id:
         form_service = ActivityFormService(db)
-        form = form_service.get_by_category(at.category_id, current_user.organization_id)
+        form = form_service.get_by_category(uuid.UUID(category_id), current_user.organization_id)
         if form and form.elements:
             # Resolve which dimension IDs are covered by the submitted values
             submitted_dim_ids = set()
             if data.dimension_value_ids:
-                dvs = db.query(DimensionValue.dimension_id).filter(
-                    DimensionValue.id.in_([uuid.UUID(v) for v in data.dimension_value_ids])
-                ).all()
+                dvs = (
+                    db.query(DimensionValue.dimension_id)
+                    .filter(DimensionValue.id.in_([uuid.UUID(v) for v in data.dimension_value_ids]))
+                    .all()
+                )
                 submitted_dim_ids = {str(row[0]) for row in dvs}
 
             for el in form.elements:
@@ -421,34 +319,30 @@ def save_participants(
 ):
     # Validate required entity_type sections from form builder config
     activity = db.query(Activity).filter_by(id=activity_id).first()
-    if activity:
-        at = db.query(ActivityType).filter_by(id=activity.activity_type_id).first()
-        if at and at.category_id:
-            form_service = ActivityFormService(db)
-            form = form_service.get_by_category(at.category_id, current_user.organization_id)
-            if form and form.elements:
-                # Build set of section_keys that have at least one participant
-                submitted_sections = {r.section_key for r in data.records}
-                for el in form.elements:
-                    if (
-                        el.get("type") == "entity_type"
-                        and el.get("required")
-                        and el.get("visible", True)
-                    ):
-                        section_key = el.get("ref_id") or el.get("type")
-                        if section_key not in submitted_sections:
-                            # Resolve label
-                            ref_id = el.get("ref_id")
-                            if ref_id == "user":
-                                label = "Users (staff)"
-                            else:
-                                from app.modules.entity.model import EntityType
+    if activity and activity.category_id:
+        form_service = ActivityFormService(db)
+        form = form_service.get_by_category(activity.category_id, current_user.organization_id)
+        if form and form.elements:
+            # Build set of section_keys that have at least one participant
+            submitted_sections = {r.section_key for r in data.records}
+            for el in form.elements:
+                if (
+                    el.get("type") == "entity_type"
+                    and el.get("required")
+                    and el.get("visible", True)
+                ):
+                    section_key = el.get("ref_id") or el.get("type")
+                    if section_key not in submitted_sections:
+                        # Resolve label
+                        ref_id = el.get("ref_id")
+                        if ref_id == "user":
+                            label = "Users (staff)"
+                        else:
+                            from app.modules.entity.model import EntityType
 
-                                et = db.query(EntityType).filter_by(id=ref_id).first()
-                                label = et.name if et else "Participants"
-                            raise ValidationError(
-                                f"{label} is required — add at least one participant"
-                            )
+                            et = db.query(EntityType).filter_by(id=ref_id).first()
+                            label = et.name if et else "Participants"
+                        raise ValidationError(f"{label} is required — add at least one participant")
 
     service = ActivityParticipantService(db)
     participants = service.bulk_create(
@@ -526,6 +420,5 @@ def delete_activity_form(
 
 # Include sub-routers
 router.include_router(category_router)
-router.include_router(type_router)
 router.include_router(activity_router)
 router.include_router(form_router)
