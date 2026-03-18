@@ -6,7 +6,7 @@ Next.js 16 + React 19 + TypeScript + Tailwind CSS.
 
 ```bash
 npm install         # Install deps
-npm run dev         # Dev server on :3000 (Turbopack)
+npm run dev         # Dev server on :3100 (Turbopack)
 npm run build       # Production build
 npm run lint        # ESLint
 ```
@@ -100,7 +100,7 @@ src/
 - Both use the same route structure
 
 ## Environment Variables
-- `NEXT_PUBLIC_API_BASE_URL` — API base (default: `http://localhost:8000/api`)
+- `NEXT_PUBLIC_API_BASE_URL` — API base (default: `http://localhost:8100/api`)
 - `NEXT_PUBLIC_BRAND_NAME` — App name
 - `NEXT_PUBLIC_S3_URL` — S3 bucket URL for assets
 - `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` — Maps API key

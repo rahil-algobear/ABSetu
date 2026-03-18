@@ -6,7 +6,7 @@ FastAPI + SQLAlchemy + PostgreSQL backend.
 
 ```bash
 make install        # Install deps
-make run-local      # Dev server on :8000
+make run-local      # Dev server on :8100
 make migrate msg='description'  # New Alembic migration
 make upgrade        # Apply migrations
 make lint           # flake8 + black --check + isort --check
