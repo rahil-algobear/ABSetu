@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   activityApi,
+  activityCategoryApi,
   activityFormApi,
   activityTypeApi,
   dimensionApi,
@@ -67,6 +69,8 @@ function getFilteredValues(
 export default function ActivitiesPage() {
   const [showCreate, setShowCreate] = useState(false);
   const queryClient = useQueryClient();
+  const searchParams = useSearchParams();
+  const categoryKey = searchParams.get("category");
   const { v, vPlural, vDim } = useVocabulary();
 
   const { data: activities = [], isLoading } = useQuery({
@@ -77,6 +81,11 @@ export default function ActivitiesPage() {
   const { data: activityTypes = [] } = useQuery({
     queryKey: ["activity-types"],
     queryFn: () => activityTypeApi.list(),
+  });
+
+  const { data: categories = [] } = useQuery({
+    queryKey: ["activity-categories"],
+    queryFn: activityCategoryApi.list,
   });
 
   const { data: dimensions = [] } = useQuery<Dimension[]>({
@@ -128,11 +137,12 @@ export default function ActivitiesPage() {
   });
   const [metaValues, setMetaValues] = useState<Record<string, unknown>>({});
 
-  // Determine category from selected activity type
+  // Determine category: from URL param first, then from selected activity type
   const selectedType = activityTypes.find((t) => t.id === formData.activity_type_id);
-  const selectedCategoryId = selectedType?.category_id || "";
+  const categoryFromUrl = categories.find((c) => c.key === categoryKey);
+  const selectedCategoryId = categoryFromUrl?.id || selectedType?.category_id || "";
 
-  // Load form builder config for the selected category
+  // Load form builder config for the category
   const { data: formConfig } = useQuery<ActivityForm>({
     queryKey: ["activity-form", selectedCategoryId],
     queryFn: () => activityFormApi.get(selectedCategoryId),
@@ -178,9 +188,16 @@ export default function ActivitiesPage() {
     return map;
   }, [dimensions, allDimensionValues, formData.dimension_value_ids]);
 
-  // Filter activity types based on tag rules with selected dimension values
+  // Filter activity types by category (if set) and tag rules
   const filteredActivityTypes = useMemo(() => {
-    if (!atDimension) return activityTypes;
+    let types = activityTypes;
+
+    // Filter by category from URL
+    if (selectedCategoryId) {
+      types = types.filter((at) => at.category_id === selectedCategoryId);
+    }
+
+    if (!atDimension) return types;
 
     const atDimValues = allDimensionValues.filter(
       (dv) => dv.dimension_id === atDimension.id
@@ -193,10 +210,10 @@ export default function ActivitiesPage() {
     );
     const allowedNames = new Set(filteredDvs.map((dv) => dv.name));
 
-    if (Object.keys(selectedByDim).length === 0) return activityTypes;
+    if (Object.keys(selectedByDim).length === 0) return types;
 
-    return activityTypes.filter((at) => allowedNames.has(at.name));
-  }, [activityTypes, atDimension, allDimensionValues, selectedByDim, dimensionValueLinks]);
+    return types.filter((at) => allowedNames.has(at.name));
+  }, [activityTypes, selectedCategoryId, atDimension, allDimensionValues, selectedByDim, dimensionValueLinks]);
 
   const createMutation = useMutation({
     mutationFn: activityApi.create,
