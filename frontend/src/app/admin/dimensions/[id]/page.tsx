@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { dimensionApi } from "@/services/api";
-import { Dimension, DimensionValue } from "@/types";
+import { dimensionApi, metaFieldSchemaApi } from "@/services/api";
+import { Dimension, DimensionValue, MetaFieldDefinition } from "@/types";
 import { Can } from "@/components/Auth/Permissions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,25 +18,27 @@ import {
   TableHead,
   TableCell,
 } from "@/components/ui/page-table";
+import { DynamicMetaForm } from "@/components/DynamicMetaForm";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { useVocabulary } from "@/hooks/useVocabulary";
 import toast from "react-hot-toast";
 
 export default function DimensionValuesPage() {
   const params = useParams();
-  const dimensionKey = params.key as string;
+  const dimensionId = params.id as string;
   const queryClient = useQueryClient();
   const { vDim } = useVocabulary();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingValue, setEditingValue] = useState<DimensionValue | null>(null);
-  const [form, setForm] = useState({ name: "", code: "" });
+  const [form, setForm] = useState({ name: "" });
+  const [metaValues, setMetaValues] = useState<Record<string, unknown>>({});
 
   const { data: dimensions = [] } = useQuery<Dimension[]>({
     queryKey: ["dimensions"],
     queryFn: dimensionApi.list,
   });
 
-  const dimension = dimensions.find((d) => d.key === dimensionKey);
+  const dimension = dimensions.find((d) => d.id === dimensionId);
 
   const { data: values = [], isLoading } = useQuery<DimensionValue[]>({
     queryKey: ["dimension-values", dimension?.id],
@@ -44,8 +46,15 @@ export default function DimensionValuesPage() {
     enabled: !!dimension,
   });
 
+  const metaSchemaKey = `dimension:${dimensionId}`;
+  const { data: metaFields = [] } = useQuery<MetaFieldDefinition[]>({
+    queryKey: ["meta-field-schemas", metaSchemaKey],
+    queryFn: () => metaFieldSchemaApi.get(metaSchemaKey),
+    enabled: !!dimension,
+  });
+
   const createMutation = useMutation({
-    mutationFn: (data: { name: string; code: string }) =>
+    mutationFn: (data: { name: string; meta?: Record<string, unknown> }) =>
       dimensionApi.createValue(dimension!.id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["dimension-values", dimension?.id] });
@@ -77,13 +86,15 @@ export default function DimensionValuesPage() {
 
   const openAdd = () => {
     setEditingValue(null);
-    setForm({ name: "", code: "" });
+    setForm({ name: "" });
+    setMetaValues({});
     setModalOpen(true);
   };
 
   const openEdit = (value: DimensionValue) => {
     setEditingValue(value);
-    setForm({ name: value.name, code: value.code });
+    setForm({ name: value.name });
+    setMetaValues(value.meta || {});
     setModalOpen(true);
   };
 
@@ -94,10 +105,11 @@ export default function DimensionValuesPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const meta = Object.keys(metaValues).length > 0 ? metaValues : undefined;
     if (editingValue) {
-      updateMutation.mutate({ id: editingValue.id, data: form });
+      updateMutation.mutate({ id: editingValue.id, data: { name: form.name, meta: meta || null } });
     } else {
-      createMutation.mutate(form);
+      createMutation.mutate({ name: form.name, meta });
     }
   };
 
@@ -126,7 +138,9 @@ export default function DimensionValuesPage() {
           <TableHeader>
             <TableRow>
               <TableHead>Name</TableHead>
-              <TableHead>Code</TableHead>
+              {metaFields.map((f) => (
+                <TableHead key={f.key}>{f.label}</TableHead>
+              ))}
               <TableHead className="w-20">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -134,7 +148,13 @@ export default function DimensionValuesPage() {
             {values.map((v) => (
               <TableRow key={v.id}>
                 <TableCell className="font-medium">{v.name}</TableCell>
-                <TableCell className="text-gray-500 text-sm font-mono">{v.code}</TableCell>
+                {metaFields.map((f) => (
+                  <TableCell key={f.key}>
+                    {v.meta?.[f.key] !== undefined
+                      ? String(v.meta[f.key])
+                      : "—"}
+                  </TableCell>
+                ))}
                 <TableCell>
                   <Can permission="dimension:manage">
                     <div className="flex gap-1">
@@ -178,17 +198,11 @@ export default function DimensionValuesPage() {
               required
             />
           </div>
-          <div>
-            <Label htmlFor="value-code">Code</Label>
-            <Input
-              id="value-code"
-              value={form.code}
-              onChange={(e) => setForm({ ...form, code: e.target.value })}
-              placeholder="e.g. THANE"
-              className="font-mono"
-              required
-            />
-          </div>
+          <DynamicMetaForm
+            fields={metaFields}
+            values={metaValues}
+            onChange={setMetaValues}
+          />
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={closeModal}>
               Cancel

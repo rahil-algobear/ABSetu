@@ -63,17 +63,42 @@ STATIC_ENTITY_TYPES = {
 
 
 def _validate_entity_type(entity_type: str, org_id, db: Session) -> None:
-    """Validate entity type — allow static types and dimension:{key} types."""
+    """Validate entity type — allow static types and scoped keys like
+    dimension:{id}, entity:{id}, activity:category:{id}, activity:type:{id},
+    participant:category:{id}, participant:type:{id}."""
     if entity_type in STATIC_ENTITY_TYPES:
         return
-    if entity_type.startswith("dimension:"):
-        # Validate the dimension exists for this org
-        from app.modules.dimension.model import Dimension
 
-        dim_key = entity_type.split(":", 1)[1]
-        dim = db.query(Dimension).filter_by(organization_id=org_id, key=dim_key).first()
-        if dim:
-            return
+    parts = entity_type.split(":")
+
+    if len(parts) == 2:
+        prefix, ref_id = parts
+
+        if prefix == "dimension":
+            from app.modules.dimension.model import Dimension
+
+            if db.query(Dimension).filter_by(organization_id=org_id, id=ref_id).first():
+                return
+
+        if prefix == "entity":
+            from app.modules.entity.model import EntityType
+
+            if db.query(EntityType).filter_by(organization_id=org_id, id=ref_id).first():
+                return
+
+    if len(parts) == 3:
+        prefix, sub, ref_id = parts
+
+        if prefix in ("activity", "participant"):
+            from app.modules.activity.model import ActivityCategory, ActivityType
+
+            if sub == "category":
+                if db.query(ActivityCategory).filter_by(organization_id=org_id, id=ref_id).first():
+                    return
+            elif sub == "type":
+                if db.query(ActivityType).filter_by(organization_id=org_id, id=ref_id).first():
+                    return
+
     from fastapi import HTTPException
 
     raise HTTPException(status_code=400, detail=f"Invalid entity type: {entity_type}")

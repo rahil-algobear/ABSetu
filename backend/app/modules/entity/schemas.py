@@ -13,7 +13,6 @@ from app.common.schemas.base_response import BaseResponseSchema
 
 class EntityTypeCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
-    key: str = Field(..., min_length=1, max_length=100)
     config: dict[str, Any] | None = None
     sort_order: int = 0
 

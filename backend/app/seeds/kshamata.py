@@ -18,6 +18,7 @@ from app.modules.activity.model import ActivityCategory, ActivityType
 from app.modules.entity.model import EntityType
 from app.modules.auth.model import User
 from app.modules.role.model import Permission, Role, RolePermission
+from app.common.helpers.slugify import slugify
 from app.modules.entity.model import Entity  # noqa: F401
 from app.modules.beneficiary.model import Enrollment  # noqa: F401
 from app.modules.activity.model import Activity, ActivityParticipant  # noqa: F401
@@ -55,13 +56,11 @@ VOCABULARY = {
 ENTITY_TYPES = [
     {
         "name": "Beneficiary",
-        "key": "beneficiary",
         "config": {"case_number_enabled": True, "can_enroll": True},
         "sort_order": 0,
     },
     {
         "name": "Facilitator",
-        "key": "facilitator",
         "config": {"case_number_enabled": False, "can_enroll": False},
         "sort_order": 1,
     },
@@ -69,36 +68,34 @@ ENTITY_TYPES = [
 
 # ---------------------------------------------------------------------------
 # Activity Category: Sessions (form builder config)
+# participant_source UUIDs are populated at seed time after entity types are created
 # ---------------------------------------------------------------------------
-SESSIONS_CATEGORY = {
-    "name": "Sessions",
-    "key": "sessions",
-    "sort_order": 0,
-    "sections": [
-        {
-            "key": "beneficiaries",
-            "label": "Beneficiaries",
-            "participant_source": "entity_type:beneficiary",
-            "selection_mode": "enrolled_checklist",
-            "min_count": 0,
-            "max_count": None,
-            "capture_status": True,
-            "statuses": ["present", "absent"],
-            "default_status": "present",
-        },
-        {
-            "key": "facilitators",
-            "label": "Facilitators",
-            "participant_source": "entity_type:facilitator",
-            "selection_mode": "multi_select",
-            "min_count": 1,
-            "max_count": None,
-            "capture_status": False,
-            "statuses": [],
-            "default_status": None,
-        },
-    ],
-}
+SESSIONS_CATEGORY_NAME = "Sessions"
+SESSIONS_CATEGORY_SORT_ORDER = 0
+SESSIONS_SECTIONS_TEMPLATE = [
+    {
+        "key": "beneficiaries",
+        "label": "Beneficiaries",
+        "entity_type_name": "Beneficiary",  # resolved to UUID at seed time
+        "selection_mode": "enrolled_checklist",
+        "min_count": 0,
+        "max_count": None,
+        "capture_status": True,
+        "statuses": ["present", "absent"],
+        "default_status": "present",
+    },
+    {
+        "key": "facilitators",
+        "label": "Facilitators",
+        "entity_type_name": "Facilitator",  # resolved to UUID at seed time
+        "selection_mode": "multi_select",
+        "min_count": 1,
+        "max_count": None,
+        "capture_status": False,
+        "statuses": [],
+        "default_status": None,
+    },
+]
 
 # ---------------------------------------------------------------------------
 # Dimension: Programme
@@ -421,8 +418,11 @@ PROGRAMME_ACTIVITY_TYPES = {
 
 
 def _make_at_code(name: str) -> str:
-    """Convert activity type name to a dimension value code."""
-    return name.upper().replace(" ", "_").replace("-", "_").replace("/", "_").replace(",", "")
+    """Convert activity type name to a slugified dimension value code."""
+    import re
+    slug = name.lower().strip()
+    slug = re.sub(r"[^a-z0-9]+", "_", slug)
+    return slug.strip("_")
 
 
 def _ensure_dimension(db, org, key, name, sort_order, is_system=None):
@@ -447,21 +447,31 @@ def _ensure_dimension(db, org, key, name, sort_order, is_system=None):
     return dim
 
 
+
+
 def _ensure_values(db, org, dimension, values_list):
     value_map = {}
-    for idx, (code, name) in enumerate(values_list):
-        dv = db.query(DimensionValue).filter_by(dimension_id=dimension.id, code=code).first()
+    for idx, (seed_key, name) in enumerate(values_list):
+        slug = slugify(name)
+        # Look up by slug (current convention) or legacy seed_key
+        dv = db.query(DimensionValue).filter_by(dimension_id=dimension.id, code=slug).first()
+        if not dv:
+            dv = db.query(DimensionValue).filter_by(dimension_id=dimension.id, code=seed_key).first()
+            if dv:
+                # Migrate legacy code to slugified name
+                dv.code = slug
+                db.flush()
         if not dv:
             dv = DimensionValue(
                 organization_id=org.id,
                 dimension_id=dimension.id,
                 name=name,
-                code=code,
+                code=slug,
                 sort_order=idx,
             )
             db.add(dv)
             db.flush()
-        value_map[code] = dv
+        value_map[seed_key] = dv
     print(f"  Ensured {len(values_list)} {dimension.name.lower()} values")
     return value_map
 
@@ -557,38 +567,58 @@ def seed():
             print(f"Updated organization: {org.name} ({org.code})")
 
         # 2. Entity Types
+        entity_type_map = {}  # name -> EntityType
         for et_data in ENTITY_TYPES:
-            et = db.query(EntityType).filter_by(organization_id=org.id, key=et_data["key"]).first()
+            slug = slugify(et_data["name"])
+            et = db.query(EntityType).filter_by(organization_id=org.id, key=slug).first()
             if not et:
                 et = EntityType(
                     organization_id=org.id,
                     name=et_data["name"],
-                    key=et_data["key"],
+                    key=slug,
                     config=et_data["config"],
                     sort_order=et_data["sort_order"],
                 )
                 db.add(et)
                 db.flush()
+            entity_type_map[et_data["name"]] = et
         print(f"  Ensured {len(ENTITY_TYPES)} entity types")
 
         # 3. Activity Category: Sessions
+        # Build sections with UUID-based participant_source
+        sections = []
+        for tmpl in SESSIONS_SECTIONS_TEMPLATE:
+            et = entity_type_map[tmpl["entity_type_name"]]
+            sections.append({
+                "key": tmpl["key"],
+                "label": tmpl["label"],
+                "participant_source": f"entity_type:{et.id}",
+                "selection_mode": tmpl["selection_mode"],
+                "min_count": tmpl["min_count"],
+                "max_count": tmpl["max_count"],
+                "capture_status": tmpl["capture_status"],
+                "statuses": tmpl["statuses"],
+                "default_status": tmpl["default_status"],
+            })
+
+        sessions_cat_key = slugify(SESSIONS_CATEGORY_NAME)
         sessions_cat = (
             db.query(ActivityCategory)
-            .filter_by(organization_id=org.id, key=SESSIONS_CATEGORY["key"])
+            .filter_by(organization_id=org.id, key=sessions_cat_key)
             .first()
         )
         if not sessions_cat:
             sessions_cat = ActivityCategory(
                 organization_id=org.id,
-                name=SESSIONS_CATEGORY["name"],
-                key=SESSIONS_CATEGORY["key"],
-                sections=SESSIONS_CATEGORY["sections"],
-                sort_order=SESSIONS_CATEGORY["sort_order"],
+                name=SESSIONS_CATEGORY_NAME,
+                key=sessions_cat_key,
+                sections=sections,
+                sort_order=SESSIONS_CATEGORY_SORT_ORDER,
             )
             db.add(sessions_cat)
             db.flush()
         else:
-            sessions_cat.sections = SESSIONS_CATEGORY["sections"]
+            sessions_cat.sections = sections
             db.flush()
         print(f"  Ensured activity category: {sessions_cat.name}")
 
@@ -625,6 +655,13 @@ def seed():
 
             at_code = _make_at_code(at_name)
             dv = db.query(DimensionValue).filter_by(dimension_id=at_dim.id, code=at_code).first()
+            if not dv:
+                # Check for legacy uppercase code
+                legacy_code = at_name.upper().replace(" ", "_").replace("-", "_").replace("/", "_").replace(",", "")
+                dv = db.query(DimensionValue).filter_by(dimension_id=at_dim.id, code=legacy_code).first()
+                if dv:
+                    dv.code = at_code
+                    db.flush()
             if not dv:
                 dv = DimensionValue(
                     organization_id=org.id,
@@ -667,38 +704,81 @@ def seed():
         )
         print(f"  Ensured dimension value links ({new_links} new)")
 
-        # 8. Admin role (all permissions — always syncs missing ones)
+        # 8. Ensure permissions exist (in case initial seed hasn't run)
+        from app.seeds.initial import PERMISSIONS as CANONICAL_PERMISSIONS
+        from app.seeds.initial import TEAM_MEMBER_PERMISSIONS
+
+        permission_map = {}
+        for key, description in CANONICAL_PERMISSIONS:
+            perm = db.query(Permission).filter_by(key=key).first()
+            if not perm:
+                perm = Permission(key=key, description=description)
+                db.add(perm)
+                db.flush()
+            permission_map[key] = perm
+        print(f"  Ensured {len(CANONICAL_PERMISSIONS)} permissions exist")
+
+        # 9. Admin role (all permissions — always syncs missing ones)
         admin_role = db.query(Role).filter_by(organization_id=org.id, name="Admin").first()
         if not admin_role:
             admin_role = Role(
                 organization_id=org.id,
                 name="Admin",
                 is_default=False,
+                is_system=True,
             )
             db.add(admin_role)
             db.flush()
             print(f"  Created Admin role")
+        else:
+            if not admin_role.is_system:
+                admin_role.is_system = True
+                db.flush()
 
-        from app.seeds.initial import PERMISSIONS as CANONICAL_PERMISSIONS
-
-        canonical_keys = [key for key, _ in CANONICAL_PERMISSIONS]
-        all_perms = db.query(Permission).filter(Permission.key.in_(canonical_keys)).all()
-        existing_perm_ids = {
+        existing_admin_perm_ids = {
             rp.permission_id
             for rp in db.query(RolePermission).filter_by(role_id=admin_role.id).all()
         }
         added = 0
-        for perm in all_perms:
-            if perm.id not in existing_perm_ids:
+        for perm in permission_map.values():
+            if perm.id not in existing_admin_perm_ids:
                 db.add(RolePermission(role_id=admin_role.id, permission_id=perm.id))
                 added += 1
         if added:
             db.flush()
-            print(f"  Admin role: added {added} missing permissions (total: {len(all_perms)})")
+            print(f"  Admin role: added {added} missing permissions (total: {len(permission_map)})")
         else:
-            print(f"  Admin role: all {len(all_perms)} permissions present")
+            print(f"  Admin role: all {len(permission_map)} permissions present")
 
-        # 9. Admin user
+        # 10. Team Member role (default role for new users)
+        team_role = db.query(Role).filter_by(organization_id=org.id, name="Team Member").first()
+        if not team_role:
+            team_role = Role(
+                organization_id=org.id,
+                name="Team Member",
+                is_default=True,
+            )
+            db.add(team_role)
+            db.flush()
+            print("  Created Team Member role")
+
+        existing_team_perm_ids = {
+            rp.permission_id
+            for rp in db.query(RolePermission).filter_by(role_id=team_role.id).all()
+        }
+        added = 0
+        for key in TEAM_MEMBER_PERMISSIONS:
+            perm = permission_map[key]
+            if perm.id not in existing_team_perm_ids:
+                db.add(RolePermission(role_id=team_role.id, permission_id=perm.id))
+                added += 1
+        if added:
+            db.flush()
+            print(f"  Team Member role: added {added} missing permissions")
+        else:
+            print(f"  Team Member role: all {len(TEAM_MEMBER_PERMISSIONS)} permissions present")
+
+        # 11. Admin user
         admin_user = db.query(User).filter_by(mobile_number=ADMIN_MOBILE).first()
         if not admin_user:
             admin_user = User(
@@ -732,6 +812,7 @@ def seed():
         print(f"  Vocabulary          : {len(VOCABULARY)} term overrides")
         print(f"  Entity Types        : {len(ENTITY_TYPES)}")
         print(f"  Activity Categories : 1 (Sessions)")
+        print(f"  Roles               : 2 (Admin [system], Team Member [default])")
         print(f"  Dimensions          : 4 (Programme, Project, Location, Activity Type [system])")
         print(f"  Programmes          : {len(PROGRAMMES)}")
         print(f"  Projects            : {len(PROJECTS)}")

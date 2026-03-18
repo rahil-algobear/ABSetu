@@ -9,6 +9,7 @@ from sqlalchemy import exists
 from sqlalchemy.orm import Session
 
 from app.common.exceptions import NotFoundError, ValidationError
+from app.common.helpers.slugify import slugify
 from app.modules.dimension.model import EntityTag
 from app.modules.entity.model import Entity, EntityType
 from app.modules.organization.model import Organization
@@ -33,6 +34,7 @@ class EntityTypeService:
         return et
 
     def create(self, org_id: uuid.UUID, data: dict) -> EntityType:
+        data["key"] = slugify(data["name"])
         et = EntityType(organization_id=org_id, **data)
         self.db.add(et)
         self.db.commit()
@@ -41,6 +43,8 @@ class EntityTypeService:
 
     def update(self, entity_type_id: uuid.UUID, org_id: uuid.UUID, data: dict) -> EntityType:
         et = self.get_by_id(entity_type_id, org_id)
+        if "name" in data and data["name"] is not None:
+            data["key"] = slugify(data["name"])
         for key, value in data.items():
             if value is not None:
                 setattr(et, key, value)

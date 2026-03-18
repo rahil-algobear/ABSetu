@@ -14,6 +14,12 @@ interface DynamicMetaFormProps {
 export function DynamicMetaForm({ fields, values, onChange }: DynamicMetaFormProps) {
   if (fields.length === 0) return null;
 
+  const getVal = (field: MetaFieldDefinition) => {
+    const v = values[field.key];
+    if (v != null && v !== "") return v;
+    return field.default;
+  };
+
   const setValue = (key: string, value: unknown) => {
     onChange({ ...values, [key]: value });
   };
@@ -33,7 +39,7 @@ export function DynamicMetaForm({ fields, values, onChange }: DynamicMetaFormPro
           {field.type === "text" && (
             <Input
               id={`meta-${field.key}`}
-              value={(values[field.key] as string) || ""}
+              value={(getVal(field) as string) || ""}
               onChange={(e) => setValue(field.key, e.target.value)}
               required={field.required}
             />
@@ -43,7 +49,7 @@ export function DynamicMetaForm({ fields, values, onChange }: DynamicMetaFormPro
             <Input
               id={`meta-${field.key}`}
               type="number"
-              value={(values[field.key] as string) || ""}
+              value={getVal(field) != null ? String(getVal(field)) : ""}
               onChange={(e) => setValue(field.key, e.target.value ? Number(e.target.value) : "")}
               required={field.required}
             />
@@ -53,7 +59,7 @@ export function DynamicMetaForm({ fields, values, onChange }: DynamicMetaFormPro
             <Input
               id={`meta-${field.key}`}
               type="date"
-              value={(values[field.key] as string) || ""}
+              value={(getVal(field) as string) || ""}
               onChange={(e) => setValue(field.key, e.target.value)}
               required={field.required}
             />
@@ -63,7 +69,7 @@ export function DynamicMetaForm({ fields, values, onChange }: DynamicMetaFormPro
             <select
               id={`meta-${field.key}`}
               className="w-full border rounded-md p-2 text-sm"
-              value={(values[field.key] as string) || ""}
+              value={(getVal(field) as string) || ""}
               onChange={(e) => setValue(field.key, e.target.value)}
               required={field.required}
             >
@@ -81,7 +87,7 @@ export function DynamicMetaForm({ fields, values, onChange }: DynamicMetaFormPro
               id={`meta-${field.key}`}
               className="w-full border rounded-md p-2 text-sm"
               multiple
-              value={Array.isArray(values[field.key]) ? (values[field.key] as string[]) : []}
+              value={Array.isArray(getVal(field)) ? (getVal(field) as string[]) : []}
               onChange={(e) => {
                 const selected = Array.from(e.target.selectedOptions, (o) => o.value);
                 setValue(field.key, selected);
@@ -99,11 +105,11 @@ export function DynamicMetaForm({ fields, values, onChange }: DynamicMetaFormPro
             <div className="flex items-center gap-2">
               <Switch
                 id={`meta-${field.key}`}
-                checked={Boolean(values[field.key])}
+                checked={Boolean(getVal(field))}
                 onCheckedChange={(checked) => setValue(field.key, checked)}
               />
               <span className="text-sm text-gray-600">
-                {values[field.key] ? "Yes" : "No"}
+                {getVal(field) ? "Yes" : "No"}
               </span>
             </div>
           )}

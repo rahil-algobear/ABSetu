@@ -1,7 +1,8 @@
-.PHONY: help install install-dev test test-coverage lint format type-check run run-local run-local-port migrate upgrade downgrade kill-server clean
+.PHONY: help install install-dev test test-coverage lint format type-check run run-local run-local-port migrate upgrade downgrade kill-server clean db-reset db-fresh seed seed-org
 
 # Use venv python if available, otherwise fall back to python3
 PYTHON := $(shell if [ -f venv/bin/python ]; then echo venv/bin/python; else echo python3; fi)
+PORT ?= 8100
 
 help:
 	@echo "Available commands:"
@@ -13,12 +14,14 @@ help:
 	@echo "  make format               - Format code with black and isort"
 	@echo "  make type-check           - Run type checking with mypy"
 	@echo "  make run                  - Run the application"
-	@echo "  make run-local            - Run application in local mode with reload"
-	@echo "  make run-local-port      - Run application on custom port (use PORT=8001)"
+	@echo "  make run-local            - Run application in local mode with reload (default PORT=8100)"
+	@echo "  make run-local-port       - Run application on custom port (use PORT=8001)"
 	@echo "  make migrate              - Create a new migration (use msg='Description')"
 	@echo "  make upgrade              - Apply database migrations"
 	@echo "  make downgrade            - Rollback last migration"
 	@echo "  make kill-server          - Kill server running on port 8000"
+	@echo "  make db-reset             - Drop and recreate the database (WARNING: destroys all data)"
+	@echo "  make db-fresh             - Reset DB + run migrations + seed all (fresh start)"
 	@echo "  make clean                - Clean up cache and temporary files"
 
 install:
@@ -50,10 +53,10 @@ type-check:
 run:
 	@echo "Running FastAPI application..."
 	@echo "Set APP_ENV=local or APP_ENV=production, or use: make run-local"
-	$(PYTHON) -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+	$(PYTHON) -m uvicorn app.main:app --host 0.0.0.0 --port $(PORT)
 
 run-local:
-	APP_ENV=local $(PYTHON) -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+	APP_ENV=local $(PYTHON) -m uvicorn app.main:app --host 0.0.0.0 --port $(PORT) --reload
 
 run-local-port:
 	@if [ -z "$(PORT)" ]; then \
@@ -85,13 +88,33 @@ seed-org:
 	fi
 	$(PYTHON) -m app.seeds.$(file)
 
+db-reset:
+	@echo "WARNING: This will destroy ALL data in the database!"
+	@echo "Dropping and recreating database..."
+	$(PYTHON) -c "from app.core.config import settings; \
+		url = settings.DATABASE_URL; \
+		db_name = url.rsplit('/', 1)[-1].split('?')[0]; \
+		base_url = url.rsplit('/', 1)[0]; \
+		from sqlalchemy import create_engine, text; \
+		eng = create_engine(base_url + '/postgres', isolation_level='AUTOCOMMIT'); \
+		conn = eng.connect(); \
+		conn.execute(text(f\"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='{db_name}' AND pid <> pg_backend_pid()\")); \
+		conn.execute(text(f'DROP DATABASE IF EXISTS {db_name}')); \
+		conn.execute(text(f'CREATE DATABASE {db_name}')); \
+		conn.close(); \
+		print(f'Database {db_name} reset successfully')"
+
+db-fresh: db-reset upgrade seed
+	$(PYTHON) -m app.seeds.kshamata
+	@echo "Fresh database ready with all seeds!"
+
 kill-server:
-	@echo "Killing server on port 8000..."
-	@if lsof -ti:8000 > /dev/null 2>&1; then \
-		lsof -ti:8000 | xargs kill -9; \
-		echo "Killed process(es) on port 8000"; \
+	@echo "Killing server on port $(PORT)..."
+	@if lsof -ti:$(PORT) > /dev/null 2>&1; then \
+		lsof -ti:$(PORT) | xargs kill -9; \
+		echo "Killed process(es) on port $(PORT)"; \
 	else \
-		echo "No process found on port 8000"; \
+		echo "No process found on port $(PORT)"; \
 	fi
 
 clean:

@@ -87,7 +87,7 @@ class Settings(BaseSettings):
     LOG_FILE: str = "logs/app.log"
 
     # CORS
-    CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:3001"]
+    CORS_ORIGINS: List[str] = ["http://localhost:3100", "http://localhost:3101"]
 
     # AWS (for file storage)
     AWS_ACCESS_KEY_ID: str = ""

@@ -7,14 +7,16 @@ import {
   activityTypeApi,
   dimensionApi,
   dimensionValueLinkApi,
+  metaFieldSchemaApi,
 } from "@/services/api";
-import { Dimension, DimensionValue, DimensionValueLink } from "@/types";
+import { Dimension, DimensionValue, DimensionValueLink, MetaFieldDefinition, MetaFieldSchemas } from "@/types";
 import { Can } from "@/components/Auth/Permissions";
 import { useVocabulary } from "@/hooks/useVocabulary";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { DynamicMetaForm } from "@/components/DynamicMetaForm";
 import { PageLayout } from "@/components/ui/page-layout";
 import { Plus } from "lucide-react";
 import Link from "next/link";
@@ -89,6 +91,12 @@ export default function ActivitiesPage() {
     queryFn: () => dimensionValueLinkApi.list(),
   });
 
+  // Load all meta field schemas (keyed by scope like "activity:category:{id}")
+  const { data: allMetaSchemas = {} } = useQuery<MetaFieldSchemas>({
+    queryKey: ["meta-field-schemas-all"],
+    queryFn: metaFieldSchemaApi.getAll,
+  });
+
   // Non-system dimensions shown as selectable dropdowns
   const selectableDimensions = useMemo(
     () => dimensions.filter((d) => !d.is_system),
@@ -107,6 +115,21 @@ export default function ActivitiesPage() {
     notes: "",
     dimension_value_ids: [] as string[],
   });
+  const [metaValues, setMetaValues] = useState<Record<string, unknown>>({});
+
+  // Derive meta fields for the selected activity type (category-level + type-level)
+  const activityMetaFields = useMemo((): MetaFieldDefinition[] => {
+    if (!formData.activity_type_id) return [];
+    const selectedType = activityTypes.find((t) => t.id === formData.activity_type_id);
+    if (!selectedType) return [];
+
+    const categoryFields = selectedType.category_id
+      ? allMetaSchemas[`activity:category:${selectedType.category_id}`] || []
+      : [];
+    const typeFields = allMetaSchemas[`activity:type:${selectedType.id}`] || [];
+
+    return [...categoryFields, ...typeFields];
+  }, [formData.activity_type_id, activityTypes, allMetaSchemas]);
 
   // Track selection per dimension for cascading logic
   const selectedByDim = useMemo(() => {
@@ -157,6 +180,7 @@ export default function ActivitiesPage() {
         notes: "",
         dimension_value_ids: [],
       });
+      setMetaValues({});
       toast.success(`${v("activity")} created`);
     },
     onError: () => toast.error(`Failed to create ${v("activity").toLowerCase()}`),
@@ -183,7 +207,10 @@ export default function ActivitiesPage() {
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                createMutation.mutate(formData);
+                const payload = activityMetaFields.length > 0
+                  ? { ...formData, meta: metaValues }
+                  : formData;
+                createMutation.mutate(payload);
               }}
               className="space-y-3"
             >
@@ -238,9 +265,10 @@ export default function ActivitiesPage() {
                 <select
                   className="w-full mt-1 border rounded-md p-2 text-sm"
                   value={formData.activity_type_id}
-                  onChange={(e) =>
-                    setFormData({ ...formData, activity_type_id: e.target.value })
-                  }
+                  onChange={(e) => {
+                    setFormData({ ...formData, activity_type_id: e.target.value });
+                    setMetaValues({});
+                  }}
                   required
                 >
                   <option value="">Select...</option>
@@ -274,6 +302,12 @@ export default function ActivitiesPage() {
                   }
                 />
               </div>
+
+              <DynamicMetaForm
+                fields={activityMetaFields}
+                values={metaValues}
+                onChange={setMetaValues}
+              />
 
               <div className="flex gap-2">
                 <Button type="submit" disabled={createMutation.isPending}>

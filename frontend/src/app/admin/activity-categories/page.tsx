@@ -19,7 +19,7 @@ import {
   TableHead,
   TableCell,
 } from "@/components/ui/page-table";
-import { Plus, Pencil, Trash2, GripVertical } from "lucide-react";
+import { Plus, Pencil, Trash2, ChevronUp, ChevronDown } from "lucide-react";
 import toast from "react-hot-toast";
 
 interface SectionConfig {
@@ -55,7 +55,7 @@ export default function ActivityCategoriesPage() {
   const { v, vPlural } = useVocabulary();
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<ActivityCategory | null>(null);
-  const [form, setForm] = useState({ name: "", key: "" });
+  const [form, setForm] = useState({ name: "" });
   const [sections, setSections] = useState<SectionConfig[]>([]);
 
   const { data: categories = [], isLoading } = useQuery({
@@ -71,7 +71,7 @@ export default function ActivityCategoriesPage() {
   // Build participant source options from entity types + "user"
   const participantSources = [
     ...entityTypes.map((et) => ({
-      value: `entity_type:${et.key}`,
+      value: `entity_type:${et.id}`,
       label: et.name,
     })),
     { value: "user", label: "Users (staff)" },
@@ -109,14 +109,14 @@ export default function ActivityCategoriesPage() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ name: "", key: "" });
+    setForm({ name: "" });
     setSections([]);
     setModalOpen(true);
   };
 
   const openEdit = (item: ActivityCategory) => {
     setEditing(item);
-    setForm({ name: item.name, key: item.key });
+    setForm({ name: item.name });
     setSections(
       (item.sections as SectionConfig[] | null)?.map((s) => ({
         ...emptySectionConfig,
@@ -148,7 +148,6 @@ export default function ActivityCategoriesPage() {
     } else {
       createMutation.mutate({
         name: form.name,
-        key: form.key,
         sections: cleanedSections,
       });
     }
@@ -164,6 +163,14 @@ export default function ActivityCategoriesPage() {
 
   const removeSection = (index: number) => {
     setSections(sections.filter((_, i) => i !== index));
+  };
+
+  const moveSection = (index: number, direction: "up" | "down") => {
+    const target = direction === "up" ? index - 1 : index + 1;
+    if (target < 0 || target >= sections.length) return;
+    const updated = [...sections];
+    [updated[index], updated[target]] = [updated[target], updated[index]];
+    setSections(updated);
   };
 
   return (
@@ -192,7 +199,6 @@ export default function ActivityCategoriesPage() {
           <TableHeader>
             <TableRow>
               <TableHead>Name</TableHead>
-              <TableHead>Key</TableHead>
               <TableHead>Sections</TableHead>
               <TableHead className="w-20">Actions</TableHead>
             </TableRow>
@@ -201,7 +207,6 @@ export default function ActivityCategoriesPage() {
             {categories.map((cat) => (
               <TableRow key={cat.id}>
                 <TableCell className="font-medium">{cat.name}</TableCell>
-                <TableCell className="text-gray-500 text-sm font-mono">{cat.key}</TableCell>
                 <TableCell>
                   {(cat.sections as SectionConfig[] | null)?.length ? (
                     <div className="flex flex-wrap gap-1">
@@ -252,29 +257,14 @@ export default function ActivityCategoriesPage() {
         className="max-w-2xl"
       >
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label htmlFor="name">Name</Label>
-              <Input
-                id="name"
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                required
-              />
-            </div>
-            {!editing && (
-              <div>
-                <Label htmlFor="key">Key</Label>
-                <Input
-                  id="key"
-                  value={form.key}
-                  onChange={(e) => setForm({ ...form, key: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "_") })}
-                  required
-                  placeholder="e.g. sessions"
-                  className="font-mono text-sm"
-                />
-              </div>
-            )}
+          <div>
+            <Label htmlFor="name">Name</Label>
+            <Input
+              id="name"
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              required
+            />
           </div>
 
           {/* Sections builder */}
@@ -297,7 +287,24 @@ export default function ActivityCategoriesPage() {
                   <div key={idx} className="border rounded-lg p-3 space-y-3 bg-gray-50">
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-1 text-gray-400">
-                        <GripVertical className="h-4 w-4" />
+                        <div className="flex flex-col -space-y-1">
+                          <button
+                            type="button"
+                            onClick={() => moveSection(idx, "up")}
+                            disabled={idx === 0}
+                            className="text-gray-400 hover:text-purple-600 disabled:opacity-30 disabled:cursor-not-allowed"
+                          >
+                            <ChevronUp className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => moveSection(idx, "down")}
+                            disabled={idx === sections.length - 1}
+                            className="text-gray-400 hover:text-purple-600 disabled:opacity-30 disabled:cursor-not-allowed"
+                          >
+                            <ChevronDown className="h-4 w-4" />
+                          </button>
+                        </div>
                         <span className="text-xs font-medium">Section {idx + 1}</span>
                       </div>
                       <button
@@ -309,30 +316,14 @@ export default function ActivityCategoriesPage() {
                       </button>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <Label className="text-xs">Label</Label>
-                        <Input
-                          value={section.label}
-                          onChange={(e) => {
-                            const label = e.target.value;
-                            const key = section.key || label.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
-                            updateSection(idx, { label, key });
-                          }}
-                          placeholder="e.g. Beneficiaries"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs">Key</Label>
-                        <Input
-                          value={section.key}
-                          onChange={(e) => updateSection(idx, { key: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "_") })}
-                          placeholder="auto-generated"
-                          className="font-mono text-sm"
-                          required
-                        />
-                      </div>
+                    <div>
+                      <Label className="text-xs">Label</Label>
+                      <Input
+                        value={section.label}
+                        onChange={(e) => updateSection(idx, { label: e.target.value })}
+                        placeholder="e.g. Beneficiaries"
+                        required
+                      />
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">

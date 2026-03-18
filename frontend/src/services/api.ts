@@ -137,7 +137,7 @@ export const dimensionApi = {
     const response = await authAxios.get<DimensionValue[]>(`/dimensions/${dimensionId}/values`);
     return response.data;
   },
-  createValue: async (dimensionId: string, data: { name: string; code: string; sort_order?: number; meta?: Record<string, unknown> }): Promise<DimensionValue> => {
+  createValue: async (dimensionId: string, data: { name: string; sort_order?: number; meta?: Record<string, unknown> }): Promise<DimensionValue> => {
     const response = await authAxios.post<DimensionValue>(`/dimensions/${dimensionId}/values`, data);
     return response.data;
   },
