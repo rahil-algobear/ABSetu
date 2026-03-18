@@ -26,9 +26,6 @@ export function DynamicMetaForm({ fields, values, onChange }: DynamicMetaFormPro
 
   return (
     <div className="space-y-3">
-      <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">
-        Form Fields
-      </p>
       {fields.map((field) => (
         <div key={field.key}>
           <Label htmlFor={`meta-${field.key}`} className="text-sm mb-1 block">
