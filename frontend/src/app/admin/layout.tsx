@@ -82,43 +82,18 @@ export default function AdminLayout({
   const currentTab = allTabs.find((tab) => pathname === tab.href || pathname.startsWith(tab.href + "/"));
   const hasAccess = !currentTab || can(currentTab.permission);
 
-  // Determine current section for heading
+  // Determine current section — show only relevant tabs
   const isMastersPage = mastersTabs.some((tab) => pathname === tab.href || pathname.startsWith(tab.href + "/"));
   const pageHeading = isMastersPage ? "Masters" : "Settings";
+  const visibleTabs = isMastersPage ? visibleMastersTabs : visibleSettingsTabs;
 
   return (
     <PageLayout className="p-4">
       <h1 className="text-2xl font-bold mb-4">{pageHeading}</h1>
 
-      {/* Scrollable tab bar — grouped into Masters and Settings */}
+      {/* Scrollable tab bar — only tabs for current section */}
       <div className="flex overflow-x-auto gap-1 mb-6 border-b border-gray-200 pb-px -mx-4 px-4 no-scrollbar">
-        {visibleMastersTabs.map((tab) => {
-          const Icon = tab.icon;
-          const active = pathname === tab.href || pathname.startsWith(tab.href + "/");
-          return (
-            <Link
-              key={tab.href}
-              href={tab.href}
-              className={cn(
-                "flex items-center gap-1.5 px-3 py-2 text-sm font-medium whitespace-nowrap border-b-2 transition-colors shrink-0",
-                active
-                  ? "border-purple-600 text-purple-700"
-                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-              )}
-            >
-              <Icon size={14} />
-              {tab.label}
-            </Link>
-          );
-        })}
-
-        {visibleMastersTabs.length > 0 && visibleSettingsTabs.length > 0 && (
-          <div className="flex items-center px-2 shrink-0">
-            <div className="w-px h-5 bg-gray-300" />
-          </div>
-        )}
-
-        {visibleSettingsTabs.map((tab) => {
+        {visibleTabs.map((tab) => {
           const Icon = tab.icon;
           const active = pathname === tab.href || pathname.startsWith(tab.href + "/");
           return (

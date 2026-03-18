@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { useAuth } from "../services/auth";
 import { usePermissions, Can } from "./Auth/Permissions";
 import { useQuery } from "@tanstack/react-query";
-import { organizationApi } from "../services/api";
+import { organizationApi, dimensionApi, entityTypeApi } from "../services/api";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import Image from "next/image";
@@ -187,7 +187,7 @@ export default function Navigation() {
   const pathname = usePathname();
   const router = useRouter();
   const { can } = usePermissions();
-  const { vPlural } = useVocabulary();
+  const { vPlural, vDim } = useVocabulary();
 
   const { data: org } = useQuery({
     queryKey: ["organization"],
@@ -196,9 +196,37 @@ export default function Navigation() {
     staleTime: 5 * 60 * 1000,
   });
 
+  const { data: dimensions = [] } = useQuery({
+    queryKey: ["dimensions"],
+    queryFn: dimensionApi.list,
+    enabled: isAuthenticated,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const { data: entityTypes = [] } = useQuery({
+    queryKey: ["entity-types"],
+    queryFn: entityTypeApi.list,
+    enabled: isAuthenticated,
+    staleTime: 5 * 60 * 1000,
+  });
+
   const mastersItems = [
-    { href: "/admin/dimensions", label: "Dimensions", icon: Layers, permission: "dimension:view" },
-    { href: "/admin/entities", label: vPlural("entity"), icon: Users, permission: "entity:view" },
+    // Dynamic dimensions (non-system)
+    ...dimensions
+      .filter((d) => !d.is_system)
+      .map((d) => ({
+        href: `/admin/dimensions/${d.id}`,
+        label: vDim(d),
+        icon: Layers,
+        permission: "dimension:view",
+      })),
+    // Dynamic entity types
+    ...entityTypes.map((et) => ({
+      href: `/admin/entities/${et.id}`,
+      label: et.name,
+      icon: Users,
+      permission: "entity:view",
+    })),
     { href: "/admin/users", label: "Users", icon: Users, permission: "user:view" },
     { href: "/admin/activity-types", label: vPlural("activity_type"), icon: ClipboardList, permission: "activity_type:view" },
   ];
