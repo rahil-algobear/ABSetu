@@ -65,7 +65,10 @@ STATIC_ENTITY_TYPES = {
 def _validate_entity_type(entity_type: str, org_id, db: Session) -> None:
     """Validate entity type — allow static types and scoped keys like
     dimension:{id}, entity:{id}, activity:category:{id}, activity:type:{id},
-    participant:category:{id}, participant:type:{id}."""
+    participant:category:{id}, participant:type:{id},
+    participant:entity:{entity_type_id},
+    participant:entity:{entity_type_id}:category:{id},
+    participant:entity:{entity_type_id}:type:{id}."""
     if entity_type in STATIC_ENTITY_TYPES:
         return
 
@@ -98,6 +101,41 @@ def _validate_entity_type(entity_type: str, org_id, db: Session) -> None:
             elif sub == "type":
                 if db.query(ActivityType).filter_by(organization_id=org_id, id=ref_id).first():
                     return
+
+        # participant:entity:{entity_type_id} — scoped to entity type, all categories
+        if prefix == "participant" and sub == "entity":
+            from app.modules.entity.model import EntityType
+
+            if ref_id == "user":
+                return
+            if db.query(EntityType).filter_by(organization_id=org_id, id=ref_id).first():
+                return
+
+    # participant:entity:{entity_type_id}:category:{id}
+    # participant:entity:{entity_type_id}:type:{id}
+    if len(parts) == 5:
+        prefix, sub1, ref_id1, sub2, ref_id2 = parts
+
+        if prefix == "participant" and sub1 == "entity":
+            from app.modules.entity.model import EntityType
+
+            entity_ok = ref_id1 == "user" or db.query(EntityType).filter_by(
+                organization_id=org_id, id=ref_id1
+            ).first()
+
+            if entity_ok:
+                from app.modules.activity.model import ActivityCategory, ActivityType
+
+                if sub2 == "category":
+                    if db.query(ActivityCategory).filter_by(
+                        organization_id=org_id, id=ref_id2
+                    ).first():
+                        return
+                elif sub2 == "type":
+                    if db.query(ActivityType).filter_by(
+                        organization_id=org_id, id=ref_id2
+                    ).first():
+                        return
 
     from fastapi import HTTPException
 

@@ -20,15 +20,36 @@ class ActivityCategory(BaseModel):
     )
     name = Column(String, nullable=False)
     key = Column(String, nullable=False)
-    sections = Column(JSONB, nullable=True, default=list)
     sort_order = Column(Integer, nullable=False, default=0)
 
     organization = relationship("Organization", back_populates="activity_categories")
     activity_types = relationship("ActivityType", back_populates="category", lazy="dynamic")
+    form = relationship("ActivityForm", back_populates="category", uselist=False)
 
     __table_args__ = (
         UniqueConstraint("organization_id", "key", name="uq_activity_category_org_key"),
     )
+
+
+class ActivityForm(BaseModel):
+    __tablename__ = "activity_forms"
+
+    organization_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    activity_category_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("activity_categories.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    elements = Column(JSONB, nullable=False, default=list)
+
+    organization = relationship("Organization", back_populates="activity_forms")
+    category = relationship("ActivityCategory", back_populates="form")
 
 
 class ActivityType(BaseModel):

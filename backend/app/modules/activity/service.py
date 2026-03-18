@@ -11,6 +11,7 @@ from app.common.helpers.slugify import slugify
 from app.modules.activity.model import (
     Activity,
     ActivityCategory,
+    ActivityForm,
     ActivityParticipant,
     ActivityType,
 )
@@ -48,18 +49,8 @@ class ActivityCategoryService:
             raise NotFoundError("Activity category not found")
         return cat
 
-    @staticmethod
-    def _slugify_section_keys(sections: list[dict] | None) -> list[dict] | None:
-        if not sections:
-            return sections
-        for section in sections:
-            if "label" in section:
-                section["key"] = slugify(section["label"])
-        return sections
-
     def create(self, org_id: uuid.UUID, data: dict) -> ActivityCategory:
         data["key"] = slugify(data["name"])
-        data["sections"] = self._slugify_section_keys(data.get("sections"))
         cat = ActivityCategory(organization_id=org_id, **data)
         self.db.add(cat)
         self.db.commit()
@@ -70,8 +61,6 @@ class ActivityCategoryService:
         cat = self.get_by_id(category_id, org_id)
         if "name" in data and data["name"] is not None:
             data["key"] = slugify(data["name"])
-        if "sections" in data:
-            data["sections"] = self._slugify_section_keys(data["sections"])
         for key, value in data.items():
             if value is not None:
                 setattr(cat, key, value)
@@ -344,3 +333,46 @@ class ActivityParticipantService:
         for p in participants:
             self.db.refresh(p)
         return participants
+
+
+class ActivityFormService:
+    def __init__(self, db: Session):
+        self.db = db
+
+    def get_by_category(self, category_id: uuid.UUID, org_id: uuid.UUID) -> ActivityForm | None:
+        return (
+            self.db.query(ActivityForm)
+            .filter_by(activity_category_id=category_id, organization_id=org_id)
+            .first()
+        )
+
+    def upsert(self, org_id: uuid.UUID, category_id: uuid.UUID, elements: list[dict]) -> ActivityForm:
+        # Validate category belongs to org
+        cat = (
+            self.db.query(ActivityCategory)
+            .filter_by(id=category_id, organization_id=org_id)
+            .first()
+        )
+        if not cat:
+            raise NotFoundError("Activity category not found")
+
+        form = self.get_by_category(category_id, org_id)
+        if form:
+            form.elements = elements
+        else:
+            form = ActivityForm(
+                organization_id=org_id,
+                activity_category_id=category_id,
+                elements=elements,
+            )
+            self.db.add(form)
+        self.db.commit()
+        self.db.refresh(form)
+        return form
+
+    def delete(self, category_id: uuid.UUID, org_id: uuid.UUID) -> None:
+        form = self.get_by_category(category_id, org_id)
+        if not form:
+            raise NotFoundError("Activity form not found")
+        self.db.delete(form)
+        self.db.commit()

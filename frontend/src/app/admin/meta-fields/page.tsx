@@ -63,6 +63,11 @@ export default function MetaFieldsPage() {
   const [fieldForm, setFieldForm] = useState<MetaFieldDefinition>({ ...emptyField });
   const [optionsText, setOptionsText] = useState("");
 
+  // Participant section state
+  const [participantEntityId, setParticipantEntityId] = useState<string>("");
+  const [participantScope, setParticipantScope] = useState<"all" | "category" | "type">("all");
+  const [participantScopeId, setParticipantScopeId] = useState<string>("");
+
   const { data: dimensions = [] } = useQuery<Dimension[]>({
     queryKey: ["dimensions"],
     queryFn: dimensionApi.list,
@@ -83,32 +88,35 @@ export default function MetaFieldsPage() {
     queryFn: () => activityTypeApi.list(),
   });
 
-  // Non-system dimensions for the pills
   const nonSystemDimensions = useMemo(
     () => dimensions.filter((d) => !d.is_system),
     [dimensions]
   );
 
-  // Derive the schema key from section + activeKey (now uses IDs)
+  // Derive the schema key from section + activeKey
   const isCategory = (id: string) => categories.some((c) => c.id === id);
 
   const schemaKey = useMemo(() => {
+    if (activeSection === "participant") {
+      // New participant scope key pattern: participant:entity:{entity_type_id}[:category|type:{id}]
+      if (!participantEntityId) return "";
+      const base = `participant:entity:${participantEntityId}`;
+      if (participantScope === "all" || !participantScopeId) return base;
+      return `${base}:${participantScope}:${participantScopeId}`;
+    }
+
     if (!activeKey) return "";
     switch (activeSection) {
       case "entity": return `entity:${activeKey}`;
       case "dimension": return `dimension:${activeKey}`;
-      case "other": return activeKey; // "activity_type", "enrollment"
+      case "other": return activeKey;
       case "activity": {
         const sub = isCategory(activeKey) ? "category" : "type";
         return `activity:${sub}:${activeKey}`;
       }
-      case "participant": {
-        const sub = isCategory(activeKey) ? "category" : "type";
-        return `participant:${sub}:${activeKey}`;
-      }
       default: return "";
     }
-  }, [activeSection, activeKey, categories]);
+  }, [activeSection, activeKey, categories, participantEntityId, participantScope, participantScopeId]);
 
   // Auto-select first ID when section changes
   const selectSection = (section: SectionKind) => {
@@ -127,7 +135,9 @@ export default function MetaFieldsPage() {
         setActiveKey(categories[0]?.id || "");
         break;
       case "participant":
-        setActiveKey(categories[0]?.id || "");
+        setParticipantEntityId(entityTypesList[0]?.id || "user");
+        setParticipantScope("all");
+        setParticipantScopeId("");
         break;
     }
   };
@@ -227,14 +237,23 @@ export default function MetaFieldsPage() {
         return at ? `Activity: ${at.name}` : activeKey;
       }
       case "participant": {
-        const cat = categories.find((c) => c.id === activeKey);
-        if (cat) return `Participant: ${cat.name} (all types)`;
-        const at = activityTypes.find((t) => t.id === activeKey);
-        return at ? `Participant: ${at.name}` : activeKey;
+        const entityLabel = participantEntityId === "user"
+          ? "Users"
+          : entityTypesList.find((et) => et.id === participantEntityId)?.name || participantEntityId;
+        if (participantScope === "all") return `Participant: ${entityLabel} (all categories)`;
+        if (participantScope === "category") {
+          const cat = categories.find((c) => c.id === participantScopeId);
+          return `Participant: ${entityLabel} \u2192 ${cat?.name || "category"}`;
+        }
+        if (participantScope === "type") {
+          const at = activityTypes.find((t) => t.id === participantScopeId);
+          return `Participant: ${entityLabel} \u2192 ${at?.name || "type"}`;
+        }
+        return `Participant: ${entityLabel}`;
       }
       default: return "";
     }
-  }, [activeSection, activeKey, entityTypesList, nonSystemDimensions, categories, activityTypes, vPlural, vDim]);
+  }, [activeSection, activeKey, entityTypesList, nonSystemDimensions, categories, activityTypes, vPlural, vDim, participantEntityId, participantScope, participantScopeId]);
 
   // Section pills
   const sections: { key: SectionKind; label: string }[] = [
@@ -243,6 +262,12 @@ export default function MetaFieldsPage() {
     { key: "other", label: "Other" },
     { key: "activity", label: "Activity fields" },
     { key: "participant", label: "Participant fields" },
+  ];
+
+  // Entity type options for participant (includes "user")
+  const participantEntityOptions = [
+    { id: "user", name: "Users (staff)" },
+    ...entityTypesList,
   ];
 
   return (
@@ -347,7 +372,7 @@ export default function MetaFieldsPage() {
           </div>
         )}
 
-        {(activeSection === "activity" || activeSection === "participant") && (
+        {activeSection === "activity" && (
           <div className="flex items-center gap-3">
             <div>
               <label className="text-xs text-gray-500 block mb-1">{v("activity_category")}</label>
@@ -378,6 +403,90 @@ export default function MetaFieldsPage() {
                   </option>
                 ))}
               </select>
+            </div>
+          </div>
+        )}
+
+        {activeSection === "participant" && (
+          <div className="space-y-3">
+            {/* Entity type selector */}
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">Entity Type</label>
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {participantEntityOptions.map((opt) => (
+                  <button
+                    key={opt.id}
+                    onClick={() => {
+                      setParticipantEntityId(opt.id);
+                      setParticipantScope("all");
+                      setParticipantScopeId("");
+                    }}
+                    className={`px-3 py-1 text-sm rounded-md whitespace-nowrap transition-colors ${
+                      participantEntityId === opt.id
+                        ? "bg-purple-50 text-purple-700 border border-purple-200 font-medium"
+                        : "bg-white text-gray-600 border border-gray-200 hover:border-gray-300"
+                    }`}
+                  >
+                    {opt.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Activity scope selector */}
+            <div className="flex items-center gap-3">
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Scope</label>
+                <select
+                  className="border rounded-md px-3 py-1.5 text-sm"
+                  value={participantScope}
+                  onChange={(e) => {
+                    const scope = e.target.value as "all" | "category" | "type";
+                    setParticipantScope(scope);
+                    setParticipantScopeId("");
+                  }}
+                >
+                  <option value="all">All categories</option>
+                  <option value="category">Specific category</option>
+                  <option value="type">Specific activity type</option>
+                </select>
+              </div>
+
+              {participantScope === "category" && (
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">{v("activity_category")}</label>
+                  <select
+                    className="border rounded-md px-3 py-1.5 text-sm"
+                    value={participantScopeId}
+                    onChange={(e) => setParticipantScopeId(e.target.value)}
+                  >
+                    <option value="">Select...</option>
+                    {categories.map((cat) => (
+                      <option key={cat.id} value={cat.id}>
+                        {cat.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {participantScope === "type" && (
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">{v("activity_type")}</label>
+                  <select
+                    className="border rounded-md px-3 py-1.5 text-sm"
+                    value={participantScopeId}
+                    onChange={(e) => setParticipantScopeId(e.target.value)}
+                  >
+                    <option value="">Select...</option>
+                    {activityTypes.map((at) => (
+                      <option key={at.id} value={at.id}>
+                        {at.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -431,10 +540,10 @@ export default function MetaFieldsPage() {
                           : Array.isArray(field.default)
                             ? field.default.join(", ")
                             : String(field.default)
-                        : "—"}
+                        : "\u2014"}
                     </TableCell>
                     <TableCell>
-                      {field.options?.length ? field.options.join(", ") : "—"}
+                      {field.options?.length ? field.options.join(", ") : "\u2014"}
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-1">
