@@ -84,10 +84,13 @@ def _validate_entity_type(entity_type: str, org_id, db: Session) -> None:
             return
 
     if (entity_type.startswith("activity:") or entity_type.startswith("participant:")) and ref_id:
-        from app.modules.activity.model import ActivityCategory
+        from app.modules.activity.model import ActivityCategory, ActivityType
 
         cat = db.query(ActivityCategory).filter_by(organization_id=org_id, id=ref_id).first()
         if cat:
+            return
+        at = db.query(ActivityType).filter_by(organization_id=org_id, id=ref_id).first()
+        if at:
             return
 
     from fastapi import HTTPException
