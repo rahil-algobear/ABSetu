@@ -186,7 +186,11 @@ export default function MetaFieldsPage() {
         ? optionsText.split("\n").map((o) => o.trim()).filter(Boolean)
         : undefined;
 
-    const field: MetaFieldDefinition = { ...fieldForm, key, options };
+    const defaultVal = fieldForm.default != null && fieldForm.default !== "" &&
+      !(Array.isArray(fieldForm.default) && fieldForm.default.length === 0)
+      ? fieldForm.default
+      : undefined;
+    const field: MetaFieldDefinition = { ...fieldForm, key, options, default: defaultVal };
 
     let updated: MetaFieldDefinition[];
     if (editingIndex !== null) {
@@ -404,6 +408,7 @@ export default function MetaFieldsPage() {
                   <TableHead>Label</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Required</TableHead>
+                  <TableHead>Default</TableHead>
                   <TableHead>Options</TableHead>
                   <TableHead className="w-20">Actions</TableHead>
                 </TableRow>
@@ -419,6 +424,15 @@ export default function MetaFieldsPage() {
                       {FIELD_TYPES.find((ft) => ft.value === field.type)?.label || field.type}
                     </TableCell>
                     <TableCell>{field.required ? "Yes" : "No"}</TableCell>
+                    <TableCell className="text-sm text-gray-500">
+                      {field.default != null && field.default !== ""
+                        ? field.type === "boolean"
+                          ? (field.default ? "Yes" : "No")
+                          : Array.isArray(field.default)
+                            ? field.default.join(", ")
+                            : String(field.default)
+                        : "—"}
+                    </TableCell>
                     <TableCell>
                       {field.options?.length ? field.options.join(", ") : "—"}
                     </TableCell>
@@ -494,6 +508,73 @@ export default function MetaFieldsPage() {
               />
             </div>
           )}
+          <div>
+            <Label htmlFor="field-default">
+              Default value <span className="text-gray-400 text-xs font-normal">(optional)</span>
+            </Label>
+            {fieldForm.type === "boolean" ? (
+              <div className="flex items-center gap-2 mt-1">
+                <Switch
+                  checked={fieldForm.default === true}
+                  onCheckedChange={(checked) => setFieldForm({ ...fieldForm, default: checked })}
+                />
+                <span className="text-sm text-gray-600">{fieldForm.default === true ? "Yes" : "No"}</span>
+              </div>
+            ) : fieldForm.type === "select" ? (
+              <select
+                id="field-default"
+                className="w-full border rounded-md p-2 text-sm"
+                value={(fieldForm.default as string) || ""}
+                onChange={(e) => setFieldForm({ ...fieldForm, default: e.target.value || undefined })}
+              >
+                <option value="">None</option>
+                {optionsText.split("\n").map((o) => o.trim()).filter(Boolean).map((opt) => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
+              </select>
+            ) : fieldForm.type === "multiselect" ? (
+              <div className="space-y-1 mt-1">
+                {optionsText.split("\n").map((o) => o.trim()).filter(Boolean).map((opt) => {
+                  const selected = Array.isArray(fieldForm.default) ? fieldForm.default : [];
+                  return (
+                    <label key={opt} className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={selected.includes(opt)}
+                        onChange={(e) => {
+                          const next = e.target.checked
+                            ? [...selected, opt]
+                            : selected.filter((s) => s !== opt);
+                          setFieldForm({ ...fieldForm, default: next.length ? next : undefined });
+                        }}
+                      />
+                      {opt}
+                    </label>
+                  );
+                })}
+                {!optionsText.trim() && (
+                  <p className="text-xs text-gray-400">Add options above first</p>
+                )}
+              </div>
+            ) : (
+              <Input
+                id="field-default"
+                type={fieldForm.type === "number" ? "number" : fieldForm.type === "date" ? "date" : "text"}
+                value={fieldForm.default != null ? String(fieldForm.default) : ""}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (!val) {
+                    setFieldForm({ ...fieldForm, default: undefined });
+                  } else if (fieldForm.type === "number") {
+                    setFieldForm({ ...fieldForm, default: Number(val) });
+                  } else {
+                    setFieldForm({ ...fieldForm, default: val });
+                  }
+                }}
+                placeholder={fieldForm.type === "date" ? "" : "Leave blank for no default"}
+              />
+            )}
+          </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={closeModal}>Cancel</Button>
             <Button type="submit">{editingIndex !== null ? "Save" : "Add"}</Button>
