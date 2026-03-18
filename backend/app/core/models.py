@@ -5,7 +5,7 @@ from app.modules.auth.model import (  # noqa: F401
     RefreshToken,
     User,
 )
-from app.modules.organization.model import Organization  # noqa: F401
+from app.modules.organization.model import MetaFieldSchema, Organization  # noqa: F401
 from app.modules.dimension.model import (  # noqa: F401
     ActivityTag,
     Dimension,

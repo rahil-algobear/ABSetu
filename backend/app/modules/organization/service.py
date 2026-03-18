@@ -31,35 +31,43 @@ class OrganizationService:
 
 
 class MetaFieldSchemaService:
-    """Manage meta field schemas stored in Organization.meta['meta_field_schemas']."""
+    """Manage meta field schemas stored in the meta_field_schemas table."""
 
     def __init__(self, db: Session):
         self.db = db
 
-    def _get_org(self, org_id: uuid.UUID) -> Organization:
-        org = self.db.query(Organization).filter_by(id=org_id).first()
-        if not org:
-            raise NotFoundError("Organization not found")
-        return org
+    def get_schema(self, org_id: uuid.UUID, scope_key: str) -> list[dict]:
+        from app.modules.organization.model import MetaFieldSchema
 
-    def get_schema(self, org_id: uuid.UUID, entity_type: str) -> list[dict]:
-        org = self._get_org(org_id)
-        meta = org.meta or {}
-        schemas = meta.get("meta_field_schemas", {})
-        return schemas.get(entity_type, [])
+        row = (
+            self.db.query(MetaFieldSchema)
+            .filter_by(organization_id=org_id, scope_key=scope_key)
+            .first()
+        )
+        return row.fields if row else []
 
     def get_all_schemas(self, org_id: uuid.UUID) -> dict[str, list[dict]]:
-        org = self._get_org(org_id)
-        meta = org.meta or {}
-        return meta.get("meta_field_schemas", {})
+        from app.modules.organization.model import MetaFieldSchema
 
-    def update_schema(self, org_id: uuid.UUID, entity_type: str, fields: list[dict]) -> list[dict]:
-        org = self._get_org(org_id)
-        meta = dict(org.meta) if org.meta else {}
-        schemas = dict(meta.get("meta_field_schemas", {}))
-        schemas[entity_type] = fields
-        meta["meta_field_schemas"] = schemas
-        org.meta = meta
+        rows = self.db.query(MetaFieldSchema).filter_by(organization_id=org_id).all()
+        return {row.scope_key: row.fields for row in rows}
+
+    def update_schema(
+        self, org_id: uuid.UUID, scope_key: str, fields: list[dict]
+    ) -> list[dict]:
+        from app.modules.organization.model import MetaFieldSchema
+
+        row = (
+            self.db.query(MetaFieldSchema)
+            .filter_by(organization_id=org_id, scope_key=scope_key)
+            .first()
+        )
+        if row:
+            row.fields = fields
+        else:
+            row = MetaFieldSchema(
+                organization_id=org_id, scope_key=scope_key, fields=fields
+            )
+            self.db.add(row)
         self.db.commit()
-        self.db.refresh(org)
         return fields
