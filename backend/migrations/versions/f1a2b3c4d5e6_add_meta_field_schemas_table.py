@@ -63,7 +63,7 @@ def upgrade() -> None:
             conn.execute(
                 sa.text(
                     "INSERT INTO meta_field_schemas (id, organization_id, scope_key, fields) "
-                    "VALUES (gen_random_uuid(), :org_id, :scope_key, :fields::jsonb)"
+                    "VALUES (gen_random_uuid(), :org_id, :scope_key, CAST(:fields AS jsonb))"
                 ),
                 {"org_id": org.id, "scope_key": scope_key, "fields": json.dumps(fields)},
             )
@@ -92,9 +92,9 @@ def downgrade() -> None:
         conn.execute(
             sa.text(
                 "UPDATE organizations "
-                "SET meta = COALESCE(meta, '{}'::jsonb) || "
-                "jsonb_build_object('meta_field_schemas', :schemas::jsonb) "
-                "WHERE id = :org_id::uuid"
+                "SET meta = COALESCE(meta, CAST('{}' AS jsonb)) || "
+                "jsonb_build_object('meta_field_schemas', CAST(:schemas AS jsonb)) "
+                "WHERE id = CAST(:org_id AS uuid)"
             ),
             {"org_id": org_id, "schemas": json.dumps(schemas)},
         )
