@@ -32,6 +32,21 @@
           "isBackground": true
         },
       {
+          "label": "Clean Start Frontend",
+          "type": "shell",
+          "command": "rm -rf .next && ./start-dev.sh",
+          "options": {
+            "cwd": "${workspaceFolder}/frontend"
+          },
+          "problemMatcher": [],
+          "presentation": {
+            "reveal": "always",
+            "panel": "new",
+            "group": "servers"
+          },
+          "isBackground": true
+        },
+      {
           "label": "Run Project",
           "dependsOn": [
             "Start Backend",
