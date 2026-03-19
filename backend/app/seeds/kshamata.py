@@ -45,7 +45,7 @@ ORG_LOGO_URL = "https://kshamata.org/wp-content/uploads/2022/06/revised-logo.png
 # ---------------------------------------------------------------------------
 VOCABULARY = {
     "activity": "Session",
-    "activity_type": "Intervention",
+    "intervention": "Intervention",
     "activity_category": "Activity Category",
     "participant": "Participant",
     "entity": "Person",
@@ -761,7 +761,7 @@ def seed():
         programme_dim = _ensure_dimension(db, org, "programme", "Programme", 0)
         project_dim = _ensure_dimension(db, org, "project", "Project", 1)
         location_dim = _ensure_dimension(db, org, "location", "Location", 2)
-        intervention_dim = _ensure_dimension(db, org, "activity_type", "Intervention", 3)
+        intervention_dim = _ensure_dimension(db, org, "intervention", "Intervention", 3)
 
         # 5. Dimension values
         programme_map = _ensure_values(db, org, programme_dim, PROGRAMMES)

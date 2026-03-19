@@ -23,7 +23,7 @@ class Dimension(BaseModel):
     sort_order = Column(Integer, nullable=False, default=0)
     is_system = Column(
         String, nullable=True
-    )  # If set, indicates a system-managed dimension (e.g. "activity_type")
+    )  # Reserved for future system-managed dimensions
 
     organization = relationship("Organization", back_populates="dimensions")
     values = relationship(

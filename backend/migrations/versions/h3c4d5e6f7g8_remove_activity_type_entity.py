@@ -108,7 +108,79 @@ def upgrade() -> None:
                     {"elements": json.dumps(elements), "id": form_id},
                 )
 
-    # 7. Drop activity_type_id FK and column from activities
+    # 7. Rename dimension key from activity_type to intervention
+    conn.execute(
+        sa.text("""
+            UPDATE dimensions SET key = 'intervention'
+            WHERE key = 'activity_type'
+        """)
+    )
+
+    # 8. Remove activity_type permissions (now covered by dimension permissions
+    # and a new activity_category permission pair)
+    conn.execute(
+        sa.text("""
+            DELETE FROM role_permissions
+            WHERE permission_id IN (
+                SELECT id FROM permissions
+                WHERE key IN ('activity_type:view', 'activity_type:manage')
+            )
+        """)
+    )
+    conn.execute(
+        sa.text("""
+            DELETE FROM permissions
+            WHERE key IN ('activity_type:view', 'activity_type:manage')
+        """)
+    )
+
+    # 9. Add activity_category permissions
+    conn.execute(
+        sa.text("""
+            INSERT INTO permissions (id, key, description, created_at, updated_at)
+            VALUES
+                (gen_random_uuid(), 'activity_category:view',
+                 'View activity categories and form builder config',
+                 now(), now()),
+                (gen_random_uuid(), 'activity_category:manage',
+                 'Create/edit/delete activity categories and form builder config',
+                 now(), now())
+            ON CONFLICT (key) DO NOTHING
+        """)
+    )
+
+    # 10. Grant activity_category permissions to all roles that had activity_type permissions
+    # (Since we already deleted those, grant to all roles that have dimension:view)
+    conn.execute(
+        sa.text("""
+            INSERT INTO role_permissions (id, role_id, permission_id, created_at, updated_at)
+            SELECT gen_random_uuid(), rp.role_id, p.id, now(), now()
+            FROM role_permissions rp
+            JOIN permissions dp ON rp.permission_id = dp.id AND dp.key = 'dimension:view'
+            CROSS JOIN permissions p
+            WHERE p.key = 'activity_category:view'
+            AND NOT EXISTS (
+                SELECT 1 FROM role_permissions rp2
+                WHERE rp2.role_id = rp.role_id AND rp2.permission_id = p.id
+            )
+        """)
+    )
+    conn.execute(
+        sa.text("""
+            INSERT INTO role_permissions (id, role_id, permission_id, created_at, updated_at)
+            SELECT gen_random_uuid(), rp.role_id, p.id, now(), now()
+            FROM role_permissions rp
+            JOIN permissions dp ON rp.permission_id = dp.id AND dp.key = 'dimension:manage'
+            CROSS JOIN permissions p
+            WHERE p.key = 'activity_category:manage'
+            AND NOT EXISTS (
+                SELECT 1 FROM role_permissions rp2
+                WHERE rp2.role_id = rp.role_id AND rp2.permission_id = p.id
+            )
+        """)
+    )
+
+    # 11. Drop activity_type_id FK and column from activities
     op.drop_constraint(
         "activities_activity_type_id_fkey", "activities", type_="foreignkey"
     )

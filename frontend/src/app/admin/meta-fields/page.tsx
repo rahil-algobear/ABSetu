@@ -113,7 +113,7 @@ export default function MetaFieldsPage() {
         setActiveKey(nonSystemDimensions[0]?.id || "");
         break;
       case "other":
-        setActiveKey("activity_type");
+        setActiveKey("enrollment");
         break;
       case "activity":
         setActiveKey(categories[0]?.id || "");
@@ -213,7 +213,7 @@ export default function MetaFieldsPage() {
         const dim = nonSystemDimensions.find((d) => d.id === activeKey);
         return dim ? vDim(dim) : activeKey;
       }
-      case "other": return activeKey === "activity_type" ? vPlural("activity_type") : vPlural("enrollment");
+      case "other": return vPlural("enrollment");
       case "activity": {
         const cat = categories.find((c) => c.id === activeKey);
         return cat ? `Activity: ${cat.name}` : activeKey;
@@ -327,7 +327,6 @@ export default function MetaFieldsPage() {
         {activeSection === "other" && (
           <div className="flex gap-2 overflow-x-auto pb-1">
             {[
-              { key: "activity_type", label: vPlural("activity_type") },
               { key: "enrollment", label: vPlural("enrollment") },
             ].map((item) => (
               <button

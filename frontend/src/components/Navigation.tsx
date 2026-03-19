@@ -320,8 +320,8 @@ export default function Navigation() {
     { href: "/admin/manage-dimensions", label: "Dimensions", icon: Layers, permission: "dimension:manage" },
     { href: "/admin/dimension-linking", label: "Dimension Linking", icon: Link2, permission: "dimension:view" },
     { href: "/admin/entity-types", label: vPlural("entity_type"), icon: UserCog, permission: "entity_type:view" },
-    { href: "/admin/activity-categories", label: vPlural("activity_category"), icon: ClipboardList, permission: "activity_type:view" },
-    { href: "/admin/form-builder", label: "Form Builder", icon: LayoutTemplate, permission: "activity_type:manage" },
+    { href: "/admin/activity-categories", label: vPlural("activity_category"), icon: ClipboardList, permission: "activity_category:view" },
+    { href: "/admin/form-builder", label: "Form Builder", icon: LayoutTemplate, permission: "activity_category:manage" },
   ];
 
   // Close mobile menu on navigation

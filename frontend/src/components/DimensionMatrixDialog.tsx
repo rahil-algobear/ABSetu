@@ -35,7 +35,7 @@ export function DimensionMatrixDialog({ open, onClose }: DimensionMatrixDialogPr
     enabled: open,
   });
 
-  // The "row" dimension — defaults to the last dimension (typically intervention/activity_type)
+  // The "row" dimension — defaults to the last dimension (typically intervention)
   const [rowDimId, setRowDimId] = useState<string>("");
 
   const effectiveRowDimId = rowDimId || dimensions[dimensions.length - 1]?.id || "";

@@ -53,7 +53,6 @@ def update_organization(
 
 # Static entity types that always exist
 STATIC_ENTITY_TYPES = {
-    "activity_type",
     "facilitator",
     "beneficiary",
     "enrollment",

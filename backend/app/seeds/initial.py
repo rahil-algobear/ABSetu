@@ -27,8 +27,8 @@ PERMISSIONS = [
     ("org:settings", "Manage organization settings"),
     ("dimension:view", "View dimensions and dimension values"),
     ("dimension:manage", "Create/edit/delete dimensions and values"),
-    ("activity_type:view", "View activity types and categories"),
-    ("activity_type:manage", "Create/edit/delete activity types and categories"),
+    ("activity_category:view", "View activity categories and form builder config"),
+    ("activity_category:manage", "Create/edit/delete activity categories and form builder config"),
     ("activity:view", "View activities"),
     ("activity:create", "Create activities and record participants"),
     ("entity:view", "View entities"),
@@ -49,7 +49,7 @@ PERMISSIONS = [
 # Team member gets view + limited create permissions
 TEAM_MEMBER_PERMISSIONS = [
     "dimension:view",
-    "activity_type:view",
+    "activity_category:view",
     "activity:view",
     "activity:create",
     "entity:view",

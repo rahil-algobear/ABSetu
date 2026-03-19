@@ -225,7 +225,7 @@ export default function FormBuilderPage() {
     <>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold">Form Builder</h2>
-        <Can permission="activity_type:manage">
+        <Can permission="activity_category:manage">
           {isDirty && (
             <Button
               size="sm"
@@ -273,7 +273,7 @@ export default function FormBuilderPage() {
             <Label className="text-sm font-semibold">
               Form Elements for &ldquo;{selectedCategory?.name}&rdquo;
             </Label>
-            <Can permission="activity_type:manage">
+            <Can permission="activity_category:manage">
               <Button type="button" size="sm" variant="outline" onClick={openAddModal}>
                 <Plus className="h-3 w-3 mr-1" />
                 Add Element
@@ -377,7 +377,7 @@ export default function FormBuilderPage() {
                     </button>
 
                     {/* Remove */}
-                    <Can permission="activity_type:manage">
+                    <Can permission="activity_category:manage">
                       <button
                         type="button"
                         onClick={() => removeElement(idx)}

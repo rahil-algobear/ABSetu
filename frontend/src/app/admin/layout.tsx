@@ -40,14 +40,12 @@ export default function AdminLayout({
   });
 
   // Build tabs for permission checking
-  const dimensionTabs = dimensions
-    .filter((d) => !d.is_system)
-    .map((d) => ({
-      href: `/admin/dimensions/${d.key}`,
-      label: vDim(d),
-      icon: Layers,
-      permission: "dimension:view",
-    }));
+  const dimensionTabs = dimensions.map((d) => ({
+    href: `/admin/dimensions/${d.key}`,
+    label: vDim(d),
+    icon: Layers,
+    permission: "dimension:view",
+  }));
 
   const entityTypeTabs = entityTypes.map((et) => ({
     href: `/admin/entities/${et.key}`,
@@ -60,7 +58,6 @@ export default function AdminLayout({
     ...dimensionTabs,
     ...entityTypeTabs,
     { href: "/admin/users", label: "Users", icon: Users, permission: "user:view" },
-    { href: "/admin/activity-types", label: vPlural("activity_type"), icon: ClipboardList, permission: "activity_type:view" },
   ];
 
   const adminTabs = [
@@ -69,8 +66,8 @@ export default function AdminLayout({
     { href: "/admin/manage-dimensions", label: "Dimensions", icon: Layers, permission: "dimension:manage" },
     { href: "/admin/dimension-linking", label: "Dimension Linking", icon: Link2, permission: "dimension:view" },
     { href: "/admin/entity-types", label: vPlural("entity_type"), icon: UserCheck, permission: "entity_type:view" },
-    { href: "/admin/activity-categories", label: vPlural("activity_category"), icon: ClipboardList, permission: "activity_type:view" },
-    { href: "/admin/form-builder", label: "Form Builder", icon: LayoutTemplate, permission: "activity_type:manage" },
+    { href: "/admin/activity-categories", label: vPlural("activity_category"), icon: ClipboardList, permission: "activity_category:view" },
+    { href: "/admin/form-builder", label: "Form Builder", icon: LayoutTemplate, permission: "activity_category:manage" },
   ];
 
   const allTabs = [...mastersTabs, ...adminTabs];

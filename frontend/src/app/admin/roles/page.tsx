@@ -44,8 +44,8 @@ const AREA_LABELS: Record<string, string> = {
 // Generic terms in permission descriptions → vocabulary keys
 // Order matters: longer phrases first to avoid partial replacements
 const DESCRIPTION_REPLACEMENTS: [string, string][] = [
-  ["activity types", "activity_type"],
-  ["activity type", "activity_type"],
+  ["activity categories", "activity_category"],
+  ["activity category", "activity_category"],
   ["activities", "activity"],
   ["participation", "participation"],
   ["facilitators", "facilitator"],

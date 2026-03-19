@@ -42,7 +42,7 @@ router = APIRouter(tags=["activities"])
 category_router = APIRouter(prefix="/activity-categories")
 
 
-@category_router.get("/", dependencies=[Depends(require_permissions("activity_type:view"))])
+@category_router.get("/", dependencies=[Depends(require_permissions("activity_category:view"))])
 def list_activity_categories(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -54,7 +54,7 @@ def list_activity_categories(
 
 @category_router.get(
     "/{category_id}",
-    dependencies=[Depends(require_permissions("activity_type:view"))],
+    dependencies=[Depends(require_permissions("activity_category:view"))],
 )
 def get_activity_category(
     category_id: uuid.UUID,
@@ -68,7 +68,7 @@ def get_activity_category(
 
 @category_router.post(
     "/",
-    dependencies=[Depends(require_permissions("activity_type:manage"))],
+    dependencies=[Depends(require_permissions("activity_category:manage"))],
     status_code=201,
 )
 def create_activity_category(
@@ -86,7 +86,7 @@ def create_activity_category(
 
 @category_router.put(
     "/{category_id}",
-    dependencies=[Depends(require_permissions("activity_type:manage"))],
+    dependencies=[Depends(require_permissions("activity_category:manage"))],
 )
 def update_activity_category(
     category_id: uuid.UUID,
@@ -105,7 +105,7 @@ def update_activity_category(
 
 @category_router.delete(
     "/{category_id}",
-    dependencies=[Depends(require_permissions("activity_type:manage"))],
+    dependencies=[Depends(require_permissions("activity_category:manage"))],
 )
 def delete_activity_category(
     category_id: uuid.UUID,
@@ -371,7 +371,7 @@ form_router = APIRouter(prefix="/activity-forms")
 
 @form_router.get(
     "/{category_id}",
-    dependencies=[Depends(require_permissions("activity_type:view"))],
+    dependencies=[Depends(require_permissions("activity_category:view"))],
 )
 def get_activity_form(
     category_id: uuid.UUID,
@@ -387,7 +387,7 @@ def get_activity_form(
 
 @form_router.put(
     "/{category_id}",
-    dependencies=[Depends(require_permissions("activity_type:manage"))],
+    dependencies=[Depends(require_permissions("activity_category:manage"))],
 )
 def upsert_activity_form(
     category_id: uuid.UUID,
@@ -406,7 +406,7 @@ def upsert_activity_form(
 
 @form_router.delete(
     "/{category_id}",
-    dependencies=[Depends(require_permissions("activity_type:manage"))],
+    dependencies=[Depends(require_permissions("activity_category:manage"))],
 )
 def delete_activity_form(
     category_id: uuid.UUID,

@@ -93,7 +93,7 @@ export default function ActivityCategoriesPage() {
     <>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold">{vPlural("activity_category")}</h2>
-        <Can permission="activity_type:manage">
+        <Can permission="activity_category:manage">
           <Button size="sm" onClick={openCreate}>
             <Plus className="h-4 w-4 mr-1" />
             Add {v("activity_category")}
@@ -128,7 +128,7 @@ export default function ActivityCategoriesPage() {
                 <TableCell className="font-medium">{cat.name}</TableCell>
                 <TableCell className="text-gray-400 text-sm font-mono">{cat.key}</TableCell>
                 <TableCell>
-                  <Can permission="activity_type:manage">
+                  <Can permission="activity_category:manage">
                     <div className="flex gap-1">
                       <button
                         onClick={() => openEdit(cat)}
