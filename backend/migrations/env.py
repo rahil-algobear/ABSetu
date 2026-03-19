@@ -14,7 +14,7 @@ from app.modules.dimension.model import (  # noqa: F401
     ActivityTag, EntityTag, EnrollmentTag, UserDimensionAccess,
 )
 from app.modules.activity.model import (  # noqa: F401
-    ActivityCategory, ActivityForm, ActivityType, Activity, ActivityParticipant,
+    ActivityCategory, ActivityForm, Activity, ActivityParticipant,
 )
 from app.modules.beneficiary.model import Enrollment  # noqa: F401
 from app.modules.entity.model import EntityType, Entity  # noqa: F401
