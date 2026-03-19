@@ -62,4 +62,5 @@ class EntityResponse(BaseResponseSchema):
     meta: dict[str, Any] | None = None
     entity_type_name: str | None = None
     entity_type_key: str | None = None
+    entity_type_config: dict[str, Any] | None = None
     tags: list[DimensionTagInfo] = []

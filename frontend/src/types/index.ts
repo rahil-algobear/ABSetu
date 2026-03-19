@@ -125,6 +125,7 @@ export interface Entity {
   meta: Record<string, unknown> | null;
   entity_type_name: string | null;
   entity_type_key: string | null;
+  entity_type_config: Record<string, unknown> | null;
   tags: DimensionTagInfo[];
   updated_at: number | null;
 }
