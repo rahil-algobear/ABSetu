@@ -169,7 +169,7 @@ export default function DimensionLinkingPage() {
           </thead>
           <tbody>
             {values1.map((v1) => (
-              <tr key={v1.id} className="border-b last:border-b-0">
+              <tr key={v1.id} className="border-b last:border-b-0 bg-white">
                 <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">
                   {v1.name}
                 </td>
