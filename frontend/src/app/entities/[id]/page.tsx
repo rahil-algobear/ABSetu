@@ -105,9 +105,9 @@ export default function EntityDetailPage() {
 
       {entity.dimensions?.length > 0 && (
         <div className="flex gap-1 mb-4">
-          {entity.dimensions.map((tag) => (
-            <Badge key={tag.value_id} variant="secondary">
-              {tag.dimension_name}: {tag.value_name}
+          {entity.dimensions.map((dim) => (
+            <Badge key={dim.value_id} variant="secondary">
+              {dim.dimension_name}: {dim.value_name}
             </Badge>
           ))}
         </div>
@@ -185,9 +185,9 @@ export default function EntityDetailPage() {
                       >
                         <div>
                           <div className="flex gap-1 mb-0.5 flex-wrap">
-                            {e.dimensions?.map((tag) => (
-                              <Badge key={tag.value_id} variant="secondary" className="text-xs">
-                                {tag.value_name}
+                            {e.dimensions?.map((dim) => (
+                              <Badge key={dim.value_id} variant="secondary" className="text-xs">
+                                {dim.value_name}
                               </Badge>
                             ))}
                           </div>

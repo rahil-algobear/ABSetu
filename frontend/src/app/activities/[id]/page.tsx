@@ -274,9 +274,9 @@ export default function ActivityDetailPage() {
         </Can>
       </div>
       <div className="flex gap-1 mb-1 flex-wrap">
-        {activity.dimensions.slice(1).map((tag) => (
-          <Badge key={tag.value_id} variant="secondary">
-            {tag.dimension_name}: {tag.value_name}
+        {activity.dimensions.slice(1).map((dim) => (
+          <Badge key={dim.value_id} variant="secondary">
+            {dim.dimension_name}: {dim.value_name}
           </Badge>
         ))}
       </div>

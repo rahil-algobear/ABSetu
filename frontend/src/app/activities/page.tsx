@@ -374,9 +374,9 @@ export default function ActivitiesPage() {
                     <div>
                       <p className="font-medium">{getActivityTitle(a)}</p>
                       <div className="flex gap-1 mt-0.5 flex-wrap">
-                        {a.dimensions.slice(1).map((tag) => (
-                          <Badge key={tag.value_id} variant="secondary" className="text-xs">
-                            {tag.value_name}
+                        {a.dimensions.slice(1).map((dim) => (
+                          <Badge key={dim.value_id} variant="secondary" className="text-xs">
+                            {dim.value_name}
                           </Badge>
                         ))}
                       </div>
