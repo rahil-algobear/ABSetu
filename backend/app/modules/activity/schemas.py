@@ -38,6 +38,7 @@ class ActivityFormElement(BaseModel):
     sort_order: int = 0
     display_type: str = "dropdown"  # "dropdown", "checklist", "radio", "search_select"
     visible: bool = True
+    required: bool = False
     config: dict[str, Any] | None = None  # element-specific config
 
 
