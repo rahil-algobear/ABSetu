@@ -64,13 +64,13 @@ export default function MetaFieldsPage() {
   const [optionsText, setOptionsText] = useState("");
 
   // Activity section: category (required or "all") + optional dimension value filter
-  const [activityTypeId, setActivityCatId] = useState<string>(""); // "" = all categories
+  const [activityTypeId, setActivityTypeId] = useState<string>(""); // "" = all
   const [activityDimId, setActivityDimId] = useState<string>(""); // which dimension to filter
   const [activityDvId, setActivityDvId] = useState<string>(""); // selected dimension value (optional)
 
   // Participant section state
   const [participantEntityId, setParticipantEntityId] = useState<string>("");
-  const [participantTypeId, setParticipantCatId] = useState<string>(""); // "" = all
+  const [participantTypeId, setParticipantTypeId] = useState<string>(""); // "" = all
   const [participantDimId, setParticipantDimId] = useState<string>("");
   const [participantDvId, setParticipantDvId] = useState<string>("");
 
@@ -154,13 +154,13 @@ export default function MetaFieldsPage() {
         setActiveKey("enrollment");
         break;
       case "activity":
-        setActivityCatId(categories[0]?.id || "");
+        setActivityTypeId(categories[0]?.id || "");
         setActivityDimId("");
         setActivityDvId("");
         break;
       case "participant":
         setParticipantEntityId(entityTypesList[0]?.id || "user");
-        setParticipantCatId("");
+        setParticipantTypeId("");
         setParticipantDimId("");
         setParticipantDvId("");
         break;
@@ -192,7 +192,7 @@ export default function MetaFieldsPage() {
         return activeKey ? { type: activeKey } : null;
       case "activity": {
         const scope: MetaFieldScope = { type: "activity" };
-        if (activityTypeId) scope.category_id = activityTypeId;
+        if (activityTypeId) scope.activity_type_id = activityTypeId;
         if (activityDvId) scope.dimension_value_id = activityDvId;
         // Need at least one filter
         if (!activityTypeId && !activityDvId) return null;
@@ -201,7 +201,7 @@ export default function MetaFieldsPage() {
       case "participant": {
         if (!participantEntityId) return null;
         const scope: MetaFieldScope = { type: "participant", entity_type_id: participantEntityId };
-        if (participantTypeId) scope.category_id = participantTypeId;
+        if (participantTypeId) scope.activity_type_id = participantTypeId;
         if (participantDvId) scope.dimension_value_id = participantDvId;
         return scope;
       }
@@ -297,7 +297,7 @@ export default function MetaFieldsPage() {
         const catName = categories.find((c) => c.id === activityTypeId)?.name;
         const parts = ["Activity"];
         if (catName) parts.push(catName);
-        else parts.push("All categories");
+        else parts.push("All");
         if (activityDvId) parts.push(dvLabel(activityDvId));
         return parts.join(" \u2192 ");
       }
@@ -441,9 +441,9 @@ export default function MetaFieldsPage() {
               <select
                 className="border rounded-md px-3 py-1.5 text-sm"
                 value={activityTypeId}
-                onChange={(e) => setActivityCatId(e.target.value)}
+                onChange={(e) => setActivityTypeId(e.target.value)}
               >
-                <option value="">All categories</option>
+                <option value="">All</option>
                 {categories.map((cat) => (
                   <option key={cat.id} value={cat.id}>{cat.name}</option>
                 ))}
@@ -498,8 +498,8 @@ export default function MetaFieldsPage() {
                     key={opt.id}
                     onClick={() => {
                       setParticipantEntityId(opt.id);
-                      setParticipantScope("all");
-                      setParticipantScopeId("");
+                      setParticipantTypeId("");
+                      setParticipantDvId("");
                     }}
                     className={`px-3 py-1 text-sm rounded-md whitespace-nowrap transition-colors ${
                       participantEntityId === opt.id
@@ -520,9 +520,9 @@ export default function MetaFieldsPage() {
                 <select
                   className="border rounded-md px-3 py-1.5 text-sm"
                   value={participantTypeId}
-                  onChange={(e) => setParticipantCatId(e.target.value)}
+                  onChange={(e) => setParticipantTypeId(e.target.value)}
                 >
-                  <option value="">All categories</option>
+                  <option value="">All</option>
                   {categories.map((cat) => (
                     <option key={cat.id} value={cat.id}>{cat.name}</option>
                   ))}
