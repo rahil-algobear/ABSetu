@@ -12,11 +12,17 @@ import { useQuery } from "@tanstack/react-query";
 import { dimensionApi, dimensionValueLinkApi } from "@/services/api";
 import { Dimension, DimensionValue, DimensionValueLink } from "@/types";
 import { useVocabulary } from "@/hooks/useVocabulary";
-import { X, GripVertical } from "lucide-react";
+import { usePermissions } from "@/components/Auth/Permissions";
+import { useRouter } from "next/navigation";
+import { X, GripVertical, Pencil } from "lucide-react";
 
 interface DimensionMatrixDialogProps {
   open: boolean;
   onClose: () => void;
+  /** Pre-select a dimension key as the row dimension when opening */
+  defaultRowDimKey?: string;
+  /** Show the "Edit Links" button that navigates to dimension-linking (default: true) */
+  showEditButton?: boolean;
 }
 
 type HeaderCell = { label: string; colSpan: number; key: string };
@@ -26,8 +32,15 @@ type LeafColumn = {
   rowValues: DimensionValue[];
 };
 
-export function DimensionMatrixDialog({ open, onClose }: DimensionMatrixDialogProps) {
+export function DimensionMatrixDialog({
+  open,
+  onClose,
+  defaultRowDimKey,
+  showEditButton = true,
+}: DimensionMatrixDialogProps) {
   const { vDim } = useVocabulary();
+  const { can } = usePermissions();
+  const router = useRouter();
 
   const { data: dimensions = [] } = useQuery<Dimension[]>({
     queryKey: ["dimensions"],
@@ -35,10 +48,13 @@ export function DimensionMatrixDialog({ open, onClose }: DimensionMatrixDialogPr
     enabled: open,
   });
 
-  // The "row" dimension — defaults to the last dimension (typically intervention)
+  // The "row" dimension — defaults to the provided key, or the last dimension
   const [rowDimId, setRowDimId] = useState<string>("");
 
-  const effectiveRowDimId = rowDimId || dimensions[dimensions.length - 1]?.id || "";
+  const defaultRowDim = defaultRowDimKey
+    ? dimensions.find((d) => d.key === defaultRowDimKey)
+    : undefined;
+  const effectiveRowDimId = rowDimId || defaultRowDim?.id || dimensions[dimensions.length - 1]?.id || "";
   const rowDimension = dimensions.find((d) => d.id === effectiveRowDimId);
 
   // Column dimensions = everything except the row dimension
@@ -312,12 +328,26 @@ export function DimensionMatrixDialog({ open, onClose }: DimensionMatrixDialogPr
                   <DialogTitle className="text-lg font-semibold">
                     Dimension Matrix
                   </DialogTitle>
-                  <button
-                    onClick={onClose}
-                    className="text-gray-400 hover:text-gray-600 transition-colors"
-                  >
-                    <X size={18} />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {showEditButton && can("dimension:manage") && (
+                      <button
+                        onClick={() => {
+                          onClose();
+                          router.push("/admin/dimension-linking");
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-purple-700 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors"
+                      >
+                        <Pencil size={14} />
+                        Edit Links
+                      </button>
+                    )}
+                    <button
+                      onClick={onClose}
+                      className="text-gray-400 hover:text-gray-600 transition-colors"
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
                 </div>
 
                 {/* Row dimension selector + column reorder bar */}

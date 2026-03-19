@@ -207,6 +207,7 @@ export default function DimensionLinkingPage() {
       <DimensionMatrixDialog
         open={matrixOpen}
         onClose={() => setMatrixOpen(false)}
+        showEditButton={false}
       />
     </>
   );

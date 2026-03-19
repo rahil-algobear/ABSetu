@@ -45,7 +45,6 @@ ORG_LOGO_URL = "https://kshamata.org/wp-content/uploads/2022/06/revised-logo.png
 # ---------------------------------------------------------------------------
 VOCABULARY = {
     "activity": "Session",
-    "intervention": "Intervention",
     "activity_category": "Activity Category",
     "participant": "Participant",
     "entity": "Person",

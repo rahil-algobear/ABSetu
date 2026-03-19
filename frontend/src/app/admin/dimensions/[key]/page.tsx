@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { dimensionApi, metaFieldSchemaApi } from "@/services/api";
 import { Dimension, DimensionValue, MetaFieldDefinition } from "@/types";
 import { Can } from "@/components/Auth/Permissions";
+import { DimensionMatrixDialog } from "@/components/DimensionMatrixDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,7 +20,7 @@ import {
   TableCell,
 } from "@/components/ui/page-table";
 import { DynamicMetaForm } from "@/components/DynamicMetaForm";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Pencil, Trash2, LayoutGrid } from "lucide-react";
 import { useVocabulary } from "@/hooks/useVocabulary";
 import toast from "react-hot-toast";
 
@@ -28,6 +29,7 @@ export default function DimensionValuesPage() {
   const dimensionKey = params.key as string;
   const queryClient = useQueryClient();
   const { vDim } = useVocabulary();
+  const [matrixOpen, setMatrixOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingValue, setEditingValue] = useState<DimensionValue | null>(null);
   const [form, setForm] = useState({ name: "" });
@@ -121,12 +123,20 @@ export default function DimensionValuesPage() {
     <>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold">{vDim(dimension)}</h2>
-        <Can permission="dimension:manage">
-          <Button size="sm" onClick={openAdd}>
-            <Plus className="h-4 w-4 mr-1" />
-            Add {vDim(dimension)}
-          </Button>
-        </Can>
+        <div className="flex gap-2">
+          {dimensions.length > 1 && (
+            <Button size="sm" variant="outline" onClick={() => setMatrixOpen(true)}>
+              <LayoutGrid className="h-4 w-4 mr-1" />
+              View Matrix
+            </Button>
+          )}
+          <Can permission="dimension:manage">
+            <Button size="sm" onClick={openAdd}>
+              <Plus className="h-4 w-4 mr-1" />
+              Add {vDim(dimension)}
+            </Button>
+          </Can>
+        </div>
       </div>
 
       {isLoading ? (
@@ -213,6 +223,12 @@ export default function DimensionValuesPage() {
           </div>
         </form>
       </Dialog>
+
+      <DimensionMatrixDialog
+        open={matrixOpen}
+        onClose={() => setMatrixOpen(false)}
+        defaultRowDimKey={dimensionKey}
+      />
     </>
   );
 }
