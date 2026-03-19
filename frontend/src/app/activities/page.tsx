@@ -324,6 +324,7 @@ export default function ActivitiesPage() {
 
   // Use form builder elements if available, otherwise fallback
   const hasFormConfig = formElements.length > 0;
+  const formConfigHasActivityMeta = formElements.some((el) => el.type === "activity_meta");
 
   // Get the first tag name to use as activity title (e.g. intervention name)
   const getActivityTitle = (a: typeof activities[0]) => {
@@ -363,7 +364,16 @@ export default function ActivitiesPage() {
               className="space-y-3"
             >
               {hasFormConfig
-                ? formElements.map(renderElement)
+                ? (<>
+                    {formElements.map(renderElement)}
+                    {!formConfigHasActivityMeta && activityMetaFields.length > 0 && (
+                      <DynamicMetaForm
+                        fields={activityMetaFields}
+                        values={metaValues}
+                        onChange={setMetaValues}
+                      />
+                    )}
+                  </>)
                 : renderDefaultForm()
               }
 
