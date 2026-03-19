@@ -62,12 +62,18 @@ STATIC_ENTITY_TYPES = {
 
 
 def _validate_entity_type(entity_type: str, org_id, db: Session) -> None:
-    """Validate entity type — allow static types and scoped keys like
-    dimension:{id}, entity:{id}, activity:category:{id}, activity:type:{id},
-    participant:category:{id}, participant:type:{id},
-    participant:entity:{entity_type_id},
-    participant:entity:{entity_type_id}:category:{id},
-    participant:entity:{entity_type_id}:type:{id}."""
+    """Validate entity type scope key for meta field schemas.
+
+    Supported patterns:
+      - Static: enrollment, activity, participation, beneficiary, facilitator
+      - dimension:{dim_id}
+      - entity:{entity_type_id}
+      - activity:category:{category_id}
+      - activity:dimension_value:{dv_id}
+      - participant:entity:{entity_type_id|"user"}
+      - participant:entity:{entity_type_id|"user"}:category:{category_id}
+      - participant:entity:{entity_type_id|"user"}:dimension_value:{dv_id}
+    """
     if entity_type in STATIC_ENTITY_TYPES:
         return
 
@@ -91,11 +97,16 @@ def _validate_entity_type(entity_type: str, org_id, db: Session) -> None:
     if len(parts) == 3:
         prefix, sub, ref_id = parts
 
-        if prefix in ("activity", "participant"):
-            from app.modules.activity.model import ActivityCategory
-
+        if prefix == "activity":
             if sub == "category":
+                from app.modules.activity.model import ActivityCategory
+
                 if db.query(ActivityCategory).filter_by(organization_id=org_id, id=ref_id).first():
+                    return
+            elif sub == "dimension_value":
+                from app.modules.dimension.model import DimensionValue
+
+                if db.query(DimensionValue).filter_by(organization_id=org_id, id=ref_id).first():
                     return
 
         # participant:entity:{entity_type_id} — scoped to entity type, all categories
@@ -107,8 +118,8 @@ def _validate_entity_type(entity_type: str, org_id, db: Session) -> None:
             if db.query(EntityType).filter_by(organization_id=org_id, id=ref_id).first():
                 return
 
-    # participant:entity:{entity_type_id}:category:{id}
-    # participant:entity:{entity_type_id}:type:{id}
+    # participant:entity:{...}:category:{id}
+    # participant:entity:{...}:dimension_value:{dv_id}
     if len(parts) == 5:
         prefix, sub1, ref_id1, sub2, ref_id2 = parts
 
@@ -121,11 +132,20 @@ def _validate_entity_type(entity_type: str, org_id, db: Session) -> None:
             )
 
             if entity_ok:
-                from app.modules.activity.model import ActivityCategory
-
                 if sub2 == "category":
+                    from app.modules.activity.model import ActivityCategory
+
                     if (
                         db.query(ActivityCategory)
+                        .filter_by(organization_id=org_id, id=ref_id2)
+                        .first()
+                    ):
+                        return
+                elif sub2 == "dimension_value":
+                    from app.modules.dimension.model import DimensionValue
+
+                    if (
+                        db.query(DimensionValue)
                         .filter_by(organization_id=org_id, id=ref_id2)
                         .first()
                     ):

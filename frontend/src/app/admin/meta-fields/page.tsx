@@ -13,6 +13,7 @@ import {
   MetaFieldSchemas,
   MetaFieldType,
   Dimension,
+  DimensionValue,
   ActivityCategory,
 } from "@/types";
 import { Button } from "@/components/ui/button";
@@ -61,10 +62,16 @@ export default function MetaFieldsPage() {
   const [fieldForm, setFieldForm] = useState<MetaFieldDefinition>({ ...emptyField });
   const [optionsText, setOptionsText] = useState("");
 
+  // Activity section sub-scope: "category" or "dimension_value"
+  const [activityScope, setActivityScope] = useState<"category" | "dimension_value">("category");
+  const [activityDimId, setActivityDimId] = useState<string>(""); // which dimension to pick from
+  const [activityDvId, setActivityDvId] = useState<string>(""); // selected dimension value
+
   // Participant section state
   const [participantEntityId, setParticipantEntityId] = useState<string>("");
-  const [participantScope, setParticipantScope] = useState<"all" | "category" | "type">("all");
+  const [participantScope, setParticipantScope] = useState<"all" | "category" | "dimension_value">("all");
   const [participantScopeId, setParticipantScopeId] = useState<string>("");
+  const [participantDimId, setParticipantDimId] = useState<string>(""); // which dimension for dv scope
 
   const { data: dimensions = [] } = useQuery<Dimension[]>({
     queryKey: ["dimensions"],
@@ -81,6 +88,17 @@ export default function MetaFieldsPage() {
     queryFn: activityCategoryApi.list,
   });
 
+  const { data: allDimensionValues = [] } = useQuery<DimensionValue[]>({
+    queryKey: ["all-dimension-values", dimensions.map((d) => d.id).join(",")],
+    queryFn: async () => {
+      const results = await Promise.all(
+        dimensions.map((d) => dimensionApi.listValues(d.id))
+      );
+      return results.flat();
+    },
+    enabled: dimensions.length > 0,
+  });
+
   const nonSystemDimensions = dimensions;
 
   // Derive the schema key from section + activeKey
@@ -92,15 +110,20 @@ export default function MetaFieldsPage() {
       return `${base}:${participantScope}:${participantScopeId}`;
     }
 
+    if (activeSection === "activity") {
+      if (activityScope === "category") return activeKey ? `activity:category:${activeKey}` : "";
+      if (activityScope === "dimension_value") return activityDvId ? `activity:dimension_value:${activityDvId}` : "";
+      return "";
+    }
+
     if (!activeKey) return "";
     switch (activeSection) {
       case "entity": return `entity:${activeKey}`;
       case "dimension": return `dimension:${activeKey}`;
       case "other": return activeKey;
-      case "activity": return `activity:category:${activeKey}`;
       default: return "";
     }
-  }, [activeSection, activeKey, participantEntityId, participantScope, participantScopeId]);
+  }, [activeSection, activeKey, activityScope, activityDvId, participantEntityId, participantScope, participantScopeId]);
 
   // Auto-select first ID when section changes
   const selectSection = (section: SectionKind) => {
@@ -116,12 +139,15 @@ export default function MetaFieldsPage() {
         setActiveKey("enrollment");
         break;
       case "activity":
+        setActivityScope("category");
         setActiveKey(categories[0]?.id || "");
+        setActivityDvId("");
         break;
       case "participant":
         setParticipantEntityId(entityTypesList[0]?.id || "user");
         setParticipantScope("all");
         setParticipantScopeId("");
+        setParticipantDimId("");
         break;
     }
   };
@@ -215,23 +241,38 @@ export default function MetaFieldsPage() {
       }
       case "other": return vPlural("enrollment");
       case "activity": {
-        const cat = categories.find((c) => c.id === activeKey);
-        return cat ? `Activity: ${cat.name}` : activeKey;
+        if (activityScope === "category") {
+          const cat = categories.find((c) => c.id === activeKey);
+          return cat ? `Activity: ${cat.name}` : activeKey;
+        }
+        const dv = allDimensionValues.find((d) => d.id === activityDvId);
+        if (dv) {
+          const dim = dimensions.find((d) => d.id === dv.dimension_id);
+          return `Activity: ${dim ? vDim(dim) : ""} \u2192 ${dv.name}`;
+        }
+        return "Activity";
       }
       case "participant": {
         const entityLabel = participantEntityId === "user"
           ? "Users"
           : entityTypesList.find((et) => et.id === participantEntityId)?.name || participantEntityId;
-        if (participantScope === "all") return `Participant: ${entityLabel} (all categories)`;
+        if (participantScope === "all") return `Participant: ${entityLabel} (all)`;
         if (participantScope === "category") {
           const cat = categories.find((c) => c.id === participantScopeId);
           return `Participant: ${entityLabel} \u2192 ${cat?.name || "category"}`;
+        }
+        if (participantScope === "dimension_value") {
+          const dv = allDimensionValues.find((d) => d.id === participantScopeId);
+          if (dv) {
+            const dim = dimensions.find((d) => d.id === dv.dimension_id);
+            return `Participant: ${entityLabel} \u2192 ${dim ? vDim(dim) : ""}: ${dv.name}`;
+          }
         }
         return `Participant: ${entityLabel}`;
       }
       default: return "";
     }
-  }, [activeSection, activeKey, entityTypesList, nonSystemDimensions, categories, vPlural, vDim, participantEntityId, participantScope, participantScopeId]);
+  }, [activeSection, activeKey, entityTypesList, nonSystemDimensions, dimensions, allDimensionValues, categories, vPlural, vDim, activityScope, activityDvId, participantEntityId, participantScope, participantScopeId]);
 
   // Section pills
   const sections: { key: SectionKind; label: string }[] = [
@@ -350,19 +391,79 @@ export default function MetaFieldsPage() {
         )}
 
         {activeSection === "activity" && (
-          <div>
-            <label className="text-xs text-gray-500 block mb-1">{v("activity_category")}</label>
-            <select
-              className="border rounded-md px-3 py-1.5 text-sm"
-              value={activeKey}
-              onChange={(e) => setActiveKey(e.target.value)}
-            >
-              {categories.map((cat) => (
-                <option key={cat.id} value={cat.id}>
-                  {cat.name}
-                </option>
-              ))}
-            </select>
+          <div className="flex items-end gap-3 flex-wrap">
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">Scope</label>
+              <select
+                className="border rounded-md px-3 py-1.5 text-sm"
+                value={activityScope}
+                onChange={(e) => {
+                  const scope = e.target.value as "category" | "dimension_value";
+                  setActivityScope(scope);
+                  if (scope === "category") {
+                    setActiveKey(categories[0]?.id || "");
+                    setActivityDvId("");
+                  } else {
+                    setActiveKey("");
+                    setActivityDimId(dimensions[0]?.id || "");
+                    setActivityDvId("");
+                  }
+                }}
+              >
+                <option value="category">{v("activity_category")}</option>
+                <option value="dimension_value">Dimension value</option>
+              </select>
+            </div>
+
+            {activityScope === "category" && (
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">{v("activity_category")}</label>
+                <select
+                  className="border rounded-md px-3 py-1.5 text-sm"
+                  value={activeKey}
+                  onChange={(e) => setActiveKey(e.target.value)}
+                >
+                  {categories.map((cat) => (
+                    <option key={cat.id} value={cat.id}>{cat.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {activityScope === "dimension_value" && (
+              <>
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">Dimension</label>
+                  <select
+                    className="border rounded-md px-3 py-1.5 text-sm"
+                    value={activityDimId}
+                    onChange={(e) => {
+                      setActivityDimId(e.target.value);
+                      setActivityDvId("");
+                    }}
+                  >
+                    {dimensions.map((d) => (
+                      <option key={d.id} value={d.id}>{vDim(d)}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">Value</label>
+                  <select
+                    className="border rounded-md px-3 py-1.5 text-sm"
+                    value={activityDvId}
+                    onChange={(e) => setActivityDvId(e.target.value)}
+                  >
+                    <option value="">Select...</option>
+                    {allDimensionValues
+                      .filter((dv) => dv.dimension_id === activityDimId)
+                      .map((dv) => (
+                        <option key={dv.id} value={dv.id}>{dv.name}</option>
+                      ))}
+                  </select>
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -393,20 +494,24 @@ export default function MetaFieldsPage() {
             </div>
 
             {/* Activity scope selector */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-end gap-3 flex-wrap">
               <div>
                 <label className="text-xs text-gray-500 block mb-1">Scope</label>
                 <select
                   className="border rounded-md px-3 py-1.5 text-sm"
                   value={participantScope}
                   onChange={(e) => {
-                    const scope = e.target.value as "all" | "category";
+                    const scope = e.target.value as "all" | "category" | "dimension_value";
                     setParticipantScope(scope);
                     setParticipantScopeId("");
+                    if (scope === "dimension_value") {
+                      setParticipantDimId(dimensions[0]?.id || "");
+                    }
                   }}
                 >
-                  <option value="all">All categories</option>
+                  <option value="all">All</option>
                   <option value="category">Specific category</option>
+                  <option value="dimension_value">Specific dimension value</option>
                 </select>
               </div>
 
@@ -420,12 +525,45 @@ export default function MetaFieldsPage() {
                   >
                     <option value="">Select...</option>
                     {categories.map((cat) => (
-                      <option key={cat.id} value={cat.id}>
-                        {cat.name}
-                      </option>
+                      <option key={cat.id} value={cat.id}>{cat.name}</option>
                     ))}
                   </select>
                 </div>
+              )}
+
+              {participantScope === "dimension_value" && (
+                <>
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">Dimension</label>
+                    <select
+                      className="border rounded-md px-3 py-1.5 text-sm"
+                      value={participantDimId}
+                      onChange={(e) => {
+                        setParticipantDimId(e.target.value);
+                        setParticipantScopeId("");
+                      }}
+                    >
+                      {dimensions.map((d) => (
+                        <option key={d.id} value={d.id}>{vDim(d)}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">Value</label>
+                    <select
+                      className="border rounded-md px-3 py-1.5 text-sm"
+                      value={participantScopeId}
+                      onChange={(e) => setParticipantScopeId(e.target.value)}
+                    >
+                      <option value="">Select...</option>
+                      {allDimensionValues
+                        .filter((dv) => dv.dimension_id === participantDimId)
+                        .map((dv) => (
+                          <option key={dv.id} value={dv.id}>{dv.name}</option>
+                        ))}
+                    </select>
+                  </div>
+                </>
               )}
             </div>
           </div>

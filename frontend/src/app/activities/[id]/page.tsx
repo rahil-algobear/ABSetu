@@ -122,6 +122,14 @@ export default function ActivityDetailPage() {
       fields.push(...(allMetaSchemas[catKey] || []));
     }
 
+    // participant:entity:{ref_id}:dimension_value:{dvId} — per dimension value tag
+    if (activity?.tags) {
+      for (const tag of activity.tags) {
+        const dvKey = `${baseKey}:dimension_value:${tag.value_id}`;
+        fields.push(...(allMetaSchemas[dvKey] || []));
+      }
+    }
+
     return fields;
   };
 
@@ -226,10 +234,19 @@ export default function ActivityDetailPage() {
   // Use first tag as activity title
   const activityTitle = activity.tags.length > 0 ? activity.tags[0].value_name : v("activity");
 
-  // Activity meta fields from category
-  const categoryFields = categoryId
-    ? allMetaSchemas[`activity:category:${categoryId}`] || []
-    : [];
+  // Activity meta fields from category + dimension values
+  const categoryFields = useMemo((): MetaFieldDefinition[] => {
+    const fields: MetaFieldDefinition[] = [];
+    if (categoryId) {
+      fields.push(...(allMetaSchemas[`activity:category:${categoryId}`] || []));
+    }
+    if (activity?.tags) {
+      for (const tag of activity.tags) {
+        fields.push(...(allMetaSchemas[`activity:dimension_value:${tag.value_id}`] || []));
+      }
+    }
+    return fields;
+  }, [categoryId, activity, allMetaSchemas]);
 
   return (
     <PageLayout className="p-4">

@@ -139,11 +139,17 @@ export default function ActivitiesPage() {
       .sort((a, b) => a.sort_order - b.sort_order);
   }, [formConfig]);
 
-  // Derive meta fields for the selected category
+  // Derive meta fields for the selected category + selected dimension values
   const activityMetaFields = useMemo((): MetaFieldDefinition[] => {
-    if (!selectedCategoryId) return [];
-    return allMetaSchemas[`activity:category:${selectedCategoryId}`] || [];
-  }, [selectedCategoryId, allMetaSchemas]);
+    const fields: MetaFieldDefinition[] = [];
+    if (selectedCategoryId) {
+      fields.push(...(allMetaSchemas[`activity:category:${selectedCategoryId}`] || []));
+    }
+    for (const dvId of formData.dimension_value_ids) {
+      fields.push(...(allMetaSchemas[`activity:dimension_value:${dvId}`] || []));
+    }
+    return fields;
+  }, [selectedCategoryId, formData.dimension_value_ids, allMetaSchemas]);
 
   // Track selection per dimension for cascading logic
   const selectedByDim = useMemo(() => {
