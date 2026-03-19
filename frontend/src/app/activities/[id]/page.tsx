@@ -19,7 +19,7 @@ import {
   MetaFieldSchemas,
 } from "@/types";
 import { Can } from "@/components/Auth/Permissions";
-import { useVocabulary } from "@/hooks/useVocabulary";
+
 import { DynamicMetaForm, MetaFieldDisplay } from "@/components/DynamicMetaForm";
 import { SearchSelectParticipants } from "@/components/SearchSelectParticipants";
 import { Button } from "@/components/ui/button";
@@ -34,7 +34,7 @@ export default function ActivityDetailPage() {
   const id = params.id as string;
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { v } = useVocabulary();
+
   const [editingSections, setEditingSections] = useState(false);
   const [participantState, setParticipantState] = useState<
     Record<string, { participant_id: string; participant_type: string; status?: string; meta?: Record<string, unknown> }[]>
@@ -156,14 +156,14 @@ export default function ActivityDetailPage() {
     mutationFn: () => activityApi.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["activities"] });
-      toast.success(`${v("activity")} deleted`);
+      toast.success("Activity deleted");
       router.push("/activities");
     },
-    onError: () => toast.error(`Failed to delete ${v("activity").toLowerCase()}`),
+    onError: () => toast.error("Failed to delete activity"),
   });
 
   const handleDelete = () => {
-    if (confirm(`Delete this ${v("activity").toLowerCase()}? This cannot be undone.`)) {
+    if (confirm("Delete this activity? This cannot be undone.")) {
       deleteMutation.mutate();
     }
   };
@@ -254,7 +254,7 @@ export default function ActivityDetailPage() {
   if (!activity) return <PageLayout className="p-4"><p>Not found</p></PageLayout>;
 
   // Use first dimension value as activity title
-  const activityTitle = activity.dimensions.length > 0 ? activity.dimensions[0].value_name : v("activity");
+  const activityTitle = activity.dimensions.length > 0 ? activity.dimensions[0].value_name : "Activity";
 
   return (
     <PageLayout className="p-4">
@@ -303,11 +303,11 @@ export default function ActivityDetailPage() {
       {entityTypeElements.length > 0 ? (
         <Card>
           <CardHeader className="flex-row items-center justify-between">
-            <CardTitle className="text-lg">{v("participant")}s</CardTitle>
+            <CardTitle className="text-lg">Participants</CardTitle>
             <Can permission="activity:create">
               {!editingSections && (
                 <Button size="sm" onClick={openEditing}>
-                  Edit {v("participant")}s
+                  Edit Participants
                 </Button>
               )}
             </Can>
@@ -524,7 +524,7 @@ export default function ActivityDetailPage() {
         /* No form config — show flat participant list */
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">{v("participant")}s</CardTitle>
+            <CardTitle className="text-lg">Participants</CardTitle>
           </CardHeader>
           <CardContent>
             {participants.length === 0 ? (

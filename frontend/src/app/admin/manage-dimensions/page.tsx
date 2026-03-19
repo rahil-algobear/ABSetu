@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { dimensionApi } from "@/services/api";
 import { Dimension } from "@/types";
 import { Can } from "@/components/Auth/Permissions";
-import { useVocabulary } from "@/hooks/useVocabulary";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,7 +23,6 @@ import toast from "react-hot-toast";
 
 export default function ManageDimensionsPage() {
   const queryClient = useQueryClient();
-  const { vDim } = useVocabulary();
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Dimension | null>(null);
   const [form, setForm] = useState({ name: "" });
@@ -127,10 +126,9 @@ export default function ManageDimensionsPage() {
               <DimensionRow
                 key={dim.id}
                 dimension={dim}
-                vDim={vDim}
                 onEdit={() => openEdit(dim)}
                 onDelete={() => {
-                  if (confirm(`Delete dimension "${vDim(dim)}"? This will remove all its values and linked data.`))
+                  if (confirm(`Delete dimension "${dim.name}"? This will remove all its values and linked data.`))
                     deleteMutation.mutate(dim.id);
                 }}
               />
@@ -170,12 +168,10 @@ export default function ManageDimensionsPage() {
 /** Row component that fetches the value count for a dimension */
 function DimensionRow({
   dimension,
-  vDim,
   onEdit,
   onDelete,
 }: {
   dimension: Dimension;
-  vDim: (d: Dimension) => string;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -187,7 +183,7 @@ function DimensionRow({
 
   return (
     <TableRow>
-      <TableCell className="font-medium">{vDim(dimension)}</TableCell>
+      <TableCell className="font-medium">{dimension.name}</TableCell>
       <TableCell className="text-gray-500">{values.length}</TableCell>
       <TableCell>
         <Can permission="dimension:manage">

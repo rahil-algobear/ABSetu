@@ -11,7 +11,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { dimensionApi, dimensionValueLinkApi } from "@/services/api";
 import { Dimension, DimensionValue, DimensionValueLink } from "@/types";
-import { useVocabulary } from "@/hooks/useVocabulary";
+
 import { usePermissions } from "@/components/Auth/Permissions";
 import { useRouter } from "next/navigation";
 import { X, GripVertical, Pencil } from "lucide-react";
@@ -38,7 +38,7 @@ export function DimensionMatrixDialog({
   defaultRowDimKey,
   showEditButton = true,
 }: DimensionMatrixDialogProps) {
-  const { vDim } = useVocabulary();
+
   const { can } = usePermissions();
   const router = useRouter();
 
@@ -360,7 +360,7 @@ export function DimensionMatrixDialog({
                       onChange={(e) => setRowDimId(e.target.value)}
                     >
                       {dimensions.map((d) => (
-                        <option key={d.id} value={d.id}>{vDim(d)}</option>
+                        <option key={d.id} value={d.id}>{d.name}</option>
                       ))}
                     </select>
                   </div>
@@ -382,7 +382,7 @@ export function DimensionMatrixDialog({
                             className="flex items-center gap-1 px-3 py-1.5 bg-white border border-gray-200 rounded-full text-sm font-medium text-gray-700 cursor-grab active:cursor-grabbing shadow-sm hover:shadow-md transition-shadow select-none"
                           >
                             <GripVertical className="h-3 w-3 text-gray-400" />
-                            {vDim(dim)}
+                            {dim.name}
                           </div>
                         ))}
                       </div>
@@ -409,7 +409,7 @@ export function DimensionMatrixDialog({
                           {headerRows.map((row, rowIndex) => (
                             <tr key={rowIndex}>
                               <th className="px-3 py-2 text-left font-medium text-gray-500 bg-gray-50 border border-gray-200 whitespace-nowrap sticky left-0 z-10">
-                                {orderedColumnDims[rowIndex] ? vDim(orderedColumnDims[rowIndex]) : ""}
+                                {orderedColumnDims[rowIndex] ? orderedColumnDims[rowIndex].name : ""}
                               </th>
                               {row.map((cell) => (
                                 <th
@@ -430,7 +430,7 @@ export function DimensionMatrixDialog({
                           {/* Row dimension values */}
                           <tr>
                             <th className="px-3 py-2 text-left font-medium text-gray-500 bg-purple-50 border border-gray-200 sticky left-0 z-10">
-                              {rowDimension ? vDim(rowDimension) : ""}
+                              {rowDimension ? rowDimension.name : ""}
                             </th>
                             {leafColumns.map((leaf, colIndex) => (
                               <td

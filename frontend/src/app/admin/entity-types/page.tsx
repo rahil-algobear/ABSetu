@@ -5,7 +5,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { entityTypeApi } from "@/services/api";
 import { EntityType } from "@/types";
 import { Can } from "@/components/Auth/Permissions";
-import { useVocabulary } from "@/hooks/useVocabulary";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,7 +22,6 @@ import toast from "react-hot-toast";
 
 export default function EntityTypesPage() {
   const queryClient = useQueryClient();
-  const { vPlural, v } = useVocabulary();
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<EntityType | null>(null);
   const [form, setForm] = useState({ name: "", case_number_enabled: false, can_enroll: false });
@@ -38,9 +36,9 @@ export default function EntityTypesPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["entity-types"] });
       closeModal();
-      toast.success(`${v("entity_type")} created`);
+      toast.success("Entity Type created");
     },
-    onError: () => toast.error(`Failed to create ${v("entity_type").toLowerCase()}`),
+    onError: () => toast.error("Failed to create entity type"),
   });
 
   const updateMutation = useMutation({
@@ -49,16 +47,16 @@ export default function EntityTypesPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["entity-types"] });
       closeModal();
-      toast.success(`${v("entity_type")} updated`);
+      toast.success("Entity Type updated");
     },
-    onError: () => toast.error(`Failed to update ${v("entity_type").toLowerCase()}`),
+    onError: () => toast.error("Failed to update entity type"),
   });
 
   const deleteMutation = useMutation({
     mutationFn: entityTypeApi.delete,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["entity-types"] });
-      toast.success(`${v("entity_type")} deleted`);
+      toast.success("Entity Type deleted");
     },
     onError: () => toast.error(`Failed to delete — it may have entities`),
   });
@@ -104,11 +102,11 @@ export default function EntityTypesPage() {
   return (
     <>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold">{vPlural("entity_type")}</h2>
+        <h2 className="text-lg font-semibold">Entity Types</h2>
         <Can permission="entity_type:manage">
           <Button size="sm" onClick={openCreate}>
             <Plus className="h-4 w-4 mr-1" />
-            Add {v("entity_type")}
+            Add Entity Type
           </Button>
         </Can>
       </div>
@@ -116,7 +114,7 @@ export default function EntityTypesPage() {
       {isLoading ? (
         <p className="text-gray-500 text-sm">Loading...</p>
       ) : entityTypes.length === 0 ? (
-        <p className="text-gray-500 text-sm">No {vPlural("entity_type").toLowerCase()} yet.</p>
+        <p className="text-gray-500 text-sm">No entity types yet.</p>
       ) : (
         <Table>
           <TableHeader>
@@ -146,7 +144,7 @@ export default function EntityTypesPage() {
                         </button>
                         <button
                           onClick={() => {
-                            if (confirm(`Delete this ${v("entity_type").toLowerCase()}?`))
+                            if (confirm("Delete this entity type?"))
                               deleteMutation.mutate(et.id);
                           }}
                           className="text-gray-400 hover:text-red-500"
@@ -166,7 +164,7 @@ export default function EntityTypesPage() {
       <Dialog
         open={modalOpen}
         onClose={closeModal}
-        title={editing ? `Edit ${v("entity_type")}` : `Add ${v("entity_type")}`}
+        title={editing ? "Edit Entity Type" : "Add Entity Type"}
       >
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>

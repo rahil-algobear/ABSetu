@@ -32,7 +32,7 @@ import {
 } from "@/components/ui/page-table";
 import { Plus, Pencil, Trash2, GripVertical } from "lucide-react";
 import toast from "react-hot-toast";
-import { useVocabulary } from "@/hooks/useVocabulary";
+
 
 const FIELD_TYPES: { value: MetaFieldType; label: string }[] = [
   { value: "text", label: "Text" },
@@ -55,7 +55,7 @@ type SectionKind = "entity" | "dimension" | "other" | "activity" | "participant"
 
 export default function MetaFieldsPage() {
   const queryClient = useQueryClient();
-  const { v, vPlural, vDim } = useVocabulary();
+
   const [activeSection, setActiveSection] = useState<SectionKind>("entity");
   const [activeKey, setActiveKey] = useState<string>("");
   const [modalOpen, setModalOpen] = useState(false);
@@ -283,16 +283,16 @@ export default function MetaFieldsPage() {
       const dv = allDimensionValues.find((d) => d.id === dvId);
       if (!dv) return "";
       const dim = dimensions.find((d) => d.id === dv.dimension_id);
-      return `${dim ? vDim(dim) : ""}: ${dv.name}`;
+      return `${dim ? dim.name : ""}: ${dv.name}`;
     };
 
     switch (activeSection) {
       case "entity": return entityTypesList.find((et) => et.id === activeKey)?.name || activeKey;
       case "dimension": {
         const dim = nonSystemDimensions.find((d) => d.id === activeKey);
-        return dim ? vDim(dim) : activeKey;
+        return dim ? dim.name : activeKey;
       }
-      case "other": return vPlural("enrollment");
+      case "other": return "Enrollments";
       case "activity": {
         const catName = categories.find((c) => c.id === activityTypeId)?.name;
         const parts = ["Activity"];
@@ -316,7 +316,7 @@ export default function MetaFieldsPage() {
       }
       default: return "";
     }
-  }, [activeSection, activeKey, entityTypesList, nonSystemDimensions, dimensions, allDimensionValues, categories, vPlural, vDim, activityTypeId, activityDvId, participantEntityId, participantTypeId, participantDvId]);
+  }, [activeSection, activeKey, entityTypesList, nonSystemDimensions, dimensions, allDimensionValues, categories, activityTypeId, activityDvId, participantEntityId, participantTypeId, participantDvId]);
 
   // Section pills
   const sections: { key: SectionKind; label: string }[] = [
@@ -398,7 +398,7 @@ export default function MetaFieldsPage() {
                     : "bg-white text-gray-600 border border-gray-200 hover:border-gray-300"
                 }`}
               >
-                {vDim(d)}
+                {d.name}
                 {(allSchemas[`dimension:${d.id}`]?.length || 0) > 0 && (
                   <span className="ml-1 text-xs text-gray-400">
                     ({allSchemas[`dimension:${d.id}`]!.length})
@@ -412,7 +412,7 @@ export default function MetaFieldsPage() {
         {activeSection === "other" && (
           <div className="flex gap-2 overflow-x-auto pb-1">
             {[
-              { key: "enrollment", label: vPlural("enrollment") },
+              { key: "enrollment", label: "Enrollments" },
             ].map((item) => (
               <button
                 key={item.key}
@@ -437,7 +437,7 @@ export default function MetaFieldsPage() {
         {activeSection === "activity" && (
           <div className="flex items-end gap-3 flex-wrap">
             <div>
-              <label className="text-xs text-gray-500 block mb-1">{v("activity_type")}</label>
+              <label className="text-xs text-gray-500 block mb-1">Activity Type</label>
               <select
                 className="border rounded-md px-3 py-1.5 text-sm"
                 value={activityTypeId}
@@ -462,7 +462,7 @@ export default function MetaFieldsPage() {
               >
                 <option value="">No filter</option>
                 {dimensions.map((d) => (
-                  <option key={d.id} value={d.id}>{vDim(d)}</option>
+                  <option key={d.id} value={d.id}>{d.name}</option>
                 ))}
               </select>
             </div>
@@ -516,7 +516,7 @@ export default function MetaFieldsPage() {
             {/* Scope selectors */}
             <div className="flex items-end gap-3 flex-wrap">
               <div>
-                <label className="text-xs text-gray-500 block mb-1">{v("activity_type")}</label>
+                <label className="text-xs text-gray-500 block mb-1">Activity Type</label>
                 <select
                   className="border rounded-md px-3 py-1.5 text-sm"
                   value={participantTypeId}
@@ -541,7 +541,7 @@ export default function MetaFieldsPage() {
                 >
                   <option value="">No filter</option>
                   {dimensions.map((d) => (
-                    <option key={d.id} value={d.id}>{vDim(d)}</option>
+                    <option key={d.id} value={d.id}>{d.name}</option>
                   ))}
                 </select>
               </div>

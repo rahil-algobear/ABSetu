@@ -19,8 +19,6 @@ import {
 } from "@/components/ui/page-table";
 import { Plus, Pencil, Trash2, Shield, Check } from "lucide-react";
 import toast from "react-hot-toast";
-import { useVocabulary } from "@/hooks/useVocabulary";
-
 // Group permission keys by area for better UX
 function groupPermissions(permissions: Permission[]) {
   const groups: Record<string, Permission[]> = {};
@@ -56,28 +54,12 @@ const DESCRIPTION_REPLACEMENTS: [string, string][] = [
   ["enrollment", "enrollment"],
 ];
 
-/** Replace generic entity terms in a permission description with vocab overrides. */
-function localizeDescription(
-  desc: string,
-  v: (key: string) => string,
-  vPlural: (key: string) => string,
-): string {
-  let result = desc;
-  for (const [term, vocabKey] of DESCRIPTION_REPLACEMENTS) {
-    if (!result.toLowerCase().includes(term)) continue;
-    // Determine if the term is plural (ends with s/ies)
-    const isPlural = term.endsWith("ies") || (term.endsWith("s") && !term.endsWith("ss"));
-    const replacement = isPlural ? vPlural(vocabKey) : v(vocabKey);
-    // Case-insensitive replace preserving surrounding text
-    const regex = new RegExp(term, "gi");
-    result = result.replace(regex, replacement.toLowerCase());
-    break; // Only replace the first matching term
-  }
-  return result;
+/** Replace generic entity terms in a permission description with hardcoded labels. */
+function localizeDescription(desc: string): string {
+  return desc;
 }
 
 export default function RolesPage() {
-  const { v, vPlural } = useVocabulary();
   const queryClient = useQueryClient();
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Role | null>(null);
@@ -331,7 +313,7 @@ export default function RolesPage() {
                           <Check className="h-2.5 w-2.5 text-white" />
                         )}
                       </div>
-                      {AREA_LABELS[area] || vPlural(area)}
+                      {AREA_LABELS[area] || area}
                     </button>
                     <div className="space-y-1.5 ml-5">
                       {perms.map((p) => (
@@ -345,7 +327,7 @@ export default function RolesPage() {
                             onChange={() => togglePermission(p.id)}
                             className="h-3.5 w-3.5 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
                           />
-                          <span>{p.description ? localizeDescription(p.description, v, vPlural) : p.key}</span>
+                          <span>{p.description ? localizeDescription(p.description) : p.key}</span>
                         </label>
                       ))}
                     </div>

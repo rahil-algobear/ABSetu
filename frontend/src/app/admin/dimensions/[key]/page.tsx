@@ -21,14 +21,12 @@ import {
 } from "@/components/ui/page-table";
 import { DynamicMetaForm } from "@/components/DynamicMetaForm";
 import { Plus, Pencil, Trash2, LayoutGrid } from "lucide-react";
-import { useVocabulary } from "@/hooks/useVocabulary";
 import toast from "react-hot-toast";
 
 export default function DimensionValuesPage() {
   const params = useParams();
   const dimensionKey = params.key as string;
   const queryClient = useQueryClient();
-  const { vDim } = useVocabulary();
   const [matrixOpen, setMatrixOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingValue, setEditingValue] = useState<DimensionValue | null>(null);
@@ -122,7 +120,7 @@ export default function DimensionValuesPage() {
   return (
     <>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold">{vDim(dimension)}</h2>
+        <h2 className="text-lg font-semibold">{dimension.name}</h2>
         <div className="flex gap-2">
           {dimensions.length > 1 && (
             <Button size="sm" variant="outline" onClick={() => setMatrixOpen(true)}>
@@ -133,7 +131,7 @@ export default function DimensionValuesPage() {
           <Can permission="dimension:manage">
             <Button size="sm" onClick={openAdd}>
               <Plus className="h-4 w-4 mr-1" />
-              Add {vDim(dimension)}
+              Add {dimension.name}
             </Button>
           </Can>
         </div>
@@ -195,7 +193,7 @@ export default function DimensionValuesPage() {
       <Dialog
         open={modalOpen}
         onClose={closeModal}
-        title={editingValue ? `Edit ${vDim(dimension)}` : `Add ${vDim(dimension)}`}
+        title={editingValue ? `Edit ${dimension.name}` : `Add ${dimension.name}`}
       >
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>

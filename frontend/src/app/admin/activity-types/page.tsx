@@ -5,7 +5,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { activityTypeApi } from "@/services/api";
 import { ActivityType } from "@/types";
 import { Can } from "@/components/Auth/Permissions";
-import { useVocabulary } from "@/hooks/useVocabulary";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,7 +22,6 @@ import toast from "react-hot-toast";
 
 export default function ActivityCategoriesPage() {
   const queryClient = useQueryClient();
-  const { v, vPlural } = useVocabulary();
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<ActivityType | null>(null);
   const [form, setForm] = useState({ name: "" });
@@ -38,9 +36,9 @@ export default function ActivityCategoriesPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["activity-types"] });
       closeModal();
-      toast.success(`${v("activity_type")} created`);
+      toast.success("Activity Type created");
     },
-    onError: () => toast.error(`Failed to create ${v("activity_type").toLowerCase()}`),
+    onError: () => toast.error("Failed to create activity type"),
   });
 
   const updateMutation = useMutation({
@@ -49,16 +47,16 @@ export default function ActivityCategoriesPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["activity-types"] });
       closeModal();
-      toast.success(`${v("activity_type")} updated`);
+      toast.success("Activity Type updated");
     },
-    onError: () => toast.error(`Failed to update ${v("activity_type").toLowerCase()}`),
+    onError: () => toast.error("Failed to update activity type"),
   });
 
   const deleteMutation = useMutation({
     mutationFn: activityTypeApi.delete,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["activity-types"] });
-      toast.success(`${v("activity_type")} deleted`);
+      toast.success("Activity Type deleted");
     },
     onError: () => toast.error("Failed to delete — it may have activities"),
   });
@@ -92,11 +90,11 @@ export default function ActivityCategoriesPage() {
   return (
     <>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold">{vPlural("activity_type")}</h2>
+        <h2 className="text-lg font-semibold">Activity Types</h2>
         <Can permission="activity_type:manage">
           <Button size="sm" onClick={openCreate}>
             <Plus className="h-4 w-4 mr-1" />
-            Add {v("activity_type")}
+            Add Activity Type
           </Button>
         </Can>
       </div>
@@ -112,7 +110,7 @@ export default function ActivityCategoriesPage() {
       {isLoading ? (
         <p className="text-gray-500 text-sm">Loading...</p>
       ) : categories.length === 0 ? (
-        <p className="text-gray-500 text-sm">No {vPlural("activity_type").toLowerCase()} yet.</p>
+        <p className="text-gray-500 text-sm">No activity types yet.</p>
       ) : (
         <Table>
           <TableHeader>
@@ -138,7 +136,7 @@ export default function ActivityCategoriesPage() {
                       </button>
                       <button
                         onClick={() => {
-                          if (confirm(`Delete this ${v("activity_type").toLowerCase()}?`))
+                          if (confirm("Delete this activity type?"))
                             deleteMutation.mutate(cat.id);
                         }}
                         className="text-gray-400 hover:text-red-500"
@@ -157,7 +155,7 @@ export default function ActivityCategoriesPage() {
       <Dialog
         open={modalOpen}
         onClose={closeModal}
-        title={editing ? `Edit ${v("activity_type")}` : `Add ${v("activity_type")}`}
+        title={editing ? "Edit Activity Type" : "Add Activity Type"}
       >
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>

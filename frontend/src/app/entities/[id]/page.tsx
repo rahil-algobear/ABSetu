@@ -17,7 +17,7 @@ import {
   Enrollment,
   MetaFieldDefinition,
 } from "@/types";
-import { useVocabulary } from "@/hooks/useVocabulary";
+
 import { Can } from "@/components/Auth/Permissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageLayout } from "@/components/ui/page-layout";
@@ -60,7 +60,7 @@ export default function EntityDetailPage() {
   const params = useParams();
   const id = params.id as string;
   const queryClient = useQueryClient();
-  const { v, vPlural, vDim } = useVocabulary();
+
 
   const [showCreate, setShowCreate] = useState(false);
   const [editingEnrollment, setEditingEnrollment] = useState<Enrollment | null>(null);
@@ -131,7 +131,7 @@ export default function EntityDetailPage() {
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle className="text-lg">{vPlural("enrollment")}</CardTitle>
+              <CardTitle className="text-lg">Enrollments</CardTitle>
               <Can permission="enrollment:manage">
                 {!showCreate && !editingEnrollment && (
                   <Button size="sm" onClick={() => setShowCreate(true)}>
@@ -152,8 +152,6 @@ export default function EntityDetailPage() {
                   queryClient.invalidateQueries({ queryKey: ["enrollments-entity", id] });
                 }}
                 onCancel={() => setShowCreate(false)}
-                v={v}
-                vDim={vDim}
               />
             )}
 
@@ -167,15 +165,13 @@ export default function EntityDetailPage() {
                   queryClient.invalidateQueries({ queryKey: ["enrollments-entity", id] });
                 }}
                 onCancel={() => setEditingEnrollment(null)}
-                v={v}
-                vDim={vDim}
               />
             )}
 
             {!showCreate && !editingEnrollment && (
               <>
                 {enrollments.length === 0 ? (
-                  <p className="text-gray-500 text-sm">No {vPlural("enrollment").toLowerCase()}</p>
+                  <p className="text-gray-500 text-sm">No enrollments</p>
                 ) : (
                   <div className="space-y-2">
                     {enrollments.map((e) => (
@@ -231,16 +227,12 @@ function EnrollmentForm({
   metaFields,
   onSuccess,
   onCancel,
-  v,
-  vDim,
 }: {
   entityId: string;
   enrollment?: Enrollment;
   metaFields: MetaFieldDefinition[];
   onSuccess: () => void;
   onCancel: () => void;
-  v: (key: string) => string;
-  vDim: (dim: { key: string; name: string }) => string;
 }) {
   const isEdit = !!enrollment;
 
@@ -302,10 +294,10 @@ function EnrollmentForm({
     mutationFn: (data: Parameters<typeof enrollmentApi.create>[0]) =>
       enrollmentApi.create(data),
     onSuccess: () => {
-      toast.success(`${v("enrollment")} created`);
+      toast.success("Enrollment created");
       onSuccess();
     },
-    onError: () => toast.error(`Failed to create ${v("enrollment").toLowerCase()}`),
+    onError: () => toast.error("Failed to create enrollment"),
   });
 
   const updateMutation = useMutation({
@@ -315,10 +307,10 @@ function EnrollmentForm({
         enrollmentApi.updateDimensions(data.id, data.tagIds),
       ]),
     onSuccess: () => {
-      toast.success(`${v("enrollment")} updated`);
+      toast.success("Enrollment updated");
       onSuccess();
     },
-    onError: () => toast.error(`Failed to update ${v("enrollment").toLowerCase()}`),
+    onError: () => toast.error("Failed to update enrollment"),
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -351,7 +343,7 @@ function EnrollmentForm({
     <div className="border rounded p-3 mb-3 bg-gray-50">
       <div className="flex items-center justify-between mb-3">
         <h3 className="font-medium text-sm">
-          {isEdit ? `Edit ${v("enrollment")}` : `New ${v("enrollment")}`}
+          {isEdit ? "Edit Enrollment" : "New Enrollment"}
         </h3>
         <Button size="sm" variant="ghost" onClick={onCancel}>
           <X className="h-4 w-4" />
@@ -375,7 +367,7 @@ function EnrollmentForm({
             ) || "";
           return (
             <div key={dim.id}>
-              <label className="text-sm font-medium">{vDim(dim)}</label>
+              <label className="text-sm font-medium">{dim.name}</label>
               <select
                 className="w-full mt-1 border rounded-md p-2 text-sm"
                 value={currentSelection}
@@ -389,7 +381,7 @@ function EnrollmentForm({
                   );
                 }}
               >
-                <option value="">Select {vDim(dim)}...</option>
+                <option value="">Select {dim.name}...</option>
                 {filtered.map((dv) => (
                   <option key={dv.id} value={dv.id}>
                     {dv.name}

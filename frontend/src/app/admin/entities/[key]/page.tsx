@@ -6,7 +6,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { entityApi, entityTypeApi, metaFieldSchemaApi } from "@/services/api";
 import { Entity, MetaFieldDefinition } from "@/types";
 import { Can } from "@/components/Auth/Permissions";
-import { useVocabulary } from "@/hooks/useVocabulary";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -27,7 +27,6 @@ import toast from "react-hot-toast";
 export default function EntityTypeEntitiesPage() {
   const { key: entityTypeKey } = useParams<{ key: string }>();
   const queryClient = useQueryClient();
-  const { v } = useVocabulary();
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Entity | null>(null);
   const [form, setForm] = useState({ name: "" });
@@ -60,7 +59,7 @@ export default function EntityTypeEntitiesPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["entities"] });
       closeModal();
-      toast.success(`${entityType?.name || v("entity")} created`);
+      toast.success(`${entityType?.name || "Entity"} created`);
     },
     onError: () => toast.error(`Failed to create`),
   });
@@ -71,7 +70,7 @@ export default function EntityTypeEntitiesPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["entities"] });
       closeModal();
-      toast.success(`${entityType?.name || v("entity")} updated`);
+      toast.success(`${entityType?.name || "Entity"} updated`);
     },
     onError: () => toast.error(`Failed to update`),
   });
@@ -118,7 +117,7 @@ export default function EntityTypeEntitiesPage() {
       (e.case_number || "").toLowerCase().includes(search.toLowerCase())
   );
 
-  const typeName = entityType?.name || v("entity");
+  const typeName = entityType?.name || "Entity";
   const config = (entityType?.config || {}) as Record<string, boolean>;
   const hasCaseNumber = config.case_number_enabled;
 

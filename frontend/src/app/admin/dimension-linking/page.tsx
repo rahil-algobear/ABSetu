@@ -7,13 +7,10 @@ import { Dimension, DimensionValue, DimensionValueLink } from "@/types";
 import { Button } from "@/components/ui/button";
 import { LayoutGrid } from "lucide-react";
 import { DimensionMatrixDialog } from "@/components/DimensionMatrixDialog";
-import { useVocabulary } from "@/hooks/useVocabulary";
 import toast from "react-hot-toast";
 
 export default function DimensionLinkingPage() {
   const queryClient = useQueryClient();
-  const { vDim } = useVocabulary();
-
   const { data: dimensions = [] } = useQuery<Dimension[]>({
     queryKey: ["dimensions"],
     queryFn: dimensionApi.list,
@@ -134,7 +131,7 @@ export default function DimensionLinkingPage() {
             onChange={(e) => { setDim1Id(e.target.value); setPendingPairs(null); }}
           >
             {dimensions.filter((d) => d.id !== effectiveDim2).map((d) => (
-              <option key={d.id} value={d.id}>{vDim(d)}</option>
+              <option key={d.id} value={d.id}>{d.name}</option>
             ))}
           </select>
         </div>
@@ -146,7 +143,7 @@ export default function DimensionLinkingPage() {
             onChange={(e) => { setDim2Id(e.target.value); setPendingPairs(null); }}
           >
             {dimensions.filter((d) => d.id !== effectiveDim1).map((d) => (
-              <option key={d.id} value={d.id}>{vDim(d)}</option>
+              <option key={d.id} value={d.id}>{d.name}</option>
             ))}
           </select>
         </div>
@@ -158,7 +155,7 @@ export default function DimensionLinkingPage() {
           <thead>
             <tr className="bg-gray-50">
               <th className="px-3 py-2 text-left font-medium text-gray-700 border-b">
-                {dim1 ? vDim(dim1) : ""} \ {dim2 ? vDim(dim2) : ""}
+                {dim1 ? dim1.name : ""} \ {dim2 ? dim2.name : ""}
               </th>
               {values2.map((v2) => (
                 <th key={v2.id} className="px-3 py-2 text-center font-medium text-gray-700 border-b whitespace-nowrap">

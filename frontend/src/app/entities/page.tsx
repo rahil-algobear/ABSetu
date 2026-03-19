@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { entityApi, entityTypeApi, metaFieldSchemaApi } from "@/services/api";
 import { MetaFieldDefinition } from "@/types";
 import { Can } from "@/components/Auth/Permissions";
-import { useVocabulary } from "@/hooks/useVocabulary";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,7 +26,7 @@ export default function EntitiesPage() {
   const [metaValues, setMetaValues] = useState<Record<string, unknown>>({});
   const [filterTypeId, setFilterTypeId] = useState("");
   const queryClient = useQueryClient();
-  const { v, vPlural } = useVocabulary();
+
 
   const { data: entityTypes = [] } = useQuery({
     queryKey: ["entity-types"],
@@ -51,9 +51,9 @@ export default function EntitiesPage() {
       setNewName("");
       setNewTypeId("");
       setMetaValues({});
-      toast.success(`${v("entity")} created`);
+      toast.success("Entity created");
     },
-    onError: () => toast.error(`Failed to create ${v("entity").toLowerCase()}`),
+    onError: () => toast.error("Failed to create entity"),
   });
 
   const filtered = entities.filter((e) =>
@@ -64,7 +64,7 @@ export default function EntitiesPage() {
   return (
     <PageLayout className="p-4">
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold">{vPlural("entity")}</h1>
+        <h1 className="text-2xl font-bold">Entities</h1>
         <Can permission="entity:create">
           <Button size="sm" onClick={() => setShowCreate(true)}>
             <Plus className="h-4 w-4 mr-1" />
@@ -100,7 +100,7 @@ export default function EntitiesPage() {
       <Dialog
         open={showCreate}
         onClose={() => setShowCreate(false)}
-        title={`Add ${v("entity")}`}
+        title="Add Entity"
       >
         <form
           onSubmit={(e) => {
@@ -117,7 +117,7 @@ export default function EntitiesPage() {
           className="space-y-3"
         >
           <div>
-            <Label htmlFor="entity_type_id">{v("entity_type")}</Label>
+            <Label htmlFor="entity_type_id">Entity Type</Label>
             <select
               id="entity_type_id"
               className="w-full mt-1 border rounded-md p-2 text-sm"
@@ -135,7 +135,7 @@ export default function EntitiesPage() {
             <Label htmlFor="name">Name</Label>
             <Input
               id="name"
-              placeholder={`${v("entity")} name`}
+              placeholder="Entity name"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               autoFocus
@@ -165,7 +165,7 @@ export default function EntitiesPage() {
       {isLoading ? (
         <p className="text-gray-500">Loading...</p>
       ) : filtered.length === 0 ? (
-        <p className="text-gray-500">No {vPlural("entity").toLowerCase()} found.</p>
+        <p className="text-gray-500">No entities found.</p>
       ) : (
         <div className="space-y-2">
           {filtered.map((e) => (

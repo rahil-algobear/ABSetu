@@ -17,7 +17,6 @@ import {
   MetaFieldSchemas,
 } from "@/types";
 import { Can } from "@/components/Auth/Permissions";
-import { useVocabulary } from "@/hooks/useVocabulary";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Dialog } from "@/components/ui/dialog";
@@ -60,7 +59,6 @@ const DISPLAY_TYPES: Record<string, { value: string; label: string }[]> = {
 
 export default function FormBuilderPage() {
   const queryClient = useQueryClient();
-  const { v, vPlural, vDim } = useVocabulary();
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>("");
   const [elements, setElements] = useState<ActivityFormElement[]>([]);
   const [isDirty, setIsDirty] = useState(false);
@@ -178,7 +176,7 @@ export default function FormBuilderPage() {
     switch (el.type) {
       case "dimension": {
         const dim = dimensions.find((d) => d.id === el.ref_id);
-        return dim ? vDim(dim) : "Dimension";
+        return dim ? dim.name : "Dimension";
       }
       case "entity_type": {
         if (el.ref_id === "user") return "Users (staff)";
@@ -241,12 +239,12 @@ export default function FormBuilderPage() {
 
       <p className="text-sm text-gray-500 mb-4">
         Configure what form elements appear when recording an activity.
-        Choose an {v("activity_type").toLowerCase()} and add the elements you want.
+        Choose an activity type and add the elements you want.
       </p>
 
       {/* Category selector */}
       <div className="mb-6">
-        <Label className="text-sm mb-1 block">{v("activity_type")}</Label>
+        <Label className="text-sm mb-1 block">Activity Type</Label>
         <select
           className="border rounded-md px-3 py-2 text-sm w-full max-w-xs"
           value={selectedCategoryId}
@@ -459,7 +457,7 @@ export default function FormBuilderPage() {
                   .filter((d) => !isElementAdded("dimension", d.id))
                   .map((d) => (
                     <option key={d.id} value={d.id}>
-                      {vDim(d)}
+                      {d.name}
                     </option>
                   ))}
               </select>

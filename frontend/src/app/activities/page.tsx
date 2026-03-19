@@ -23,7 +23,7 @@ import {
   MetaFieldSchemas,
 } from "@/types";
 import { Can } from "@/components/Auth/Permissions";
-import { useVocabulary } from "@/hooks/useVocabulary";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -70,7 +70,6 @@ export default function ActivitiesPage() {
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const categoryKey = searchParams.get("category");
-  const { v, vPlural, vDim } = useVocabulary();
 
   const { data: activities = [], isLoading } = useQuery({
     queryKey: ["activities"],
@@ -184,9 +183,9 @@ export default function ActivitiesPage() {
         dimension_value_ids: [],
       });
       setMetaValues({});
-      toast.success(`${v("activity")} created`);
+      toast.success("Activity created");
     },
-    onError: () => toast.error(`Failed to create ${v("activity").toLowerCase()}`),
+    onError: () => toast.error("Failed to create activity"),
   });
 
   // Render a single form element based on its type
@@ -212,7 +211,7 @@ export default function ActivitiesPage() {
         return (
           <div key={`dimension-${dim.id}`}>
             <label className="text-sm font-medium">
-              {vDim(dim)}
+              {dim.name}
               {el.required && <span className="text-red-500 ml-0.5">*</span>}
             </label>
             <select
@@ -232,7 +231,7 @@ export default function ActivitiesPage() {
               }}
               required={el.required}
             >
-              <option value="">Select {vDim(dim)}...</option>
+              <option value="">Select {dim.name}...</option>
               {filtered.map((dv) => (
                 <option key={dv.id} value={dv.id}>
                   {dv.name}
@@ -272,17 +271,17 @@ export default function ActivitiesPage() {
   const getActivityTitle = (a: typeof activities[0]) => {
     // Use the first dimension value as the title (typically the intervention)
     if (a.dimensions.length > 0) return a.dimensions[0].value_name;
-    return v("activity");
+    return "Activity";
   };
 
   return (
     <PageLayout className="p-4">
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold">{vPlural("activity")}</h1>
+        <h1 className="text-2xl font-bold">Activities</h1>
         <Can permission="activity:create">
           <Button size="sm" onClick={() => setShowCreate(true)}>
             <Plus className="h-4 w-4 mr-1" />
-            New {v("activity")}
+            New Activity
           </Button>
         </Can>
       </div>
@@ -290,7 +289,7 @@ export default function ActivitiesPage() {
       {showCreate && (
         <Card className="mb-4">
           <CardHeader>
-            <CardTitle className="text-lg">Create {v("activity")}</CardTitle>
+            <CardTitle className="text-lg">Create Activity</CardTitle>
           </CardHeader>
           <CardContent>
             <form
@@ -309,7 +308,7 @@ export default function ActivitiesPage() {
                 ? formElements.map(renderElement)
                 : (
                   <p className="text-sm text-gray-500">
-                    The form for this {v("activity").toLowerCase()} category has not been configured yet. Please ask your admin to set it up in the Form Builder under Admin settings.
+                    The form for this activity category has not been configured yet. Please ask your admin to set it up in the Form Builder under Admin settings.
                   </p>
                 )
               }
@@ -363,7 +362,7 @@ export default function ActivitiesPage() {
       {isLoading ? (
         <p className="text-gray-500">Loading...</p>
       ) : activities.length === 0 ? (
-        <p className="text-gray-500">No {vPlural("activity").toLowerCase()} yet.</p>
+        <p className="text-gray-500">No activities yet.</p>
       ) : (
         <div className="flex flex-col gap-4">
           {activities.map((a) => (

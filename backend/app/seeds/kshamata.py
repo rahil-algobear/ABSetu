@@ -1,7 +1,7 @@
 """
 Kshamata seed script: creates org, dimensions (Programme, Project, Location,
 Intervention), entity types, activity type, dimension value links,
-vocabulary, and admin user.
+and admin user.
 
 Interventions are regular dimension values — no ActivityType entity needed.
 
@@ -39,17 +39,6 @@ ADMIN_COUNTRY_CODE = "+91"
 ORG_NAME = "Kshamata"
 ORG_CODE = "KSHAMATA"
 ORG_LOGO_URL = "https://kshamata.org/wp-content/uploads/2022/06/revised-logo.png"
-
-# ---------------------------------------------------------------------------
-# Vocabulary mapping — org-level UI label overrides
-# ---------------------------------------------------------------------------
-VOCABULARY = {
-    "activity": "Session",
-    "activity_type": "Activity Type",
-    "participant": "Participant",
-    "entity": "Person",
-    "enrollment": "Enrollment",
-}
 
 # ---------------------------------------------------------------------------
 # Entity Types
@@ -643,7 +632,7 @@ def seed():
                 code=ORG_CODE,
                 case_number_format="{ORG_CODE}-{YY}-{SERIAL}",
                 logo_url=ORG_LOGO_URL,
-                meta={"vocabulary": VOCABULARY},
+                meta={},
             )
             db.add(org)
             db.flush()
@@ -652,7 +641,7 @@ def seed():
             org.name = ORG_NAME
             org.logo_url = ORG_LOGO_URL
             meta = dict(org.meta or {})
-            meta["vocabulary"] = VOCABULARY
+            meta.pop("vocabulary", None)
             org.meta = meta
             db.flush()
             print(f"Updated organization: {org.name} ({org.code})")
@@ -898,7 +887,6 @@ def seed():
         )
         print("\nKshamata seed completed successfully!")
         print(f"  Organisation        : {ORG_NAME}")
-        print(f"  Vocabulary          : {len(VOCABULARY)} term overrides")
         print(f"  Entity Types        : {len(ENTITY_TYPES)}")
         print(f"  Activity Types : 1 (Sessions)")
         print(f"  Roles               : 2 (Admin [system], Team Member [default])")

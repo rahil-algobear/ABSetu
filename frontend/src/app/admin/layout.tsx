@@ -5,7 +5,6 @@ import { useQuery } from "@tanstack/react-query";
 import { PageLayout } from "@/components/ui/page-layout";
 import { usePermissions } from "@/components/Auth/Permissions";
 import { dimensionApi, entityTypeApi } from "@/services/api";
-import { useVocabulary } from "@/hooks/useVocabulary";
 import {
   Layers,
   ClipboardList,
@@ -25,7 +24,6 @@ export default function AdminLayout({
 }) {
   const pathname = usePathname();
   const { can, loading } = usePermissions();
-  const { vPlural, vDim } = useVocabulary();
 
   const { data: dimensions = [] } = useQuery({
     queryKey: ["dimensions"],
@@ -42,7 +40,7 @@ export default function AdminLayout({
   // Build tabs for permission checking
   const dimensionTabs = dimensions.map((d) => ({
     href: `/admin/dimensions/${d.key}`,
-    label: vDim(d),
+    label: d.name,
     icon: Layers,
     permission: "dimension:view",
   }));
@@ -65,8 +63,8 @@ export default function AdminLayout({
     { href: "/admin/roles", label: "Roles", icon: Shield, permission: "role:view" },
     { href: "/admin/manage-dimensions", label: "Dimensions", icon: Layers, permission: "dimension:manage" },
     { href: "/admin/dimension-linking", label: "Dimension Linking", icon: Link2, permission: "dimension:view" },
-    { href: "/admin/entity-types", label: vPlural("entity_type"), icon: UserCheck, permission: "entity_type:view" },
-    { href: "/admin/activity-types", label: vPlural("activity_type"), icon: ClipboardList, permission: "activity_type:view" },
+    { href: "/admin/entity-types", label: "Entity Types", icon: UserCheck, permission: "entity_type:view" },
+    { href: "/admin/activity-types", label: "Activity Types", icon: ClipboardList, permission: "activity_type:view" },
     { href: "/admin/form-builder", label: "Form Builder", icon: LayoutTemplate, permission: "activity_type:manage" },
   ];
 

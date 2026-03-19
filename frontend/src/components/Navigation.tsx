@@ -9,7 +9,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import Image from "next/image";
 import { clsx } from "clsx";
-import { useVocabulary } from "@/hooks/useVocabulary";
+
 import {
   LayoutDashboard,
   CalendarDays,
@@ -256,7 +256,7 @@ export default function Navigation() {
   const pathname = usePathname();
   const router = useRouter();
   const { can } = usePermissions();
-  const { vPlural, vDim } = useVocabulary();
+
 
   const { data: org } = useQuery({
     queryKey: ["organization"],
@@ -307,7 +307,7 @@ export default function Navigation() {
     { href: "/admin/users", label: "Users", icon: Users, permission: "user:view" },
     ...dimensions.map((d) => ({
       href: `/admin/dimensions/${d.key}`,
-      label: vDim(d),
+      label: d.name,
       icon: Layers,
       permission: "dimension:view",
     })),
@@ -319,8 +319,8 @@ export default function Navigation() {
     { href: "/admin/roles", label: "Roles", icon: Shield, permission: "role:view" },
     { href: "/admin/manage-dimensions", label: "Dimensions", icon: Layers, permission: "dimension:manage" },
     { href: "/admin/dimension-linking", label: "Dimension Linking", icon: Link2, permission: "dimension:view" },
-    { href: "/admin/entity-types", label: vPlural("entity_type"), icon: UserCog, permission: "entity_type:view" },
-    { href: "/admin/activity-types", label: vPlural("activity_type"), icon: ClipboardList, permission: "activity_type:view" },
+    { href: "/admin/entity-types", label: "Entity Types", icon: UserCog, permission: "entity_type:view" },
+    { href: "/admin/activity-types", label: "Activity Types", icon: ClipboardList, permission: "activity_type:view" },
     { href: "/admin/form-builder", label: "Form Builder", icon: LayoutTemplate, permission: "activity_type:manage" },
   ];
 
