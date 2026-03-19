@@ -156,6 +156,7 @@ def _build_activity_response(a) -> dict:
 
 @activity_router.get("/", dependencies=[Depends(require_permissions("activity:view"))])
 def list_activities(
+    activity_type_id: uuid.UUID | None = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -167,6 +168,7 @@ def list_activities(
     activities = service.list_by_org(
         current_user.organization_id,
         accessible_dv_ids=accessible,
+        activity_type_id=activity_type_id,
     )
     return [_build_activity_response(a) for a in activities]
 

@@ -69,11 +69,11 @@ export default function ActivitiesPage() {
   const [showCreate, setShowCreate] = useState(false);
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
-  const categoryKey = searchParams.get("category");
+  const typeKey = searchParams.get("type");
 
   const { data: activities = [], isLoading } = useQuery({
-    queryKey: ["activities"],
-    queryFn: activityApi.list,
+    queryKey: ["activities", selectedTypeId],
+    queryFn: () => activityApi.list(selectedTypeId || undefined),
   });
 
   const { data: categories = [] } = useQuery({
@@ -119,15 +119,16 @@ export default function ActivitiesPage() {
   });
   const [metaValues, setMetaValues] = useState<Record<string, unknown>>({});
 
-  // Determine category from URL param
-  const categoryFromUrl = categories.find((c) => c.key === categoryKey);
-  const selectedCategoryId = categoryFromUrl?.id || "";
+  // Determine activity type from URL param
+  const activityType = categories.find((c) => c.key === typeKey);
+  const selectedTypeId = activityType?.id || "";
+  const typeName = activityType?.name || "Activity";
 
-  // Load form builder config for the category
+  // Load form builder config for the activity type
   const { data: formConfig } = useQuery<ActivityForm>({
-    queryKey: ["activity-form", selectedCategoryId],
-    queryFn: () => activityFormApi.get(selectedCategoryId),
-    enabled: !!selectedCategoryId,
+    queryKey: ["activity-form", selectedTypeId],
+    queryFn: () => activityFormApi.get(selectedTypeId),
+    enabled: !!selectedTypeId,
   });
 
   // Sorted visible elements from form config
@@ -138,22 +139,22 @@ export default function ActivitiesPage() {
       .sort((a, b) => a.sort_order - b.sort_order);
   }, [formConfig]);
 
-  // Derive meta fields: category + dimension values + category×dimension_value combos
+  // Derive meta fields: activity type + dimension values + type×dimension_value combos
   const activityMetaFields = useMemo((): MetaFieldDefinition[] => {
     const fields: MetaFieldDefinition[] = [];
-    if (selectedCategoryId) {
-      fields.push(...(allMetaSchemas[`activity:category:${selectedCategoryId}`] || []));
+    if (selectedTypeId) {
+      fields.push(...(allMetaSchemas[`activity:category:${selectedTypeId}`] || []));
     }
     for (const dvId of formData.dimension_value_ids) {
-      // All-categories × dimension value
+      // All types × dimension value
       fields.push(...(allMetaSchemas[`activity:dimension_value:${dvId}`] || []));
       // Specific category × dimension value
-      if (selectedCategoryId) {
-        fields.push(...(allMetaSchemas[`activity:category:${selectedCategoryId}:dimension_value:${dvId}`] || []));
+      if (selectedTypeId) {
+        fields.push(...(allMetaSchemas[`activity:category:${selectedTypeId}:dimension_value:${dvId}`] || []));
       }
     }
     return fields;
-  }, [selectedCategoryId, formData.dimension_value_ids, allMetaSchemas]);
+  }, [selectedTypeId, formData.dimension_value_ids, allMetaSchemas]);
 
   // Track selection per dimension for cascading logic
   const selectedByDim = useMemo(() => {
@@ -183,9 +184,9 @@ export default function ActivitiesPage() {
         dimension_value_ids: [],
       });
       setMetaValues({});
-      toast.success("Activity created");
+      toast.success(`${typeName} created`);
     },
-    onError: () => toast.error("Failed to create activity"),
+    onError: () => toast.error(`Failed to create ${typeName.toLowerCase()}`),
   });
 
   // Render a single form element based on its type
@@ -271,17 +272,17 @@ export default function ActivitiesPage() {
   const getActivityTitle = (a: typeof activities[0]) => {
     // Use the first dimension value as the title (typically the intervention)
     if (a.dimensions.length > 0) return a.dimensions[0].value_name;
-    return "Activity";
+    return typeName;
   };
 
   return (
     <PageLayout className="p-4">
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold">Activities</h1>
+        <h1 className="text-2xl font-bold">{typeName}s</h1>
         <Can permission="activity:create">
           <Button size="sm" onClick={() => setShowCreate(true)}>
             <Plus className="h-4 w-4 mr-1" />
-            New Activity
+            New {typeName}
           </Button>
         </Can>
       </div>
@@ -289,7 +290,7 @@ export default function ActivitiesPage() {
       {showCreate && (
         <Card className="mb-4">
           <CardHeader>
-            <CardTitle className="text-lg">Create Activity</CardTitle>
+            <CardTitle className="text-lg">Create {typeName}</CardTitle>
           </CardHeader>
           <CardContent>
             <form
@@ -297,7 +298,7 @@ export default function ActivitiesPage() {
                 e.preventDefault();
                 const payload = {
                   ...formData,
-                  activity_type_id: selectedCategoryId || undefined,
+                  activity_type_id: selectedTypeId || undefined,
                   ...(activityMetaFields.length > 0 ? { meta: metaValues } : {}),
                 };
                 createMutation.mutate(payload);
@@ -308,7 +309,7 @@ export default function ActivitiesPage() {
                 ? formElements.map(renderElement)
                 : (
                   <p className="text-sm text-gray-500">
-                    The form for this activity category has not been configured yet. Please ask your admin to set it up in the Form Builder under Admin settings.
+                    The form for this activity type has not been configured yet. Please ask your admin to set it up in the Form Builder under Admin settings.
                   </p>
                 )
               }
@@ -362,7 +363,7 @@ export default function ActivitiesPage() {
       {isLoading ? (
         <p className="text-gray-500">Loading...</p>
       ) : activities.length === 0 ? (
-        <p className="text-gray-500">No activities yet.</p>
+        <p className="text-gray-500">No {typeName.toLowerCase()}s yet.</p>
       ) : (
         <div className="flex flex-col gap-4">
           {activities.map((a) => (

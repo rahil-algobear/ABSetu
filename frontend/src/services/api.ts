@@ -280,8 +280,9 @@ export const activityFormApi = {
 // --- Activities ---
 
 export const activityApi = {
-  list: async (): Promise<Activity[]> => {
-    const response = await authAxios.get<Activity[]>('/activities/');
+  list: async (activityTypeId?: string): Promise<Activity[]> => {
+    const params = activityTypeId ? { activity_type_id: activityTypeId } : {};
+    const response = await authAxios.get<Activity[]>('/activities/', { params });
     return response.data;
   },
   get: async (id: string): Promise<Activity> => {

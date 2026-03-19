@@ -6,7 +6,7 @@ import { usePermissions, Can } from "./Auth/Permissions";
 import { useQuery } from "@tanstack/react-query";
 import { organizationApi, dimensionApi, entityTypeApi, activityTypeApi } from "@/services/api";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { clsx } from "clsx";
 
@@ -254,6 +254,7 @@ export default function Navigation() {
   const { userProfile } = usePermissions();
   const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const router = useRouter();
   const { can } = usePermissions();
 
@@ -287,9 +288,11 @@ export default function Navigation() {
   });
 
   // Activity types as top-level nav links
-  const activityTypeLinks = activityTypes.map((cat) => ({
-    href: `/activities?category=${cat.key}`,
-    label: cat.name,
+  const currentTypeKey = searchParams.get("type");
+  const activityTypeLinks = activityTypes.map((at) => ({
+    href: `/activities?type=${at.key}`,
+    key: at.key,
+    label: at.name,
     icon: CalendarDays,
     permission: "activity:view",
   }));
@@ -433,23 +436,26 @@ export default function Navigation() {
                   Dashboard
                 </Link>
 
-                {/* Activity categories as top-level links */}
-                {activityTypeLinks.map((item) => (
-                  <Can key={item.href} permission={item.permission}>
-                    <Link
-                      href={item.href}
-                      className={clsx(
-                        "flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-                        pathname.startsWith(item.href.split("?")[0])
-                          ? "text-purple-700 bg-purple-50"
-                          : "text-gray-500 hover:text-gray-900 hover:bg-gray-100",
-                      )}
-                    >
-                      <CalendarDays size={15} />
-                      {item.label}
-                    </Link>
-                  </Can>
-                ))}
+                {/* Activity types as top-level links */}
+                {activityTypeLinks.map((item) => {
+                  const active = pathname === "/activities" && currentTypeKey === item.key;
+                  return (
+                    <Can key={item.href} permission={item.permission}>
+                      <Link
+                        href={item.href}
+                        className={clsx(
+                          "flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                          active
+                            ? "text-purple-700 bg-purple-50"
+                            : "text-gray-500 hover:text-gray-900 hover:bg-gray-100",
+                        )}
+                      >
+                        <CalendarDays size={15} />
+                        {item.label}
+                      </Link>
+                    </Can>
+                  );
+                })}
 
                 <NavDropdown
                   label="People"
@@ -520,10 +526,10 @@ export default function Navigation() {
               Dashboard
             </Link>
 
-            {/* Activity categories as top-level links */}
+            {/* Activity types as top-level links */}
             {activityTypeLinks.map((item) => {
               if (!can(item.permission)) return null;
-              const active = pathname.startsWith(item.href.split("?")[0]);
+              const active = pathname === "/activities" && currentTypeKey === item.key;
               return (
                 <Link
                   key={item.href}

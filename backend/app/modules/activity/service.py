@@ -80,8 +80,12 @@ class ActivityService:
         self,
         org_id: uuid.UUID,
         accessible_dv_ids: list[uuid.UUID] | None = None,
+        activity_type_id: uuid.UUID | None = None,
     ) -> list[Activity]:
         query = self.db.query(Activity).filter_by(organization_id=org_id)
+
+        if activity_type_id:
+            query = query.filter(Activity.activity_type_id == activity_type_id)
 
         if accessible_dv_ids:
             from sqlalchemy import exists
