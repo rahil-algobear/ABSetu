@@ -121,7 +121,7 @@ export default function ActivityDetailPage() {
       fields.push(...(allMetaSchemas[`${base}:category:${categoryId}`] || []));
     }
 
-    // Per dimension value tag
+    // Per dimension value dimension
     if (activity?.dimensions) {
       for (const dim of activity.dimensions) {
         // participant:entity:{ref_id}:dimension_value:{dvId}
@@ -253,7 +253,7 @@ export default function ActivityDetailPage() {
   if (isLoading) return <PageLayout className="p-4"><p>Loading...</p></PageLayout>;
   if (!activity) return <PageLayout className="p-4"><p>Not found</p></PageLayout>;
 
-  // Use first tag as activity title
+  // Use first dimension value as activity title
   const activityTitle = activity.dimensions.length > 0 ? activity.dimensions[0].value_name : v("activity");
 
   return (

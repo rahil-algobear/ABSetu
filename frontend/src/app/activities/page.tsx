@@ -268,9 +268,9 @@ export default function ActivitiesPage() {
   // Use form builder elements if available
   const hasFormConfig = formElements.length > 0;
 
-  // Get the first tag name to use as activity title (e.g. intervention name)
+  // Get the first dimension value name to use as activity title (e.g. intervention name)
   const getActivityTitle = (a: typeof activities[0]) => {
-    // Use the first tag as the title (typically the intervention)
+    // Use the first dimension value as the title (typically the intervention)
     if (a.dimensions.length > 0) return a.dimensions[0].value_name;
     return v("activity");
   };
