@@ -30,7 +30,8 @@ from app.modules.activity.service import (
     ActivityService,
     ActivityTypeService,
 )
-from app.modules.activity.model import Activity
+from app.modules.activity.model import Activity, ActivityDimension
+from app.modules.organization.service import MetaFieldSchemaService
 from app.modules.dimension.model import Dimension, DimensionValue
 from app.modules.dimension.service import UserDimensionAccessService
 
@@ -320,7 +321,14 @@ def save_participants(
     db: Session = Depends(get_db),
 ):
     # Validate required entity_type sections from form builder config
-    activity = db.query(Activity).filter_by(id=activity_id).first()
+    from sqlalchemy.orm import joinedload
+
+    activity = (
+        db.query(Activity)
+        .options(joinedload(Activity.dimensions))
+        .filter_by(id=activity_id)
+        .first()
+    )
     if activity and activity.activity_type_id:
         form_service = ActivityFormService(db)
         form = form_service.get_by_type(activity.activity_type_id, current_user.organization_id)
@@ -343,6 +351,36 @@ def save_participants(
                             et = db.query(EntityType).filter_by(id=ref_id).first()
                             label = et.name if et else "Participants"
                         raise ValidationError(f"{label} is required — add at least one participant")
+
+    # Validate required participant meta fields
+    meta_service = MetaFieldSchemaService(db)
+    all_schemas = meta_service.get_all_schemas(current_user.organization_id)
+
+    activity_type_id_str = str(activity.activity_type_id) if activity and activity.activity_type_id else None
+    activity_dv_ids = []
+    if activity:
+        for ad in activity.dimensions or []:
+            if ad.dimension_value_id:
+                activity_dv_ids.append(str(ad.dimension_value_id))
+
+    for record in data.records:
+        base = f"participant:entity:{record.section_key}"
+        # Collect all applicable meta field definitions for this participant
+        fields: list[dict] = []
+        fields.extend(all_schemas.get(base, []))
+        if activity_type_id_str:
+            fields.extend(all_schemas.get(f"{base}:activity_type:{activity_type_id_str}", []))
+        for dv_id in activity_dv_ids:
+            fields.extend(all_schemas.get(f"{base}:dimension_value:{dv_id}", []))
+            if activity_type_id_str:
+                fields.extend(all_schemas.get(
+                    f"{base}:activity_type:{activity_type_id_str}:dimension_value:{dv_id}", []
+                ))
+
+        meta = record.meta or {}
+        for f in fields:
+            if f.get("required") and not meta.get(f["key"]):
+                raise ValidationError(f'"{f["label"]}" is required for participants')
 
     service = ActivityParticipantService(db)
     participants = service.bulk_create(

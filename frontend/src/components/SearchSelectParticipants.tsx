@@ -207,6 +207,7 @@ export function SearchSelectParticipants({
                 {metaFields.map((field) => (
                   <th key={field.key} className="text-left px-3 py-2 font-medium">
                     {field.label}
+                    {field.required && <span className="text-red-500 ml-0.5">*</span>}
                   </th>
                 ))}
                 <th className="w-10 px-2 py-2"></th>
@@ -345,6 +346,7 @@ function MetaFieldCell({
         className="border rounded px-2 py-1 text-xs w-full"
         value={(value as string) || ""}
         onChange={(e) => onChange(e.target.value)}
+        required={field.required}
       >
         <option value="">-</option>
         {field.options?.map((opt) => (
@@ -361,6 +363,7 @@ function MetaFieldCell({
         className="border rounded px-2 py-1 text-xs w-full"
         value={value != null ? String(value) : ""}
         onChange={(e) => onChange(e.target.value ? Number(e.target.value) : "")}
+        required={field.required}
       />
     );
   }
@@ -372,6 +375,7 @@ function MetaFieldCell({
         className="border rounded px-2 py-1 text-xs w-full"
         value={(value as string) || ""}
         onChange={(e) => onChange(e.target.value)}
+        required={field.required}
       />
     );
   }
@@ -383,6 +387,7 @@ function MetaFieldCell({
       className="border rounded px-2 py-1 text-xs w-full"
       value={(value as string) || ""}
       onChange={(e) => onChange(e.target.value)}
+      required={field.required}
     />
   );
 }
