@@ -8,8 +8,12 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.common.dependencies import get_current_user, require_permissions
-from app.common.exceptions import ValidationError
+from app.common.dependencies import (
+    get_accessible_dimension_value_ids,
+    get_current_user,
+    require_permissions,
+)
+from app.common.exceptions import ForbiddenError, ValidationError
 from app.modules.auth.model import User
 from app.modules.activity.schemas import (
     ActivityCreate,
@@ -33,7 +37,6 @@ from app.modules.activity.service import (
 from app.modules.activity.model import Activity
 from app.modules.organization.service import MetaFieldSchemaService
 from app.modules.dimension.model import Dimension, DimensionValue
-from app.modules.dimension.service import UserDimensionAccessService
 
 router = APIRouter(tags=["activities"])
 
@@ -159,16 +162,13 @@ def _build_activity_response(a) -> dict:
 def list_activities(
     activity_type_id: uuid.UUID | None = None,
     current_user: User = Depends(get_current_user),
+    accessible_dv_ids: list[uuid.UUID] | None = Depends(get_accessible_dimension_value_ids),
     db: Session = Depends(get_db),
 ):
-    access_service = UserDimensionAccessService(db)
-    dv_ids = access_service.get_access_value_ids(current_user.id)
-    accessible = dv_ids if dv_ids else None
-
     service = ActivityService(db)
     activities = service.list_by_org(
         current_user.organization_id,
-        accessible_dv_ids=accessible,
+        accessible_dv_ids=accessible_dv_ids,
         activity_type_id=activity_type_id,
     )
     return [_build_activity_response(a) for a in activities]
@@ -195,8 +195,18 @@ def get_activity(
 def create_activity(
     data: ActivityCreate,
     current_user: User = Depends(get_current_user),
+    accessible_dv_ids: list[uuid.UUID] | None = Depends(get_accessible_dimension_value_ids),
     db: Session = Depends(get_db),
 ):
+    # Validate dimension values are within user's allowed scope
+    if accessible_dv_ids is not None and data.dimension_value_ids:
+        allowed = {str(dv_id) for dv_id in accessible_dv_ids}
+        for dv_id in data.dimension_value_ids:
+            if dv_id not in allowed:
+                raise ForbiddenError(
+                    "You do not have access to one or more selected dimension values"
+                )
+
     # Validate required form elements from form builder config
     activity_type_id = data.activity_type_id
     if activity_type_id:
@@ -356,7 +366,9 @@ def save_participants(
     meta_service = MetaFieldSchemaService(db)
     all_schemas = meta_service.get_all_schemas(current_user.organization_id)
 
-    activity_type_id_str = str(activity.activity_type_id) if activity and activity.activity_type_id else None
+    activity_type_id_str = (
+        str(activity.activity_type_id) if activity and activity.activity_type_id else None
+    )
     activity_dv_ids = []
     if activity:
         for ad in activity.dimensions or []:
@@ -373,9 +385,11 @@ def save_participants(
         for dv_id in activity_dv_ids:
             fields.extend(all_schemas.get(f"{base}:dimension_value:{dv_id}", []))
             if activity_type_id_str:
-                fields.extend(all_schemas.get(
-                    f"{base}:activity_type:{activity_type_id_str}:dimension_value:{dv_id}", []
-                ))
+                fields.extend(
+                    all_schemas.get(
+                        f"{base}:activity_type:{activity_type_id_str}:dimension_value:{dv_id}", []
+                    )
+                )
 
         meta = record.meta or {}
         for f in fields:

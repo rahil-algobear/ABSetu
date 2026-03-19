@@ -103,3 +103,30 @@ def require_permissions(*required_keys: str) -> Callable:
         return current_user
 
     return _checker
+
+
+def get_accessible_dimension_value_ids(
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[uuid.UUID] | None:
+    """
+    Return the current user's allowed dimension value IDs, or None if unrestricted.
+
+    - Empty UserDimension rows → None (user sees everything)
+    - Non-empty → list of allowed dimension_value_ids
+
+    Usage:
+        from app.common.dependencies import get_accessible_dimension_value_ids
+
+        @router.get("/")
+        def list_items(
+            accessible_dv_ids: list[uuid.UUID] | None = Depends(get_accessible_dimension_value_ids),
+        ):
+            # accessible_dv_ids is None → no restriction
+            # accessible_dv_ids is [...] → filter by these IDs
+    """
+    from app.modules.dimension.service import UserDimensionAccessService
+
+    access_service = UserDimensionAccessService(db)
+    dv_ids = access_service.get_access_value_ids(current_user.id)
+    return dv_ids if dv_ids else None

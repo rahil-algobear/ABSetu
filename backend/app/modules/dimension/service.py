@@ -70,13 +70,15 @@ class DimensionValueService:
     def __init__(self, db: Session):
         self.db = db
 
-    def list_by_dimension(self, dimension_id: uuid.UUID) -> list[DimensionValue]:
-        return (
-            self.db.query(DimensionValue)
-            .filter_by(dimension_id=dimension_id)
-            .order_by(DimensionValue.sort_order, DimensionValue.name)
-            .all()
-        )
+    def list_by_dimension(
+        self,
+        dimension_id: uuid.UUID,
+        accessible_dv_ids: list[uuid.UUID] | None = None,
+    ) -> list[DimensionValue]:
+        query = self.db.query(DimensionValue).filter_by(dimension_id=dimension_id)
+        if accessible_dv_ids is not None:
+            query = query.filter(DimensionValue.id.in_(accessible_dv_ids))
+        return query.order_by(DimensionValue.sort_order, DimensionValue.name).all()
 
     def get_by_id(self, value_id: uuid.UUID) -> DimensionValue:
         value = self.db.query(DimensionValue).filter_by(id=value_id).first()

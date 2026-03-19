@@ -8,7 +8,12 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.common.dependencies import get_current_user, require_permissions
+from app.common.dependencies import (
+    get_accessible_dimension_value_ids,
+    get_current_user,
+    require_permissions,
+)
+from app.common.exceptions import ForbiddenError
 from app.modules.auth.model import User
 from app.modules.entity.schemas import (
     DimensionInfo,
@@ -20,7 +25,6 @@ from app.modules.entity.schemas import (
     EntityUpdate,
 )
 from app.modules.entity.service import EntityService, EntityTypeService
-from app.modules.dimension.service import UserDimensionAccessService
 
 router = APIRouter(tags=["entities"])
 
@@ -142,17 +146,14 @@ def delete_entity_type(
 def list_entities(
     entity_type_id: uuid.UUID | None = Query(None),
     current_user: User = Depends(get_current_user),
+    accessible_dv_ids: list[uuid.UUID] | None = Depends(get_accessible_dimension_value_ids),
     db: Session = Depends(get_db),
 ):
-    access_service = UserDimensionAccessService(db)
-    dv_ids = access_service.get_access_value_ids(current_user.id)
-    accessible = dv_ids if dv_ids else None
-
     service = EntityService(db)
     entities = service.list_by_org(
         current_user.organization_id,
         entity_type_id=entity_type_id,
-        accessible_dv_ids=accessible,
+        accessible_dv_ids=accessible_dv_ids,
     )
     return [_build_entity_response(e) for e in entities]
 
@@ -179,8 +180,18 @@ def get_entity(
 def create_entity(
     data: EntityCreate,
     current_user: User = Depends(get_current_user),
+    accessible_dv_ids: list[uuid.UUID] | None = Depends(get_accessible_dimension_value_ids),
     db: Session = Depends(get_db),
 ):
+    # Validate dimension values are within user's allowed scope
+    if accessible_dv_ids is not None and data.dimension_value_ids:
+        allowed = {str(dv_id) for dv_id in accessible_dv_ids}
+        for dv_id in data.dimension_value_ids:
+            if dv_id not in allowed:
+                raise ForbiddenError(
+                    "You do not have access to one or more selected dimension values"
+                )
+
     service = EntityService(db)
     entity = service.create(
         current_user.organization_id,
@@ -217,8 +228,18 @@ def update_entity_dimensions(
     entity_id: uuid.UUID,
     dimension_value_ids: list[str],
     current_user: User = Depends(get_current_user),
+    accessible_dv_ids: list[uuid.UUID] | None = Depends(get_accessible_dimension_value_ids),
     db: Session = Depends(get_db),
 ):
+    # Validate dimension values are within user's allowed scope
+    if accessible_dv_ids is not None and dimension_value_ids:
+        allowed = {str(dv_id) for dv_id in accessible_dv_ids}
+        for dv_id in dimension_value_ids:
+            if dv_id not in allowed:
+                raise ForbiddenError(
+                    "You do not have access to one or more selected dimension values"
+                )
+
     service = EntityService(db)
     entity = service.update_dimensions(
         entity_id,

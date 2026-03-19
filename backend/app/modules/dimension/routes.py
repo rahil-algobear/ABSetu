@@ -8,7 +8,11 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.common.dependencies import get_current_user, require_permissions
+from app.common.dependencies import (
+    get_accessible_dimension_value_ids,
+    get_current_user,
+    require_permissions,
+)
 from app.modules.auth.model import User
 from app.modules.dimension.schemas import (
     DimensionCreate,
@@ -125,16 +129,19 @@ def delete_dimension(
 )
 def list_dimension_values(
     dimension_id: uuid.UUID,
+    scoped: bool = Query(False, description="Filter values by user's dimension access"),
     current_user: User = Depends(get_current_user),
+    accessible_dv_ids: list[uuid.UUID] | None = Depends(get_accessible_dimension_value_ids),
     db: Session = Depends(get_db),
 ):
-    """List all values for a dimension."""
+    """List all values for a dimension. Pass ?scoped=true to filter by user's access."""
     # Verify dimension belongs to org
     dim_service = DimensionService(db)
     dim_service.get_by_id(dimension_id, current_user.organization_id)
 
     service = DimensionValueService(db)
-    values = service.list_by_dimension(dimension_id)
+    scope = accessible_dv_ids if scoped else None
+    values = service.list_by_dimension(dimension_id, accessible_dv_ids=scope)
     results = []
     for v in values:
         resp = DimensionValueResponse(
