@@ -200,6 +200,25 @@ export default function ActivityDetailPage() {
       }
     }
 
+    // Validate required meta fields for each participant
+    for (const el of entityTypeElements) {
+      const sectionKey = getSectionKey(el);
+      const sectionState = participantState[sectionKey] || [];
+      const metaFields = getParticipationMetaFields(el);
+      const requiredFields = metaFields.filter((f) => f.required);
+      if (requiredFields.length > 0) {
+        for (const p of sectionState) {
+          const meta = p.meta || {};
+          for (const f of requiredFields) {
+            if (!meta[f.key]) {
+              toast.error(`"${f.label}" is required for all participants`);
+              return;
+            }
+          }
+        }
+      }
+    }
+
     const records: { participant_type: string; participant_id: string; section_key: string; status?: string; meta?: Record<string, unknown> }[] = [];
     for (const el of entityTypeElements) {
       const sectionKey = getSectionKey(el);
