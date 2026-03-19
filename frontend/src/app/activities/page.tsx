@@ -365,7 +365,7 @@ export default function ActivitiesPage() {
       ) : activities.length === 0 ? (
         <p className="text-gray-500">No {vPlural("activity").toLowerCase()} yet.</p>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-4">
           {activities.map((a) => (
             <Link key={a.id} href={`/activities/${a.id}`}>
               <Card className="hover:shadow-md transition-shadow cursor-pointer">
