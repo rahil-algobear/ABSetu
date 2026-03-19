@@ -320,7 +320,7 @@ export default function Navigation() {
   const adminItems = [
     { href: "/admin/meta-fields", label: "Form Fields", icon: SlidersHorizontal, permission: "org:settings" },
     { href: "/admin/roles", label: "Roles", icon: Shield, permission: "role:view" },
-    { href: "/admin/manage-dimensions", label: "Dimensions", icon: Layers, permission: "dimension:manage" },
+    { href: "/admin/manage-dimensions", label: "Dimensions", icon: Layers, permission: "dimension:view" },
     { href: "/admin/dimension-linking", label: "Dimension Linking", icon: Link2, permission: "dimension:view" },
     { href: "/admin/entity-types", label: "Entity Types", icon: UserCog, permission: "entity_type:view" },
     { href: "/admin/activity-types", label: "Activity Types", icon: ClipboardList, permission: "activity_type:view" },
