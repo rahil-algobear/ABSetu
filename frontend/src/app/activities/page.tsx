@@ -139,14 +139,19 @@ export default function ActivitiesPage() {
       .sort((a, b) => a.sort_order - b.sort_order);
   }, [formConfig]);
 
-  // Derive meta fields for the selected category + selected dimension values
+  // Derive meta fields: category + dimension values + category×dimension_value combos
   const activityMetaFields = useMemo((): MetaFieldDefinition[] => {
     const fields: MetaFieldDefinition[] = [];
     if (selectedCategoryId) {
       fields.push(...(allMetaSchemas[`activity:category:${selectedCategoryId}`] || []));
     }
     for (const dvId of formData.dimension_value_ids) {
+      // All-categories × dimension value
       fields.push(...(allMetaSchemas[`activity:dimension_value:${dvId}`] || []));
+      // Specific category × dimension value
+      if (selectedCategoryId) {
+        fields.push(...(allMetaSchemas[`activity:category:${selectedCategoryId}:dimension_value:${dvId}`] || []));
+      }
     }
     return fields;
   }, [selectedCategoryId, formData.dimension_value_ids, allMetaSchemas]);

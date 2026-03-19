@@ -70,9 +70,11 @@ def _validate_entity_type(entity_type: str, org_id, db: Session) -> None:
       - entity:{entity_type_id}
       - activity:category:{category_id}
       - activity:dimension_value:{dv_id}
+      - activity:category:{cat_id}:dimension_value:{dv_id}
       - participant:entity:{entity_type_id|"user"}
       - participant:entity:{entity_type_id|"user"}:category:{category_id}
       - participant:entity:{entity_type_id|"user"}:dimension_value:{dv_id}
+      - participant:entity:{...}:category:{cat_id}:dimension_value:{dv_id}
     """
     if entity_type in STATIC_ENTITY_TYPES:
         return
@@ -118,11 +120,28 @@ def _validate_entity_type(entity_type: str, org_id, db: Session) -> None:
             if db.query(EntityType).filter_by(organization_id=org_id, id=ref_id).first():
                 return
 
+    # 5-part keys:
+    # activity:category:{cat_id}:dimension_value:{dv_id}
     # participant:entity:{...}:category:{id}
     # participant:entity:{...}:dimension_value:{dv_id}
     if len(parts) == 5:
         prefix, sub1, ref_id1, sub2, ref_id2 = parts
 
+        # activity:category:{cat_id}:dimension_value:{dv_id}
+        if prefix == "activity" and sub1 == "category" and sub2 == "dimension_value":
+            from app.modules.activity.model import ActivityCategory
+            from app.modules.dimension.model import DimensionValue
+
+            cat_ok = db.query(ActivityCategory).filter_by(
+                organization_id=org_id, id=ref_id1
+            ).first()
+            dv_ok = db.query(DimensionValue).filter_by(
+                organization_id=org_id, id=ref_id2
+            ).first()
+            if cat_ok and dv_ok:
+                return
+
+        # participant:entity:{...}:category:{id} or :dimension_value:{dv_id}
         if prefix == "participant" and sub1 == "entity":
             from app.modules.entity.model import EntityType
 
@@ -150,6 +169,34 @@ def _validate_entity_type(entity_type: str, org_id, db: Session) -> None:
                         .first()
                     ):
                         return
+
+    # 7-part keys:
+    # participant:entity:{...}:category:{cat_id}:dimension_value:{dv_id}
+    if len(parts) == 7:
+        prefix, sub1, ref_id1, sub2, ref_id2, sub3, ref_id3 = parts
+
+        if (
+            prefix == "participant"
+            and sub1 == "entity"
+            and sub2 == "category"
+            and sub3 == "dimension_value"
+        ):
+            from app.modules.entity.model import EntityType
+            from app.modules.activity.model import ActivityCategory
+            from app.modules.dimension.model import DimensionValue
+
+            entity_ok = (
+                ref_id1 == "user"
+                or db.query(EntityType).filter_by(organization_id=org_id, id=ref_id1).first()
+            )
+            cat_ok = db.query(ActivityCategory).filter_by(
+                organization_id=org_id, id=ref_id2
+            ).first()
+            dv_ok = db.query(DimensionValue).filter_by(
+                organization_id=org_id, id=ref_id3
+            ).first()
+            if entity_ok and cat_ok and dv_ok:
+                return
 
     from fastapi import HTTPException
 

@@ -111,22 +111,25 @@ export default function ActivityDetailPage() {
   const getParticipationMetaFields = (el: ActivityFormElement): MetaFieldDefinition[] => {
     if (!el.ref_id) return [];
     const fields: MetaFieldDefinition[] = [];
+    const base = `participant:entity:${el.ref_id}`;
 
-    // participant:entity:{ref_id} — all categories
-    const baseKey = `participant:entity:${el.ref_id}`;
-    fields.push(...(allMetaSchemas[baseKey] || []));
+    // participant:entity:{ref_id} — all categories, all dimension values
+    fields.push(...(allMetaSchemas[base] || []));
 
     // participant:entity:{ref_id}:category:{categoryId}
     if (categoryId) {
-      const catKey = `${baseKey}:category:${categoryId}`;
-      fields.push(...(allMetaSchemas[catKey] || []));
+      fields.push(...(allMetaSchemas[`${base}:category:${categoryId}`] || []));
     }
 
-    // participant:entity:{ref_id}:dimension_value:{dvId} — per dimension value tag
+    // Per dimension value tag
     if (activity?.tags) {
       for (const tag of activity.tags) {
-        const dvKey = `${baseKey}:dimension_value:${tag.value_id}`;
-        fields.push(...(allMetaSchemas[dvKey] || []));
+        // participant:entity:{ref_id}:dimension_value:{dvId}
+        fields.push(...(allMetaSchemas[`${base}:dimension_value:${tag.value_id}`] || []));
+        // participant:entity:{ref_id}:category:{catId}:dimension_value:{dvId}
+        if (categoryId) {
+          fields.push(...(allMetaSchemas[`${base}:category:${categoryId}:dimension_value:${tag.value_id}`] || []));
+        }
       }
     }
 
@@ -234,7 +237,7 @@ export default function ActivityDetailPage() {
   // Use first tag as activity title
   const activityTitle = activity.tags.length > 0 ? activity.tags[0].value_name : v("activity");
 
-  // Activity meta fields from category + dimension values
+  // Activity meta fields: category + dimension values + category×dimension_value combos
   const categoryFields = useMemo((): MetaFieldDefinition[] => {
     const fields: MetaFieldDefinition[] = [];
     if (categoryId) {
@@ -242,7 +245,12 @@ export default function ActivityDetailPage() {
     }
     if (activity?.tags) {
       for (const tag of activity.tags) {
+        // All-categories × dimension value
         fields.push(...(allMetaSchemas[`activity:dimension_value:${tag.value_id}`] || []));
+        // Specific category × dimension value
+        if (categoryId) {
+          fields.push(...(allMetaSchemas[`activity:category:${categoryId}:dimension_value:${tag.value_id}`] || []));
+        }
       }
     }
     return fields;
