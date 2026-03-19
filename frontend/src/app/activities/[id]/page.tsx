@@ -336,7 +336,7 @@ export default function ActivityDetailPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             {editingSections ? (
-              <>
+              <form onSubmit={(e) => { e.preventDefault(); handleSave(); }}>
                 {entityTypeElements.map((el) => {
                   const sectionKey = getSectionKey(el);
                   const isUserSource = el.ref_id === "user";
@@ -453,14 +453,14 @@ export default function ActivityDetailPage() {
                   );
                 })}
                 <div className="flex gap-2 pt-2">
-                  <Button onClick={handleSave} disabled={saveMutation.isPending}>
+                  <Button type="submit" disabled={saveMutation.isPending}>
                     Save
                   </Button>
-                  <Button variant="outline" onClick={() => setEditingSections(false)}>
+                  <Button type="button" variant="outline" onClick={() => setEditingSections(false)}>
                     Cancel
                   </Button>
                 </div>
-              </>
+              </form>
             ) : (
               entityTypeElements.map((el) => {
                 const sectionKey = getSectionKey(el);
