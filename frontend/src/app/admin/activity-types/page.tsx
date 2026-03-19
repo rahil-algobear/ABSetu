@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { activityCategoryApi } from "@/services/api";
-import { ActivityCategory } from "@/types";
+import { activityTypeApi } from "@/services/api";
+import { ActivityType } from "@/types";
 import { Can } from "@/components/Auth/Permissions";
 import { useVocabulary } from "@/hooks/useVocabulary";
 import { Button } from "@/components/ui/button";
@@ -25,40 +25,40 @@ export default function ActivityCategoriesPage() {
   const queryClient = useQueryClient();
   const { v, vPlural } = useVocabulary();
   const [modalOpen, setModalOpen] = useState(false);
-  const [editing, setEditing] = useState<ActivityCategory | null>(null);
+  const [editing, setEditing] = useState<ActivityType | null>(null);
   const [form, setForm] = useState({ name: "" });
 
   const { data: categories = [], isLoading } = useQuery({
-    queryKey: ["activity-categories"],
-    queryFn: activityCategoryApi.list,
+    queryKey: ["activity-types"],
+    queryFn: activityTypeApi.list,
   });
 
   const createMutation = useMutation({
-    mutationFn: activityCategoryApi.create,
+    mutationFn: activityTypeApi.create,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["activity-categories"] });
+      queryClient.invalidateQueries({ queryKey: ["activity-types"] });
       closeModal();
-      toast.success(`${v("activity_category")} created`);
+      toast.success(`${v("activity_type")} created`);
     },
-    onError: () => toast.error(`Failed to create ${v("activity_category").toLowerCase()}`),
+    onError: () => toast.error(`Failed to create ${v("activity_type").toLowerCase()}`),
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Parameters<typeof activityCategoryApi.update>[1] }) =>
-      activityCategoryApi.update(id, data),
+    mutationFn: ({ id, data }: { id: string; data: Parameters<typeof activityTypeApi.update>[1] }) =>
+      activityTypeApi.update(id, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["activity-categories"] });
+      queryClient.invalidateQueries({ queryKey: ["activity-types"] });
       closeModal();
-      toast.success(`${v("activity_category")} updated`);
+      toast.success(`${v("activity_type")} updated`);
     },
-    onError: () => toast.error(`Failed to update ${v("activity_category").toLowerCase()}`),
+    onError: () => toast.error(`Failed to update ${v("activity_type").toLowerCase()}`),
   });
 
   const deleteMutation = useMutation({
-    mutationFn: activityCategoryApi.delete,
+    mutationFn: activityTypeApi.delete,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["activity-categories"] });
-      toast.success(`${v("activity_category")} deleted`);
+      queryClient.invalidateQueries({ queryKey: ["activity-types"] });
+      toast.success(`${v("activity_type")} deleted`);
     },
     onError: () => toast.error("Failed to delete — it may have activities"),
   });
@@ -69,7 +69,7 @@ export default function ActivityCategoriesPage() {
     setModalOpen(true);
   };
 
-  const openEdit = (item: ActivityCategory) => {
+  const openEdit = (item: ActivityType) => {
     setEditing(item);
     setForm({ name: item.name });
     setModalOpen(true);
@@ -92,17 +92,17 @@ export default function ActivityCategoriesPage() {
   return (
     <>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold">{vPlural("activity_category")}</h2>
-        <Can permission="activity_category:manage">
+        <h2 className="text-lg font-semibold">{vPlural("activity_type")}</h2>
+        <Can permission="activity_type:manage">
           <Button size="sm" onClick={openCreate}>
             <Plus className="h-4 w-4 mr-1" />
-            Add {v("activity_category")}
+            Add {v("activity_type")}
           </Button>
         </Can>
       </div>
 
       <p className="text-sm text-gray-500 mb-4">
-        Activity categories define the structural type of an activity. Use the{" "}
+        Activity types define the structural type of an activity. Use the{" "}
         <a href="/admin/form-builder" className="text-purple-600 underline">
           Form Builder
         </a>{" "}
@@ -112,7 +112,7 @@ export default function ActivityCategoriesPage() {
       {isLoading ? (
         <p className="text-gray-500 text-sm">Loading...</p>
       ) : categories.length === 0 ? (
-        <p className="text-gray-500 text-sm">No {vPlural("activity_category").toLowerCase()} yet.</p>
+        <p className="text-gray-500 text-sm">No {vPlural("activity_type").toLowerCase()} yet.</p>
       ) : (
         <Table>
           <TableHeader>
@@ -128,7 +128,7 @@ export default function ActivityCategoriesPage() {
                 <TableCell className="font-medium">{cat.name}</TableCell>
                 <TableCell className="text-gray-400 text-sm font-mono">{cat.key}</TableCell>
                 <TableCell>
-                  <Can permission="activity_category:manage">
+                  <Can permission="activity_type:manage">
                     <div className="flex gap-1">
                       <button
                         onClick={() => openEdit(cat)}
@@ -138,7 +138,7 @@ export default function ActivityCategoriesPage() {
                       </button>
                       <button
                         onClick={() => {
-                          if (confirm(`Delete this ${v("activity_category").toLowerCase()}?`))
+                          if (confirm(`Delete this ${v("activity_type").toLowerCase()}?`))
                             deleteMutation.mutate(cat.id);
                         }}
                         className="text-gray-400 hover:text-red-500"
@@ -157,7 +157,7 @@ export default function ActivityCategoriesPage() {
       <Dialog
         open={modalOpen}
         onClose={closeModal}
-        title={editing ? `Edit ${v("activity_category")}` : `Add ${v("activity_category")}`}
+        title={editing ? `Edit ${v("activity_type")}` : `Add ${v("activity_type")}`}
       >
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>

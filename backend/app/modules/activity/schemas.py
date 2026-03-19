@@ -1,5 +1,5 @@
 """
-Activity, ActivityCategory, ActivityParticipant schemas
+Activity, ActivityType, ActivityParticipant schemas
 """
 
 import datetime
@@ -9,20 +9,20 @@ from pydantic import BaseModel, Field
 
 from app.common.schemas.base_response import BaseResponseSchema
 
-# --- Activity Category ---
+# --- Activity Type ---
 
 
-class ActivityCategoryCreate(BaseModel):
+class ActivityTypeCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     sort_order: int = 0
 
 
-class ActivityCategoryUpdate(BaseModel):
+class ActivityTypeUpdate(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=200)
     sort_order: int | None = None
 
 
-class ActivityCategoryResponse(BaseResponseSchema):
+class ActivityTypeResponse(BaseResponseSchema):
     organization_id: str
     name: str
     key: str
@@ -43,7 +43,7 @@ class ActivityFormElement(BaseModel):
 
 
 class ActivityFormCreate(BaseModel):
-    activity_category_id: str
+    activity_type_id: str
     elements: list[ActivityFormElement] = []
 
 
@@ -53,7 +53,7 @@ class ActivityFormUpdate(BaseModel):
 
 class ActivityFormResponse(BaseResponseSchema):
     organization_id: str
-    activity_category_id: str
+    activity_type_id: str
     elements: list[dict[str, Any]] = []
 
 
@@ -69,7 +69,7 @@ class DimensionInfo(BaseModel):
 
 
 class ActivityCreate(BaseModel):
-    category_id: str | None = None
+    activity_type_id: str | None = None
     dimension_value_ids: list[str] = []
     date: datetime.date
     notes: str | None = None
@@ -84,12 +84,12 @@ class ActivityUpdate(BaseModel):
 
 class ActivityResponse(BaseResponseSchema):
     organization_id: str
-    category_id: str | None = None
+    activity_type_id: str | None = None
     date: datetime.date
     notes: str | None = None
     created_by: str | None = None
     meta: dict[str, Any] | None = None
-    category_name: str | None = None
+    activity_type_name: str | None = None
     dimensions: list[DimensionInfo] = []
 
 

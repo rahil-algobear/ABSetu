@@ -1,7 +1,7 @@
 import authAxios, { publicAxios } from './axios';
 import {
   Activity,
-  ActivityCategory,
+  ActivityType,
   ActivityForm,
   ActivityFormElement,
   ActivityParticipant,
@@ -94,7 +94,7 @@ export interface MetaFieldScope {
   type: string; // "entity", "dimension", "enrollment", "activity", "participant"
   entity_type_id?: string;
   dimension_id?: string;
-  category_id?: string;
+  activity_type_id?: string;
   dimension_value_id?: string;
 }
 
@@ -235,27 +235,27 @@ export const entityApi = {
   },
 };
 
-// --- Activity Categories ---
+// --- Activity Types ---
 
-export const activityCategoryApi = {
-  list: async (): Promise<ActivityCategory[]> => {
-    const response = await authAxios.get<ActivityCategory[]>('/activity-categories/');
+export const activityTypeApi = {
+  list: async (): Promise<ActivityType[]> => {
+    const response = await authAxios.get<ActivityType[]>('/activity-types/');
     return response.data;
   },
-  get: async (id: string): Promise<ActivityCategory> => {
-    const response = await authAxios.get<ActivityCategory>(`/activity-categories/${id}`);
+  get: async (id: string): Promise<ActivityType> => {
+    const response = await authAxios.get<ActivityType>(`/activity-types/${id}`);
     return response.data;
   },
-  create: async (data: { name: string; sort_order?: number }): Promise<ActivityCategory> => {
-    const response = await authAxios.post<ActivityCategory>('/activity-categories/', data);
+  create: async (data: { name: string; sort_order?: number }): Promise<ActivityType> => {
+    const response = await authAxios.post<ActivityType>('/activity-types/', data);
     return response.data;
   },
-  update: async (id: string, data: { name?: string; sort_order?: number }): Promise<ActivityCategory> => {
-    const response = await authAxios.put<ActivityCategory>(`/activity-categories/${id}`, data);
+  update: async (id: string, data: { name?: string; sort_order?: number }): Promise<ActivityType> => {
+    const response = await authAxios.put<ActivityType>(`/activity-types/${id}`, data);
     return response.data;
   },
   delete: async (id: string) => {
-    const response = await authAxios.delete(`/activity-categories/${id}`);
+    const response = await authAxios.delete(`/activity-types/${id}`);
     return response.data;
   },
 };
@@ -289,7 +289,7 @@ export const activityApi = {
     return response.data;
   },
   create: async (data: {
-    category_id?: string;
+    activity_type_id?: string;
     date: string;
     notes?: string;
     dimension_value_ids?: string[];

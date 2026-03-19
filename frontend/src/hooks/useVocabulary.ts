@@ -9,7 +9,7 @@ import { useAuth } from "@/services/auth";
  */
 const DEFAULTS: Record<string, string> = {
   activity: "Activity",
-  activity_category: "Activity Category",
+  activity_type: "Activity Type",
   entity: "Entity",
   entity_type: "Entity Type",
   participant: "Participant",
@@ -21,7 +21,7 @@ const DEFAULTS: Record<string, string> = {
  */
 const DEFAULTS_PLURAL: Record<string, string> = {
   activity: "Activities",
-  activity_category: "Activity Categories",
+  activity_type: "Activity Types",
   entity: "Entities",
   entity_type: "Entity Types",
   participant: "Participants",

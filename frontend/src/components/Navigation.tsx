@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { useAuth } from "../services/auth";
 import { usePermissions, Can } from "./Auth/Permissions";
 import { useQuery } from "@tanstack/react-query";
-import { organizationApi, dimensionApi, entityTypeApi, activityCategoryApi } from "@/services/api";
+import { organizationApi, dimensionApi, entityTypeApi, activityTypeApi } from "@/services/api";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import Image from "next/image";
@@ -279,15 +279,15 @@ export default function Navigation() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const { data: activityCategories = [] } = useQuery({
-    queryKey: ["activity-categories"],
-    queryFn: activityCategoryApi.list,
+  const { data: activityTypes = [] } = useQuery({
+    queryKey: ["activity-types"],
+    queryFn: activityTypeApi.list,
     enabled: isAuthenticated,
     staleTime: 5 * 60 * 1000,
   });
 
-  // Activity categories as top-level nav links
-  const activityCategoryLinks = activityCategories.map((cat) => ({
+  // Activity types as top-level nav links
+  const activityTypeLinks = activityTypes.map((cat) => ({
     href: `/activities?category=${cat.key}`,
     label: cat.name,
     icon: CalendarDays,
@@ -320,8 +320,8 @@ export default function Navigation() {
     { href: "/admin/manage-dimensions", label: "Dimensions", icon: Layers, permission: "dimension:manage" },
     { href: "/admin/dimension-linking", label: "Dimension Linking", icon: Link2, permission: "dimension:view" },
     { href: "/admin/entity-types", label: vPlural("entity_type"), icon: UserCog, permission: "entity_type:view" },
-    { href: "/admin/activity-categories", label: vPlural("activity_category"), icon: ClipboardList, permission: "activity_category:view" },
-    { href: "/admin/form-builder", label: "Form Builder", icon: LayoutTemplate, permission: "activity_category:manage" },
+    { href: "/admin/activity-types", label: vPlural("activity_type"), icon: ClipboardList, permission: "activity_type:view" },
+    { href: "/admin/form-builder", label: "Form Builder", icon: LayoutTemplate, permission: "activity_type:manage" },
   ];
 
   // Close mobile menu on navigation
@@ -434,7 +434,7 @@ export default function Navigation() {
                 </Link>
 
                 {/* Activity categories as top-level links */}
-                {activityCategoryLinks.map((item) => (
+                {activityTypeLinks.map((item) => (
                   <Can key={item.href} permission={item.permission}>
                     <Link
                       href={item.href}
@@ -521,7 +521,7 @@ export default function Navigation() {
             </Link>
 
             {/* Activity categories as top-level links */}
-            {activityCategoryLinks.map((item) => {
+            {activityTypeLinks.map((item) => {
               if (!can(item.permission)) return null;
               const active = pathname.startsWith(item.href.split("?")[0]);
               return (

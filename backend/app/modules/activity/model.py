@@ -1,5 +1,5 @@
 """
-Activity models: ActivityCategory, ActivityForm, Activity, ActivityParticipant
+Activity models: ActivityType, ActivityForm, Activity, ActivityParticipant
 """
 
 from sqlalchemy import Column, Date, ForeignKey, Integer, String, Text, UniqueConstraint
@@ -9,8 +9,8 @@ from sqlalchemy.orm import relationship
 from app.common.models.base_model import BaseModel
 
 
-class ActivityCategory(BaseModel):
-    __tablename__ = "activity_categories"
+class ActivityType(BaseModel):
+    __tablename__ = "activity_types"
 
     organization_id = Column(
         UUID(as_uuid=True),
@@ -22,12 +22,10 @@ class ActivityCategory(BaseModel):
     key = Column(String, nullable=False)
     sort_order = Column(Integer, nullable=False, default=0)
 
-    organization = relationship("Organization", back_populates="activity_categories")
-    form = relationship("ActivityForm", back_populates="category", uselist=False)
+    organization = relationship("Organization", back_populates="activity_types")
+    form = relationship("ActivityForm", back_populates="activity_type", uselist=False)
 
-    __table_args__ = (
-        UniqueConstraint("organization_id", "key", name="uq_activity_category_org_key"),
-    )
+    __table_args__ = (UniqueConstraint("organization_id", "key", name="uq_activity_type_org_key"),)
 
 
 class ActivityForm(BaseModel):
@@ -39,16 +37,16 @@ class ActivityForm(BaseModel):
         nullable=False,
         index=True,
     )
-    activity_category_id = Column(
+    activity_type_id = Column(
         UUID(as_uuid=True),
-        ForeignKey("activity_categories.id", ondelete="CASCADE"),
+        ForeignKey("activity_types.id", ondelete="CASCADE"),
         nullable=False,
         unique=True,
     )
     elements = Column(JSONB, nullable=False, default=list)
 
     organization = relationship("Organization", back_populates="activity_forms")
-    category = relationship("ActivityCategory", back_populates="form")
+    activity_type = relationship("ActivityType", back_populates="form")
 
 
 class Activity(BaseModel):
@@ -60,9 +58,9 @@ class Activity(BaseModel):
         nullable=False,
         index=True,
     )
-    category_id = Column(
+    activity_type_id = Column(
         UUID(as_uuid=True),
-        ForeignKey("activity_categories.id", ondelete="SET NULL"),
+        ForeignKey("activity_types.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
@@ -75,7 +73,7 @@ class Activity(BaseModel):
     )
     meta = Column(JSONB, nullable=True, default=dict)
 
-    category = relationship("ActivityCategory")
+    activity_type = relationship("ActivityType")
     participants = relationship("ActivityParticipant", back_populates="activity", lazy="dynamic")
     dimensions = relationship(
         "ActivityDimension",

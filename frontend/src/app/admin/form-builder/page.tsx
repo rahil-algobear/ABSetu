@@ -3,14 +3,14 @@
 import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  activityCategoryApi,
+  activityTypeApi,
   activityFormApi,
   dimensionApi,
   entityTypeApi,
   metaFieldSchemaApi,
 } from "@/services/api";
 import {
-  ActivityCategory,
+  ActivityType,
   ActivityFormElement,
   Dimension,
   EntityType,
@@ -70,9 +70,9 @@ export default function FormBuilderPage() {
   const [addDisplayType, setAddDisplayType] = useState<string>("dropdown");
 
   // Data queries
-  const { data: categories = [] } = useQuery<ActivityCategory[]>({
-    queryKey: ["activity-categories"],
-    queryFn: activityCategoryApi.list,
+  const { data: categories = [] } = useQuery<ActivityType[]>({
+    queryKey: ["activity-types"],
+    queryFn: activityTypeApi.list,
   });
 
   const { data: dimensions = [] } = useQuery<Dimension[]>({
@@ -225,7 +225,7 @@ export default function FormBuilderPage() {
     <>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold">Form Builder</h2>
-        <Can permission="activity_category:manage">
+        <Can permission="activity_type:manage">
           {isDirty && (
             <Button
               size="sm"
@@ -241,12 +241,12 @@ export default function FormBuilderPage() {
 
       <p className="text-sm text-gray-500 mb-4">
         Configure what form elements appear when recording an activity.
-        Choose an {v("activity_category").toLowerCase()} and add the elements you want.
+        Choose an {v("activity_type").toLowerCase()} and add the elements you want.
       </p>
 
       {/* Category selector */}
       <div className="mb-6">
-        <Label className="text-sm mb-1 block">{v("activity_category")}</Label>
+        <Label className="text-sm mb-1 block">{v("activity_type")}</Label>
         <select
           className="border rounded-md px-3 py-2 text-sm w-full max-w-xs"
           value={selectedCategoryId}
@@ -273,7 +273,7 @@ export default function FormBuilderPage() {
             <Label className="text-sm font-semibold">
               Form Elements for &ldquo;{selectedCategory?.name}&rdquo;
             </Label>
-            <Can permission="activity_category:manage">
+            <Can permission="activity_type:manage">
               <Button type="button" size="sm" variant="outline" onClick={openAddModal}>
                 <Plus className="h-3 w-3 mr-1" />
                 Add Element
@@ -377,7 +377,7 @@ export default function FormBuilderPage() {
                     </button>
 
                     {/* Remove */}
-                    <Can permission="activity_category:manage">
+                    <Can permission="activity_type:manage">
                       <button
                         type="button"
                         onClick={() => removeElement(idx)}

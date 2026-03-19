@@ -850,7 +850,7 @@ When a user selects a location, they see activity types from any category. The a
 
 ### New Table
 
-#### `activity_categories`
+#### `activity_types`
 
 | Column | Type | Notes |
 |--------|------|-------|
@@ -987,11 +987,11 @@ Each section has:
 
 #### `activity_types` (modified)
 
-Gains a `category_id` FK.
+Gains a `activity_type_id` FK.
 
 | Column | Change |
 |--------|--------|
-| `category_id` | **Added** — FK → activity_categories, NOT NULL |
+| `activity_type_id` | **Added** — FK → activity_types, NOT NULL |
 
 Activity types inherit form structure from their category. All 15 of Kshamata's interventions point to the same "Sessions" category.
 
@@ -1150,7 +1150,7 @@ When "Activity: Sessions" or "Partic: Sessions" is selected, a sub-filter appear
                  [Mental Health ▼]    →  shows type-specific fields only
 ```
 
-Tabs are dynamically generated from the org's entity types, dimensions, and activity categories. `DynamicMetaForm` editor requires no changes — it already works with any field definition array.
+Tabs are dynamically generated from the org's entity types, dimensions, and activity types. `DynamicMetaForm` editor requires no changes — it already works with any field definition array.
 
 ### Activity Form Rendering Logic
 
@@ -1390,7 +1390,7 @@ Organization
   │           └── Enrollments (for entity types with can_enroll)
   │                 └── EnrollmentDimensions → DimensionValues
   ├── ActivityCategories (form builder — defines participant sections)
-  │     └── ActivityTypes (now with category_id)
+  │     └── ActivityTypes (now with activity_type_id)
   │           └── Activities
   │                 ├── ActivityDimensions → DimensionValues
   │                 └── ActivityParticipants (polymorphic: entity or user, with status + meta)
@@ -1407,12 +1407,12 @@ Organization
 
 Since `enrollments` haven't been built yet and `facilitators` + `beneficiaries` already exist:
 
-1. Create `entity_types` and `activity_categories` tables
+1. Create `entity_types` and `activity_types` tables
 2. Create `entities` table, migrate data from `beneficiaries` and `facilitators`
 3. Create `entity_dimensions`, migrate data from `beneficiary_dimensions`
 4. Create `activity_participants` table, migrate data from `participations` (with `participant_type: "entity"`, `section_key: "entity_type:beneficiary"`)
 5. Migrate `activity_facilitators` data into `activity_participants` (with `participant_type: "entity"`, `section_key: "entity_type:facilitator"`)
-6. Add `category_id` to `activity_types`
+6. Add `activity_type_id` to `activity_types`
 7. Drop old tables (`beneficiaries`, `facilitators`, `activity_facilitators`, `beneficiary_dimensions`, `participations`)
 8. Rename "Custom Fields" to "Form Fields" in frontend, update schema key patterns
 9. Update all services, routes, and frontend to use new entity/category/activity_participants models

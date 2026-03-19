@@ -61,13 +61,13 @@ export default function ActivityDetailPage() {
   });
 
   // Category ID comes directly from the activity
-  const categoryId = activity?.category_id || "";
+  const activityTypeId = activity?.activity_type_id || "";
 
   // Load form builder config
   const { data: formConfig } = useQuery<ActivityForm>({
-    queryKey: ["activity-form", categoryId],
-    queryFn: () => activityFormApi.get(categoryId),
-    enabled: !!categoryId,
+    queryKey: ["activity-form", activityTypeId],
+    queryFn: () => activityFormApi.get(activityTypeId),
+    enabled: !!activityTypeId,
   });
 
   // Get entity_type elements from form config (these are participant sections)
@@ -116,9 +116,9 @@ export default function ActivityDetailPage() {
     // participant:entity:{ref_id} — all categories, all dimension values
     fields.push(...(allMetaSchemas[base] || []));
 
-    // participant:entity:{ref_id}:category:{categoryId}
-    if (categoryId) {
-      fields.push(...(allMetaSchemas[`${base}:category:${categoryId}`] || []));
+    // participant:entity:{ref_id}:category:{activityTypeId}
+    if (activityTypeId) {
+      fields.push(...(allMetaSchemas[`${base}:category:${activityTypeId}`] || []));
     }
 
     // Per dimension value dimension
@@ -127,8 +127,8 @@ export default function ActivityDetailPage() {
         // participant:entity:{ref_id}:dimension_value:{dvId}
         fields.push(...(allMetaSchemas[`${base}:dimension_value:${dim.value_id}`] || []));
         // participant:entity:{ref_id}:category:{catId}:dimension_value:{dvId}
-        if (categoryId) {
-          fields.push(...(allMetaSchemas[`${base}:category:${categoryId}:dimension_value:${dim.value_id}`] || []));
+        if (activityTypeId) {
+          fields.push(...(allMetaSchemas[`${base}:category:${activityTypeId}:dimension_value:${dim.value_id}`] || []));
         }
       }
     }
@@ -232,23 +232,23 @@ export default function ActivityDetailPage() {
   };
 
   // Activity meta fields: category + dimension values + category×dimension_value combos
-  const categoryFields = useMemo((): MetaFieldDefinition[] => {
+  const activityTypeFields = useMemo((): MetaFieldDefinition[] => {
     const fields: MetaFieldDefinition[] = [];
-    if (categoryId) {
-      fields.push(...(allMetaSchemas[`activity:category:${categoryId}`] || []));
+    if (activityTypeId) {
+      fields.push(...(allMetaSchemas[`activity:category:${activityTypeId}`] || []));
     }
     if (activity?.dimensions) {
       for (const dim of activity.dimensions) {
         // All-categories × dimension value
         fields.push(...(allMetaSchemas[`activity:dimension_value:${dim.value_id}`] || []));
         // Specific category × dimension value
-        if (categoryId) {
-          fields.push(...(allMetaSchemas[`activity:category:${categoryId}:dimension_value:${dim.value_id}`] || []));
+        if (activityTypeId) {
+          fields.push(...(allMetaSchemas[`activity:category:${activityTypeId}:dimension_value:${dim.value_id}`] || []));
         }
       }
     }
     return fields;
-  }, [categoryId, activity, allMetaSchemas]);
+  }, [activityTypeId, activity, allMetaSchemas]);
 
   if (isLoading) return <PageLayout className="p-4"><p>Loading...</p></PageLayout>;
   if (!activity) return <PageLayout className="p-4"><p>Not found</p></PageLayout>;
@@ -282,8 +282,8 @@ export default function ActivityDetailPage() {
       </div>
       <p className="text-gray-500 mb-4">{activity.date}</p>
 
-      {activity.category_name && (
-        <p className="text-sm text-gray-500 mb-2">Category: {activity.category_name}</p>
+      {activity.activity_type_name && (
+        <p className="text-sm text-gray-500 mb-2">Category: {activity.activity_type_name}</p>
       )}
 
       {activity.notes && (
@@ -291,10 +291,10 @@ export default function ActivityDetailPage() {
       )}
 
       {/* Activity meta display */}
-      {activity.meta && Object.keys(activity.meta).length > 0 && categoryFields.length > 0 && (
+      {activity.meta && Object.keys(activity.meta).length > 0 && activityTypeFields.length > 0 && (
         <Card className="mb-4">
           <CardContent className="py-3">
-            <MetaFieldDisplay fields={categoryFields} values={activity.meta} />
+            <MetaFieldDisplay fields={activityTypeFields} values={activity.meta} />
           </CardContent>
         </Card>
       )}

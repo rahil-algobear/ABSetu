@@ -1,6 +1,6 @@
 """
 Kshamata seed script: creates org, dimensions (Programme, Project, Location,
-Intervention), entity types, activity category, dimension value links,
+Intervention), entity types, activity type, dimension value links,
 vocabulary, and admin user.
 
 Interventions are regular dimension values — no ActivityType entity needed.
@@ -16,7 +16,7 @@ import sys
 from app.core.database import SessionLocal
 from app.modules.organization.model import MetaFieldSchema, Organization
 from app.modules.dimension.model import Dimension, DimensionValue, DimensionValueLink
-from app.modules.activity.model import ActivityCategory
+from app.modules.activity.model import ActivityType
 from app.modules.entity.model import EntityType
 from app.modules.auth.model import User
 from app.modules.role.model import Permission, Role, RolePermission
@@ -45,7 +45,7 @@ ORG_LOGO_URL = "https://kshamata.org/wp-content/uploads/2022/06/revised-logo.png
 # ---------------------------------------------------------------------------
 VOCABULARY = {
     "activity": "Session",
-    "activity_category": "Activity Category",
+    "activity_type": "Activity Type",
     "participant": "Participant",
     "entity": "Person",
     "enrollment": "Enrollment",
@@ -68,7 +68,7 @@ ENTITY_TYPES = [
 ]
 
 # ---------------------------------------------------------------------------
-# Activity Category: Sessions (form builder config)
+# Activity Type: Sessions (form builder config)
 # participant_source UUIDs are populated at seed time after entity types are created
 # ---------------------------------------------------------------------------
 SESSIONS_CATEGORY_NAME = "Sessions"
@@ -732,15 +732,13 @@ def seed():
                 f" ({len(FACILITATOR_CUSTOM_FIELDS)} fields)"
             )
 
-        # 3. Activity Category: Sessions
+        # 3. Activity Type: Sessions
         sessions_cat_key = slugify(SESSIONS_CATEGORY_NAME)
         sessions_cat = (
-            db.query(ActivityCategory)
-            .filter_by(organization_id=org.id, key=sessions_cat_key)
-            .first()
+            db.query(ActivityType).filter_by(organization_id=org.id, key=sessions_cat_key).first()
         )
         if not sessions_cat:
-            sessions_cat = ActivityCategory(
+            sessions_cat = ActivityType(
                 organization_id=org.id,
                 name=SESSIONS_CATEGORY_NAME,
                 key=sessions_cat_key,
@@ -748,7 +746,7 @@ def seed():
             )
             db.add(sessions_cat)
             db.flush()
-        print(f"  Ensured activity category: {sessions_cat.name}")
+        print(f"  Ensured activity type: {sessions_cat.name}")
 
         # 4. Dimensions (intervention is now a regular dimension, not system)
         programme_dim = _ensure_dimension(db, org, "programme", "Programme", 0)
@@ -902,7 +900,7 @@ def seed():
         print(f"  Organisation        : {ORG_NAME}")
         print(f"  Vocabulary          : {len(VOCABULARY)} term overrides")
         print(f"  Entity Types        : {len(ENTITY_TYPES)}")
-        print(f"  Activity Categories : 1 (Sessions)")
+        print(f"  Activity Types : 1 (Sessions)")
         print(f"  Roles               : 2 (Admin [system], Team Member [default])")
         print(f"  Dimensions          : 4 (Programme, Project, Location, Intervention)")
         print(f"  Programmes          : {len(PROGRAMMES)}")

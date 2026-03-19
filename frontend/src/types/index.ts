@@ -130,9 +130,9 @@ export interface Entity {
   updated_at: number | null;
 }
 
-// --- Activity Categories ---
+// --- Activity Types ---
 
-export interface ActivityCategory {
+export interface ActivityType {
   id: string;
   organization_id: string;
   name: string;
@@ -156,7 +156,7 @@ export interface ActivityFormElement {
 export interface ActivityForm {
   id?: string;
   organization_id?: string;
-  activity_category_id: string;
+  activity_type_id: string;
   elements: ActivityFormElement[];
   updated_at?: number | null;
 }
@@ -164,12 +164,12 @@ export interface ActivityForm {
 export interface Activity {
   id: string;
   organization_id: string;
-  category_id: string | null;
+  activity_type_id: string | null;
   date: string;
   notes: string | null;
   created_by: string | null;
   meta: Record<string, unknown> | null;
-  category_name: string | null;
+  activity_type_name: string | null;
   dimensions: DimensionInfo[];
   updated_at: number | null;
 }

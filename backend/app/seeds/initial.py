@@ -16,7 +16,7 @@ from app.modules.auth.model import User
 
 # Import all models so SQLAlchemy can resolve relationship strings
 from app.modules.dimension.model import Dimension, DimensionValue  # noqa: F401
-from app.modules.activity.model import ActivityCategory, Activity  # noqa: F401
+from app.modules.activity.model import ActivityType, Activity  # noqa: F401
 from app.modules.entity.model import Entity, EntityType  # noqa: F401
 from app.modules.beneficiary.model import Enrollment  # noqa: F401
 
@@ -27,8 +27,8 @@ PERMISSIONS = [
     ("org:settings", "Manage organization settings"),
     ("dimension:view", "View dimensions and dimension values"),
     ("dimension:manage", "Create/edit/delete dimensions and values"),
-    ("activity_category:view", "View activity categories and form builder config"),
-    ("activity_category:manage", "Create/edit/delete activity categories and form builder config"),
+    ("activity_type:view", "View activity types and form builder config"),
+    ("activity_type:manage", "Create/edit/delete activity types and form builder config"),
     ("activity:view", "View activities"),
     ("activity:create", "Create activities and record participants"),
     ("entity:view", "View entities"),
@@ -49,7 +49,7 @@ PERMISSIONS = [
 # Team member gets view + limited create permissions
 TEAM_MEMBER_PERMISSIONS = [
     "dimension:view",
-    "activity_category:view",
+    "activity_type:view",
     "activity:view",
     "activity:create",
     "entity:view",

@@ -1,5 +1,5 @@
 """
-Activity, ActivityCategory, ActivityParticipant routes
+Activity, ActivityType, ActivityParticipant routes
 """
 
 import uuid
@@ -12,23 +12,23 @@ from app.common.dependencies import get_current_user, require_permissions
 from app.common.exceptions import ValidationError
 from app.modules.auth.model import User
 from app.modules.activity.schemas import (
-    ActivityCategoryCreate,
-    ActivityCategoryResponse,
-    ActivityCategoryUpdate,
     ActivityCreate,
     ActivityFormResponse,
     ActivityFormUpdate,
     ActivityResponse,
+    ActivityTypeCreate,
+    ActivityTypeResponse,
+    ActivityTypeUpdate,
     ActivityUpdate,
     DimensionInfo,
     ParticipantBulkCreate,
     ParticipantResponse,
 )
 from app.modules.activity.service import (
-    ActivityCategoryService,
     ActivityFormService,
     ActivityParticipantService,
     ActivityService,
+    ActivityTypeService,
 )
 from app.modules.activity.model import Activity
 from app.modules.dimension.model import Dimension, DimensionValue
@@ -37,84 +37,84 @@ from app.modules.dimension.service import UserDimensionAccessService
 router = APIRouter(tags=["activities"])
 
 
-# --- Activity Categories ---
+# --- Activity Types ---
 
-category_router = APIRouter(prefix="/activity-categories")
+activity_type_router = APIRouter(prefix="/activity-types")
 
 
-@category_router.get("/", dependencies=[Depends(require_permissions("activity_category:view"))])
-def list_activity_categories(
+@activity_type_router.get("/", dependencies=[Depends(require_permissions("activity_type:view"))])
+def list_activity_types(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    service = ActivityCategoryService(db)
-    categories = service.list_by_org(current_user.organization_id)
-    return [ActivityCategoryResponse.dump_from_model(c) for c in categories]
+    service = ActivityTypeService(db)
+    types = service.list_by_org(current_user.organization_id)
+    return [ActivityTypeResponse.dump_from_model(t) for t in types]
 
 
-@category_router.get(
-    "/{category_id}",
-    dependencies=[Depends(require_permissions("activity_category:view"))],
+@activity_type_router.get(
+    "/{activity_type_id}",
+    dependencies=[Depends(require_permissions("activity_type:view"))],
 )
-def get_activity_category(
-    category_id: uuid.UUID,
+def get_activity_type(
+    activity_type_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    service = ActivityCategoryService(db)
-    cat = service.get_by_id(category_id, current_user.organization_id)
-    return ActivityCategoryResponse.dump_from_model(cat)
+    service = ActivityTypeService(db)
+    at = service.get_by_id(activity_type_id, current_user.organization_id)
+    return ActivityTypeResponse.dump_from_model(at)
 
 
-@category_router.post(
+@activity_type_router.post(
     "/",
-    dependencies=[Depends(require_permissions("activity_category:manage"))],
+    dependencies=[Depends(require_permissions("activity_type:manage"))],
     status_code=201,
 )
-def create_activity_category(
-    data: ActivityCategoryCreate,
+def create_activity_type(
+    data: ActivityTypeCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    service = ActivityCategoryService(db)
-    cat = service.create(
+    service = ActivityTypeService(db)
+    at = service.create(
         current_user.organization_id,
         data.model_dump(),
     )
-    return ActivityCategoryResponse.dump_from_model(cat)
+    return ActivityTypeResponse.dump_from_model(at)
 
 
-@category_router.put(
-    "/{category_id}",
-    dependencies=[Depends(require_permissions("activity_category:manage"))],
+@activity_type_router.put(
+    "/{activity_type_id}",
+    dependencies=[Depends(require_permissions("activity_type:manage"))],
 )
-def update_activity_category(
-    category_id: uuid.UUID,
-    data: ActivityCategoryUpdate,
+def update_activity_type(
+    activity_type_id: uuid.UUID,
+    data: ActivityTypeUpdate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    service = ActivityCategoryService(db)
-    cat = service.update(
-        category_id,
+    service = ActivityTypeService(db)
+    at = service.update(
+        activity_type_id,
         current_user.organization_id,
         data.model_dump(exclude_none=True),
     )
-    return ActivityCategoryResponse.dump_from_model(cat)
+    return ActivityTypeResponse.dump_from_model(at)
 
 
-@category_router.delete(
-    "/{category_id}",
-    dependencies=[Depends(require_permissions("activity_category:manage"))],
+@activity_type_router.delete(
+    "/{activity_type_id}",
+    dependencies=[Depends(require_permissions("activity_type:manage"))],
 )
-def delete_activity_category(
-    category_id: uuid.UUID,
+def delete_activity_type(
+    activity_type_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    service = ActivityCategoryService(db)
-    service.delete(category_id, current_user.organization_id)
-    return {"message": "Activity category deleted"}
+    service = ActivityTypeService(db)
+    service.delete(activity_type_id, current_user.organization_id)
+    return {"message": "Activity type deleted"}
 
 
 # --- Activities ---
@@ -138,18 +138,18 @@ def _build_activity_response(a) -> dict:
                 ).model_dump()
             )
 
-    category_name = a.category.name if a.category else None
+    activity_type_name = a.activity_type.name if a.activity_type else None
 
     return ActivityResponse(
         id=str(a.id),
         updated_at=a.updated_at,
         organization_id=str(a.organization_id),
-        category_id=str(a.category_id) if a.category_id else None,
+        activity_type_id=str(a.activity_type_id) if a.activity_type_id else None,
         date=a.date,
         notes=a.notes,
         created_by=str(a.created_by) if a.created_by else None,
         meta=a.meta,
-        category_name=category_name,
+        activity_type_name=activity_type_name,
         dimensions=dim_infos,
     ).dump()
 
@@ -195,10 +195,10 @@ def create_activity(
     db: Session = Depends(get_db),
 ):
     # Validate required form elements from form builder config
-    category_id = data.category_id
-    if category_id:
+    activity_type_id = data.activity_type_id
+    if activity_type_id:
         form_service = ActivityFormService(db)
-        form = form_service.get_by_category(uuid.UUID(category_id), current_user.organization_id)
+        form = form_service.get_by_type(uuid.UUID(activity_type_id), current_user.organization_id)
         if form and form.elements:
             # Resolve which dimension IDs are covered by the submitted values
             submitted_dim_ids = set()
@@ -319,11 +319,10 @@ def save_participants(
 ):
     # Validate required entity_type sections from form builder config
     activity = db.query(Activity).filter_by(id=activity_id).first()
-    if activity and activity.category_id:
+    if activity and activity.activity_type_id:
         form_service = ActivityFormService(db)
-        form = form_service.get_by_category(activity.category_id, current_user.organization_id)
+        form = form_service.get_by_type(activity.activity_type_id, current_user.organization_id)
         if form and form.elements:
-            # Build set of section_keys that have at least one participant
             submitted_sections = {r.section_key for r in data.records}
             for el in form.elements:
                 if (
@@ -333,7 +332,6 @@ def save_participants(
                 ):
                     section_key = el.get("ref_id") or el.get("type")
                     if section_key not in submitted_sections:
-                        # Resolve label
                         ref_id = el.get("ref_id")
                         if ref_id == "user":
                             label = "Users (staff)"
@@ -370,27 +368,27 @@ form_router = APIRouter(prefix="/activity-forms")
 
 
 @form_router.get(
-    "/{category_id}",
-    dependencies=[Depends(require_permissions("activity_category:view"))],
+    "/{activity_type_id}",
+    dependencies=[Depends(require_permissions("activity_type:view"))],
 )
 def get_activity_form(
-    category_id: uuid.UUID,
+    activity_type_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     service = ActivityFormService(db)
-    form = service.get_by_category(category_id, current_user.organization_id)
+    form = service.get_by_type(activity_type_id, current_user.organization_id)
     if not form:
-        return {"activity_category_id": str(category_id), "elements": []}
+        return {"activity_type_id": str(activity_type_id), "elements": []}
     return ActivityFormResponse.dump_from_model(form)
 
 
 @form_router.put(
-    "/{category_id}",
-    dependencies=[Depends(require_permissions("activity_category:manage"))],
+    "/{activity_type_id}",
+    dependencies=[Depends(require_permissions("activity_type:manage"))],
 )
 def upsert_activity_form(
-    category_id: uuid.UUID,
+    activity_type_id: uuid.UUID,
     data: ActivityFormUpdate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -398,27 +396,27 @@ def upsert_activity_form(
     service = ActivityFormService(db)
     form = service.upsert(
         current_user.organization_id,
-        category_id,
+        activity_type_id,
         [e.model_dump() for e in data.elements],
     )
     return ActivityFormResponse.dump_from_model(form)
 
 
 @form_router.delete(
-    "/{category_id}",
-    dependencies=[Depends(require_permissions("activity_category:manage"))],
+    "/{activity_type_id}",
+    dependencies=[Depends(require_permissions("activity_type:manage"))],
 )
 def delete_activity_form(
-    category_id: uuid.UUID,
+    activity_type_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     service = ActivityFormService(db)
-    service.delete(category_id, current_user.organization_id)
+    service.delete(activity_type_id, current_user.organization_id)
     return {"message": "Activity form deleted"}
 
 
 # Include sub-routers
-router.include_router(category_router)
+router.include_router(activity_type_router)
 router.include_router(activity_router)
 router.include_router(form_router)

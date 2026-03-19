@@ -6,7 +6,7 @@ import {
   metaFieldSchemaApi,
   dimensionApi,
   entityTypeApi,
-  activityCategoryApi,
+  activityTypeApi,
   MetaFieldScope,
 } from "@/services/api";
 import {
@@ -15,7 +15,7 @@ import {
   MetaFieldType,
   Dimension,
   DimensionValue,
-  ActivityCategory,
+  ActivityType,
 } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -64,13 +64,13 @@ export default function MetaFieldsPage() {
   const [optionsText, setOptionsText] = useState("");
 
   // Activity section: category (required or "all") + optional dimension value filter
-  const [activityCatId, setActivityCatId] = useState<string>(""); // "" = all categories
+  const [activityTypeId, setActivityCatId] = useState<string>(""); // "" = all categories
   const [activityDimId, setActivityDimId] = useState<string>(""); // which dimension to filter
   const [activityDvId, setActivityDvId] = useState<string>(""); // selected dimension value (optional)
 
   // Participant section state
   const [participantEntityId, setParticipantEntityId] = useState<string>("");
-  const [participantCatId, setParticipantCatId] = useState<string>(""); // "" = all
+  const [participantTypeId, setParticipantCatId] = useState<string>(""); // "" = all
   const [participantDimId, setParticipantDimId] = useState<string>("");
   const [participantDvId, setParticipantDvId] = useState<string>("");
 
@@ -84,9 +84,9 @@ export default function MetaFieldsPage() {
     queryFn: entityTypeApi.list,
   });
 
-  const { data: categories = [] } = useQuery<ActivityCategory[]>({
-    queryKey: ["activity-categories"],
-    queryFn: activityCategoryApi.list,
+  const { data: categories = [] } = useQuery<ActivityType[]>({
+    queryKey: ["activity-types"],
+    queryFn: activityTypeApi.list,
   });
 
   const { data: allDimensionValues = [] } = useQuery<DimensionValue[]>({
@@ -107,11 +107,11 @@ export default function MetaFieldsPage() {
     if (activeSection === "activity") {
       // Build: activity:category:{catId}[:dimension_value:{dvId}]
       // or: activity:dimension_value:{dvId} (all categories)
-      if (activityCatId && activityDvId) {
-        return `activity:category:${activityCatId}:dimension_value:${activityDvId}`;
+      if (activityTypeId && activityDvId) {
+        return `activity:category:${activityTypeId}:dimension_value:${activityDvId}`;
       }
-      if (activityCatId) {
-        return `activity:category:${activityCatId}`;
+      if (activityTypeId) {
+        return `activity:category:${activityTypeId}`;
       }
       if (activityDvId) {
         return `activity:dimension_value:${activityDvId}`;
@@ -122,8 +122,8 @@ export default function MetaFieldsPage() {
     if (activeSection === "participant") {
       if (!participantEntityId) return "";
       let key = `participant:entity:${participantEntityId}`;
-      if (participantCatId) {
-        key += `:category:${participantCatId}`;
+      if (participantTypeId) {
+        key += `:category:${participantTypeId}`;
       }
       if (participantDvId) {
         key += `:dimension_value:${participantDvId}`;
@@ -138,7 +138,7 @@ export default function MetaFieldsPage() {
       case "other": return activeKey;
       default: return "";
     }
-  }, [activeSection, activeKey, activityCatId, activityDvId, participantEntityId, participantCatId, participantDvId]);
+  }, [activeSection, activeKey, activityTypeId, activityDvId, participantEntityId, participantTypeId, participantDvId]);
 
   // Auto-select first ID when section changes
   const selectSection = (section: SectionKind) => {
@@ -192,23 +192,23 @@ export default function MetaFieldsPage() {
         return activeKey ? { type: activeKey } : null;
       case "activity": {
         const scope: MetaFieldScope = { type: "activity" };
-        if (activityCatId) scope.category_id = activityCatId;
+        if (activityTypeId) scope.category_id = activityTypeId;
         if (activityDvId) scope.dimension_value_id = activityDvId;
         // Need at least one filter
-        if (!activityCatId && !activityDvId) return null;
+        if (!activityTypeId && !activityDvId) return null;
         return scope;
       }
       case "participant": {
         if (!participantEntityId) return null;
         const scope: MetaFieldScope = { type: "participant", entity_type_id: participantEntityId };
-        if (participantCatId) scope.category_id = participantCatId;
+        if (participantTypeId) scope.category_id = participantTypeId;
         if (participantDvId) scope.dimension_value_id = participantDvId;
         return scope;
       }
       default:
         return null;
     }
-  }, [activeSection, activeKey, activityCatId, activityDvId, participantEntityId, participantCatId, participantDvId]);
+  }, [activeSection, activeKey, activityTypeId, activityDvId, participantEntityId, participantTypeId, participantDvId]);
 
   const updateMutation = useMutation({
     mutationFn: (newFields: MetaFieldDefinition[]) => {
@@ -294,7 +294,7 @@ export default function MetaFieldsPage() {
       }
       case "other": return vPlural("enrollment");
       case "activity": {
-        const catName = categories.find((c) => c.id === activityCatId)?.name;
+        const catName = categories.find((c) => c.id === activityTypeId)?.name;
         const parts = ["Activity"];
         if (catName) parts.push(catName);
         else parts.push("All categories");
@@ -306,17 +306,17 @@ export default function MetaFieldsPage() {
           ? "Users"
           : entityTypesList.find((et) => et.id === participantEntityId)?.name || participantEntityId;
         const parts = [`Participant: ${entityLabel}`];
-        if (participantCatId) {
-          const catName = categories.find((c) => c.id === participantCatId)?.name;
+        if (participantTypeId) {
+          const catName = categories.find((c) => c.id === participantTypeId)?.name;
           parts.push(catName || "category");
         }
         if (participantDvId) parts.push(dvLabel(participantDvId));
-        if (!participantCatId && !participantDvId) parts.push("(all)");
+        if (!participantTypeId && !participantDvId) parts.push("(all)");
         return parts.join(" \u2192 ");
       }
       default: return "";
     }
-  }, [activeSection, activeKey, entityTypesList, nonSystemDimensions, dimensions, allDimensionValues, categories, vPlural, vDim, activityCatId, activityDvId, participantEntityId, participantCatId, participantDvId]);
+  }, [activeSection, activeKey, entityTypesList, nonSystemDimensions, dimensions, allDimensionValues, categories, vPlural, vDim, activityTypeId, activityDvId, participantEntityId, participantTypeId, participantDvId]);
 
   // Section pills
   const sections: { key: SectionKind; label: string }[] = [
@@ -437,10 +437,10 @@ export default function MetaFieldsPage() {
         {activeSection === "activity" && (
           <div className="flex items-end gap-3 flex-wrap">
             <div>
-              <label className="text-xs text-gray-500 block mb-1">{v("activity_category")}</label>
+              <label className="text-xs text-gray-500 block mb-1">{v("activity_type")}</label>
               <select
                 className="border rounded-md px-3 py-1.5 text-sm"
-                value={activityCatId}
+                value={activityTypeId}
                 onChange={(e) => setActivityCatId(e.target.value)}
               >
                 <option value="">All categories</option>
@@ -516,10 +516,10 @@ export default function MetaFieldsPage() {
             {/* Scope selectors */}
             <div className="flex items-end gap-3 flex-wrap">
               <div>
-                <label className="text-xs text-gray-500 block mb-1">{v("activity_category")}</label>
+                <label className="text-xs text-gray-500 block mb-1">{v("activity_type")}</label>
                 <select
                   className="border rounded-md px-3 py-1.5 text-sm"
-                  value={participantCatId}
+                  value={participantTypeId}
                   onChange={(e) => setParticipantCatId(e.target.value)}
                 >
                   <option value="">All categories</option>

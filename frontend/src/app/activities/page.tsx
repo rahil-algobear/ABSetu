@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   activityApi,
-  activityCategoryApi,
+  activityTypeApi,
   activityFormApi,
   dimensionApi,
   dimensionValueLinkApi,
@@ -78,8 +78,8 @@ export default function ActivitiesPage() {
   });
 
   const { data: categories = [] } = useQuery({
-    queryKey: ["activity-categories"],
-    queryFn: activityCategoryApi.list,
+    queryKey: ["activity-types"],
+    queryFn: activityTypeApi.list,
   });
 
   const { data: dimensions = [] } = useQuery<Dimension[]>({
@@ -298,7 +298,7 @@ export default function ActivitiesPage() {
                 e.preventDefault();
                 const payload = {
                   ...formData,
-                  category_id: selectedCategoryId || undefined,
+                  activity_type_id: selectedCategoryId || undefined,
                   ...(activityMetaFields.length > 0 ? { meta: metaValues } : {}),
                 };
                 createMutation.mutate(payload);
@@ -383,8 +383,8 @@ export default function ActivitiesPage() {
                     </div>
                     <div className="text-right">
                       <p className="text-sm font-medium">{a.date}</p>
-                      {a.category_name && (
-                        <p className="text-xs text-gray-500">{a.category_name}</p>
+                      {a.activity_type_name && (
+                        <p className="text-xs text-gray-500">{a.activity_type_name}</p>
                       )}
                     </div>
                   </div>

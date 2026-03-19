@@ -1,5 +1,5 @@
 """
-Activity, ActivityCategory, ActivityParticipant, ActivityForm services
+Activity, ActivityType, ActivityParticipant, ActivityForm services
 """
 
 import uuid
@@ -10,9 +10,9 @@ from app.common.exceptions import NotFoundError, ValidationError
 from app.common.helpers.slugify import slugify
 from app.modules.activity.model import (
     Activity,
-    ActivityCategory,
     ActivityForm,
     ActivityParticipant,
+    ActivityType,
 )
 from app.modules.dimension.model import (
     ActivityDimension,
@@ -20,56 +20,55 @@ from app.modules.dimension.model import (
 )
 
 
-class ActivityCategoryService:
+class ActivityTypeService:
     def __init__(self, db: Session):
         self.db = db
 
-    def list_by_org(self, org_id: uuid.UUID) -> list[ActivityCategory]:
+    def list_by_org(self, org_id: uuid.UUID) -> list[ActivityType]:
         return (
-            self.db.query(ActivityCategory)
+            self.db.query(ActivityType)
             .filter_by(organization_id=org_id)
-            .order_by(ActivityCategory.sort_order)
+            .order_by(ActivityType.sort_order)
             .all()
         )
 
-    def get_by_id(self, category_id: uuid.UUID, org_id: uuid.UUID) -> ActivityCategory:
-        cat = (
-            self.db.query(ActivityCategory)
-            .filter_by(id=category_id, organization_id=org_id)
+    def get_by_id(self, activity_type_id: uuid.UUID, org_id: uuid.UUID) -> ActivityType:
+        at = (
+            self.db.query(ActivityType)
+            .filter_by(id=activity_type_id, organization_id=org_id)
             .first()
         )
-        if not cat:
-            raise NotFoundError("Activity category not found")
-        return cat
+        if not at:
+            raise NotFoundError("Activity type not found")
+        return at
 
-    def create(self, org_id: uuid.UUID, data: dict) -> ActivityCategory:
+    def create(self, org_id: uuid.UUID, data: dict) -> ActivityType:
         data["key"] = slugify(data["name"])
-        cat = ActivityCategory(organization_id=org_id, **data)
-        self.db.add(cat)
+        at = ActivityType(organization_id=org_id, **data)
+        self.db.add(at)
         self.db.commit()
-        self.db.refresh(cat)
-        return cat
+        self.db.refresh(at)
+        return at
 
-    def update(self, category_id: uuid.UUID, org_id: uuid.UUID, data: dict) -> ActivityCategory:
-        cat = self.get_by_id(category_id, org_id)
+    def update(self, activity_type_id: uuid.UUID, org_id: uuid.UUID, data: dict) -> ActivityType:
+        at = self.get_by_id(activity_type_id, org_id)
         if "name" in data and data["name"] is not None:
             data["key"] = slugify(data["name"])
         for key, value in data.items():
             if value is not None:
-                setattr(cat, key, value)
+                setattr(at, key, value)
         self.db.commit()
-        self.db.refresh(cat)
-        return cat
+        self.db.refresh(at)
+        return at
 
-    def delete(self, category_id: uuid.UUID, org_id: uuid.UUID) -> None:
-        cat = self.get_by_id(category_id, org_id)
-        # Check if any activities reference this category
-        count = self.db.query(Activity).filter_by(category_id=category_id).count()
+    def delete(self, activity_type_id: uuid.UUID, org_id: uuid.UUID) -> None:
+        at = self.get_by_id(activity_type_id, org_id)
+        count = self.db.query(Activity).filter_by(activity_type_id=activity_type_id).count()
         if count > 0:
             raise ValidationError(
-                f"Cannot delete category with {count} activities. Reassign them first."
+                f"Cannot delete activity type with {count} activities. Reassign them first."
             )
-        self.db.delete(cat)
+        self.db.delete(at)
         self.db.commit()
 
 
@@ -95,7 +94,7 @@ class ActivityService:
 
         return (
             query.options(
-                joinedload(Activity.category),
+                joinedload(Activity.activity_type),
                 joinedload(Activity.dimensions)
                 .joinedload(ActivityDimension.dimension_value)
                 .joinedload(DimensionValue.dimension),
@@ -108,7 +107,7 @@ class ActivityService:
         activity = (
             self.db.query(Activity)
             .options(
-                joinedload(Activity.category),
+                joinedload(Activity.activity_type),
                 joinedload(Activity.dimensions)
                 .joinedload(ActivityDimension.dimension_value)
                 .joinedload(DimensionValue.dimension),
@@ -127,19 +126,19 @@ class ActivityService:
         data: dict,
         dimension_value_ids: list[str],
     ) -> Activity:
-        category_id = data.get("category_id")
-        if category_id:
-            cat = (
-                self.db.query(ActivityCategory)
-                .filter_by(id=uuid.UUID(category_id), organization_id=org_id)
+        activity_type_id = data.get("activity_type_id")
+        if activity_type_id:
+            at = (
+                self.db.query(ActivityType)
+                .filter_by(id=uuid.UUID(activity_type_id), organization_id=org_id)
                 .first()
             )
-            if not cat:
-                raise ValidationError("Activity category not found in this organization")
+            if not at:
+                raise ValidationError("Activity type not found in this organization")
 
         activity = Activity(
             organization_id=org_id,
-            category_id=uuid.UUID(category_id) if category_id else None,
+            activity_type_id=uuid.UUID(activity_type_id) if activity_type_id else None,
             date=data["date"],
             notes=data.get("notes"),
             meta=data.get("meta"),
@@ -183,7 +182,6 @@ class ActivityParticipantService:
         if not activity:
             raise NotFoundError("Activity not found")
 
-        # Delete existing participants, then recreate
         self.db.query(ActivityParticipant).filter_by(activity_id=activity_id).delete()
 
         participants = []
@@ -209,32 +207,31 @@ class ActivityFormService:
     def __init__(self, db: Session):
         self.db = db
 
-    def get_by_category(self, category_id: uuid.UUID, org_id: uuid.UUID) -> ActivityForm | None:
+    def get_by_type(self, activity_type_id: uuid.UUID, org_id: uuid.UUID) -> ActivityForm | None:
         return (
             self.db.query(ActivityForm)
-            .filter_by(activity_category_id=category_id, organization_id=org_id)
+            .filter_by(activity_type_id=activity_type_id, organization_id=org_id)
             .first()
         )
 
     def upsert(
-        self, org_id: uuid.UUID, category_id: uuid.UUID, elements: list[dict]
+        self, org_id: uuid.UUID, activity_type_id: uuid.UUID, elements: list[dict]
     ) -> ActivityForm:
-        # Validate category belongs to org
-        cat = (
-            self.db.query(ActivityCategory)
-            .filter_by(id=category_id, organization_id=org_id)
+        at = (
+            self.db.query(ActivityType)
+            .filter_by(id=activity_type_id, organization_id=org_id)
             .first()
         )
-        if not cat:
-            raise NotFoundError("Activity category not found")
+        if not at:
+            raise NotFoundError("Activity type not found")
 
-        form = self.get_by_category(category_id, org_id)
+        form = self.get_by_type(activity_type_id, org_id)
         if form:
             form.elements = elements
         else:
             form = ActivityForm(
                 organization_id=org_id,
-                activity_category_id=category_id,
+                activity_type_id=activity_type_id,
                 elements=elements,
             )
             self.db.add(form)
@@ -242,8 +239,8 @@ class ActivityFormService:
         self.db.refresh(form)
         return form
 
-    def delete(self, category_id: uuid.UUID, org_id: uuid.UUID) -> None:
-        form = self.get_by_category(category_id, org_id)
+    def delete(self, activity_type_id: uuid.UUID, org_id: uuid.UUID) -> None:
+        form = self.get_by_type(activity_type_id, org_id)
         if not form:
             raise NotFoundError("Activity form not found")
         self.db.delete(form)

@@ -103,9 +103,9 @@ def _validate_entity_type(entity_type: str, org_id, db: Session) -> None:
 
         if prefix == "activity":
             if sub == "category":
-                from app.modules.activity.model import ActivityCategory
+                from app.modules.activity.model import ActivityType
 
-                if db.query(ActivityCategory).filter_by(organization_id=org_id, id=ref_id).first():
+                if db.query(ActivityType).filter_by(organization_id=org_id, id=ref_id).first():
                     return
             elif sub == "dimension_value":
                 from app.modules.dimension.model import DimensionValue
@@ -131,12 +131,10 @@ def _validate_entity_type(entity_type: str, org_id, db: Session) -> None:
 
         # activity:category:{cat_id}:dimension_value:{dv_id}
         if prefix == "activity" and sub1 == "category" and sub2 == "dimension_value":
-            from app.modules.activity.model import ActivityCategory
+            from app.modules.activity.model import ActivityType
             from app.modules.dimension.model import DimensionValue
 
-            cat_ok = (
-                db.query(ActivityCategory).filter_by(organization_id=org_id, id=ref_id1).first()
-            )
+            cat_ok = db.query(ActivityType).filter_by(organization_id=org_id, id=ref_id1).first()
             dv_ok = db.query(DimensionValue).filter_by(organization_id=org_id, id=ref_id2).first()
             if cat_ok and dv_ok:
                 return
@@ -152,13 +150,9 @@ def _validate_entity_type(entity_type: str, org_id, db: Session) -> None:
 
             if entity_ok:
                 if sub2 == "category":
-                    from app.modules.activity.model import ActivityCategory
+                    from app.modules.activity.model import ActivityType
 
-                    if (
-                        db.query(ActivityCategory)
-                        .filter_by(organization_id=org_id, id=ref_id2)
-                        .first()
-                    ):
+                    if db.query(ActivityType).filter_by(organization_id=org_id, id=ref_id2).first():
                         return
                 elif sub2 == "dimension_value":
                     from app.modules.dimension.model import DimensionValue
@@ -182,16 +176,14 @@ def _validate_entity_type(entity_type: str, org_id, db: Session) -> None:
             and sub3 == "dimension_value"
         ):
             from app.modules.entity.model import EntityType
-            from app.modules.activity.model import ActivityCategory
+            from app.modules.activity.model import ActivityType
             from app.modules.dimension.model import DimensionValue
 
             entity_ok = (
                 ref_id1 == "user"
                 or db.query(EntityType).filter_by(organization_id=org_id, id=ref_id1).first()
             )
-            cat_ok = (
-                db.query(ActivityCategory).filter_by(organization_id=org_id, id=ref_id2).first()
-            )
+            cat_ok = db.query(ActivityType).filter_by(organization_id=org_id, id=ref_id2).first()
             dv_ok = db.query(DimensionValue).filter_by(organization_id=org_id, id=ref_id3).first()
             if entity_ok and cat_ok and dv_ok:
                 return
@@ -250,7 +242,7 @@ def _resolve_scope_key(scope: MetaFieldScope, org_id, db: Session) -> str:
     from fastapi import HTTPException
     from app.modules.dimension.model import Dimension, DimensionValue
     from app.modules.entity.model import EntityType
-    from app.modules.activity.model import ActivityCategory
+    from app.modules.activity.model import ActivityType
 
     def _check_entity_type(eid: str) -> None:
         if eid == "user":
@@ -259,7 +251,7 @@ def _resolve_scope_key(scope: MetaFieldScope, org_id, db: Session) -> str:
             raise HTTPException(status_code=400, detail=f"Entity type not found: {eid}")
 
     def _check_category(cid: str) -> None:
-        if not db.query(ActivityCategory).filter_by(organization_id=org_id, id=cid).first():
+        if not db.query(ActivityType).filter_by(organization_id=org_id, id=cid).first():
             raise HTTPException(status_code=400, detail=f"Activity category not found: {cid}")
 
     def _check_dimension(did: str) -> None:
