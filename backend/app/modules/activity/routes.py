@@ -30,7 +30,7 @@ from app.modules.activity.service import (
     ActivityService,
     ActivityTypeService,
 )
-from app.modules.activity.model import Activity, ActivityDimension
+from app.modules.activity.model import Activity
 from app.modules.organization.service import MetaFieldSchemaService
 from app.modules.dimension.model import Dimension, DimensionValue
 from app.modules.dimension.service import UserDimensionAccessService
