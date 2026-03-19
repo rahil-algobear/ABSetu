@@ -31,3 +31,30 @@ class OrganizationResponse(BaseResponseSchema):
     case_number_format: str
     logo_url: str | None = None
     meta: dict[str, Any] | None = None
+
+
+# --- Meta Field Schemas ---
+
+
+class MetaFieldScope(BaseModel):
+    """Structured scope for meta field schemas.
+
+    The backend builds the internal scope_key from these fields.
+    Examples:
+      { "type": "entity", "entity_type_id": "..." }
+      { "type": "dimension", "dimension_id": "..." }
+      { "type": "enrollment" }
+      { "type": "activity", "category_id": "...", "dimension_value_id": "..." }
+      { "type": "participant", "entity_type_id": "...", "category_id": "...", "dimension_value_id": "..." }
+    """
+
+    type: str  # "entity", "dimension", "enrollment", "activity", "participant"
+    entity_type_id: str | None = None
+    dimension_id: str | None = None
+    category_id: str | None = None
+    dimension_value_id: str | None = None
+
+
+class MetaFieldSchemaUpdate(BaseModel):
+    scope: MetaFieldScope
+    fields: list[dict[str, Any]]

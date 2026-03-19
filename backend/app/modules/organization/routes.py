@@ -9,6 +9,8 @@ from app.core.database import get_db
 from app.common.dependencies import get_current_user, require_permissions
 from app.modules.auth.model import User
 from app.modules.organization.schemas import (
+    MetaFieldSchemaUpdate,
+    MetaFieldScope,
     OrganizationResponse,
     OrganizationUpdate,
 )
@@ -241,7 +243,93 @@ def update_meta_field_schema(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Update meta field schema for an entity type."""
+    """Update meta field schema for an entity type (legacy path-based API)."""
     _validate_entity_type(entity_type, current_user.organization_id, db)
     service = MetaFieldSchemaService(db)
     return service.update_schema(current_user.organization_id, entity_type, fields)
+
+
+def _resolve_scope_key(scope: MetaFieldScope, org_id, db: Session) -> str:
+    """Build and validate a scope_key from a structured MetaFieldScope."""
+    from fastapi import HTTPException
+    from app.modules.dimension.model import Dimension, DimensionValue
+    from app.modules.entity.model import EntityType
+    from app.modules.activity.model import ActivityCategory
+
+    def _check_entity_type(eid: str) -> None:
+        if eid == "user":
+            return
+        if not db.query(EntityType).filter_by(organization_id=org_id, id=eid).first():
+            raise HTTPException(status_code=400, detail=f"Entity type not found: {eid}")
+
+    def _check_category(cid: str) -> None:
+        if not db.query(ActivityCategory).filter_by(organization_id=org_id, id=cid).first():
+            raise HTTPException(status_code=400, detail=f"Activity category not found: {cid}")
+
+    def _check_dimension(did: str) -> None:
+        if not db.query(Dimension).filter_by(organization_id=org_id, id=did).first():
+            raise HTTPException(status_code=400, detail=f"Dimension not found: {did}")
+
+    def _check_dimension_value(dvid: str) -> None:
+        if not db.query(DimensionValue).filter_by(organization_id=org_id, id=dvid).first():
+            raise HTTPException(status_code=400, detail=f"Dimension value not found: {dvid}")
+
+    t = scope.type
+
+    if t in ("enrollment", "activity", "participation", "facilitator", "beneficiary"):
+        if t == "activity":
+            # activity[:category:{catId}][:dimension_value:{dvId}]
+            key = "activity"
+            if scope.category_id:
+                _check_category(scope.category_id)
+                key += f":category:{scope.category_id}"
+            if scope.dimension_value_id:
+                _check_dimension_value(scope.dimension_value_id)
+                key += f":dimension_value:{scope.dimension_value_id}"
+            if key == "activity":
+                # Bare "activity" is a valid static scope
+                pass
+            return key
+        return t
+
+    if t == "entity":
+        if not scope.entity_type_id:
+            raise HTTPException(status_code=400, detail="entity_type_id is required for entity scope")
+        _check_entity_type(scope.entity_type_id)
+        return f"entity:{scope.entity_type_id}"
+
+    if t == "dimension":
+        if not scope.dimension_id:
+            raise HTTPException(status_code=400, detail="dimension_id is required for dimension scope")
+        _check_dimension(scope.dimension_id)
+        return f"dimension:{scope.dimension_id}"
+
+    if t == "participant":
+        if not scope.entity_type_id:
+            raise HTTPException(status_code=400, detail="entity_type_id is required for participant scope")
+        _check_entity_type(scope.entity_type_id)
+        key = f"participant:entity:{scope.entity_type_id}"
+        if scope.category_id:
+            _check_category(scope.category_id)
+            key += f":category:{scope.category_id}"
+        if scope.dimension_value_id:
+            _check_dimension_value(scope.dimension_value_id)
+            key += f":dimension_value:{scope.dimension_value_id}"
+        return key
+
+    raise HTTPException(status_code=400, detail=f"Invalid scope type: {t}")
+
+
+@router.put(
+    "/meta-field-schemas",
+    dependencies=[Depends(require_permissions("org:settings"))],
+)
+def update_meta_field_schema_structured(
+    data: MetaFieldSchemaUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Update meta field schema using structured scope (preferred API)."""
+    scope_key = _resolve_scope_key(data.scope, current_user.organization_id, db)
+    service = MetaFieldSchemaService(db)
+    return service.update_schema(current_user.organization_id, scope_key, data.fields)

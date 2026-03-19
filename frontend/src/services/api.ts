@@ -90,21 +90,29 @@ export const organizationApi = {
 
 // --- Meta Field Schemas ---
 
+export interface MetaFieldScope {
+  type: string; // "entity", "dimension", "enrollment", "activity", "participant"
+  entity_type_id?: string;
+  dimension_id?: string;
+  category_id?: string;
+  dimension_value_id?: string;
+}
+
 export const metaFieldSchemaApi = {
   getAll: async (): Promise<MetaFieldSchemas> => {
     const response = await authAxios.get<MetaFieldSchemas>('/organization/meta-field-schemas');
     return response.data;
   },
-  get: async (entityType: string): Promise<MetaFieldDefinition[]> => {
+  get: async (scopeKey: string): Promise<MetaFieldDefinition[]> => {
     const response = await authAxios.get<MetaFieldDefinition[]>(
-      `/organization/meta-field-schemas/${entityType}`
+      `/organization/meta-field-schemas/${scopeKey}`
     );
     return response.data;
   },
-  update: async (entityType: string, fields: MetaFieldDefinition[]): Promise<MetaFieldDefinition[]> => {
+  update: async (scope: MetaFieldScope, fields: MetaFieldDefinition[]): Promise<MetaFieldDefinition[]> => {
     const response = await authAxios.put<MetaFieldDefinition[]>(
-      `/organization/meta-field-schemas/${entityType}`,
-      fields
+      '/organization/meta-field-schemas',
+      { scope, fields }
     );
     return response.data;
   },

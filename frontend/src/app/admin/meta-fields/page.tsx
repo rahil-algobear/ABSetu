@@ -7,6 +7,7 @@ import {
   dimensionApi,
   entityTypeApi,
   activityCategoryApi,
+  MetaFieldScope,
 } from "@/services/api";
 import {
   MetaFieldDefinition,
@@ -180,9 +181,40 @@ export default function MetaFieldsPage() {
 
   const fields = schemaKey ? (allSchemas[schemaKey] || []) : [];
 
+  // Build structured scope for the API
+  const currentScope = useMemo((): MetaFieldScope | null => {
+    switch (activeSection) {
+      case "entity":
+        return activeKey ? { type: "entity", entity_type_id: activeKey } : null;
+      case "dimension":
+        return activeKey ? { type: "dimension", dimension_id: activeKey } : null;
+      case "other":
+        return activeKey ? { type: activeKey } : null;
+      case "activity": {
+        const scope: MetaFieldScope = { type: "activity" };
+        if (activityCatId) scope.category_id = activityCatId;
+        if (activityDvId) scope.dimension_value_id = activityDvId;
+        // Need at least one filter
+        if (!activityCatId && !activityDvId) return null;
+        return scope;
+      }
+      case "participant": {
+        if (!participantEntityId) return null;
+        const scope: MetaFieldScope = { type: "participant", entity_type_id: participantEntityId };
+        if (participantCatId) scope.category_id = participantCatId;
+        if (participantDvId) scope.dimension_value_id = participantDvId;
+        return scope;
+      }
+      default:
+        return null;
+    }
+  }, [activeSection, activeKey, activityCatId, activityDvId, participantEntityId, participantCatId, participantDvId]);
+
   const updateMutation = useMutation({
-    mutationFn: (newFields: MetaFieldDefinition[]) =>
-      metaFieldSchemaApi.update(schemaKey, newFields),
+    mutationFn: (newFields: MetaFieldDefinition[]) => {
+      if (!currentScope) throw new Error("No scope selected");
+      return metaFieldSchemaApi.update(currentScope, newFields);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["meta-field-schemas"] });
       toast.success("Form fields updated");
