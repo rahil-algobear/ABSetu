@@ -129,19 +129,17 @@ def delete_dimension(
 )
 def list_dimension_values(
     dimension_id: uuid.UUID,
-    scoped: bool = Query(False, description="Filter values by user's dimension access"),
     current_user: User = Depends(get_current_user),
     accessible_dv_ids: list[uuid.UUID] | None = Depends(get_accessible_dimension_value_ids),
     db: Session = Depends(get_db),
 ):
-    """List all values for a dimension. Pass ?scoped=true to filter by user's access."""
+    """List values for a dimension, filtered by user's dimension access."""
     # Verify dimension belongs to org
     dim_service = DimensionService(db)
     dim_service.get_by_id(dimension_id, current_user.organization_id)
 
     service = DimensionValueService(db)
-    scope = accessible_dv_ids if scoped else None
-    values = service.list_by_dimension(dimension_id, accessible_dv_ids=scope)
+    values = service.list_by_dimension(dimension_id, accessible_dv_ids=accessible_dv_ids)
     results = []
     for v in values:
         resp = DimensionValueResponse(
