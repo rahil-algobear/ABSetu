@@ -66,7 +66,6 @@ export interface Dimension {
   name: string;
   key: string;
   sort_order: number;
-  is_system: string | null;
   updated_at: number | null;
 }
 

@@ -26,7 +26,6 @@ class DimensionResponse(BaseResponseSchema):
     name: str
     key: str
     sort_order: int = 0
-    is_system: str | None = None
 
 
 # --- DimensionValue ---

@@ -21,9 +21,6 @@ class Dimension(BaseModel):
     name = Column(String, nullable=False)
     key = Column(String, nullable=False)
     sort_order = Column(Integer, nullable=False, default=0)
-    is_system = Column(
-        String, nullable=True
-    )  # Reserved for future system-managed dimensions
 
     organization = relationship("Organization", back_populates="dimensions")
     values = relationship(

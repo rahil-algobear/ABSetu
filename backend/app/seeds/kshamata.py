@@ -485,7 +485,7 @@ def _make_intervention_code(name: str) -> str:
     return slug.strip("_")
 
 
-def _ensure_dimension(db, org, key, name, sort_order, is_system=None):
+def _ensure_dimension(db, org, key, name, sort_order):
     dim = db.query(Dimension).filter_by(organization_id=org.id, key=key).first()
     if not dim:
         dim = Dimension(
@@ -493,20 +493,14 @@ def _ensure_dimension(db, org, key, name, sort_order, is_system=None):
             name=name,
             key=key,
             sort_order=sort_order,
-            is_system=is_system,
         )
         db.add(dim)
         db.flush()
     else:
         if name and dim.name != name:
             dim.name = name
-        # Clear is_system if it was previously set (migration path)
-        if dim.is_system and not is_system:
-            dim.is_system = None
-        elif is_system and not dim.is_system:
-            dim.is_system = is_system
         db.flush()
-    print(f"  Ensured dimension: {dim.name}" + (" [system]" if dim.is_system else ""))
+    print(f"  Ensured dimension: {dim.name}")
     return dim
 
 

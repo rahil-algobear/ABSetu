@@ -62,8 +62,6 @@ class DimensionService:
 
     def delete(self, dimension_id: uuid.UUID, org_id: uuid.UUID) -> None:
         dimension = self.get_by_id(dimension_id, org_id)
-        if dimension.is_system:
-            raise ValidationError("Cannot delete a system-managed dimension")
         self.db.delete(dimension)
         self.db.commit()
 

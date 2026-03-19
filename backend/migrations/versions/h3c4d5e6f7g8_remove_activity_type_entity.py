@@ -180,7 +180,10 @@ def upgrade() -> None:
         """)
     )
 
-    # 11. Drop activity_type_id FK and column from activities
+    # 11. Drop is_system column from dimensions (no longer used)
+    op.drop_column("dimensions", "is_system")
+
+    # 12. Drop activity_type_id FK and column from activities
     op.drop_constraint(
         "activities_activity_type_id_fkey", "activities", type_="foreignkey"
     )
@@ -192,6 +195,12 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # Re-add is_system column to dimensions
+    op.add_column(
+        "dimensions",
+        sa.Column("is_system", sa.String, nullable=True),
+    )
+
     # Recreate activity_types table
     op.create_table(
         "activity_types",
