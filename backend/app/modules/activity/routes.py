@@ -13,7 +13,7 @@ from app.common.dependencies import (
     get_current_user,
     require_permissions,
 )
-from app.common.exceptions import ForbiddenError, ValidationError
+from app.common.exceptions import ValidationError
 from app.modules.auth.model import User
 from app.modules.activity.schemas import (
     ActivityCreate,
@@ -199,13 +199,11 @@ def create_activity(
     db: Session = Depends(get_db),
 ):
     # Validate dimension values are within user's allowed scope
-    if accessible_dv_ids is not None and data.dimension_value_ids:
-        allowed = {str(dv_id) for dv_id in accessible_dv_ids}
-        for dv_id in data.dimension_value_ids:
-            if dv_id not in allowed:
-                raise ForbiddenError(
-                    "You do not have access to one or more selected dimension values"
-                )
+    from app.modules.dimension.service import UserDimensionAccessService
+
+    UserDimensionAccessService(db).validate_dimension_values(
+        accessible_dv_ids, data.dimension_value_ids or []
+    )
 
     # Validate required form elements from form builder config
     activity_type_id = data.activity_type_id

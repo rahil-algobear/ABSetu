@@ -77,7 +77,19 @@ class DimensionValueService:
     ) -> list[DimensionValue]:
         query = self.db.query(DimensionValue).filter_by(dimension_id=dimension_id)
         if accessible_dv_ids is not None:
-            query = query.filter(DimensionValue.id.in_(accessible_dv_ids))
+            # Only filter if the user has assignments for THIS dimension.
+            # If none of the user's assigned values belong to this dimension,
+            # they have no restriction on it → return all values.
+            scoped_ids = (
+                self.db.query(DimensionValue.id)
+                .filter(
+                    DimensionValue.dimension_id == dimension_id,
+                    DimensionValue.id.in_(accessible_dv_ids),
+                )
+                .all()
+            )
+            if scoped_ids:
+                query = query.filter(DimensionValue.id.in_([r[0] for r in scoped_ids]))
         return query.order_by(DimensionValue.sort_order, DimensionValue.name).all()
 
     def get_by_id(self, value_id: uuid.UUID) -> DimensionValue:
@@ -226,6 +238,52 @@ class UserDimensionAccessService:
     def get_access_value_ids(self, user_id: uuid.UUID) -> list[uuid.UUID]:
         rows = self.get_access(user_id)
         return [r.dimension_value_id for r in rows]
+
+    def validate_dimension_values(
+        self,
+        accessible_dv_ids: list[uuid.UUID] | None,
+        submitted_dv_ids: list[str],
+    ) -> None:
+        """
+        Validate that submitted dimension value IDs are within user's scope.
+
+        Per-dimension logic: if the user has no assignments for a particular
+        dimension, they have unrestricted access to that dimension's values.
+        Only rejects values from dimensions where the user HAS assignments
+        but the specific value is not in their allowed set.
+        """
+        if accessible_dv_ids is None or not submitted_dv_ids:
+            return
+
+        allowed = {str(dv_id) for dv_id in accessible_dv_ids}
+
+        # Find which dimensions the user has restrictions on
+        restricted_dim_ids = set()
+        if accessible_dv_ids:
+            rows = (
+                self.db.query(DimensionValue.dimension_id)
+                .filter(DimensionValue.id.in_(accessible_dv_ids))
+                .distinct()
+                .all()
+            )
+            restricted_dim_ids = {row[0] for row in rows}
+
+        # Look up which dimension each submitted value belongs to
+        submitted_uuids = [uuid.UUID(v) for v in submitted_dv_ids]
+        submitted_rows = (
+            self.db.query(DimensionValue.id, DimensionValue.dimension_id)
+            .filter(DimensionValue.id.in_(submitted_uuids))
+            .all()
+        )
+
+        from app.common.exceptions import ForbiddenError
+
+        for dv_id, dim_id in submitted_rows:
+            # Only enforce if user has restrictions for this dimension
+            if dim_id in restricted_dim_ids and str(dv_id) not in allowed:
+                raise ForbiddenError(
+                    "You do not have access to one or more selected dimension values"
+                )
 
     def update_access(
         self, user_id: uuid.UUID, dimension_value_ids: list[uuid.UUID]

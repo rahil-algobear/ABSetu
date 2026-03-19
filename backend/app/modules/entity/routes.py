@@ -13,7 +13,6 @@ from app.common.dependencies import (
     get_current_user,
     require_permissions,
 )
-from app.common.exceptions import ForbiddenError
 from app.modules.auth.model import User
 from app.modules.entity.schemas import (
     DimensionInfo,
@@ -184,13 +183,11 @@ def create_entity(
     db: Session = Depends(get_db),
 ):
     # Validate dimension values are within user's allowed scope
-    if accessible_dv_ids is not None and data.dimension_value_ids:
-        allowed = {str(dv_id) for dv_id in accessible_dv_ids}
-        for dv_id in data.dimension_value_ids:
-            if dv_id not in allowed:
-                raise ForbiddenError(
-                    "You do not have access to one or more selected dimension values"
-                )
+    from app.modules.dimension.service import UserDimensionAccessService
+
+    UserDimensionAccessService(db).validate_dimension_values(
+        accessible_dv_ids, data.dimension_value_ids or []
+    )
 
     service = EntityService(db)
     entity = service.create(
@@ -232,13 +229,11 @@ def update_entity_dimensions(
     db: Session = Depends(get_db),
 ):
     # Validate dimension values are within user's allowed scope
-    if accessible_dv_ids is not None and dimension_value_ids:
-        allowed = {str(dv_id) for dv_id in accessible_dv_ids}
-        for dv_id in dimension_value_ids:
-            if dv_id not in allowed:
-                raise ForbiddenError(
-                    "You do not have access to one or more selected dimension values"
-                )
+    from app.modules.dimension.service import UserDimensionAccessService
+
+    UserDimensionAccessService(db).validate_dimension_values(
+        accessible_dv_ids, dimension_value_ids or []
+    )
 
     service = EntityService(db)
     entity = service.update_dimensions(
