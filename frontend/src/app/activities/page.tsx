@@ -71,14 +71,19 @@ export default function ActivitiesPage() {
   const searchParams = useSearchParams();
   const typeKey = searchParams.get("type");
 
-  const { data: activities = [], isLoading } = useQuery({
-    queryKey: ["activities", selectedTypeId],
-    queryFn: () => activityApi.list(selectedTypeId || undefined),
-  });
-
   const { data: activityTypes = [] } = useQuery({
     queryKey: ["activity-types"],
     queryFn: activityTypeApi.list,
+  });
+
+  // Determine activity type from URL param
+  const activityType = activityTypes.find((c) => c.key === typeKey);
+  const selectedTypeId = activityType?.id || "";
+  const typeName = activityType?.name || "Activity";
+
+  const { data: activities = [], isLoading } = useQuery({
+    queryKey: ["activities", selectedTypeId],
+    queryFn: () => activityApi.list(selectedTypeId || undefined),
   });
 
   const { data: dimensions = [] } = useQuery<Dimension[]>({
@@ -118,11 +123,6 @@ export default function ActivitiesPage() {
     dimension_value_ids: [] as string[],
   });
   const [metaValues, setMetaValues] = useState<Record<string, unknown>>({});
-
-  // Determine activity type from URL param
-  const activityType = activityTypes.find((c) => c.key === typeKey);
-  const selectedTypeId = activityType?.id || "";
-  const typeName = activityType?.name || "Activity";
 
   // Load form builder config for the activity type
   const { data: formConfig } = useQuery<ActivityForm>({
