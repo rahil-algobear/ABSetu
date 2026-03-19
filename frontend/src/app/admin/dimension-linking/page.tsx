@@ -182,8 +182,9 @@ export default function DimensionLinkingPage() {
                         type="checkbox"
                         checked={checked}
                         onChange={() => togglePair(v1.id, v2.id)}
-                        disabled={!canManage}
-                        className="rounded border-gray-300 text-purple-600 focus:ring-purple-500 disabled:opacity-50"
+                        readOnly={!canManage}
+                        onClick={canManage ? undefined : (e) => e.preventDefault()}
+                        className={`rounded border-gray-300 text-purple-600 focus:ring-purple-500 ${!canManage ? "pointer-events-none opacity-75" : ""}`}
                       />
                     </td>
                   );
