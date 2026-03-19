@@ -276,7 +276,7 @@ export default function ActivitiesPage() {
   };
 
   return (
-    <PageLayout className="p-4">
+    <PageLayout className="p-6">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold">{vPlural("activity")}</h1>
         <Can permission="activity:create">
