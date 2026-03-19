@@ -60,8 +60,8 @@ ENTITY_TYPES = [
 # Activity Type: Sessions (form builder config)
 # participant_source UUIDs are populated at seed time after entity types are created
 # ---------------------------------------------------------------------------
-SESSIONS_CATEGORY_NAME = "Sessions"
-SESSIONS_CATEGORY_SORT_ORDER = 0
+SESSIONS_TYPE_NAME = "Sessions"
+SESSIONS_TYPE_SORT_ORDER = 0
 SESSIONS_SECTIONS_TEMPLATE = [
     {
         "key": "beneficiaries",
@@ -722,20 +722,20 @@ def seed():
             )
 
         # 3. Activity Type: Sessions
-        sessions_cat_key = slugify(SESSIONS_CATEGORY_NAME)
-        sessions_cat = (
-            db.query(ActivityType).filter_by(organization_id=org.id, key=sessions_cat_key).first()
+        sessions_type_key = slugify(SESSIONS_TYPE_NAME)
+        sessions_type = (
+            db.query(ActivityType).filter_by(organization_id=org.id, key=sessions_type_key).first()
         )
-        if not sessions_cat:
-            sessions_cat = ActivityType(
+        if not sessions_type:
+            sessions_type = ActivityType(
                 organization_id=org.id,
-                name=SESSIONS_CATEGORY_NAME,
-                key=sessions_cat_key,
-                sort_order=SESSIONS_CATEGORY_SORT_ORDER,
+                name=SESSIONS_TYPE_NAME,
+                key=sessions_type_key,
+                sort_order=SESSIONS_TYPE_SORT_ORDER,
             )
-            db.add(sessions_cat)
+            db.add(sessions_type)
             db.flush()
-        print(f"  Ensured activity type: {sessions_cat.name}")
+        print(f"  Ensured activity type: {sessions_type.name}")
 
         # 4. Dimensions (intervention is now a regular dimension, not system)
         programme_dim = _ensure_dimension(db, org, "programme", "Programme", 0)

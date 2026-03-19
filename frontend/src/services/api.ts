@@ -263,16 +263,16 @@ export const activityTypeApi = {
 // --- Activity Forms (Form Builder) ---
 
 export const activityFormApi = {
-  get: async (categoryId: string): Promise<ActivityForm> => {
-    const response = await authAxios.get<ActivityForm>(`/activity-forms/${categoryId}`);
+  get: async (activityTypeId: string): Promise<ActivityForm> => {
+    const response = await authAxios.get<ActivityForm>(`/activity-forms/${activityTypeId}`);
     return response.data;
   },
-  upsert: async (categoryId: string, elements: ActivityFormElement[]): Promise<ActivityForm> => {
-    const response = await authAxios.put<ActivityForm>(`/activity-forms/${categoryId}`, { elements });
+  upsert: async (activityTypeId: string, elements: ActivityFormElement[]): Promise<ActivityForm> => {
+    const response = await authAxios.put<ActivityForm>(`/activity-forms/${activityTypeId}`, { elements });
     return response.data;
   },
-  delete: async (categoryId: string) => {
-    const response = await authAxios.delete(`/activity-forms/${categoryId}`);
+  delete: async (activityTypeId: string) => {
+    const response = await authAxios.delete(`/activity-forms/${activityTypeId}`);
     return response.data;
   },
 };

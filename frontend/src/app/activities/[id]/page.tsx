@@ -60,7 +60,7 @@ export default function ActivityDetailPage() {
     queryFn: metaFieldSchemaApi.getAll,
   });
 
-  // Category ID comes directly from the activity
+  // Activity type ID comes directly from the activity
   const activityTypeId = activity?.activity_type_id || "";
 
   // Load form builder config
@@ -113,22 +113,22 @@ export default function ActivityDetailPage() {
     const fields: MetaFieldDefinition[] = [];
     const base = `participant:entity:${el.ref_id}`;
 
-    // participant:entity:{ref_id} — all categories, all dimension values
+    // participant:entity:{ref_id} — all activity types, all dimension values
     fields.push(...(allMetaSchemas[base] || []));
 
-    // participant:entity:{ref_id}:category:{activityTypeId}
+    // participant:entity:{ref_id}:activity_type:{activityTypeId}
     if (activityTypeId) {
-      fields.push(...(allMetaSchemas[`${base}:category:${activityTypeId}`] || []));
+      fields.push(...(allMetaSchemas[`${base}:activity_type:${activityTypeId}`] || []));
     }
 
-    // Per dimension value dimension
+    // Per dimension value
     if (activity?.dimensions) {
       for (const dim of activity.dimensions) {
         // participant:entity:{ref_id}:dimension_value:{dvId}
         fields.push(...(allMetaSchemas[`${base}:dimension_value:${dim.value_id}`] || []));
-        // participant:entity:{ref_id}:category:{catId}:dimension_value:{dvId}
+        // participant:entity:{ref_id}:activity_type:{typeId}:dimension_value:{dvId}
         if (activityTypeId) {
-          fields.push(...(allMetaSchemas[`${base}:category:${activityTypeId}:dimension_value:${dim.value_id}`] || []));
+          fields.push(...(allMetaSchemas[`${base}:activity_type:${activityTypeId}:dimension_value:${dim.value_id}`] || []));
         }
       }
     }
@@ -231,19 +231,19 @@ export default function ActivityDetailPage() {
     return et?.name || "Participants";
   };
 
-  // Activity meta fields: category + dimension values + category×dimension_value combos
+  // Activity meta fields: activity type + dimension values + type×dimension_value combos
   const activityTypeFields = useMemo((): MetaFieldDefinition[] => {
     const fields: MetaFieldDefinition[] = [];
     if (activityTypeId) {
-      fields.push(...(allMetaSchemas[`activity:category:${activityTypeId}`] || []));
+      fields.push(...(allMetaSchemas[`activity:activity_type:${activityTypeId}`] || []));
     }
     if (activity?.dimensions) {
       for (const dim of activity.dimensions) {
-        // All-categories × dimension value
+        // All activity types × dimension value
         fields.push(...(allMetaSchemas[`activity:dimension_value:${dim.value_id}`] || []));
-        // Specific category × dimension value
+        // Specific activity type × dimension value
         if (activityTypeId) {
-          fields.push(...(allMetaSchemas[`activity:category:${activityTypeId}:dimension_value:${dim.value_id}`] || []));
+          fields.push(...(allMetaSchemas[`activity:activity_type:${activityTypeId}:dimension_value:${dim.value_id}`] || []));
         }
       }
     }
@@ -283,7 +283,7 @@ export default function ActivityDetailPage() {
       <p className="text-gray-500 mb-4">{activity.date}</p>
 
       {activity.activity_type_name && (
-        <p className="text-sm text-gray-500 mb-2">Category: {activity.activity_type_name}</p>
+        <p className="text-sm text-gray-500 mb-2">Type: {activity.activity_type_name}</p>
       )}
 
       {activity.notes && (

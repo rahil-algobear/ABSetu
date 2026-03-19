@@ -44,14 +44,14 @@ class MetaFieldScope(BaseModel):
       { "type": "entity", "entity_type_id": "..." }
       { "type": "dimension", "dimension_id": "..." }
       { "type": "enrollment" }
-      { "type": "activity", "category_id": "...", "dimension_value_id": "..." }
-      { "type": "participant", "entity_type_id": "...", "category_id": "...", "dimension_value_id": "..." }
+      { "type": "activity", "activity_type_id": "...", "dimension_value_id": "..." }
+      { "type": "participant", "entity_type_id": "...", "activity_type_id": "...", "dimension_value_id": "..." }
     """
 
     type: str  # "entity", "dimension", "enrollment", "activity", "participant"
     entity_type_id: str | None = None
     dimension_id: str | None = None
-    category_id: str | None = None
+    activity_type_id: str | None = None
     dimension_value_id: str | None = None
 
 

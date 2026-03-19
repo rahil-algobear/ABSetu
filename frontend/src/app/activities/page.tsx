@@ -76,7 +76,7 @@ export default function ActivitiesPage() {
     queryFn: () => activityApi.list(selectedTypeId || undefined),
   });
 
-  const { data: categories = [] } = useQuery({
+  const { data: activityTypes = [] } = useQuery({
     queryKey: ["activity-types"],
     queryFn: activityTypeApi.list,
   });
@@ -120,7 +120,7 @@ export default function ActivitiesPage() {
   const [metaValues, setMetaValues] = useState<Record<string, unknown>>({});
 
   // Determine activity type from URL param
-  const activityType = categories.find((c) => c.key === typeKey);
+  const activityType = activityTypes.find((c) => c.key === typeKey);
   const selectedTypeId = activityType?.id || "";
   const typeName = activityType?.name || "Activity";
 
@@ -143,14 +143,14 @@ export default function ActivitiesPage() {
   const activityMetaFields = useMemo((): MetaFieldDefinition[] => {
     const fields: MetaFieldDefinition[] = [];
     if (selectedTypeId) {
-      fields.push(...(allMetaSchemas[`activity:category:${selectedTypeId}`] || []));
+      fields.push(...(allMetaSchemas[`activity:activity_type:${selectedTypeId}`] || []));
     }
     for (const dvId of formData.dimension_value_ids) {
       // All types × dimension value
       fields.push(...(allMetaSchemas[`activity:dimension_value:${dvId}`] || []));
-      // Specific category × dimension value
+      // Specific activity type × dimension value
       if (selectedTypeId) {
-        fields.push(...(allMetaSchemas[`activity:category:${selectedTypeId}:dimension_value:${dvId}`] || []));
+        fields.push(...(allMetaSchemas[`activity:activity_type:${selectedTypeId}:dimension_value:${dvId}`] || []));
       }
     }
     return fields;

@@ -59,7 +59,7 @@ const DISPLAY_TYPES: Record<string, { value: string; label: string }[]> = {
 
 export default function FormBuilderPage() {
   const queryClient = useQueryClient();
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string>("");
+  const [selectedTypeId, setSelectedTypeId] = useState<string>("");
   const [elements, setElements] = useState<ActivityFormElement[]>([]);
   const [isDirty, setIsDirty] = useState(false);
   const [addModalOpen, setAddModalOpen] = useState(false);
@@ -68,7 +68,7 @@ export default function FormBuilderPage() {
   const [addDisplayType, setAddDisplayType] = useState<string>("dropdown");
 
   // Data queries
-  const { data: categories = [] } = useQuery<ActivityType[]>({
+  const { data: activityTypes = [] } = useQuery<ActivityType[]>({
     queryKey: ["activity-types"],
     queryFn: activityTypeApi.list,
   });
@@ -88,11 +88,11 @@ export default function FormBuilderPage() {
     queryFn: metaFieldSchemaApi.getAll,
   });
 
-  // Load form when category changes
+  // Load form when activity type changes
   const { data: formData, isLoading: formLoading } = useQuery({
-    queryKey: ["activity-form", selectedCategoryId],
-    queryFn: () => activityFormApi.get(selectedCategoryId),
-    enabled: !!selectedCategoryId,
+    queryKey: ["activity-form", selectedTypeId],
+    queryFn: () => activityFormApi.get(selectedTypeId),
+    enabled: !!selectedTypeId,
   });
 
   // Sync form data into local state when it loads (only if user hasn't made changes)
@@ -102,17 +102,17 @@ export default function FormBuilderPage() {
     }
   }, [formData]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Auto-select first category
+  // Auto-select first activity type
   useEffect(() => {
-    if (!selectedCategoryId && categories.length > 0) {
-      setSelectedCategoryId(categories[0].id);
+    if (!selectedTypeId && activityTypes.length > 0) {
+      setSelectedTypeId(activityTypes[0].id);
     }
-  }, [categories]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activityTypes]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const saveMutation = useMutation({
-    mutationFn: () => activityFormApi.upsert(selectedCategoryId, elements),
+    mutationFn: () => activityFormApi.upsert(selectedTypeId, elements),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["activity-form", selectedCategoryId] });
+      queryClient.invalidateQueries({ queryKey: ["activity-form", selectedTypeId] });
       setIsDirty(false);
       toast.success("Form saved");
     },
@@ -202,10 +202,10 @@ export default function FormBuilderPage() {
     // Check participant:entity:{id}
     const baseKey = `participant:entity:${el.ref_id}`;
     count += allSchemas[baseKey]?.length || 0;
-    // Check participant:entity:{id}:category:{categoryId}
-    if (selectedCategoryId) {
-      const catKey = `${baseKey}:category:${selectedCategoryId}`;
-      count += allSchemas[catKey]?.length || 0;
+    // Check participant:entity:{id}:activity_type:{activityTypeId}
+    if (selectedTypeId) {
+      const typeKey = `${baseKey}:activity_type:${selectedTypeId}`;
+      count += allSchemas[typeKey]?.length || 0;
     }
     return count;
   };
@@ -217,7 +217,7 @@ export default function FormBuilderPage() {
     );
   };
 
-  const selectedCategory = categories.find((c) => c.id === selectedCategoryId);
+  const selectedType = activityTypes.find((c) => c.id === selectedTypeId);
 
   return (
     <>
@@ -242,34 +242,34 @@ export default function FormBuilderPage() {
         Choose an activity type and add the elements you want.
       </p>
 
-      {/* Category selector */}
+      {/* Activity Type selector */}
       <div className="mb-6">
         <Label className="text-sm mb-1 block">Activity Type</Label>
         <select
           className="border rounded-md px-3 py-2 text-sm w-full max-w-xs"
-          value={selectedCategoryId}
+          value={selectedTypeId}
           onChange={(e) => {
-            setSelectedCategoryId(e.target.value);
+            setSelectedTypeId(e.target.value);
             setIsDirty(false);
           }}
         >
-          {categories.length === 0 && (
-            <option value="">No categories yet</option>
+          {activityTypes.length === 0 && (
+            <option value="">No activity types yet</option>
           )}
-          {categories.map((cat) => (
-            <option key={cat.id} value={cat.id}>
-              {cat.name}
+          {activityTypes.map((at) => (
+            <option key={at.id} value={at.id}>
+              {at.name}
             </option>
           ))}
         </select>
       </div>
 
-      {selectedCategoryId && !formLoading && (
+      {selectedTypeId && !formLoading && (
         <>
           {/* Elements list */}
           <div className="flex items-center justify-between mb-3">
             <Label className="text-sm font-semibold">
-              Form Elements for &ldquo;{selectedCategory?.name}&rdquo;
+              Form Elements for &ldquo;{selectedType?.name}&rdquo;
             </Label>
             <Can permission="activity_type:manage">
               <Button type="button" size="sm" variant="outline" onClick={openAddModal}>
@@ -283,7 +283,7 @@ export default function FormBuilderPage() {
             <div className="border rounded-md p-8 text-center text-gray-400">
               <p className="text-sm">No form elements yet.</p>
               <p className="text-xs mt-1">
-                Add elements to define what appears when recording an activity in this category.
+                Add elements to define what appears when recording an activity of this type.
               </p>
             </div>
           ) : (

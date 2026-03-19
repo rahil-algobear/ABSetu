@@ -70,13 +70,13 @@ def _validate_entity_type(entity_type: str, org_id, db: Session) -> None:
       - Static: enrollment, activity, participation, beneficiary, facilitator
       - dimension:{dim_id}
       - entity:{entity_type_id}
-      - activity:category:{category_id}
+      - activity:activity_type:{activity_type_id}
       - activity:dimension_value:{dv_id}
-      - activity:category:{cat_id}:dimension_value:{dv_id}
+      - activity:activity_type:{activity_type_id}:dimension_value:{dv_id}
       - participant:entity:{entity_type_id|"user"}
-      - participant:entity:{entity_type_id|"user"}:category:{category_id}
+      - participant:entity:{entity_type_id|"user"}:activity_type:{activity_type_id}
       - participant:entity:{entity_type_id|"user"}:dimension_value:{dv_id}
-      - participant:entity:{...}:category:{cat_id}:dimension_value:{dv_id}
+      - participant:entity:{...}:activity_type:{activity_type_id}:dimension_value:{dv_id}
     """
     if entity_type in STATIC_ENTITY_TYPES:
         return
@@ -102,7 +102,7 @@ def _validate_entity_type(entity_type: str, org_id, db: Session) -> None:
         prefix, sub, ref_id = parts
 
         if prefix == "activity":
-            if sub == "category":
+            if sub == "activity_type":
                 from app.modules.activity.model import ActivityType
 
                 if db.query(ActivityType).filter_by(organization_id=org_id, id=ref_id).first():
@@ -113,7 +113,7 @@ def _validate_entity_type(entity_type: str, org_id, db: Session) -> None:
                 if db.query(DimensionValue).filter_by(organization_id=org_id, id=ref_id).first():
                     return
 
-        # participant:entity:{entity_type_id} — scoped to entity type, all categories
+        # participant:entity:{entity_type_id} — scoped to entity type, all activity types
         if prefix == "participant" and sub == "entity":
             from app.modules.entity.model import EntityType
 
@@ -123,23 +123,23 @@ def _validate_entity_type(entity_type: str, org_id, db: Session) -> None:
                 return
 
     # 5-part keys:
-    # activity:category:{cat_id}:dimension_value:{dv_id}
-    # participant:entity:{...}:category:{id}
+    # activity:activity_type:{activity_type_id}:dimension_value:{dv_id}
+    # participant:entity:{...}:activity_type:{id}
     # participant:entity:{...}:dimension_value:{dv_id}
     if len(parts) == 5:
         prefix, sub1, ref_id1, sub2, ref_id2 = parts
 
-        # activity:category:{cat_id}:dimension_value:{dv_id}
-        if prefix == "activity" and sub1 == "category" and sub2 == "dimension_value":
+        # activity:activity_type:{activity_type_id}:dimension_value:{dv_id}
+        if prefix == "activity" and sub1 == "activity_type" and sub2 == "dimension_value":
             from app.modules.activity.model import ActivityType
             from app.modules.dimension.model import DimensionValue
 
-            cat_ok = db.query(ActivityType).filter_by(organization_id=org_id, id=ref_id1).first()
+            at_ok = db.query(ActivityType).filter_by(organization_id=org_id, id=ref_id1).first()
             dv_ok = db.query(DimensionValue).filter_by(organization_id=org_id, id=ref_id2).first()
-            if cat_ok and dv_ok:
+            if at_ok and dv_ok:
                 return
 
-        # participant:entity:{...}:category:{id} or :dimension_value:{dv_id}
+        # participant:entity:{...}:activity_type:{id} or :dimension_value:{dv_id}
         if prefix == "participant" and sub1 == "entity":
             from app.modules.entity.model import EntityType
 
@@ -149,7 +149,7 @@ def _validate_entity_type(entity_type: str, org_id, db: Session) -> None:
             )
 
             if entity_ok:
-                if sub2 == "category":
+                if sub2 == "activity_type":
                     from app.modules.activity.model import ActivityType
 
                     if db.query(ActivityType).filter_by(organization_id=org_id, id=ref_id2).first():
@@ -165,14 +165,14 @@ def _validate_entity_type(entity_type: str, org_id, db: Session) -> None:
                         return
 
     # 7-part keys:
-    # participant:entity:{...}:category:{cat_id}:dimension_value:{dv_id}
+    # participant:entity:{...}:activity_type:{activity_type_id}:dimension_value:{dv_id}
     if len(parts) == 7:
         prefix, sub1, ref_id1, sub2, ref_id2, sub3, ref_id3 = parts
 
         if (
             prefix == "participant"
             and sub1 == "entity"
-            and sub2 == "category"
+            and sub2 == "activity_type"
             and sub3 == "dimension_value"
         ):
             from app.modules.entity.model import EntityType
@@ -183,9 +183,9 @@ def _validate_entity_type(entity_type: str, org_id, db: Session) -> None:
                 ref_id1 == "user"
                 or db.query(EntityType).filter_by(organization_id=org_id, id=ref_id1).first()
             )
-            cat_ok = db.query(ActivityType).filter_by(organization_id=org_id, id=ref_id2).first()
+            at_ok = db.query(ActivityType).filter_by(organization_id=org_id, id=ref_id2).first()
             dv_ok = db.query(DimensionValue).filter_by(organization_id=org_id, id=ref_id3).first()
-            if entity_ok and cat_ok and dv_ok:
+            if entity_ok and at_ok and dv_ok:
                 return
 
     from fastapi import HTTPException
@@ -250,9 +250,9 @@ def _resolve_scope_key(scope: MetaFieldScope, org_id, db: Session) -> str:
         if not db.query(EntityType).filter_by(organization_id=org_id, id=eid).first():
             raise HTTPException(status_code=400, detail=f"Entity type not found: {eid}")
 
-    def _check_category(cid: str) -> None:
+    def _check_activity_type(cid: str) -> None:
         if not db.query(ActivityType).filter_by(organization_id=org_id, id=cid).first():
-            raise HTTPException(status_code=400, detail=f"Activity category not found: {cid}")
+            raise HTTPException(status_code=400, detail=f"Activity type not found: {cid}")
 
     def _check_dimension(did: str) -> None:
         if not db.query(Dimension).filter_by(organization_id=org_id, id=did).first():
@@ -266,11 +266,11 @@ def _resolve_scope_key(scope: MetaFieldScope, org_id, db: Session) -> str:
 
     if t in ("enrollment", "activity", "participation", "facilitator", "beneficiary"):
         if t == "activity":
-            # activity[:category:{catId}][:dimension_value:{dvId}]
+            # activity[:activity_type:{activityTypeId}][:dimension_value:{dvId}]
             key = "activity"
-            if scope.category_id:
-                _check_category(scope.category_id)
-                key += f":category:{scope.category_id}"
+            if scope.activity_type_id:
+                _check_activity_type(scope.activity_type_id)
+                key += f":activity_type:{scope.activity_type_id}"
             if scope.dimension_value_id:
                 _check_dimension_value(scope.dimension_value_id)
                 key += f":dimension_value:{scope.dimension_value_id}"
@@ -303,9 +303,9 @@ def _resolve_scope_key(scope: MetaFieldScope, org_id, db: Session) -> str:
             )
         _check_entity_type(scope.entity_type_id)
         key = f"participant:entity:{scope.entity_type_id}"
-        if scope.category_id:
-            _check_category(scope.category_id)
-            key += f":category:{scope.category_id}"
+        if scope.activity_type_id:
+            _check_activity_type(scope.activity_type_id)
+            key += f":activity_type:{scope.activity_type_id}"
         if scope.dimension_value_id:
             _check_dimension_value(scope.dimension_value_id)
             key += f":dimension_value:{scope.dimension_value_id}"

@@ -20,13 +20,13 @@ import {
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
 
-export default function ActivityCategoriesPage() {
+export default function ActivityTypesPage() {
   const queryClient = useQueryClient();
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<ActivityType | null>(null);
   const [form, setForm] = useState({ name: "" });
 
-  const { data: categories = [], isLoading } = useQuery({
+  const { data: activityTypes = [], isLoading } = useQuery({
     queryKey: ["activity-types"],
     queryFn: activityTypeApi.list,
   });
@@ -109,7 +109,7 @@ export default function ActivityCategoriesPage() {
 
       {isLoading ? (
         <p className="text-gray-500 text-sm">Loading...</p>
-      ) : categories.length === 0 ? (
+      ) : activityTypes.length === 0 ? (
         <p className="text-gray-500 text-sm">No activity types yet.</p>
       ) : (
         <Table>
@@ -121,15 +121,15 @@ export default function ActivityCategoriesPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {categories.map((cat) => (
-              <TableRow key={cat.id}>
-                <TableCell className="font-medium">{cat.name}</TableCell>
-                <TableCell className="text-gray-400 text-sm font-mono">{cat.key}</TableCell>
+            {activityTypes.map((at) => (
+              <TableRow key={at.id}>
+                <TableCell className="font-medium">{at.name}</TableCell>
+                <TableCell className="text-gray-400 text-sm font-mono">{at.key}</TableCell>
                 <TableCell>
                   <Can permission="activity_type:manage">
                     <div className="flex gap-1">
                       <button
-                        onClick={() => openEdit(cat)}
+                        onClick={() => openEdit(at)}
                         className="text-gray-400 hover:text-purple-600"
                       >
                         <Pencil className="h-4 w-4" />
@@ -137,7 +137,7 @@ export default function ActivityCategoriesPage() {
                       <button
                         onClick={() => {
                           if (confirm("Delete this activity type?"))
-                            deleteMutation.mutate(cat.id);
+                            deleteMutation.mutate(at.id);
                         }}
                         className="text-gray-400 hover:text-red-500"
                       >

@@ -63,7 +63,7 @@ export default function MetaFieldsPage() {
   const [fieldForm, setFieldForm] = useState<MetaFieldDefinition>({ ...emptyField });
   const [optionsText, setOptionsText] = useState("");
 
-  // Activity section: category (required or "all") + optional dimension value filter
+  // Activity section: activity type (required or "all") + optional dimension value filter
   const [activityTypeId, setActivityTypeId] = useState<string>(""); // "" = all
   const [activityDimId, setActivityDimId] = useState<string>(""); // which dimension to filter
   const [activityDvId, setActivityDvId] = useState<string>(""); // selected dimension value (optional)
@@ -84,7 +84,7 @@ export default function MetaFieldsPage() {
     queryFn: entityTypeApi.list,
   });
 
-  const { data: categories = [] } = useQuery<ActivityType[]>({
+  const { data: activityTypes = [] } = useQuery<ActivityType[]>({
     queryKey: ["activity-types"],
     queryFn: activityTypeApi.list,
   });
@@ -105,13 +105,13 @@ export default function MetaFieldsPage() {
   // Derive the schema key from section + activeKey
   const schemaKey = useMemo(() => {
     if (activeSection === "activity") {
-      // Build: activity:category:{catId}[:dimension_value:{dvId}]
-      // or: activity:dimension_value:{dvId} (all categories)
+      // Build: activity:activity_type:{typeId}[:dimension_value:{dvId}]
+      // or: activity:dimension_value:{dvId} (all activity types)
       if (activityTypeId && activityDvId) {
-        return `activity:category:${activityTypeId}:dimension_value:${activityDvId}`;
+        return `activity:activity_type:${activityTypeId}:dimension_value:${activityDvId}`;
       }
       if (activityTypeId) {
-        return `activity:category:${activityTypeId}`;
+        return `activity:activity_type:${activityTypeId}`;
       }
       if (activityDvId) {
         return `activity:dimension_value:${activityDvId}`;
@@ -123,7 +123,7 @@ export default function MetaFieldsPage() {
       if (!participantEntityId) return "";
       let key = `participant:entity:${participantEntityId}`;
       if (participantTypeId) {
-        key += `:category:${participantTypeId}`;
+        key += `:activity_type:${participantTypeId}`;
       }
       if (participantDvId) {
         key += `:dimension_value:${participantDvId}`;
@@ -154,7 +154,7 @@ export default function MetaFieldsPage() {
         setActiveKey("enrollment");
         break;
       case "activity":
-        setActivityTypeId(categories[0]?.id || "");
+        setActivityTypeId(activityTypes[0]?.id || "");
         setActivityDimId("");
         setActivityDvId("");
         break;
@@ -294,9 +294,9 @@ export default function MetaFieldsPage() {
       }
       case "other": return "Enrollments";
       case "activity": {
-        const catName = categories.find((c) => c.id === activityTypeId)?.name;
+        const typeName = activityTypes.find((c) => c.id === activityTypeId)?.name;
         const parts = ["Activity"];
-        if (catName) parts.push(catName);
+        if (typeName) parts.push(typeName);
         else parts.push("All");
         if (activityDvId) parts.push(dvLabel(activityDvId));
         return parts.join(" \u2192 ");
@@ -307,8 +307,8 @@ export default function MetaFieldsPage() {
           : entityTypesList.find((et) => et.id === participantEntityId)?.name || participantEntityId;
         const parts = [`Participant: ${entityLabel}`];
         if (participantTypeId) {
-          const catName = categories.find((c) => c.id === participantTypeId)?.name;
-          parts.push(catName || "category");
+          const typeName = activityTypes.find((c) => c.id === participantTypeId)?.name;
+          parts.push(typeName || "activity type");
         }
         if (participantDvId) parts.push(dvLabel(participantDvId));
         if (!participantTypeId && !participantDvId) parts.push("(all)");
@@ -316,7 +316,7 @@ export default function MetaFieldsPage() {
       }
       default: return "";
     }
-  }, [activeSection, activeKey, entityTypesList, nonSystemDimensions, dimensions, allDimensionValues, categories, activityTypeId, activityDvId, participantEntityId, participantTypeId, participantDvId]);
+  }, [activeSection, activeKey, entityTypesList, nonSystemDimensions, dimensions, allDimensionValues, activityTypes, activityTypeId, activityDvId, participantEntityId, participantTypeId, participantDvId]);
 
   // Section pills
   const sections: { key: SectionKind; label: string }[] = [
@@ -444,8 +444,8 @@ export default function MetaFieldsPage() {
                 onChange={(e) => setActivityTypeId(e.target.value)}
               >
                 <option value="">All</option>
-                {categories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>{cat.name}</option>
+                {activityTypes.map((at) => (
+                  <option key={at.id} value={at.id}>{at.name}</option>
                 ))}
               </select>
             </div>
@@ -523,8 +523,8 @@ export default function MetaFieldsPage() {
                   onChange={(e) => setParticipantTypeId(e.target.value)}
                 >
                   <option value="">All</option>
-                  {categories.map((cat) => (
-                    <option key={cat.id} value={cat.id}>{cat.name}</option>
+                  {activityTypes.map((at) => (
+                    <option key={at.id} value={at.id}>{at.name}</option>
                   ))}
                 </select>
               </div>
