@@ -149,7 +149,10 @@ export default function ActivityDetailPage() {
       setEditingSections(false);
       toast.success("Participants saved");
     },
-    onError: () => toast.error("Failed to save participants"),
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      toast.error(msg || "Failed to save participants");
+    },
   });
 
   const deleteMutation = useMutation({
