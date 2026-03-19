@@ -122,13 +122,13 @@ export default function ActivityDetailPage() {
     }
 
     // Per dimension value tag
-    if (activity?.tags) {
-      for (const tag of activity.tags) {
+    if (activity?.dimensions) {
+      for (const dim of activity.dimensions) {
         // participant:entity:{ref_id}:dimension_value:{dvId}
-        fields.push(...(allMetaSchemas[`${base}:dimension_value:${tag.value_id}`] || []));
+        fields.push(...(allMetaSchemas[`${base}:dimension_value:${dim.value_id}`] || []));
         // participant:entity:{ref_id}:category:{catId}:dimension_value:{dvId}
         if (categoryId) {
-          fields.push(...(allMetaSchemas[`${base}:category:${categoryId}:dimension_value:${tag.value_id}`] || []));
+          fields.push(...(allMetaSchemas[`${base}:category:${categoryId}:dimension_value:${dim.value_id}`] || []));
         }
       }
     }
@@ -237,13 +237,13 @@ export default function ActivityDetailPage() {
     if (categoryId) {
       fields.push(...(allMetaSchemas[`activity:category:${categoryId}`] || []));
     }
-    if (activity?.tags) {
-      for (const tag of activity.tags) {
+    if (activity?.dimensions) {
+      for (const dim of activity.dimensions) {
         // All-categories × dimension value
-        fields.push(...(allMetaSchemas[`activity:dimension_value:${tag.value_id}`] || []));
+        fields.push(...(allMetaSchemas[`activity:dimension_value:${dim.value_id}`] || []));
         // Specific category × dimension value
         if (categoryId) {
-          fields.push(...(allMetaSchemas[`activity:category:${categoryId}:dimension_value:${tag.value_id}`] || []));
+          fields.push(...(allMetaSchemas[`activity:category:${categoryId}:dimension_value:${dim.value_id}`] || []));
         }
       }
     }
@@ -254,7 +254,7 @@ export default function ActivityDetailPage() {
   if (!activity) return <PageLayout className="p-4"><p>Not found</p></PageLayout>;
 
   // Use first tag as activity title
-  const activityTitle = activity.tags.length > 0 ? activity.tags[0].value_name : v("activity");
+  const activityTitle = activity.dimensions.length > 0 ? activity.dimensions[0].value_name : v("activity");
 
   return (
     <PageLayout className="p-4">
@@ -274,7 +274,7 @@ export default function ActivityDetailPage() {
         </Can>
       </div>
       <div className="flex gap-1 mb-1 flex-wrap">
-        {activity.tags.slice(1).map((tag) => (
+        {activity.dimensions.slice(1).map((tag) => (
           <Badge key={tag.value_id} variant="secondary">
             {tag.dimension_name}: {tag.value_name}
           </Badge>

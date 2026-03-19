@@ -271,7 +271,7 @@ export default function ActivitiesPage() {
   // Get the first tag name to use as activity title (e.g. intervention name)
   const getActivityTitle = (a: typeof activities[0]) => {
     // Use the first tag as the title (typically the intervention)
-    if (a.tags.length > 0) return a.tags[0].value_name;
+    if (a.dimensions.length > 0) return a.dimensions[0].value_name;
     return v("activity");
   };
 
@@ -374,7 +374,7 @@ export default function ActivitiesPage() {
                     <div>
                       <p className="font-medium">{getActivityTitle(a)}</p>
                       <div className="flex gap-1 mt-0.5 flex-wrap">
-                        {a.tags.slice(1).map((tag) => (
+                        {a.dimensions.slice(1).map((tag) => (
                           <Badge key={tag.value_id} variant="secondary" className="text-xs">
                             {tag.value_name}
                           </Badge>

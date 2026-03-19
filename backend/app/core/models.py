@@ -7,13 +7,13 @@ from app.modules.auth.model import (  # noqa: F401
 )
 from app.modules.organization.model import MetaFieldSchema, Organization  # noqa: F401
 from app.modules.dimension.model import (  # noqa: F401
-    ActivityTag,
+    ActivityDimension,
     Dimension,
     DimensionValue,
     DimensionValueLink,
-    EnrollmentTag,
-    EntityTag,
-    UserDimensionAccess,
+    EnrollmentDimension,
+    EntityDimension,
+    UserDimension,
 )
 from app.modules.activity.model import (  # noqa: F401
     Activity,

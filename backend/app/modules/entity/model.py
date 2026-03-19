@@ -51,8 +51,8 @@ class Entity(BaseModel):
     organization = relationship("Organization", back_populates="entities")
     entity_type = relationship("EntityType", back_populates="entities")
     enrollments = relationship("Enrollment", back_populates="entity", lazy="dynamic")
-    tags = relationship(
-        "EntityTag",
+    dimensions = relationship(
+        "EntityDimension",
         back_populates="entity",
         cascade="all, delete-orphan",
         lazy="joined",

@@ -229,8 +229,8 @@ export const entityApi = {
     const response = await authAxios.put<Entity>(`/entities/${id}`, data);
     return response.data;
   },
-  updateTags: async (id: string, dimensionValueIds: string[]): Promise<Entity> => {
-    const response = await authAxios.put<Entity>(`/entities/${id}/tags`, dimensionValueIds);
+  updateDimensions: async (id: string, dimensionValueIds: string[]): Promise<Entity> => {
+    const response = await authAxios.put<Entity>(`/entities/${id}/dimensions`, dimensionValueIds);
     return response.data;
   },
 };
@@ -411,8 +411,8 @@ export const enrollmentApi = {
     const response = await authAxios.put<Enrollment>(`/enrollments/${id}`, data);
     return response.data;
   },
-  updateTags: async (id: string, dimensionValueIds: string[]): Promise<Enrollment> => {
-    const response = await authAxios.put<Enrollment>(`/enrollments/${id}/tags`, dimensionValueIds);
+  updateDimensions: async (id: string, dimensionValueIds: string[]): Promise<Enrollment> => {
+    const response = await authAxios.put<Enrollment>(`/enrollments/${id}/dimensions`, dimensionValueIds);
     return response.data;
   },
 };

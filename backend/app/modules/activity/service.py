@@ -15,7 +15,7 @@ from app.modules.activity.model import (
     ActivityParticipant,
 )
 from app.modules.dimension.model import (
-    ActivityTag,
+    ActivityDimension,
     DimensionValue,
 )
 
@@ -89,15 +89,15 @@ class ActivityService:
 
             query = query.filter(
                 exists()
-                .where(ActivityTag.activity_id == Activity.id)
-                .where(ActivityTag.dimension_value_id.in_(accessible_dv_ids))
+                .where(ActivityDimension.activity_id == Activity.id)
+                .where(ActivityDimension.dimension_value_id.in_(accessible_dv_ids))
             )
 
         return (
             query.options(
                 joinedload(Activity.category),
-                joinedload(Activity.tags)
-                .joinedload(ActivityTag.dimension_value)
+                joinedload(Activity.dimensions)
+                .joinedload(ActivityDimension.dimension_value)
                 .joinedload(DimensionValue.dimension),
             )
             .order_by(Activity.date.desc())
@@ -109,8 +109,8 @@ class ActivityService:
             self.db.query(Activity)
             .options(
                 joinedload(Activity.category),
-                joinedload(Activity.tags)
-                .joinedload(ActivityTag.dimension_value)
+                joinedload(Activity.dimensions)
+                .joinedload(ActivityDimension.dimension_value)
                 .joinedload(DimensionValue.dimension),
             )
             .filter_by(id=activity_id)
@@ -149,8 +149,8 @@ class ActivityService:
         self.db.flush()
 
         for dv_id in dimension_value_ids:
-            tag = ActivityTag(activity_id=activity.id, dimension_value_id=uuid.UUID(dv_id))
-            self.db.add(tag)
+            dim = ActivityDimension(activity_id=activity.id, dimension_value_id=uuid.UUID(dv_id))
+            self.db.add(dim)
 
         self.db.commit()
         self.db.refresh(activity)

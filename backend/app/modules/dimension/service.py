@@ -12,7 +12,7 @@ from app.modules.dimension.model import (
     Dimension,
     DimensionValue,
     DimensionValueLink,
-    UserDimensionAccess,
+    UserDimension,
 )
 
 
@@ -218,8 +218,8 @@ class UserDimensionAccessService:
     def __init__(self, db: Session):
         self.db = db
 
-    def get_access(self, user_id: uuid.UUID) -> list[UserDimensionAccess]:
-        return self.db.query(UserDimensionAccess).filter_by(user_id=user_id).all()
+    def get_access(self, user_id: uuid.UUID) -> list[UserDimension]:
+        return self.db.query(UserDimension).filter_by(user_id=user_id).all()
 
     def get_access_value_ids(self, user_id: uuid.UUID) -> list[uuid.UUID]:
         rows = self.get_access(user_id)
@@ -227,10 +227,10 @@ class UserDimensionAccessService:
 
     def update_access(
         self, user_id: uuid.UUID, dimension_value_ids: list[uuid.UUID]
-    ) -> list[UserDimensionAccess]:
+    ) -> list[UserDimension]:
         """Bulk-replace a user's dimension access."""
-        self.db.query(UserDimensionAccess).filter_by(user_id=user_id).delete()
+        self.db.query(UserDimension).filter_by(user_id=user_id).delete()
         for dv_id in dimension_value_ids:
-            self.db.add(UserDimensionAccess(user_id=user_id, dimension_value_id=dv_id))
+            self.db.add(UserDimension(user_id=user_id, dimension_value_id=dv_id))
         self.db.commit()
         return self.get_access(user_id)

@@ -186,9 +186,9 @@ export default function EntitiesPage() {
                         )}
                       </div>
                     </div>
-                    {e.tags.length > 0 && (
+                    {e.dimensions.length > 0 && (
                       <div className="flex gap-1 flex-wrap">
-                        {e.tags.map((tag) => (
+                        {e.dimensions.map((tag) => (
                           <Badge key={tag.value_id} variant="secondary" className="text-xs">
                             {tag.value_name}
                           </Badge>

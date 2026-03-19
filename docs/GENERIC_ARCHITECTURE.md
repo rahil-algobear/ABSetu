@@ -23,9 +23,9 @@ Replace hardcoded organizational entities (Center, Programme, ProgrammeCenter) w
 | `centers` | `dimensions` + `dimension_values` |
 | `programmes` | `dimensions` + `dimension_values` |
 | `programme_centers` | `dimension_value_links` |
-| `user_center_access` | `user_dimension_access` |
-| `user_programme_access` | `user_dimension_access` |
-| `user_session_template_access` | `user_dimension_access` |
+| `user_center_access` | `user_dimensions` |
+| `user_programme_access` | `user_dimensions` |
+| `user_session_template_access` | `user_dimensions` |
 | `session_templates` | `activity_types` (renamed) |
 | `sessions` | `activities` (renamed) |
 | `session_facilitators` | `activity_facilitators` (renamed) |
@@ -42,8 +42,8 @@ Replace hardcoded organizational entities (Center, Programme, ProgrammeCenter) w
 | `facilitators` | Same |
 | `session_facilitators` → `activity_facilitators` | Renamed |
 | `beneficiaries` | Same |
-| `enrollments` | Modified — removes `programme_center_id`, tagged via `enrollment_tags` |
-| `users` | Modified — removes access relationships, uses `user_dimension_access` |
+| `enrollments` | Modified — removes `programme_center_id`, tagged via `enrollment_dimensions` |
+| `users` | Modified — removes access relationships, uses `user_dimensions` |
 | `roles` | Same |
 | `permissions` | Modified — simplified permission keys |
 | `role_permissions` | Same |
@@ -164,7 +164,7 @@ Location ↔ ActivityType rules (replaces `CENTRE_INTERVENTIONS`):
 
 ---
 
-#### `activity_tags` ✅
+#### `activity_dimensions` ✅
 
 Links dimension values to activities. Replaces the `programme_center_id` FK on activities (formerly sessions).
 
@@ -184,7 +184,7 @@ Unique constraint: `(activity_id, dimension_value_id)`
 
 ---
 
-#### `beneficiary_tags` ✅
+#### `beneficiary_dimensions` ✅
 
 Links dimension values to beneficiaries for scoping and reporting.
 
@@ -198,7 +198,7 @@ Unique constraint: `(beneficiary_id, dimension_value_id)`
 
 ---
 
-#### `enrollment_tags` ✅
+#### `enrollment_dimensions` ✅
 
 Links dimension values to enrollments. Replaces the `programme_center_id` FK on enrollments.
 
@@ -212,7 +212,7 @@ Unique constraint: `(enrollment_id, dimension_value_id)`
 
 ---
 
-#### `user_dimension_access` ✅
+#### `user_dimensions` ✅
 
 Replaces `user_center_access`, `user_programme_access`, and `user_session_template_access` with a single table.
 
@@ -245,7 +245,7 @@ Unique constraint: `(user_id, dimension_value_id)`
 | `organization_id` | **Added** — FK → organizations (was implicit through programme_center) |
 | `session_template_id` | **Renamed** to `activity_type_id` — FK → activity_types |
 
-Tags are now in `activity_tags` instead of being implicit through `programme_center_id`.
+Tags are now in `activity_dimensions` instead of being implicit through `programme_center_id`.
 
 #### `enrollments` (modified)
 
@@ -254,7 +254,7 @@ Tags are now in `activity_tags` instead of being implicit through `programme_cen
 | `programme_center_id` | **Removed** |
 | `organization_id` | **Added** — FK → organizations |
 
-Tags are now in `enrollment_tags`.
+Tags are now in `enrollment_dimensions`.
 
 ---
 
@@ -288,7 +288,7 @@ Tags are now in `enrollment_tags`.
 ### Two-Layer Auth Model
 
 1. **Action permissions** (Role → Permission keys): "Can this user create sessions?" — same as today
-2. **Data scoping** (UserDimensionAccess): "Which sessions can this user see?" — replaces centre/programme assignment
+2. **Data scoping** (UserDimension): "Which sessions can this user see?" — replaces centre/programme assignment
 
 These are independent. A user needs BOTH the right permission AND matching scope to perform an action.
 
@@ -383,7 +383,7 @@ Component: `src/components/ActivityTypeMatrixDialog.tsx`
 Dynamically renders one dropdown per dimension (filtered by user's access scope). Selection cascading via dimension value links — choosing a Location filters Programme to valid options, which filters Activity Type to valid options.
 
 ```
-[Location dropdown]       → filtered by UserDimensionAccess
+[Location dropdown]       → filtered by UserDimension
 [Programme dropdown]      → filtered by dimension_value_links(selected location)
 [Activity Type dropdown]  → filtered by dimension_value_links(selected location)
 [Date picker]
@@ -483,15 +483,15 @@ PUT    /api/organization/meta-field-schemas/{entity_type}
 
 ```
 app/modules/dimension/
-├── model.py       # Dimension, DimensionValue, DimensionValueLink, ActivityTag, BeneficiaryTag,
-│                  #   EnrollmentTag, UserDimensionAccess (all tagging in one module)
+├── model.py       # Dimension, DimensionValue, DimensionValueLink, ActivityDimension, BeneficiaryDimension,
+│                  #   EnrollmentDimension, UserDimension (all tagging in one module)
 ├── schemas.py     # Request/response schemas
 ├── service.py     # DimensionService, DimensionValueService, DimensionValueLinkService,
-│                  #   UserDimensionAccessService
+│                  #   UserDimensionService
 └── routes.py      # /api/dimensions, /api/dimension-value-links endpoints
 ```
 
-> **Note:** The originally planned separate `app/modules/tagging/` module was not created. All tag models (`ActivityTag`, `BeneficiaryTag`, `EnrollmentTag`, `UserDimensionAccess`) live in the dimension module alongside `DimensionValueLink` since they're closely related. User access endpoints are in the user module routes.
+> **Note:** The originally planned separate `app/modules/tagging/` module was not created. All tag models (`ActivityDimension`, `BeneficiaryDimension`, `EnrollmentDimension`, `UserDimension`) live in the dimension module alongside `DimensionValueLink` since they're closely related. User access endpoints are in the user module routes.
 
 ### Module: `app/modules/activity/`
 
@@ -566,7 +566,7 @@ Rename session-related tables to generic, domain-neutral names:
 | `sessions` | `activities` | "Activity" is neutral — covers sessions, disbursements, visits, campaigns |
 | `session_templates` | `activity_types` | It's a category, not a template you clone |
 | `session_facilitators` | `activity_facilitators` | Follows from activity rename |
-| `session_tags` | `activity_tags` | Follows from activity rename |
+| `session_dimensions` | `activity_dimensions` | Follows from activity rename |
 | `attendances` | `participations` | "Attendance" implies physical presence; "participation" covers receiving a donation, getting a vaccine, etc. |
 
 ### Schema changes
@@ -669,20 +669,20 @@ Organization
   │           └── DimensionValueLinks (valid combinations between values)
   ├── ActivityTypes (formerly SessionTemplates)
   ├── Activities (formerly Sessions)
-  │     ├── ActivityTags → DimensionValues
+  │     ├── ActivityDimensions → DimensionValues
   │     ├── Participations (formerly Attendances, now with meta JSONB)
   │     │     └── → Beneficiaries
   │     └── ActivityFacilitators → Facilitators
   ├── Facilitators
   ├── Beneficiaries
-  │     ├── BeneficiaryTags → DimensionValues
+  │     ├── BeneficiaryDimensions → DimensionValues
   │     └── Enrollments
-  │           └── EnrollmentTags → DimensionValues
+  │           └── EnrollmentDimensions → DimensionValues
   ├── Roles
   │     └── RolePermissions → Permissions
   └── Users
         ├── Role assignment
-        └── UserDimensionAccess → DimensionValues
+        └── UserDimension → DimensionValues
 ```
 
 ---
@@ -713,7 +713,7 @@ Replace `beneficiaries` and `facilitators` tables with a generic `entities` tabl
 | `beneficiaries` | `entities` + `entity_types` |
 | `facilitators` | `entities` + `entity_types` |
 | `activity_facilitators` | `activity_participants` (unified — see Change 2) |
-| `beneficiary_tags` | `entity_tags` |
+| `beneficiary_dimensions` | `entity_dimensions` |
 
 ### New Tables
 
@@ -775,9 +775,9 @@ All people tracked by the org, regardless of type.
 | `created_at` | Timestamp | From BaseModel |
 | `updated_at` | Timestamp | From BaseModel |
 
-#### `entity_tags`
+#### `entity_dimensions`
 
-Replaces `beneficiary_tags`. Links dimension values to entities for scoping and reporting.
+Replaces `beneficiary_dimensions`. Links dimension values to entities for scoping and reporting.
 
 | Column | Type | Notes |
 |--------|------|-------|
@@ -819,7 +819,7 @@ The entity type's `name` field serves as the display name directly. No separate 
 | `entity_type:view` | View entity types |
 | `entity_type:manage` | Create/edit/delete entity types |
 
-Data scoping via `UserDimensionAccess` applies to entities through `entity_tags`, same as it does today for beneficiaries through `beneficiary_tags`.
+Data scoping via `UserDimension` applies to entities through `entity_dimensions`, same as it does today for beneficiaries through `beneficiary_dimensions`.
 
 ---
 
@@ -1244,7 +1244,7 @@ Only entity types with `can_enroll: true` in their config. For Kshamata: benefic
 
 A single entity can have multiple enrollments — different dimension value combinations (different programmes/locations), or re-enrollment after release.
 
-#### `enrollment_tags`
+#### `enrollment_dimensions`
 
 Links the enrollment to specific dimension values.
 
@@ -1271,7 +1271,7 @@ SELECT e.*
 FROM entities e
 JOIN enrollments en ON en.entity_id = e.id
   AND en.release_date IS NULL  -- still active
-JOIN enrollment_tags et ON et.enrollment_id = en.id
+JOIN enrollment_dimensions et ON et.enrollment_id = en.id
 WHERE e.entity_type_id = :beneficiary_type_id
   AND et.dimension_value_id IN (:selected_dimension_value_ids)
 GROUP BY e.id
@@ -1340,7 +1340,7 @@ Shows this entity's enrollment history. Admin can add, edit, or release enrollme
 └───────────────────────────────────────────────┘
 ```
 
-Dimension dropdowns cascade via tag rules, same as the activity form. The enrollment form respects `UserDimensionAccess` — a field worker scoped to ShantiSadan can only enroll entities there.
+Dimension dropdowns cascade via tag rules, same as the activity form. The enrollment form respects `UserDimension` — a field worker scoped to ShantiSadan can only enroll entities there.
 
 ### Permissions
 
@@ -1386,19 +1386,19 @@ Organization
   │           └── TagRules (valid combinations between values)
   ├── EntityTypes (org-defined person categories)
   │     └── Entities (all tracked people)
-  │           ├── EntityTags → DimensionValues
+  │           ├── EntityDimensions → DimensionValues
   │           └── Enrollments (for entity types with can_enroll)
-  │                 └── EnrollmentTags → DimensionValues
+  │                 └── EnrollmentDimensions → DimensionValues
   ├── ActivityCategories (form builder — defines participant sections)
   │     └── ActivityTypes (now with category_id)
   │           └── Activities
-  │                 ├── ActivityTags → DimensionValues
+  │                 ├── ActivityDimensions → DimensionValues
   │                 └── ActivityParticipants (polymorphic: entity or user, with status + meta)
   ├── Roles
   │     └── RolePermissions → Permissions
   └── Users
         ├── Role assignment
-        └── UserDimensionAccess → DimensionValues
+        └── UserDimension → DimensionValues
 ```
 
 ---
@@ -1409,10 +1409,10 @@ Since `enrollments` haven't been built yet and `facilitators` + `beneficiaries` 
 
 1. Create `entity_types` and `activity_categories` tables
 2. Create `entities` table, migrate data from `beneficiaries` and `facilitators`
-3. Create `entity_tags`, migrate data from `beneficiary_tags`
+3. Create `entity_dimensions`, migrate data from `beneficiary_dimensions`
 4. Create `activity_participants` table, migrate data from `participations` (with `participant_type: "entity"`, `section_key: "entity_type:beneficiary"`)
 5. Migrate `activity_facilitators` data into `activity_participants` (with `participant_type: "entity"`, `section_key: "entity_type:facilitator"`)
 6. Add `category_id` to `activity_types`
-7. Drop old tables (`beneficiaries`, `facilitators`, `activity_facilitators`, `beneficiary_tags`, `participations`)
+7. Drop old tables (`beneficiaries`, `facilitators`, `activity_facilitators`, `beneficiary_dimensions`, `participations`)
 8. Rename "Custom Fields" to "Form Fields" in frontend, update schema key patterns
 9. Update all services, routes, and frontend to use new entity/category/activity_participants models

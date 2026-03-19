@@ -29,8 +29,8 @@ class Enrollment(BaseModel):
     meta = Column(JSONB, nullable=True, default=dict)
 
     entity = relationship("Entity", back_populates="enrollments")
-    tags = relationship(
-        "EnrollmentTag",
+    dimensions = relationship(
+        "EnrollmentDimension",
         back_populates="enrollment",
         cascade="all, delete-orphan",
         lazy="joined",

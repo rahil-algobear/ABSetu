@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.common.exceptions import NotFoundError, ValidationError
 from app.common.helpers.slugify import slugify
-from app.modules.dimension.model import EntityTag
+from app.modules.dimension.model import EntityDimension
 from app.modules.entity.model import Entity, EntityType
 from app.modules.organization.model import Organization
 
@@ -102,8 +102,8 @@ class EntityService:
         if accessible_dv_ids:
             query = query.filter(
                 exists()
-                .where(EntityTag.entity_id == Entity.id)
-                .where(EntityTag.dimension_value_id.in_(accessible_dv_ids))
+                .where(EntityDimension.entity_id == Entity.id)
+                .where(EntityDimension.dimension_value_id.in_(accessible_dv_ids))
             )
 
         return query.order_by(Entity.created_at.desc()).all()
@@ -144,11 +144,11 @@ class EntityService:
         self.db.flush()
 
         for dv_id in dimension_value_ids or []:
-            tag = EntityTag(
+            dim = EntityDimension(
                 entity_id=entity.id,
                 dimension_value_id=uuid.UUID(dv_id),
             )
-            self.db.add(tag)
+            self.db.add(dim)
 
         self.db.commit()
         self.db.refresh(entity)
@@ -163,19 +163,17 @@ class EntityService:
         self.db.refresh(entity)
         return entity
 
-    def update_tags(
+    def update_dimensions(
         self, entity_id: uuid.UUID, org_id: uuid.UUID, dimension_value_ids: list[str]
     ) -> Entity:
         entity = self.get_by_id(entity_id, org_id)
-        # Remove existing tags
-        self.db.query(EntityTag).filter_by(entity_id=entity.id).delete()
-        # Add new tags
+        self.db.query(EntityDimension).filter_by(entity_id=entity.id).delete()
         for dv_id in dimension_value_ids:
-            tag = EntityTag(
+            dim = EntityDimension(
                 entity_id=entity.id,
                 dimension_value_id=uuid.UUID(dv_id),
             )
-            self.db.add(tag)
+            self.db.add(dim)
         self.db.commit()
         self.db.refresh(entity)
         return entity

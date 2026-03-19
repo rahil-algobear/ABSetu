@@ -34,7 +34,7 @@ class EntityTypeResponse(BaseResponseSchema):
 # --- Entity ---
 
 
-class DimensionTagInfo(BaseModel):
+class DimensionInfo(BaseModel):
     dimension_key: str
     dimension_name: str
     value_id: str
@@ -63,4 +63,4 @@ class EntityResponse(BaseResponseSchema):
     entity_type_name: str | None = None
     entity_type_key: str | None = None
     entity_type_config: dict[str, Any] | None = None
-    tags: list[DimensionTagInfo] = []
+    dimensions: list[DimensionInfo] = []

@@ -60,7 +60,7 @@ class ActivityFormResponse(BaseResponseSchema):
 # --- Activity ---
 
 
-class DimensionTagInfo(BaseModel):
+class DimensionInfo(BaseModel):
     dimension_key: str
     dimension_name: str
     value_id: str
@@ -90,7 +90,7 @@ class ActivityResponse(BaseResponseSchema):
     created_by: str | None = None
     meta: dict[str, Any] | None = None
     category_name: str | None = None
-    tags: list[DimensionTagInfo] = []
+    dimensions: list[DimensionInfo] = []
 
 
 # --- Activity Participant ---

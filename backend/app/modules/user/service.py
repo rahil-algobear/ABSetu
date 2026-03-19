@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.common.exceptions import NotFoundError, ValidationError
 from app.modules.auth.model import User
-from app.modules.dimension.model import UserDimensionAccess
+from app.modules.dimension.model import UserDimension
 from app.modules.role.model import Role
 
 
@@ -103,9 +103,9 @@ class UserService:
             raise NotFoundError("User not found")
 
         # Replace all dimension access
-        self.db.query(UserDimensionAccess).filter_by(user_id=user_id).delete()
+        self.db.query(UserDimension).filter_by(user_id=user_id).delete()
         for dv_id in dimension_value_ids:
-            self.db.add(UserDimensionAccess(user_id=user_id, dimension_value_id=dv_id))
+            self.db.add(UserDimension(user_id=user_id, dimension_value_id=dv_id))
 
         self.db.commit()
         self.db.refresh(user)

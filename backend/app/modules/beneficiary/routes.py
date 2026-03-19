@@ -11,7 +11,7 @@ from app.core.database import get_db
 from app.common.dependencies import get_current_user, require_permissions
 from app.modules.auth.model import User
 from app.modules.beneficiary.schemas import (
-    DimensionTagInfo,
+    DimensionInfo,
     EnrollmentCreate,
     EnrollmentResponse,
     EnrollmentUpdate,
@@ -24,12 +24,12 @@ enrollment_router = APIRouter(prefix="/enrollments")
 
 
 def _build_enrollment_response(e) -> dict:
-    tag_infos = []
-    for t in e.tags or []:
-        dv = t.dimension_value
+    dim_infos = []
+    for d in e.dimensions or []:
+        dv = d.dimension_value
         if dv and dv.dimension:
-            tag_infos.append(
-                DimensionTagInfo(
+            dim_infos.append(
+                DimensionInfo(
                     dimension_key=dv.dimension.key,
                     dimension_name=dv.dimension.name,
                     value_id=str(dv.id),
@@ -46,7 +46,7 @@ def _build_enrollment_response(e) -> dict:
         release_date=e.release_date,
         meta=e.meta,
         entity_name=e.entity.name if e.entity else None,
-        tags=tag_infos,
+        dimensions=dim_infos,
     ).dump()
 
 
@@ -106,15 +106,16 @@ def update_enrollment(
 
 
 @enrollment_router.put(
-    "/{enrollment_id}/tags", dependencies=[Depends(require_permissions("enrollment:manage"))]
+    "/{enrollment_id}/dimensions",
+    dependencies=[Depends(require_permissions("enrollment:manage"))],
 )
-def update_enrollment_tags(
+def update_enrollment_dimensions(
     enrollment_id: uuid.UUID,
     dimension_value_ids: list[str],
     db: Session = Depends(get_db),
 ):
     service = EnrollmentService(db)
-    enrollment = service.update_tags(enrollment_id, dimension_value_ids)
+    enrollment = service.update_dimensions(enrollment_id, dimension_value_ids)
     return _build_enrollment_response(enrollment)
 
 

@@ -33,7 +33,7 @@ class User(BaseModel):
     organization = relationship("Organization")
     role = relationship("Role", back_populates="users")
     dimension_access = relationship(
-        "UserDimensionAccess",
+        "UserDimension",
         back_populates="user",
         cascade="all, delete-orphan",
     )

@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.common.exceptions import NotFoundError, ValidationError
 from app.modules.beneficiary.model import Enrollment
-from app.modules.dimension.model import EnrollmentTag
+from app.modules.dimension.model import EnrollmentDimension
 from app.modules.entity.model import Entity
 
 
@@ -68,11 +68,11 @@ class EnrollmentService:
         self.db.flush()
 
         for dv_id in dimension_value_ids or []:
-            tag = EnrollmentTag(
+            dim = EnrollmentDimension(
                 enrollment_id=enrollment.id,
                 dimension_value_id=uuid.UUID(dv_id),
             )
-            self.db.add(tag)
+            self.db.add(dim)
 
         self.db.commit()
         self.db.refresh(enrollment)
@@ -90,18 +90,20 @@ class EnrollmentService:
         self.db.refresh(enrollment)
         return enrollment
 
-    def update_tags(self, enrollment_id: uuid.UUID, dimension_value_ids: list[str]) -> Enrollment:
+    def update_dimensions(
+        self, enrollment_id: uuid.UUID, dimension_value_ids: list[str]
+    ) -> Enrollment:
         enrollment = self.db.query(Enrollment).filter_by(id=enrollment_id).first()
         if not enrollment:
             raise NotFoundError("Enrollment not found")
 
-        self.db.query(EnrollmentTag).filter_by(enrollment_id=enrollment.id).delete()
+        self.db.query(EnrollmentDimension).filter_by(enrollment_id=enrollment.id).delete()
         for dv_id in dimension_value_ids:
-            tag = EnrollmentTag(
+            dim = EnrollmentDimension(
                 enrollment_id=enrollment.id,
                 dimension_value_id=uuid.UUID(dv_id),
             )
-            self.db.add(tag)
+            self.db.add(dim)
 
         self.db.commit()
         self.db.refresh(enrollment)

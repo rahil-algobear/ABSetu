@@ -1,5 +1,5 @@
 """
-Dimension models: Dimension, DimensionValue, DimensionValueLink, UserDimensionAccess
+Dimension models: Dimension, DimensionValue, DimensionValueLink, UserDimension
 """
 
 from sqlalchemy import Column, ForeignKey, Integer, String, UniqueConstraint
@@ -93,8 +93,8 @@ class DimensionValueLink(BaseModel):
     )
 
 
-class ActivityTag(BaseModel):
-    __tablename__ = "activity_tags"
+class ActivityDimension(BaseModel):
+    __tablename__ = "activity_dimensions"
 
     activity_id = Column(
         UUID(as_uuid=True),
@@ -109,16 +109,16 @@ class ActivityTag(BaseModel):
         index=True,
     )
 
-    activity = relationship("Activity", back_populates="tags")
+    activity = relationship("Activity", back_populates="dimensions")
     dimension_value = relationship("DimensionValue")
 
     __table_args__ = (
-        UniqueConstraint("activity_id", "dimension_value_id", name="uq_activity_tag"),
+        UniqueConstraint("activity_id", "dimension_value_id", name="uq_activity_dimension"),
     )
 
 
-class EntityTag(BaseModel):
-    __tablename__ = "entity_tags"
+class EntityDimension(BaseModel):
+    __tablename__ = "entity_dimensions"
 
     entity_id = Column(
         UUID(as_uuid=True),
@@ -133,14 +133,16 @@ class EntityTag(BaseModel):
         index=True,
     )
 
-    entity = relationship("Entity", back_populates="tags")
+    entity = relationship("Entity", back_populates="dimensions")
     dimension_value = relationship("DimensionValue")
 
-    __table_args__ = (UniqueConstraint("entity_id", "dimension_value_id", name="uq_entity_tag"),)
+    __table_args__ = (
+        UniqueConstraint("entity_id", "dimension_value_id", name="uq_entity_dimension"),
+    )
 
 
-class EnrollmentTag(BaseModel):
-    __tablename__ = "enrollment_tags"
+class EnrollmentDimension(BaseModel):
+    __tablename__ = "enrollment_dimensions"
 
     enrollment_id = Column(
         UUID(as_uuid=True),
@@ -155,16 +157,16 @@ class EnrollmentTag(BaseModel):
         index=True,
     )
 
-    enrollment = relationship("Enrollment", back_populates="tags")
+    enrollment = relationship("Enrollment", back_populates="dimensions")
     dimension_value = relationship("DimensionValue")
 
     __table_args__ = (
-        UniqueConstraint("enrollment_id", "dimension_value_id", name="uq_enrollment_tag"),
+        UniqueConstraint("enrollment_id", "dimension_value_id", name="uq_enrollment_dimension"),
     )
 
 
-class UserDimensionAccess(BaseModel):
-    __tablename__ = "user_dimension_access"
+class UserDimension(BaseModel):
+    __tablename__ = "user_dimensions"
 
     user_id = Column(
         UUID(as_uuid=True),
@@ -182,6 +184,4 @@ class UserDimensionAccess(BaseModel):
     user = relationship("User", back_populates="dimension_access")
     dimension_value = relationship("DimensionValue")
 
-    __table_args__ = (
-        UniqueConstraint("user_id", "dimension_value_id", name="uq_user_dimension_access"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", "dimension_value_id", name="uq_user_dimension"),)

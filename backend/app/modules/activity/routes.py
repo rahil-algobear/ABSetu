@@ -20,7 +20,7 @@ from app.modules.activity.schemas import (
     ActivityFormUpdate,
     ActivityResponse,
     ActivityUpdate,
-    DimensionTagInfo,
+    DimensionInfo,
     ParticipantBulkCreate,
     ParticipantResponse,
 )
@@ -124,12 +124,12 @@ activity_router = APIRouter(prefix="/activities")
 
 def _build_activity_response(a) -> dict:
     """Build ActivityResponse dict from an Activity model instance."""
-    tag_infos = []
-    for t in a.tags or []:
-        dv = t.dimension_value
+    dim_infos = []
+    for d in a.dimensions or []:
+        dv = d.dimension_value
         if dv and dv.dimension:
-            tag_infos.append(
-                DimensionTagInfo(
+            dim_infos.append(
+                DimensionInfo(
                     dimension_key=dv.dimension.key,
                     dimension_name=dv.dimension.name,
                     value_id=str(dv.id),
@@ -150,7 +150,7 @@ def _build_activity_response(a) -> dict:
         created_by=str(a.created_by) if a.created_by else None,
         meta=a.meta,
         category_name=category_name,
-        tags=tag_infos,
+        dimensions=dim_infos,
     ).dump()
 
 

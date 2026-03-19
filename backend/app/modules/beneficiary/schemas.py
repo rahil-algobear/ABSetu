@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from app.common.schemas.base_response import BaseResponseSchema
 
 
-class DimensionTagInfo(BaseModel):
+class DimensionInfo(BaseModel):
     dimension_key: str
     dimension_name: str
     value_id: str
@@ -42,4 +42,4 @@ class EnrollmentResponse(BaseResponseSchema):
     release_date: date | None = None
     meta: dict[str, Any] | None = None
     entity_name: str | None = None
-    tags: list[DimensionTagInfo] = []
+    dimensions: list[DimensionInfo] = []

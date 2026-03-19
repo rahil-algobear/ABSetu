@@ -103,9 +103,9 @@ export default function EntityDetailPage() {
         )}
       </div>
 
-      {entity.tags?.length > 0 && (
+      {entity.dimensions?.length > 0 && (
         <div className="flex gap-1 mb-4">
-          {entity.tags.map((tag) => (
+          {entity.dimensions.map((tag) => (
             <Badge key={tag.value_id} variant="secondary">
               {tag.dimension_name}: {tag.value_name}
             </Badge>
@@ -185,7 +185,7 @@ export default function EntityDetailPage() {
                       >
                         <div>
                           <div className="flex gap-1 mb-0.5 flex-wrap">
-                            {e.tags?.map((tag) => (
+                            {e.dimensions?.map((tag) => (
                               <Badge key={tag.value_id} variant="secondary" className="text-xs">
                                 {tag.value_name}
                               </Badge>
@@ -276,7 +276,7 @@ function EnrollmentForm({
   );
   const [releaseDate, setReleaseDate] = useState(enrollment?.release_date || "");
   const [dimensionValueIds, setDimensionValueIds] = useState<string[]>(
-    () => enrollment?.tags?.map((t) => t.value_id) || []
+    () => enrollment?.dimensions?.map((t) => t.value_id) || []
   );
   const [metaValues, setMetaValues] = useState<Record<string, unknown>>(
     () => enrollment?.meta || {}
@@ -312,7 +312,7 @@ function EnrollmentForm({
     mutationFn: (data: { id: string; updates: Partial<Enrollment>; tagIds: string[] }) =>
       Promise.all([
         enrollmentApi.update(data.id, data.updates),
-        enrollmentApi.updateTags(data.id, data.tagIds),
+        enrollmentApi.updateDimensions(data.id, data.tagIds),
       ]),
     onSuccess: () => {
       toast.success(`${v("enrollment")} updated`);

@@ -108,7 +108,7 @@ export interface EntityType {
   updated_at: number | null;
 }
 
-export interface DimensionTagInfo {
+export interface DimensionInfo {
   dimension_key: string;
   dimension_name: string;
   value_id: string;
@@ -126,7 +126,7 @@ export interface Entity {
   entity_type_name: string | null;
   entity_type_key: string | null;
   entity_type_config: Record<string, unknown> | null;
-  tags: DimensionTagInfo[];
+  dimensions: DimensionInfo[];
   updated_at: number | null;
 }
 
@@ -170,7 +170,7 @@ export interface Activity {
   created_by: string | null;
   meta: Record<string, unknown> | null;
   category_name: string | null;
-  tags: DimensionTagInfo[];
+  dimensions: DimensionInfo[];
   updated_at: number | null;
 }
 
@@ -250,6 +250,6 @@ export interface Enrollment {
   release_date: string | null;
   meta: Record<string, unknown> | null;
   entity_name: string | null;
-  tags: DimensionTagInfo[];
+  dimensions: DimensionInfo[];
   updated_at: number | null;
 }

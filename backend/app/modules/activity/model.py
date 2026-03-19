@@ -77,8 +77,8 @@ class Activity(BaseModel):
 
     category = relationship("ActivityCategory")
     participants = relationship("ActivityParticipant", back_populates="activity", lazy="dynamic")
-    tags = relationship(
-        "ActivityTag",
+    dimensions = relationship(
+        "ActivityDimension",
         back_populates="activity",
         cascade="all, delete-orphan",
         lazy="joined",
