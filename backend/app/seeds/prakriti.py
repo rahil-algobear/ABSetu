@@ -20,7 +20,7 @@ import sys
 from app.core.database import SessionLocal
 from app.modules.organization.model import MetaFieldSchema, Organization
 from app.modules.dimension.model import Dimension, DimensionValue, DimensionValueLink
-from app.modules.activity.model import ActivityCategory, ActivityType
+from app.modules.activity.model import ActivityCategory, ActivityForm, ActivityType
 from app.modules.entity.model import EntityType
 from app.modules.auth.model import User
 from app.modules.role.model import Permission, Role, RolePermission
@@ -738,15 +738,30 @@ def seed():
                 organization_id=org.id,
                 name=FIELD_ACTIVITIES_CATEGORY_NAME,
                 key=field_act_cat_key,
-                sections=sections,
                 sort_order=FIELD_ACTIVITIES_CATEGORY_SORT_ORDER,
             )
             db.add(field_act_cat)
             db.flush()
-        else:
-            field_act_cat.sections = sections
-            db.flush()
         print(f"  Ensured activity category: {field_act_cat.name}")
+
+        # 3b. Activity Form (sections stored as elements on ActivityForm)
+        act_form = (
+            db.query(ActivityForm)
+            .filter_by(activity_category_id=field_act_cat.id)
+            .first()
+        )
+        if not act_form:
+            act_form = ActivityForm(
+                organization_id=org.id,
+                activity_category_id=field_act_cat.id,
+                elements=sections,
+            )
+            db.add(act_form)
+            db.flush()
+        else:
+            act_form.elements = sections
+            db.flush()
+        print(f"  Ensured activity form for {field_act_cat.name}")
 
         # 4. Dimensions
         programme_dim = _ensure_dimension(db, org, "programme", "Programme", 0)
