@@ -134,12 +134,10 @@ def _validate_entity_type(entity_type: str, org_id, db: Session) -> None:
             from app.modules.activity.model import ActivityCategory
             from app.modules.dimension.model import DimensionValue
 
-            cat_ok = db.query(ActivityCategory).filter_by(
-                organization_id=org_id, id=ref_id1
-            ).first()
-            dv_ok = db.query(DimensionValue).filter_by(
-                organization_id=org_id, id=ref_id2
-            ).first()
+            cat_ok = (
+                db.query(ActivityCategory).filter_by(organization_id=org_id, id=ref_id1).first()
+            )
+            dv_ok = db.query(DimensionValue).filter_by(organization_id=org_id, id=ref_id2).first()
             if cat_ok and dv_ok:
                 return
 
@@ -191,12 +189,10 @@ def _validate_entity_type(entity_type: str, org_id, db: Session) -> None:
                 ref_id1 == "user"
                 or db.query(EntityType).filter_by(organization_id=org_id, id=ref_id1).first()
             )
-            cat_ok = db.query(ActivityCategory).filter_by(
-                organization_id=org_id, id=ref_id2
-            ).first()
-            dv_ok = db.query(DimensionValue).filter_by(
-                organization_id=org_id, id=ref_id3
-            ).first()
+            cat_ok = (
+                db.query(ActivityCategory).filter_by(organization_id=org_id, id=ref_id2).first()
+            )
+            dv_ok = db.query(DimensionValue).filter_by(organization_id=org_id, id=ref_id3).first()
             if entity_ok and cat_ok and dv_ok:
                 return
 
@@ -294,19 +290,25 @@ def _resolve_scope_key(scope: MetaFieldScope, org_id, db: Session) -> str:
 
     if t == "entity":
         if not scope.entity_type_id:
-            raise HTTPException(status_code=400, detail="entity_type_id is required for entity scope")
+            raise HTTPException(
+                status_code=400, detail="entity_type_id is required for entity scope"
+            )
         _check_entity_type(scope.entity_type_id)
         return f"entity:{scope.entity_type_id}"
 
     if t == "dimension":
         if not scope.dimension_id:
-            raise HTTPException(status_code=400, detail="dimension_id is required for dimension scope")
+            raise HTTPException(
+                status_code=400, detail="dimension_id is required for dimension scope"
+            )
         _check_dimension(scope.dimension_id)
         return f"dimension:{scope.dimension_id}"
 
     if t == "participant":
         if not scope.entity_type_id:
-            raise HTTPException(status_code=400, detail="entity_type_id is required for participant scope")
+            raise HTTPException(
+                status_code=400, detail="entity_type_id is required for participant scope"
+            )
         _check_entity_type(scope.entity_type_id)
         key = f"participant:entity:{scope.entity_type_id}"
         if scope.category_id:
