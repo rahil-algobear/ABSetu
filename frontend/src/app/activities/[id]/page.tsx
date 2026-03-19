@@ -231,12 +231,6 @@ export default function ActivityDetailPage() {
     return et?.name || "Participants";
   };
 
-  if (isLoading) return <PageLayout className="p-4"><p>Loading...</p></PageLayout>;
-  if (!activity) return <PageLayout className="p-4"><p>Not found</p></PageLayout>;
-
-  // Use first tag as activity title
-  const activityTitle = activity.tags.length > 0 ? activity.tags[0].value_name : v("activity");
-
   // Activity meta fields: category + dimension values + category×dimension_value combos
   const categoryFields = useMemo((): MetaFieldDefinition[] => {
     const fields: MetaFieldDefinition[] = [];
@@ -255,6 +249,12 @@ export default function ActivityDetailPage() {
     }
     return fields;
   }, [categoryId, activity, allMetaSchemas]);
+
+  if (isLoading) return <PageLayout className="p-4"><p>Loading...</p></PageLayout>;
+  if (!activity) return <PageLayout className="p-4"><p>Not found</p></PageLayout>;
+
+  // Use first tag as activity title
+  const activityTitle = activity.tags.length > 0 ? activity.tags[0].value_name : v("activity");
 
   return (
     <PageLayout className="p-4">
