@@ -265,66 +265,8 @@ export default function ActivitiesPage() {
     }
   };
 
-  // Fallback rendering when no form config exists
-  const renderDefaultForm = () => (
-    <>
-      {/* Dimension selectors */}
-      {dimensions.map((dim) => {
-        const dimValues = allDimensionValues.filter(
-          (dv) => dv.dimension_id === dim.id
-        );
-        const filtered = getFilteredValues(
-          dimValues,
-          selectedByDim,
-          dim.id,
-          dimensionValueLinks
-        );
-        const currentSelection =
-          formData.dimension_value_ids.find((id) =>
-            dimValues.some((dv) => dv.id === id)
-          ) || "";
-        return (
-          <div key={dim.id}>
-            <label className="text-sm font-medium">{vDim(dim)}</label>
-            <select
-              className="w-full mt-1 border rounded-md p-2 text-sm"
-              value={currentSelection}
-              onChange={(e) => {
-                const newId = e.target.value;
-                const otherIds = formData.dimension_value_ids.filter(
-                  (id) => !dimValues.some((dv) => dv.id === id)
-                );
-                setFormData({
-                  ...formData,
-                  dimension_value_ids: newId
-                    ? [...otherIds, newId]
-                    : otherIds,
-                });
-              }}
-            >
-              <option value="">Select {vDim(dim)}...</option>
-              {filtered.map((dv) => (
-                <option key={dv.id} value={dv.id}>
-                  {dv.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        );
-      })}
-
-      {/* Activity Meta */}
-      <DynamicMetaForm
-        fields={activityMetaFields}
-        values={metaValues}
-        onChange={setMetaValues}
-      />
-    </>
-  );
-
-  // Use form builder elements if available, otherwise fallback
+  // Use form builder elements if available
   const hasFormConfig = formElements.length > 0;
-  const formConfigHasActivityMeta = formElements.some((el) => el.type === "activity_meta");
 
   // Get the first tag name to use as activity title (e.g. intervention name)
   const getActivityTitle = (a: typeof activities[0]) => {
@@ -364,46 +306,47 @@ export default function ActivitiesPage() {
               className="space-y-3"
             >
               {hasFormConfig
-                ? (<>
-                    {formElements.map(renderElement)}
-                    {!formConfigHasActivityMeta && activityMetaFields.length > 0 && (
-                      <DynamicMetaForm
-                        fields={activityMetaFields}
-                        values={metaValues}
-                        onChange={setMetaValues}
-                      />
-                    )}
-                  </>)
-                : renderDefaultForm()
+                ? formElements.map(renderElement)
+                : (
+                  <p className="text-sm text-gray-500">
+                    The form for this {v("activity").toLowerCase()} category has not been configured yet. Please ask your admin to set it up in the Form Builder under Admin settings.
+                  </p>
+                )
               }
 
-              <div>
-                <label className="text-sm font-medium">Date</label>
-                <Input
-                  type="date"
-                  value={formData.date}
-                  onChange={(e) =>
-                    setFormData({ ...formData, date: e.target.value })
-                  }
-                  required
-                />
-              </div>
+              {hasFormConfig && (
+                <>
+                  <div>
+                    <label className="text-sm font-medium">Date</label>
+                    <Input
+                      type="date"
+                      value={formData.date}
+                      onChange={(e) =>
+                        setFormData({ ...formData, date: e.target.value })
+                      }
+                      required
+                    />
+                  </div>
 
-              <div>
-                <label className="text-sm font-medium">Notes</label>
-                <Input
-                  placeholder="Optional notes..."
-                  value={formData.notes}
-                  onChange={(e) =>
-                    setFormData({ ...formData, notes: e.target.value })
-                  }
-                />
-              </div>
+                  <div>
+                    <label className="text-sm font-medium">Notes</label>
+                    <Input
+                      placeholder="Optional notes..."
+                      value={formData.notes}
+                      onChange={(e) =>
+                        setFormData({ ...formData, notes: e.target.value })
+                      }
+                    />
+                  </div>
+                </>
+              )}
 
               <div className="flex gap-2">
-                <Button type="submit" disabled={createMutation.isPending}>
-                  Create
-                </Button>
+                {hasFormConfig && (
+                  <Button type="submit" disabled={createMutation.isPending}>
+                    Create
+                  </Button>
+                )}
                 <Button
                   type="button"
                   variant="outline"
