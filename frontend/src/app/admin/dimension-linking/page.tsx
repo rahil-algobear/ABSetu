@@ -7,10 +7,13 @@ import { Dimension, DimensionValue, DimensionValueLink } from "@/types";
 import { Button } from "@/components/ui/button";
 import { LayoutGrid } from "lucide-react";
 import { DimensionMatrixDialog } from "@/components/DimensionMatrixDialog";
+import { usePermissions } from "@/components/Auth/Permissions";
 import toast from "react-hot-toast";
 
 export default function DimensionLinkingPage() {
   const queryClient = useQueryClient();
+  const { can } = usePermissions();
+  const canManage = can("dimension:manage");
   const { data: dimensions = [] } = useQuery<Dimension[]>({
     queryKey: ["dimensions"],
     queryFn: dimensionApi.list,
@@ -179,7 +182,8 @@ export default function DimensionLinkingPage() {
                         type="checkbox"
                         checked={checked}
                         onChange={() => togglePair(v1.id, v2.id)}
-                        className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                        disabled={!canManage}
+                        className="rounded border-gray-300 text-purple-600 focus:ring-purple-500 disabled:opacity-50"
                       />
                     </td>
                   );
@@ -190,7 +194,7 @@ export default function DimensionLinkingPage() {
         </table>
       </div>
 
-      {hasPendingChanges && (
+      {hasPendingChanges && canManage && (
         <div className="flex gap-2 mt-4">
           <Button onClick={() => bulkSyncMutation.mutate()} disabled={bulkSyncMutation.isPending}>
             Save Changes
