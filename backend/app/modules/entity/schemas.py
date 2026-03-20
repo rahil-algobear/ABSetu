@@ -64,3 +64,5 @@ class EntityResponse(BaseResponseSchema):
     entity_type_key: str | None = None
     entity_type_config: dict[str, Any] | None = None
     dimensions: list[DimensionInfo] = []
+    enrollment_count: int = 0
+    activity_count: int = 0

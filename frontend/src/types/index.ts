@@ -128,6 +128,8 @@ export interface Entity {
   entity_type_config: Record<string, unknown> | null;
   dimensions: DimensionInfo[];
   updated_at: number | null;
+  enrollment_count: number;
+  activity_count: number;
 }
 
 // --- Activity Types ---
