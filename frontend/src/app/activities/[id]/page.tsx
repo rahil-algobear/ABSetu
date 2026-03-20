@@ -27,7 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PageLayout } from "@/components/ui/page-layout";
-import { Trash2, Pencil } from "lucide-react";
+import { Trash2, Pencil, Calendar, FileText, Users } from "lucide-react";
 import toast from "react-hot-toast";
 
 export default function ActivityDetailPage() {
@@ -93,9 +93,6 @@ export default function ActivityDetailPage() {
       .filter((el) => el.visible && (el.type === "default" || el.type === "activity_meta"))
       .sort((a, b) => a.sort_order - b.sort_order);
   }, [formConfig]);
-
-  // Are there any record-stage fields that need editing?
-  const hasRecordFields = detailElements.some((el) => el.stage === "record");
 
   // Entity type source IDs from form elements
   const entitySourceIds = useMemo(() => {
@@ -331,10 +328,20 @@ export default function ActivityDetailPage() {
   // Use first dimension value as activity title
   const activityTitle = activity.dimensions.length > 0 ? activity.dimensions[0].value_name : "Activity";
 
+  // Check if the notes element is visible
+  const notesElement = detailElements.find((el) => el.type === "default" && el.ref_id === "notes");
+  const dateElement = detailElements.find((el) => el.type === "default" && el.ref_id === "start_date");
+
   return (
-    <PageLayout className="p-4">
-      <div className="flex items-center justify-between mb-1">
-        <h1 className="text-2xl font-bold">{activityTitle}</h1>
+    <PageLayout className="p-4 space-y-4">
+      {/* Header */}
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">{activityTitle}</h1>
+          {activity.activity_type_name && (
+            <p className="text-sm text-gray-500">{activity.activity_type_name}</p>
+          )}
+        </div>
         <Can permission="activity:create">
           <Button
             size="sm"
@@ -348,19 +355,25 @@ export default function ActivityDetailPage() {
           </Button>
         </Can>
       </div>
-      <div className="flex gap-1 mb-1 flex-wrap">
-        {activity.dimensions.slice(1).map((dim) => (
-          <Badge key={dim.value_id} variant="secondary">
-            {dim.dimension_name}: {dim.value_name}
-          </Badge>
-        ))}
-      </div>
-      {editingDetails ? (
-        <Card className="mb-4">
-          <CardHeader className="flex-row items-center justify-between">
-            <CardTitle className="text-lg">Edit Details</CardTitle>
-          </CardHeader>
-          <CardContent>
+
+      {/* Details Card */}
+      <Card>
+        <CardHeader className="flex-row items-center justify-between pb-2">
+          <CardTitle className="text-base">Details</CardTitle>
+          {!editingDetails && (
+            <Can permission="activity:create">
+              <button
+                onClick={openDetailEditing}
+                className="text-gray-400 hover:text-purple-600 p-1"
+                title="Edit details"
+              >
+                <Pencil className="h-4 w-4" />
+              </button>
+            </Can>
+          )}
+        </CardHeader>
+        <CardContent>
+          {editingDetails ? (
             <form onSubmit={(e) => { e.preventDefault(); handleDetailSave(); }} className="space-y-3">
               {detailElements.map((el) => {
                 if (el.type === "default" && el.ref_id === "start_date") {
@@ -402,7 +415,7 @@ export default function ActivityDetailPage() {
                     </div>
                   );
                 }
-                if (el.type === "activity_meta" && activityTypeFields.length > 0) {
+                if (el.type === "activity_meta") {
                   return (
                     <div key="edit-activity_meta">
                       <DynamicMetaForm
@@ -424,56 +437,82 @@ export default function ActivityDetailPage() {
                 </Button>
               </div>
             </form>
-          </CardContent>
-        </Card>
-      ) : (
-        <>
-          <div className="flex items-center gap-2 mb-1">
-            <p className="text-gray-500">
-              {activity.start_date}
-              {activity.end_date && activity.end_date !== activity.start_date && ` — ${activity.end_date}`}
-            </p>
-            <Can permission="activity:create">
-              <button
-                onClick={openDetailEditing}
-                className="text-gray-400 hover:text-purple-600"
-                title="Edit details"
-              >
-                <Pencil className="h-3.5 w-3.5" />
-              </button>
-            </Can>
-          </div>
+          ) : (
+            <div className="space-y-3">
+              {/* Dimensions */}
+              {activity.dimensions.length > 0 && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {activity.dimensions.map((dim) => (
+                    <div key={dim.value_id}>
+                      <p className="text-xs text-gray-500">{dim.dimension_name}</p>
+                      <p className="text-sm font-medium">{dim.value_name}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
 
-          {activity.activity_type_name && (
-            <p className="text-sm text-gray-500 mb-2">Type: {activity.activity_type_name}</p>
+              {activity.dimensions.length > 0 && <hr className="border-gray-100" />}
+
+              {/* Date */}
+              {dateElement && (
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4 text-gray-400 shrink-0" />
+                  <div>
+                    <p className="text-xs text-gray-500">Date</p>
+                    <p className="text-sm font-medium">
+                      {activity.start_date}
+                      {activity.end_date && activity.end_date !== activity.start_date
+                        ? ` — ${activity.end_date}`
+                        : ""}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Notes — always show if the element is visible */}
+              {notesElement && (
+                <div className="flex items-start gap-2">
+                  <FileText className="h-4 w-4 text-gray-400 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs text-gray-500">Notes</p>
+                    {activity.notes ? (
+                      <p className="text-sm">{activity.notes}</p>
+                    ) : (
+                      <p className="text-sm text-gray-300 italic">Not set</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Activity meta — always show all fields */}
+              {activityTypeFields.length > 0 && (
+                <>
+                  <hr className="border-gray-100" />
+                  <MetaFieldDisplay
+                    fields={activityTypeFields}
+                    values={activity.meta}
+                    showEmpty
+                  />
+                </>
+              )}
+            </div>
           )}
-
-          {activity.notes && (
-            <p className="text-sm text-gray-600 mb-2">{activity.notes}</p>
-          )}
-
-          {/* Activity meta display */}
-          {activity.meta && Object.keys(activity.meta).length > 0 && activityTypeFields.length > 0 && (
-            <Card className="mb-4">
-              <CardContent className="py-3">
-                <MetaFieldDisplay fields={activityTypeFields} values={activity.meta} />
-              </CardContent>
-            </Card>
-          )}
-        </>
-      )}
-
-      <div className="mb-4" />
+        </CardContent>
+      </Card>
 
       {/* Participant sections from form builder */}
       {entityTypeElements.length > 0 ? (
         <Card>
-          <CardHeader className="flex-row items-center justify-between">
-            <CardTitle className="text-lg">Participants</CardTitle>
+          <CardHeader className="flex-row items-center justify-between pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Users className="h-4 w-4 text-gray-500" />
+              Participants
+            </CardTitle>
             <Can permission="activity:create">
               {!editingSections && (
-                <Button size="sm" onClick={openEditing}>
-                  Edit Participants
+                <Button size="sm" variant="outline" onClick={openEditing}>
+                  <Pencil className="h-3.5 w-3.5 mr-1" />
+                  Edit
                 </Button>
               )}
             </Can>
@@ -616,12 +655,15 @@ export default function ActivityDetailPage() {
 
                 return (
                   <div key={sectionKey}>
-                    <h3 className="text-sm font-semibold mb-1">
+                    <h3 className="text-sm font-semibold mb-1 flex items-center gap-1.5">
                       {getElementLabel(el)}
                       {el.required && <span className="text-red-500 ml-0.5">*</span>}
+                      <Badge variant="secondary" className="text-xs font-normal ml-1">
+                        {sectionParticipants.length}
+                      </Badge>
                     </h3>
                     {sectionParticipants.length === 0 ? (
-                      <p className="text-gray-500 text-xs">None recorded</p>
+                      <p className="text-gray-400 text-xs italic py-2">No participants added yet</p>
                     ) : useTable ? (
                       <div className="border rounded-md overflow-x-auto">
                         <table className="w-full text-sm">
@@ -669,14 +711,11 @@ export default function ActivityDetailPage() {
                         </table>
                       </div>
                     ) : (
-                      <div className="space-y-1">
+                      <div className="flex flex-wrap gap-1.5">
                         {sectionParticipants.map((p) => (
-                          <div
-                            key={p.id}
-                            className="p-2 border rounded text-sm"
-                          >
-                            <span>{p.participant_name || p.participant_id}</span>
-                          </div>
+                          <Badge key={p.id} variant="outline" className="text-sm font-normal py-1 px-2">
+                            {p.participant_name || p.participant_id}
+                          </Badge>
                         ))}
                       </div>
                     )}
@@ -690,11 +729,14 @@ export default function ActivityDetailPage() {
         /* No form config — show flat participant list */
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Participants</CardTitle>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Users className="h-4 w-4 text-gray-500" />
+              Participants
+            </CardTitle>
           </CardHeader>
           <CardContent>
             {participants.length === 0 ? (
-              <p className="text-gray-500 text-sm">No participants recorded</p>
+              <p className="text-gray-400 text-sm italic">No participants recorded</p>
             ) : (
               <div className="space-y-1">
                 {participants.map((p) => (
