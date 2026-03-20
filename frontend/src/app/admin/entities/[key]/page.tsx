@@ -40,12 +40,6 @@ function EntityTypeEntitiesContent() {
   const [form, setForm] = useState({ name: "" });
   const [metaValues, setMetaValues] = useState<Record<string, unknown>>({});
 
-  // List params from URL
-  const listParams = useListParams({
-    defaultSortBy: "created_at",
-    defaultSortOrder: "desc",
-  });
-
   // Find the entity type by key
   const { data: entityTypes = [] } = useQuery({
     queryKey: ["entity-types"],
@@ -54,42 +48,35 @@ function EntityTypeEntitiesContent() {
 
   const entityType = entityTypes.find((et) => et.key === entityTypeKey);
 
-  // Fetch filter definitions
+  // Fetch filter definitions (needed before useListParams for slug mapping)
   const { data: filterData } = useQuery({
     queryKey: ["entity-filters"],
     queryFn: entityApi.getFilters,
   });
 
-  // Filter out the entity_type_id filter (implicit from URL) and enrich labels
-  const filterDefinitions: FilterDefinition[] = useMemo(() => {
-    return (filterData?.filters || [])
-      .filter((f) => f.key !== "entity_type_id")
-      .map((f) => ({
-        key: f.key,
-        label: f.label,
-        type: f.type as FilterDefinition["type"],
-        options: f.options,
-        min: f.min,
-        max: f.max,
-      }));
+  // All definitions (for slug mapping in useListParams)
+  const allFilterDefs: FilterDefinition[] = useMemo(() => {
+    return (filterData?.filters || []).map((f) => ({
+      key: f.key,
+      label: f.label,
+      type: f.type as FilterDefinition["type"],
+      options: f.options,
+      min: f.min,
+      max: f.max,
+    }));
   }, [filterData]);
 
-  // Enrich filter labels from URL-parsed filters
-  const enrichedFilters = useMemo(() => {
-    if (!filterData?.filters) return listParams.activeFilters;
-    return listParams.activeFilters.map((f) => {
-      const def = filterData.filters.find((d) => d.key === f.key);
-      if (!def) return f;
-      let displayValue = f.displayValue;
-      if (def.type === "select" && def.options) {
-        const vals = Array.isArray(f.value) ? f.value : [f.value];
-        displayValue = vals
-          .map((v) => def.options!.find((o) => o.value === v)?.label || v)
-          .join(", ");
-      }
-      return { ...f, label: def.label, displayValue };
-    });
-  }, [listParams.activeFilters, filterData]);
+  // Definitions for the filter modal (without entity_type_id — implicit from URL)
+  const filterDefinitions: FilterDefinition[] = useMemo(() => {
+    return allFilterDefs.filter((f) => f.key !== "entity_type_id");
+  }, [allFilterDefs]);
+
+  // List params from URL — uses filter definitions for slug mapping
+  const listParams = useListParams({
+    defaultSortBy: "created_at",
+    defaultSortOrder: "desc",
+    filterDefinitions: allFilterDefs,
+  });
 
   // Paginated entity list — scoped to entity type
   const { data: response, isLoading } = useQuery({
@@ -206,7 +193,7 @@ function EntityTypeEntitiesContent() {
         search={listParams.search}
         onSearchChange={listParams.setSearch}
         filterDefinitions={filterDefinitions}
-        activeFilters={enrichedFilters}
+        activeFilters={listParams.activeFilters}
         onFiltersChange={listParams.setActiveFilters}
         onRemoveFilter={listParams.removeFilter}
         searchPlaceholder={`Search ${typeName.toLowerCase()}...`}
