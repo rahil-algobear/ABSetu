@@ -126,7 +126,35 @@ def delete_activity_type(
 activity_router = APIRouter(prefix="/activities")
 
 
-def _build_activity_response(a) -> dict:
+def _resolve_generated_title(activity, form) -> str | None:
+    """Compose a generated title from dimension values based on form config."""
+    if not form or not form.elements:
+        return None
+    title_el = next(
+        (el for el in form.elements if el.get("type") == "default" and el.get("ref_id") == "title"),
+        None,
+    )
+    if not title_el:
+        return None
+    config = title_el.get("config") or {}
+    if config.get("mode") != "generated":
+        return None
+    dimension_ids = config.get("dimension_ids", [])
+    separator = config.get("separator", " - ")
+    if not dimension_ids:
+        return None
+    # Build title from dimension values in the configured order
+    parts = []
+    for dim_id in dimension_ids:
+        for d in activity.dimensions or []:
+            dv = d.dimension_value
+            if dv and dv.dimension and str(dv.dimension.id) == dim_id:
+                parts.append(dv.name)
+                break
+    return separator.join(parts) if parts else None
+
+
+def _build_activity_response(a, form=None) -> dict:
     """Build ActivityResponse dict from an Activity model instance."""
     dim_infos = []
     for d in a.dimensions or []:
@@ -144,11 +172,15 @@ def _build_activity_response(a) -> dict:
 
     activity_type_name = a.activity_type.name if a.activity_type else None
 
+    # Resolve title: generated from dimensions, or free-text from DB
+    title = _resolve_generated_title(a, form) or a.title
+
     return ActivityResponse(
         id=str(a.id),
         updated_at=a.updated_at,
         organization_id=str(a.organization_id),
         activity_type_id=str(a.activity_type_id) if a.activity_type_id else None,
+        title=title,
         start_date=a.start_date,
         end_date=a.end_date,
         notes=a.notes,
@@ -157,6 +189,17 @@ def _build_activity_response(a) -> dict:
         activity_type_name=activity_type_name,
         dimensions=dim_infos,
     ).dump()
+
+
+def _load_forms_by_type(db: Session, activities: list, org_id: uuid.UUID) -> dict:
+    """Load ActivityForm for each unique activity_type_id, keyed by type ID string."""
+    form_service = ActivityFormService(db)
+    forms: dict = {}
+    for a in activities:
+        key = str(a.activity_type_id) if a.activity_type_id else None
+        if key and key not in forms:
+            forms[key] = form_service.get_by_type(a.activity_type_id, org_id)
+    return forms
 
 
 @activity_router.get("/", dependencies=[Depends(require_permissions("activity:view"))])
@@ -172,7 +215,13 @@ def list_activities(
         accessible_dv_ids=accessible_dv_ids,
         activity_type_id=activity_type_id,
     )
-    return [_build_activity_response(a) for a in activities]
+    forms = _load_forms_by_type(db, activities, current_user.organization_id)
+    return [
+        _build_activity_response(
+            a, forms.get(str(a.activity_type_id)) if a.activity_type_id else None
+        )
+        for a in activities
+    ]
 
 
 @activity_router.get(
@@ -186,7 +235,13 @@ def list_activities_by_entity(
 ):
     service = ActivityService(db)
     activities = service.list_by_entity(entity_id, current_user.organization_id)
-    return [_build_activity_response(a) for a in activities]
+    forms = _load_forms_by_type(db, activities, current_user.organization_id)
+    return [
+        _build_activity_response(
+            a, forms.get(str(a.activity_type_id)) if a.activity_type_id else None
+        )
+        for a in activities
+    ]
 
 
 @activity_router.get(
@@ -195,8 +250,14 @@ def list_activities_by_entity(
 )
 def get_activity(
     activity=Depends(get_accessible_activity),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    return _build_activity_response(activity)
+    form = None
+    if activity.activity_type_id:
+        form_service = ActivityFormService(db)
+        form = form_service.get_by_type(activity.activity_type_id, current_user.organization_id)
+    return _build_activity_response(activity, form)
 
 
 @activity_router.post(
@@ -212,6 +273,7 @@ def create_activity(
 ):
     # Validate required form elements from form builder config
     activity_type_id = data.activity_type_id
+    form = None
     if activity_type_id:
         form_service = ActivityFormService(db)
         form = form_service.get_by_type(uuid.UUID(activity_type_id), current_user.organization_id)
@@ -245,7 +307,7 @@ def create_activity(
         data.dimension_value_ids,
         accessible_dv_ids=accessible_dv_ids,
     )
-    return _build_activity_response(activity)
+    return _build_activity_response(activity, form)
 
 
 @activity_router.put(
@@ -255,11 +317,16 @@ def create_activity(
 def update_activity(
     data: ActivityUpdate,
     activity=Depends(get_accessible_activity),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     service = ActivityService(db)
     updated = service.update(activity.id, data.model_dump(exclude_none=True))
-    return _build_activity_response(updated)
+    form = None
+    if updated.activity_type_id:
+        form_service = ActivityFormService(db)
+        form = form_service.get_by_type(updated.activity_type_id, current_user.organization_id)
+    return _build_activity_response(updated, form)
 
 
 @activity_router.delete(
@@ -433,7 +500,11 @@ def get_activity_form(
             "activity_type_id": str(activity_type_id),
             "elements": list(ActivityFormService.DEFAULT_ELEMENTS),
         }
-    return ActivityFormResponse.dump_from_model(form)
+    # Ensure new default elements are present in existing forms
+    patched_elements = ActivityFormService._ensure_defaults(list(form.elements))
+    resp = ActivityFormResponse.dump_from_model(form)
+    resp["elements"] = patched_elements
+    return resp
 
 
 @form_router.put(

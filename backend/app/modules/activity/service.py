@@ -166,6 +166,7 @@ class ActivityService:
         activity = Activity(
             organization_id=org_id,
             activity_type_id=uuid.UUID(activity_type_id) if activity_type_id else None,
+            title=data.get("title"),
             start_date=data["start_date"],
             end_date=data.get("end_date"),
             notes=data.get("notes"),
@@ -264,8 +265,19 @@ class ActivityFormService:
     DEFAULT_ELEMENTS = [
         {
             "type": "default",
-            "ref_id": "start_date",
+            "ref_id": "title",
             "sort_order": 0,
+            "display_type": "text",
+            "visible": True,
+            "required": False,
+            "stage": "create",
+            "removable": False,
+            "config": {"mode": "free_text"},
+        },
+        {
+            "type": "default",
+            "ref_id": "start_date",
+            "sort_order": 1,
             "display_type": "date_range",
             "visible": True,
             "required": True,
@@ -275,7 +287,7 @@ class ActivityFormService:
         {
             "type": "default",
             "ref_id": "notes",
-            "sort_order": 1,
+            "sort_order": 2,
             "display_type": "textarea",
             "visible": True,
             "required": False,

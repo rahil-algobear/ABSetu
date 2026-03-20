@@ -21,6 +21,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Dialog } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import {
   ChevronUp,
   ChevronDown,
@@ -34,6 +35,7 @@ import {
   Users,
   SlidersHorizontal,
   Calendar,
+  Type,
 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -44,6 +46,7 @@ const ELEMENT_TYPES = [
 ];
 
 const DEFAULT_ELEMENT_LABELS: Record<string, string> = {
+  title: "Title",
   start_date: "Date",
   notes: "Notes",
 };
@@ -202,7 +205,8 @@ export default function FormBuilderPage() {
     }
   };
 
-  const getElementIcon = (type: string) => {
+  const getElementIcon = (type: string, refId?: string | null) => {
+    if (type === "default" && refId === "title") return Type;
     if (type === "default") return Calendar;
     const def = ELEMENT_TYPES.find((t) => t.value === type);
     return def?.icon || SlidersHorizontal;
@@ -300,133 +304,247 @@ export default function FormBuilderPage() {
           ) : (
             <div className="space-y-2">
               {elements.map((el, idx) => {
-                const Icon = getElementIcon(el.type);
+                const Icon = getElementIcon(el.type, el.ref_id);
                 const metaCount = getParticipationMetaCount(el);
                 const isDefault = el.type === "default";
                 const isRemovable = el.removable !== false;
+                const isTitleEl = el.type === "default" && el.ref_id === "title";
+                const titleConfig = isTitleEl ? (el.config || { mode: "free_text" }) : null;
+                const titleMode = titleConfig?.mode as string || "free_text";
                 return (
-                  <div
-                    key={`${el.type}-${el.ref_id}-${idx}`}
-                    className={`border rounded-lg p-3 flex items-center gap-3 ${
-                      el.visible ? "bg-white" : "bg-gray-50 opacity-60"
-                    } ${isDefault ? "border-purple-200" : ""}`}
-                  >
-                    {/* Reorder */}
-                    <div className="flex flex-col -space-y-1">
-                      <button
-                        type="button"
-                        onClick={() => moveElement(idx, "up")}
-                        disabled={idx === 0}
-                        className="text-gray-400 hover:text-purple-600 disabled:opacity-30 disabled:cursor-not-allowed"
-                      >
-                        <ChevronUp className="h-4 w-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => moveElement(idx, "down")}
-                        disabled={idx === elements.length - 1}
-                        className="text-gray-400 hover:text-purple-600 disabled:opacity-30 disabled:cursor-not-allowed"
-                      >
-                        <ChevronDown className="h-4 w-4" />
-                      </button>
-                    </div>
-
-                    {/* Icon + Label */}
-                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                      <Icon className="h-4 w-4 text-purple-500 shrink-0" />
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium truncate">
-                          {getElementLabel(el)}
-                          {isDefault && (
-                            <span className="ml-1.5 text-[10px] font-medium text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded">
-                              Default
-                            </span>
-                          )}
-                        </p>
-                        <p className="text-xs text-gray-400">
-                          {isDefault ? "Default field" : (ELEMENT_TYPES.find((t) => t.value === el.type)?.label || el.type)}
-                          {!isDefault && (
-                            <>
-                              {" \u00b7 "}
-                              {DISPLAY_TYPES[el.type]?.find((d) => d.value === el.display_type)?.label || el.display_type}
-                            </>
-                          )}
-                          {el.required && (
-                            <span className="ml-1 text-red-500">
-                              {" \u00b7 "}required
-                            </span>
-                          )}
-                          {metaCount > 0 && (
-                            <span className="ml-1 text-purple-500">
-                              {" \u00b7 "}{metaCount} participation field{metaCount !== 1 ? "s" : ""}
-                            </span>
-                          )}
-                        </p>
+                  <div key={`${el.type}-${el.ref_id}-${idx}`}>
+                    <div
+                      className={`border rounded-lg p-3 flex items-center gap-3 ${
+                        el.visible ? "bg-white" : "bg-gray-50 opacity-60"
+                      } ${isDefault ? "border-purple-200" : ""} ${isTitleEl && titleConfig ? "rounded-b-none" : ""}`}
+                    >
+                      {/* Reorder */}
+                      <div className="flex flex-col -space-y-1">
+                        <button
+                          type="button"
+                          onClick={() => moveElement(idx, "up")}
+                          disabled={idx === 0}
+                          className="text-gray-400 hover:text-purple-600 disabled:opacity-30 disabled:cursor-not-allowed"
+                        >
+                          <ChevronUp className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveElement(idx, "down")}
+                          disabled={idx === elements.length - 1}
+                          className="text-gray-400 hover:text-purple-600 disabled:opacity-30 disabled:cursor-not-allowed"
+                        >
+                          <ChevronDown className="h-4 w-4" />
+                        </button>
                       </div>
-                    </div>
 
-                    {/* Stage toggle: show during creation */}
-                    <label
-                      className="flex items-center gap-1 text-xs text-gray-500 whitespace-nowrap cursor-pointer"
-                      title={el.stage === "create" ? "Shown during creation" : "Shown only when editing"}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={el.stage === "create"}
-                        onChange={(e) => updateElement(idx, { stage: e.target.checked ? "create" : "record" })}
-                        className="rounded"
-                      />
-                      On create
-                    </label>
+                      {/* Icon + Label */}
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <Icon className="h-4 w-4 text-purple-500 shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">
+                            {getElementLabel(el)}
+                            {isDefault && (
+                              <span className="ml-1.5 text-[10px] font-medium text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded">
+                                Default
+                              </span>
+                            )}
+                            {isTitleEl && (
+                              <span className="ml-1.5 text-[10px] font-medium text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
+                                {titleMode === "generated" ? "Generated" : "Free text"}
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-xs text-gray-400">
+                            {isDefault ? "Default field" : (ELEMENT_TYPES.find((t) => t.value === el.type)?.label || el.type)}
+                            {!isDefault && (
+                              <>
+                                {" \u00b7 "}
+                                {DISPLAY_TYPES[el.type]?.find((d) => d.value === el.display_type)?.label || el.display_type}
+                              </>
+                            )}
+                            {el.required && (
+                              <span className="ml-1 text-red-500">
+                                {" \u00b7 "}required
+                              </span>
+                            )}
+                            {metaCount > 0 && (
+                              <span className="ml-1 text-purple-500">
+                                {" \u00b7 "}{metaCount} participation field{metaCount !== 1 ? "s" : ""}
+                              </span>
+                            )}
+                          </p>
+                        </div>
+                      </div>
 
-                    {/* Display type selector (not for default elements) */}
-                    {!isDefault && (
-                      <select
-                        className="border rounded-md px-2 py-1 text-xs"
-                        value={el.display_type}
-                        onChange={(e) => updateElement(idx, { display_type: e.target.value })}
+                      {/* Stage toggle: show during creation */}
+                      <label
+                        className="flex items-center gap-1 text-xs text-gray-500 whitespace-nowrap cursor-pointer"
+                        title={el.stage === "create" ? "Shown during creation" : "Shown only when editing"}
                       >
-                        {(DISPLAY_TYPES[el.type] || []).map((d) => (
-                          <option key={d.value} value={d.value}>{d.label}</option>
-                        ))}
-                      </select>
-                    )}
+                        <input
+                          type="checkbox"
+                          checked={el.stage === "create"}
+                          onChange={(e) => updateElement(idx, { stage: e.target.checked ? "create" : "record" })}
+                          className="rounded"
+                        />
+                        On create
+                      </label>
 
-                    {/* Required toggle */}
-                    <button
-                      type="button"
-                      onClick={() => updateElement(idx, { required: !el.required })}
-                      className={el.required ? "text-red-500 hover:text-red-700" : "text-gray-300 hover:text-red-500"}
-                      title={el.required ? "Required (click to make optional)" : "Optional (click to make required)"}
-                    >
-                      <Asterisk className="h-4 w-4" />
-                    </button>
+                      {/* Display type selector (not for default elements) */}
+                      {!isDefault && (
+                        <select
+                          className="border rounded-md px-2 py-1 text-xs"
+                          value={el.display_type}
+                          onChange={(e) => updateElement(idx, { display_type: e.target.value })}
+                        >
+                          {(DISPLAY_TYPES[el.type] || []).map((d) => (
+                            <option key={d.value} value={d.value}>{d.label}</option>
+                          ))}
+                        </select>
+                      )}
 
-                    {/* Visibility toggle */}
-                    <button
-                      type="button"
-                      onClick={() => updateElement(idx, { visible: !el.visible })}
-                      className="text-gray-400 hover:text-purple-600"
-                      title={el.visible ? "Hide" : "Show"}
-                    >
-                      {el.visible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-                    </button>
-
-                    {/* Remove (disabled for default elements) */}
-                    <Can permission="activity_type:manage">
+                      {/* Required toggle */}
                       <button
                         type="button"
-                        onClick={() => removeElement(idx)}
-                        disabled={!isRemovable}
-                        className={isRemovable
-                          ? "text-gray-400 hover:text-red-500"
-                          : "text-gray-200 cursor-not-allowed"
-                        }
-                        title={isRemovable ? "Remove" : "Default fields cannot be removed"}
+                        onClick={() => updateElement(idx, { required: !el.required })}
+                        className={el.required ? "text-red-500 hover:text-red-700" : "text-gray-300 hover:text-red-500"}
+                        title={el.required ? "Required (click to make optional)" : "Optional (click to make required)"}
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Asterisk className="h-4 w-4" />
                       </button>
-                    </Can>
+
+                      {/* Visibility toggle */}
+                      <button
+                        type="button"
+                        onClick={() => updateElement(idx, { visible: !el.visible })}
+                        className="text-gray-400 hover:text-purple-600"
+                        title={el.visible ? "Hide" : "Show"}
+                      >
+                        {el.visible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                      </button>
+
+                      {/* Remove (disabled for default elements) */}
+                      <Can permission="activity_type:manage">
+                        <button
+                          type="button"
+                          onClick={() => removeElement(idx)}
+                          disabled={!isRemovable}
+                          className={isRemovable
+                            ? "text-gray-400 hover:text-red-500"
+                            : "text-gray-200 cursor-not-allowed"
+                          }
+                          title={isRemovable ? "Remove" : "Default fields cannot be removed"}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </Can>
+                    </div>
+
+                    {/* Title element config panel */}
+                    {isTitleEl && (
+                      <div className="border border-t-0 border-purple-200 rounded-b-lg px-4 py-3 bg-purple-50/30 space-y-3">
+                        <div>
+                          <Label className="text-xs font-medium mb-1.5 block">Title Mode</Label>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                updateElement(idx, { config: { mode: "free_text" } })
+                              }
+                              className={`px-3 py-1.5 rounded-md text-xs font-medium border transition-colors ${
+                                titleMode === "free_text"
+                                  ? "bg-purple-100 border-purple-300 text-purple-700"
+                                  : "bg-white border-gray-200 text-gray-600 hover:border-gray-300"
+                              }`}
+                            >
+                              Free text
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                updateElement(idx, {
+                                  config: {
+                                    mode: "generated",
+                                    dimension_ids: (titleConfig?.dimension_ids as string[]) || [],
+                                    separator: (titleConfig?.separator as string) || " - ",
+                                  },
+                                })
+                              }
+                              className={`px-3 py-1.5 rounded-md text-xs font-medium border transition-colors ${
+                                titleMode === "generated"
+                                  ? "bg-purple-100 border-purple-300 text-purple-700"
+                                  : "bg-white border-gray-200 text-gray-600 hover:border-gray-300"
+                              }`}
+                            >
+                              Generated from dimensions
+                            </button>
+                          </div>
+                        </div>
+
+                        {titleMode === "generated" && (
+                          <>
+                            <div>
+                              <Label className="text-xs font-medium mb-1.5 block">
+                                Dimensions to include (in order)
+                              </Label>
+                              <div className="space-y-1">
+                                {dimensions.map((dim) => {
+                                  const dimIds = (titleConfig?.dimension_ids as string[]) || [];
+                                  const isChecked = dimIds.includes(dim.id);
+                                  return (
+                                    <label key={dim.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                                      <input
+                                        type="checkbox"
+                                        checked={isChecked}
+                                        onChange={(e) => {
+                                          const newIds = e.target.checked
+                                            ? [...dimIds, dim.id]
+                                            : dimIds.filter((id) => id !== dim.id);
+                                          updateElement(idx, {
+                                            config: {
+                                              ...titleConfig,
+                                              dimension_ids: newIds,
+                                            },
+                                          });
+                                        }}
+                                        className="rounded"
+                                      />
+                                      {dim.name}
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                              {dimensions.length === 0 && (
+                                <p className="text-xs text-gray-400">No dimensions defined yet.</p>
+                              )}
+                            </div>
+                            <div>
+                              <Label className="text-xs font-medium mb-1 block">Separator</Label>
+                              <Input
+                                className="max-w-[120px] text-sm h-8"
+                                value={(titleConfig?.separator as string) || " - "}
+                                onChange={(e) =>
+                                  updateElement(idx, {
+                                    config: {
+                                      ...titleConfig,
+                                      separator: e.target.value,
+                                    },
+                                  })
+                                }
+                                placeholder=" - "
+                              />
+                            </div>
+                          </>
+                        )}
+
+                        {titleMode === "free_text" && (
+                          <p className="text-xs text-gray-500">
+                            Users will type a title manually when creating or editing an activity.
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}

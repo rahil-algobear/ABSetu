@@ -64,6 +64,7 @@ class Activity(BaseModel):
         nullable=True,
         index=True,
     )
+    title = Column(Text, nullable=True)
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=True)
     notes = Column(Text, nullable=True)

@@ -5,11 +5,13 @@ Entity and EntityType services
 import uuid
 from datetime import datetime
 
-from sqlalchemy import exists, or_
+from sqlalchemy import exists, func, or_
 from sqlalchemy.orm import Session
 
 from app.common.exceptions import NotFoundError, ValidationError
 from app.common.helpers.slugify import slugify
+from app.modules.activity.model import ActivityParticipant
+from app.modules.beneficiary.model import Enrollment
 from app.modules.dimension.model import DimensionValue, EntityDimension
 from app.modules.entity.model import Entity, EntityType
 from app.modules.organization.model import Organization
@@ -93,11 +95,29 @@ class EntityService:
         org_id: uuid.UUID,
         entity_type_id: uuid.UUID | None = None,
         accessible_dv_ids: list[uuid.UUID] | None = None,
-    ) -> list[Entity]:
-        query = self.db.query(Entity).filter_by(organization_id=org_id)
+    ) -> list[tuple]:
+        enrollment_count = (
+            self.db.query(func.count(Enrollment.id))
+            .filter(Enrollment.entity_id == Entity.id)
+            .correlate(Entity)
+            .scalar_subquery()
+        )
+        activity_count = (
+            self.db.query(func.count(ActivityParticipant.id))
+            .filter(
+                ActivityParticipant.participant_type == "entity",
+                ActivityParticipant.participant_id == Entity.id,
+            )
+            .correlate(Entity)
+            .scalar_subquery()
+        )
+
+        query = self.db.query(Entity, enrollment_count, activity_count).filter_by(
+            organization_id=org_id
+        )
 
         if entity_type_id:
-            query = query.filter_by(entity_type_id=entity_type_id)
+            query = query.filter(Entity.entity_type_id == entity_type_id)
 
         if accessible_dv_ids:
             # Per-dimension scoping: only filter dimensions where user has restrictions.

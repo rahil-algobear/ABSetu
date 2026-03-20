@@ -32,7 +32,7 @@ entity_type_router = APIRouter(prefix="/entity-types")
 entity_router = APIRouter(prefix="/entities")
 
 
-def _build_entity_response(e) -> dict:
+def _build_entity_response(e, enrollment_count: int = 0, activity_count: int = 0) -> dict:
     dim_infos = []
     for d in e.dimensions or []:
         dv = d.dimension_value
@@ -58,6 +58,8 @@ def _build_entity_response(e) -> dict:
         entity_type_key=e.entity_type.key if e.entity_type else None,
         entity_type_config=e.entity_type.config if e.entity_type else None,
         dimensions=dim_infos,
+        enrollment_count=enrollment_count,
+        activity_count=activity_count,
     ).dump()
 
 
@@ -150,12 +152,15 @@ def list_entities(
     db: Session = Depends(get_db),
 ):
     service = EntityService(db)
-    entities = service.list_by_org(
+    rows = service.list_by_org(
         current_user.organization_id,
         entity_type_id=entity_type_id,
         accessible_dv_ids=accessible_dv_ids,
     )
-    return [_build_entity_response(e) for e in entities]
+    return [
+        _build_entity_response(entity, enrollment_count, activity_count)
+        for entity, enrollment_count, activity_count in rows
+    ]
 
 
 @entity_router.get(

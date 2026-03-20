@@ -188,6 +188,10 @@ export default function EntitiesPage() {
                           </Badge>
                         )}
                       </div>
+                      <div className="flex gap-3 mt-1 text-xs text-gray-500">
+                        <span>{e.enrollment_count} Enrollment{e.enrollment_count !== 1 ? "s" : ""}</span>
+                        <span>{e.activity_count} Activit{e.activity_count !== 1 ? "ies" : "y"}</span>
+                      </div>
                     </div>
                     {e.dimensions.length > 0 && (
                       <div className="flex gap-1 flex-wrap">

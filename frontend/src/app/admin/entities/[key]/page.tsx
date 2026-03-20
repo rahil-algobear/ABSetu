@@ -159,6 +159,8 @@ export default function EntityTypeEntitiesPage() {
               {metaFields.map((f) => (
                 <TableHead key={f.key}>{f.label}</TableHead>
               ))}
+              <TableHead>Enrollments</TableHead>
+              <TableHead>Activities</TableHead>
               <TableHead className="w-20">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -181,6 +183,8 @@ export default function EntityTypeEntitiesPage() {
                       : "—"}
                   </TableCell>
                 ))}
+                <TableCell>{e.enrollment_count}</TableCell>
+                <TableCell>{e.activity_count}</TableCell>
                 <TableCell>
                   <Can permission="entity:edit">
                     <button
