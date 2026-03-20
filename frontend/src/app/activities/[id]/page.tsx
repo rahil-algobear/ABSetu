@@ -31,6 +31,7 @@ import { PageLayout } from "@/components/ui/page-layout";
 import { PageHeader } from "@/components/ui/page-header";
 import { Trash2, Pencil, Calendar, FileText, Users, Type } from "lucide-react";
 import toast from "react-hot-toast";
+import { formatDate } from "@/utils/date";
 
 export default function ActivityDetailPage() {
   const params = useParams();
@@ -513,9 +514,9 @@ export default function ActivityDetailPage() {
                       <div>
                         <p className="text-xs text-gray-500">Date</p>
                         <p className="text-sm font-medium">
-                          {activity.start_date}
+                          {formatDate(activity.start_date)}
                           {activity.end_date && activity.end_date !== activity.start_date
-                            ? ` — ${activity.end_date}`
+                            ? ` — ${formatDate(activity.end_date)}`
                             : ""}
                         </p>
                       </div>
