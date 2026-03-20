@@ -214,11 +214,10 @@ def get_entity_filters(
             "options": [{"value": str(et.id), "label": et.name} for et in entity_types],
         })
 
-    # Dimension filters (non-system)
+    # Dimension filters
     dims = (
         db.query(Dimension)
         .filter_by(organization_id=org_id)
-        .filter(Dimension.is_system.is_(None))
         .order_by(Dimension.sort_order)
         .all()
     )
