@@ -19,6 +19,7 @@ class UserProfileResponse(BaseResponseSchema):
     role_id: str | None = None
     role_name: str | None = None
     permissions: list[str] = []
+    dimension_value_ids: list[str] = []
 
 
 class UserListResponse(BaseResponseSchema):

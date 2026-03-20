@@ -17,6 +17,7 @@ interface UserProfile {
 
 interface PermissionsContextType {
   permissions: string[];
+  dimensionValueIds: string[];
   loading: boolean;
   userProfile: UserProfile | null;
   can: (permission: string) => boolean;
@@ -26,6 +27,7 @@ interface PermissionsContextType {
 
 const PermissionsContext = createContext<PermissionsContextType>({
   permissions: [],
+  dimensionValueIds: [],
   loading: true,
   userProfile: null,
   can: () => false,
@@ -36,12 +38,14 @@ const PermissionsContext = createContext<PermissionsContextType>({
 export function PermissionsProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated } = useAuth();
   const [permissions, setPermissions] = useState<string[]>([]);
+  const [dimensionValueIds, setDimensionValueIds] = useState<string[]>([]);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!isAuthenticated) {
       setPermissions([]);
+      setDimensionValueIds([]);
       setUserProfile(null);
       setLoading(false);
       return;
@@ -51,6 +55,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
       .getProfile()
       .then((profile) => {
         setPermissions(profile.permissions || []);
+        setDimensionValueIds(profile.dimension_value_ids || []);
         setUserProfile({
           first_name: profile.first_name,
           last_name: profile.last_name,
@@ -58,6 +63,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
       })
       .catch(() => {
         setPermissions([]);
+        setDimensionValueIds([]);
         setUserProfile(null);
       })
       .finally(() => {
@@ -71,7 +77,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
 
   return (
     <PermissionsContext.Provider
-      value={{ permissions, loading, userProfile, can, canAll, canAny }}
+      value={{ permissions, dimensionValueIds, loading, userProfile, can, canAll, canAny }}
     >
       {children}
     </PermissionsContext.Provider>

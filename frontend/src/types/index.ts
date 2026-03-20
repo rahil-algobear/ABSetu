@@ -40,6 +40,7 @@ export interface UserProfileResponse {
   role_id: string | null;
   role_name: string | null;
   permissions: string[];
+  dimension_value_ids: string[];
 }
 
 export interface ApiError extends Error {

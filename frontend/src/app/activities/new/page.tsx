@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -32,6 +32,8 @@ import { DynamicMetaForm } from "@/components/DynamicMetaForm";
 import { SearchSelectParticipants } from "@/components/SearchSelectParticipants";
 import { PageLayout } from "@/components/ui/page-layout";
 import { PageHeader } from "@/components/ui/page-header";
+import { usePermissions } from "@/components/Auth/Permissions";
+import { useDimensionAutoSelect } from "@/hooks/useDimensionAutoSelect";
 
 import toast from "react-hot-toast";
 
@@ -71,6 +73,7 @@ export default function NewActivityPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const typeKey = searchParams.get("type");
+  const { dimensionValueIds: userDimensionValueIds } = usePermissions();
 
   const { data: activityTypes = [] } = useQuery({
     queryKey: ["activity-types"],
@@ -197,6 +200,29 @@ export default function NewActivityPage() {
     }
     return map;
   }, [dimensions, allDimensionValues, formData.dimension_value_ids]);
+
+  // Dimension form element IDs (only dimensions in the form, in order)
+  const formDimensions = useMemo(() => {
+    return formElements
+      .filter((el) => el.type === "dimension" && el.ref_id)
+      .map((el) => ({ id: el.ref_id! }));
+  }, [formElements]);
+
+  const handleAutoSelect = useCallback(
+    (dvIds: string[]) => {
+      setFormData((prev) => ({ ...prev, dimension_value_ids: dvIds }));
+    },
+    [],
+  );
+
+  useDimensionAutoSelect({
+    dimensions: formDimensions,
+    allDimensionValues,
+    dimensionValueLinks,
+    userDimensionValueIds,
+    currentSelections: formData.dimension_value_ids,
+    onAutoSelect: handleAutoSelect,
+  });
 
   const createMutation = useMutation({
     mutationFn: async (payload: Parameters<typeof activityApi.create>[0]) => {
