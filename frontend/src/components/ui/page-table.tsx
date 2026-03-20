@@ -36,7 +36,7 @@ interface TableCellProps {
 }
 
 export function Table({ children, className = "", stickyRows = 0, maxHeight }: TableProps) {
-  const containerStyle = maxHeight ? { maxHeight, height: maxHeight } : {};
+  const containerStyle = maxHeight ? { maxHeight } : {};
 
   return (
     <div
