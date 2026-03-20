@@ -428,31 +428,21 @@ def save_participants(
 
     # Validate required participant meta fields
     meta_service = MetaFieldSchemaService(db)
-    all_schemas = meta_service.get_all_schemas(current_user.organization_id)
 
-    activity_type_id_str = (
-        str(activity.activity_type_id) if activity.activity_type_id else None
-    )
-    activity_dv_ids = []
-    for ad in activity.dimensions or []:
-        if ad.dimension_value_id:
-            activity_dv_ids.append(str(ad.dimension_value_id))
+    activity_dv_ids = [
+        ad.dimension_value_id for ad in (activity.dimensions or []) if ad.dimension_value_id
+    ]
 
     for record in data.records:
-        base = f"participant:entity:{record.section_key}"
-        # Collect all applicable meta field definitions for this participant
-        fields: list[dict] = []
-        fields.extend(all_schemas.get(base, []))
-        if activity_type_id_str:
-            fields.extend(all_schemas.get(f"{base}:activity_type:{activity_type_id_str}", []))
-        for dv_id in activity_dv_ids:
-            fields.extend(all_schemas.get(f"{base}:dimension_value:{dv_id}", []))
-            if activity_type_id_str:
-                fields.extend(
-                    all_schemas.get(
-                        f"{base}:activity_type:{activity_type_id_str}:dimension_value:{dv_id}", []
-                    )
-                )
+        # Resolve entity_type_id: "user" → sentinel UUID, else parse as UUID
+        entity_type_id = MetaFieldSchemaService._resolve_entity_type_id(record.section_key)
+
+        fields = meta_service.get_participant_schemas(
+            current_user.organization_id,
+            entity_type_id=entity_type_id,
+            activity_type_id=activity.activity_type_id,
+            dimension_value_ids=activity_dv_ids,
+        )
 
         meta = record.meta or {}
         for f in fields:

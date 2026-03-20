@@ -666,16 +666,20 @@ def seed():
 
         # 2b. Meta Field Schemas — Beneficiary custom fields
         beneficiary_et = entity_type_map["Beneficiary"]
-        beneficiary_scope_key = f"entity:{beneficiary_et.id}"
         mfs = (
             db.query(MetaFieldSchema)
-            .filter_by(organization_id=org.id, scope_key=beneficiary_scope_key)
+            .filter_by(
+                organization_id=org.id,
+                scope_type="entity",
+                entity_type_id=beneficiary_et.id,
+            )
             .first()
         )
         if not mfs:
             mfs = MetaFieldSchema(
                 organization_id=org.id,
-                scope_key=beneficiary_scope_key,
+                scope_type="entity",
+                entity_type_id=beneficiary_et.id,
                 fields=BENEFICIARY_CUSTOM_FIELDS,
             )
             db.add(mfs)
@@ -692,19 +696,20 @@ def seed():
 
         # 2c. Meta Field Schemas — Facilitator custom fields
         facilitator_et = entity_type_map["Facilitator"]
-        facilitator_scope_key = f"entity:{facilitator_et.id}"
         mfs_f = (
             db.query(MetaFieldSchema)
             .filter_by(
                 organization_id=org.id,
-                scope_key=facilitator_scope_key,
+                scope_type="entity",
+                entity_type_id=facilitator_et.id,
             )
             .first()
         )
         if not mfs_f:
             mfs_f = MetaFieldSchema(
                 organization_id=org.id,
-                scope_key=facilitator_scope_key,
+                scope_type="entity",
+                entity_type_id=facilitator_et.id,
                 fields=FACILITATOR_CUSTOM_FIELDS,
             )
             db.add(mfs_f)

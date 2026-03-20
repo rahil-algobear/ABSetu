@@ -14,6 +14,7 @@ import {
   EntityType,
   LoginResponse,
   MetaFieldDefinition,
+  MetaFieldSchemaItem,
   MetaFieldSchemas,
   OTPVerifyData,
   Organization,
@@ -106,10 +107,8 @@ export const metaFieldSchemaApi = {
     const response = await authAxios.get<MetaFieldSchemas>('/organization/meta-field-schemas');
     return response.data;
   },
-  get: async (scopeKey: string): Promise<MetaFieldDefinition[]> => {
-    const response = await authAxios.get<MetaFieldDefinition[]>(
-      `/organization/meta-field-schemas/${scopeKey}`
-    );
+  getAllStructured: async (): Promise<MetaFieldSchemaItem[]> => {
+    const response = await authAxios.get<MetaFieldSchemaItem[]>('/organization/meta-field-schemas/structured');
     return response.data;
   },
   update: async (scope: MetaFieldScope, fields: MetaFieldDefinition[]): Promise<MetaFieldDefinition[]> => {

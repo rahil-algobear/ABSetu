@@ -2,13 +2,17 @@
 Organization routes
 """
 
-from fastapi import APIRouter, Depends
+import uuid
+
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.common.dependencies import get_current_user, require_permissions
 from app.modules.auth.model import User
+from app.modules.organization.model import USER_ENTITY_SENTINEL
 from app.modules.organization.schemas import (
+    MetaFieldSchemaResponse,
     MetaFieldSchemaUpdate,
     MetaFieldScope,
     OrganizationResponse,
@@ -53,159 +57,94 @@ def update_organization(
 
 # --- Meta Field Schemas ---
 
-# Static entity types that always exist
-STATIC_ENTITY_TYPES = {
-    "facilitator",
-    "beneficiary",
-    "enrollment",
-    "activity",
-    "participation",
-}
 
+def _resolve_scope(scope: MetaFieldScope, org_id, db: Session) -> dict:
+    """Validate and resolve a MetaFieldScope into structured column values.
 
-def _validate_entity_type(entity_type: str, org_id, db: Session) -> None:
-    """Validate entity type scope key for meta field schemas.
-
-    Supported patterns:
-      - Static: enrollment, activity, participation, beneficiary, facilitator
-      - dimension:{dim_id}
-      - entity:{entity_type_id}
-      - activity:activity_type:{activity_type_id}
-      - activity:dimension_value:{dv_id}
-      - activity:activity_type:{activity_type_id}:dimension_value:{dv_id}
-      - participant:entity:{entity_type_id|"user"}
-      - participant:entity:{entity_type_id|"user"}:activity_type:{activity_type_id}
-      - participant:entity:{entity_type_id|"user"}:dimension_value:{dv_id}
-      - participant:entity:{...}:activity_type:{activity_type_id}:dimension_value:{dv_id}
+    Returns a dict with keys: scope_type, entity_type_id, activity_type_id,
+    dimension_value_id, dimension_id — ready for service layer calls.
+    FK validation is handled by the database; we only validate existence
+    for better error messages.
     """
-    if entity_type in STATIC_ENTITY_TYPES:
-        return
+    from app.modules.dimension.model import Dimension, DimensionValue
+    from app.modules.entity.model import EntityType
+    from app.modules.activity.model import ActivityType
 
-    parts = entity_type.split(":")
+    result = {
+        "scope_type": scope.type,
+        "entity_type_id": None,
+        "activity_type_id": None,
+        "dimension_value_id": None,
+        "dimension_id": None,
+    }
 
-    if len(parts) == 2:
-        prefix, ref_id = parts
+    # Validate and resolve entity_type_id
+    if scope.entity_type_id:
+        if scope.entity_type_id == "user":
+            result["entity_type_id"] = uuid.UUID(USER_ENTITY_SENTINEL)
+        else:
+            et = db.query(EntityType).filter_by(
+                organization_id=org_id, id=scope.entity_type_id
+            ).first()
+            if not et:
+                raise HTTPException(400, f"Entity type not found: {scope.entity_type_id}")
+            result["entity_type_id"] = et.id
 
-        if prefix == "dimension":
-            from app.modules.dimension.model import Dimension
+    # Validate and resolve activity_type_id
+    if scope.activity_type_id:
+        at = db.query(ActivityType).filter_by(
+            organization_id=org_id, id=scope.activity_type_id
+        ).first()
+        if not at:
+            raise HTTPException(400, f"Activity type not found: {scope.activity_type_id}")
+        result["activity_type_id"] = at.id
 
-            if db.query(Dimension).filter_by(organization_id=org_id, id=ref_id).first():
-                return
+    # Validate and resolve dimension_id
+    if scope.dimension_id:
+        dim = db.query(Dimension).filter_by(
+            organization_id=org_id, id=scope.dimension_id
+        ).first()
+        if not dim:
+            raise HTTPException(400, f"Dimension not found: {scope.dimension_id}")
+        result["dimension_id"] = dim.id
 
-        if prefix == "entity":
-            from app.modules.entity.model import EntityType
+    # Validate and resolve dimension_value_id
+    if scope.dimension_value_id:
+        dv = db.query(DimensionValue).filter_by(
+            organization_id=org_id, id=scope.dimension_value_id
+        ).first()
+        if not dv:
+            raise HTTPException(400, f"Dimension value not found: {scope.dimension_value_id}")
+        result["dimension_value_id"] = dv.id
 
-            if db.query(EntityType).filter_by(organization_id=org_id, id=ref_id).first():
-                return
+    # Validate required fields per scope type
+    t = scope.type
+    if t == "entity" and not result["entity_type_id"]:
+        raise HTTPException(400, "entity_type_id is required for entity scope")
+    if t == "dimension" and not result["dimension_id"]:
+        raise HTTPException(400, "dimension_id is required for dimension scope")
+    if t == "participant" and not result["entity_type_id"]:
+        raise HTTPException(400, "entity_type_id is required for participant scope")
 
-    if len(parts) == 3:
-        prefix, sub, ref_id = parts
-
-        if prefix == "activity":
-            if sub == "activity_type":
-                from app.modules.activity.model import ActivityType
-
-                if db.query(ActivityType).filter_by(organization_id=org_id, id=ref_id).first():
-                    return
-            elif sub == "dimension_value":
-                from app.modules.dimension.model import DimensionValue
-
-                if db.query(DimensionValue).filter_by(organization_id=org_id, id=ref_id).first():
-                    return
-
-        # participant:entity:{entity_type_id} — scoped to entity type, all activity types
-        if prefix == "participant" and sub == "entity":
-            from app.modules.entity.model import EntityType
-
-            if ref_id == "user":
-                return
-            if db.query(EntityType).filter_by(organization_id=org_id, id=ref_id).first():
-                return
-
-    # 5-part keys:
-    # activity:activity_type:{activity_type_id}:dimension_value:{dv_id}
-    # participant:entity:{...}:activity_type:{id}
-    # participant:entity:{...}:dimension_value:{dv_id}
-    if len(parts) == 5:
-        prefix, sub1, ref_id1, sub2, ref_id2 = parts
-
-        # activity:activity_type:{activity_type_id}:dimension_value:{dv_id}
-        if prefix == "activity" and sub1 == "activity_type" and sub2 == "dimension_value":
-            from app.modules.activity.model import ActivityType
-            from app.modules.dimension.model import DimensionValue
-
-            at_ok = db.query(ActivityType).filter_by(organization_id=org_id, id=ref_id1).first()
-            dv_ok = db.query(DimensionValue).filter_by(organization_id=org_id, id=ref_id2).first()
-            if at_ok and dv_ok:
-                return
-
-        # participant:entity:{...}:activity_type:{id} or :dimension_value:{dv_id}
-        if prefix == "participant" and sub1 == "entity":
-            from app.modules.entity.model import EntityType
-
-            entity_ok = (
-                ref_id1 == "user"
-                or db.query(EntityType).filter_by(organization_id=org_id, id=ref_id1).first()
-            )
-
-            if entity_ok:
-                if sub2 == "activity_type":
-                    from app.modules.activity.model import ActivityType
-
-                    if db.query(ActivityType).filter_by(organization_id=org_id, id=ref_id2).first():
-                        return
-                elif sub2 == "dimension_value":
-                    from app.modules.dimension.model import DimensionValue
-
-                    if (
-                        db.query(DimensionValue)
-                        .filter_by(organization_id=org_id, id=ref_id2)
-                        .first()
-                    ):
-                        return
-
-    # 7-part keys:
-    # participant:entity:{...}:activity_type:{activity_type_id}:dimension_value:{dv_id}
-    if len(parts) == 7:
-        prefix, sub1, ref_id1, sub2, ref_id2, sub3, ref_id3 = parts
-
-        if (
-            prefix == "participant"
-            and sub1 == "entity"
-            and sub2 == "activity_type"
-            and sub3 == "dimension_value"
-        ):
-            from app.modules.entity.model import EntityType
-            from app.modules.activity.model import ActivityType
-            from app.modules.dimension.model import DimensionValue
-
-            entity_ok = (
-                ref_id1 == "user"
-                or db.query(EntityType).filter_by(organization_id=org_id, id=ref_id1).first()
-            )
-            at_ok = db.query(ActivityType).filter_by(organization_id=org_id, id=ref_id2).first()
-            dv_ok = db.query(DimensionValue).filter_by(organization_id=org_id, id=ref_id3).first()
-            if entity_ok and at_ok and dv_ok:
-                return
-
-    from fastapi import HTTPException
-
-    raise HTTPException(status_code=400, detail=f"Invalid entity type: {entity_type}")
+    return result
 
 
-@router.get(
-    "/meta-field-schemas/{entity_type}",
-    dependencies=[Depends(require_permissions("org:settings"))],
-)
-def get_meta_field_schema(
-    entity_type: str,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Get meta field schema for an entity type."""
-    _validate_entity_type(entity_type, current_user.organization_id, db)
-    service = MetaFieldSchemaService(db)
-    return service.get_schema(current_user.organization_id, entity_type)
+def _schema_to_response(row) -> dict:
+    """Convert a MetaFieldSchema model to a response dict."""
+    et_id = None
+    if row.entity_type_id:
+        et_id = "user" if str(row.entity_type_id) == USER_ENTITY_SENTINEL else str(row.entity_type_id)
+    return MetaFieldSchemaResponse(
+        scope_key=row.scope_key,
+        scope=MetaFieldScope(
+            type=row.scope_type,
+            entity_type_id=et_id,
+            activity_type_id=str(row.activity_type_id) if row.activity_type_id else None,
+            dimension_id=str(row.dimension_id) if row.dimension_id else None,
+            dimension_value_id=str(row.dimension_value_id) if row.dimension_value_id else None,
+        ),
+        fields=row.fields,
+    ).model_dump()
 
 
 @router.get(
@@ -216,102 +155,26 @@ def get_all_meta_field_schemas(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Get all meta field schemas for the organization."""
+    """Get all meta field schemas for the organization.
+
+    Returns a dict keyed by scope_key for backward compatibility.
+    """
     service = MetaFieldSchemaService(db)
     return service.get_all_schemas(current_user.organization_id)
 
 
-@router.put(
-    "/meta-field-schemas/{entity_type}",
+@router.get(
+    "/meta-field-schemas/structured",
     dependencies=[Depends(require_permissions("org:settings"))],
 )
-def update_meta_field_schema(
-    entity_type: str,
-    fields: list[dict],
+def get_all_meta_field_schemas_structured(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Update meta field schema for an entity type (legacy path-based API)."""
-    _validate_entity_type(entity_type, current_user.organization_id, db)
+    """Get all meta field schemas with structured scope data."""
     service = MetaFieldSchemaService(db)
-    return service.update_schema(current_user.organization_id, entity_type, fields)
-
-
-def _resolve_scope_key(scope: MetaFieldScope, org_id, db: Session) -> str:
-    """Build and validate a scope_key from a structured MetaFieldScope."""
-    from fastapi import HTTPException
-    from app.modules.dimension.model import Dimension, DimensionValue
-    from app.modules.entity.model import EntityType
-    from app.modules.activity.model import ActivityType
-
-    def _check_entity_type(eid: str) -> None:
-        if eid == "user":
-            return
-        if not db.query(EntityType).filter_by(organization_id=org_id, id=eid).first():
-            raise HTTPException(status_code=400, detail=f"Entity type not found: {eid}")
-
-    def _check_activity_type(cid: str) -> None:
-        if not db.query(ActivityType).filter_by(organization_id=org_id, id=cid).first():
-            raise HTTPException(status_code=400, detail=f"Activity type not found: {cid}")
-
-    def _check_dimension(did: str) -> None:
-        if not db.query(Dimension).filter_by(organization_id=org_id, id=did).first():
-            raise HTTPException(status_code=400, detail=f"Dimension not found: {did}")
-
-    def _check_dimension_value(dvid: str) -> None:
-        if not db.query(DimensionValue).filter_by(organization_id=org_id, id=dvid).first():
-            raise HTTPException(status_code=400, detail=f"Dimension value not found: {dvid}")
-
-    t = scope.type
-
-    if t in ("enrollment", "activity", "participation", "facilitator", "beneficiary"):
-        if t == "activity":
-            # activity[:activity_type:{activityTypeId}][:dimension_value:{dvId}]
-            key = "activity"
-            if scope.activity_type_id:
-                _check_activity_type(scope.activity_type_id)
-                key += f":activity_type:{scope.activity_type_id}"
-            if scope.dimension_value_id:
-                _check_dimension_value(scope.dimension_value_id)
-                key += f":dimension_value:{scope.dimension_value_id}"
-            if key == "activity":
-                # Bare "activity" is a valid static scope
-                pass
-            return key
-        return t
-
-    if t == "entity":
-        if not scope.entity_type_id:
-            raise HTTPException(
-                status_code=400, detail="entity_type_id is required for entity scope"
-            )
-        _check_entity_type(scope.entity_type_id)
-        return f"entity:{scope.entity_type_id}"
-
-    if t == "dimension":
-        if not scope.dimension_id:
-            raise HTTPException(
-                status_code=400, detail="dimension_id is required for dimension scope"
-            )
-        _check_dimension(scope.dimension_id)
-        return f"dimension:{scope.dimension_id}"
-
-    if t == "participant":
-        if not scope.entity_type_id:
-            raise HTTPException(
-                status_code=400, detail="entity_type_id is required for participant scope"
-            )
-        _check_entity_type(scope.entity_type_id)
-        key = f"participant:entity:{scope.entity_type_id}"
-        if scope.activity_type_id:
-            _check_activity_type(scope.activity_type_id)
-            key += f":activity_type:{scope.activity_type_id}"
-        if scope.dimension_value_id:
-            _check_dimension_value(scope.dimension_value_id)
-            key += f":dimension_value:{scope.dimension_value_id}"
-        return key
-
-    raise HTTPException(status_code=400, detail=f"Invalid scope type: {t}")
+    rows = service.get_all_schemas_structured(current_user.organization_id)
+    return [_schema_to_response(row) for row in rows]
 
 
 @router.put(
@@ -323,7 +186,11 @@ def update_meta_field_schema_structured(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Update meta field schema using structured scope (preferred API)."""
-    scope_key = _resolve_scope_key(data.scope, current_user.organization_id, db)
+    """Update meta field schema using structured scope."""
+    resolved = _resolve_scope(data.scope, current_user.organization_id, db)
     service = MetaFieldSchemaService(db)
-    return service.update_schema(current_user.organization_id, scope_key, data.fields)
+    return service.update_schema(
+        current_user.organization_id,
+        fields=data.fields,
+        **resolved,
+    )

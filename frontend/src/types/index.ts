@@ -216,6 +216,20 @@ export type MetaEntityType = string; // dynamic key for meta field schemas: "ent
 
 export type MetaFieldSchemas = Partial<Record<string, MetaFieldDefinition[]>>;
 
+export interface MetaFieldSchemaScope {
+  type: string;
+  entity_type_id?: string | null;
+  dimension_id?: string | null;
+  activity_type_id?: string | null;
+  dimension_value_id?: string | null;
+}
+
+export interface MetaFieldSchemaItem {
+  scope_key: string;
+  scope: MetaFieldSchemaScope;
+  fields: MetaFieldDefinition[];
+}
+
 // --- Roles & Permissions ---
 
 export interface Permission {
