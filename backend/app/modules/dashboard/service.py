@@ -12,7 +12,7 @@ from app.modules.activity.model import Activity, ActivityForm, ActivityType, Act
 from app.modules.entity.model import Entity, EntityType
 from app.modules.beneficiary.model import Enrollment
 from app.modules.auth.model import User
-from app.modules.dimension.model import ActivityDimension, DimensionValue, EntityDimension, EnrollmentDimension
+from app.modules.dimension.model import ActivityDimension, DimensionValue, EntityDimension
 from app.modules.dashboard.schemas import (
     CountByItem,
     DashboardStats,
@@ -92,23 +92,33 @@ class DashboardService:
         query: Query,
         restricted_dims: dict[uuid.UUID, list[uuid.UUID]],
     ) -> Query:
-        """Apply per-dimension user-access scoping to an Enrollment query."""
+        """
+        Scope enrollments through their parent entity's dimensions.
+
+        Enrollment endpoints don't use EnrollmentDimension for access control,
+        so we scope via Entity → EntityDimension instead.
+        """
+        # Build a subquery of entity IDs the user can access
+        accessible_entities_q = self.db.query(Entity.id)
         for dim_id, allowed_ids in restricted_dims.items():
             dim_values_subq = (
                 self.db.query(DimensionValue.id)
                 .filter(DimensionValue.dimension_id == dim_id)
                 .subquery()
             )
-            query = query.filter(
+            accessible_entities_q = accessible_entities_q.filter(
                 or_(
                     ~exists()
-                    .where(EnrollmentDimension.enrollment_id == Enrollment.id)
-                    .where(EnrollmentDimension.dimension_value_id.in_(dim_values_subq)),
+                    .where(EntityDimension.entity_id == Entity.id)
+                    .where(EntityDimension.dimension_value_id.in_(dim_values_subq)),
                     exists()
-                    .where(EnrollmentDimension.enrollment_id == Enrollment.id)
-                    .where(EnrollmentDimension.dimension_value_id.in_(allowed_ids)),
+                    .where(EntityDimension.entity_id == Entity.id)
+                    .where(EntityDimension.dimension_value_id.in_(allowed_ids)),
                 )
             )
+        query = query.filter(
+            Enrollment.entity_id.in_(accessible_entities_q.subquery())
+        )
         return query
 
     def _apply_activity_filters(
@@ -144,6 +154,13 @@ class DashboardService:
     ) -> DashboardStats:
         org_filter = {"organization_id": organization_id}
         has_filters = bool(dimension_value_ids or activity_type_id)
+
+        # Validate manual filters are within user's accessible scope
+        from app.modules.dimension.service import UserDimensionAccessService
+
+        UserDimensionAccessService(self.db).validate_dimension_values(
+            accessible_dv_ids, dimension_value_ids or []
+        )
 
         # Pre-compute restricted dimensions for user-access scoping
         restricted_dims = self._get_restricted_dims(accessible_dv_ids) if accessible_dv_ids else {}
