@@ -99,6 +99,7 @@ class ActivityResponse(BaseResponseSchema):
     meta: dict[str, Any] | None = None
     activity_type_name: str | None = None
     dimensions: list[DimensionInfo] = []
+    participant_count: int = 0
 
 
 # --- Activity Participant ---

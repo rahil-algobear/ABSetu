@@ -4,7 +4,7 @@ Activity, ActivityType, ActivityParticipant routes
 
 import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.common.dependencies import (
@@ -14,6 +14,8 @@ from app.common.dependencies import (
     require_permissions,
 )
 from app.common.exceptions import ValidationError
+from app.common.schemas.base_response import PaginatedResponse
+from app.common.schemas.list_params import ListParams
 from app.core.database import get_db
 from app.modules.activity.schemas import (
     ActivityCreate,
@@ -204,24 +206,98 @@ def _load_forms_by_type(db: Session, activities: list, org_id: uuid.UUID) -> dic
 
 @activity_router.get("/", dependencies=[Depends(require_permissions("activity:view"))])
 def list_activities(
-    activity_type_id: uuid.UUID | None = None,
+    page: int = Query(1, ge=1),
+    limit: int = Query(25, ge=1, le=100),
+    search: str | None = Query(None),
+    sort_by: str | None = Query(None),
+    sort_order: str = Query("desc", pattern="^(asc|desc)$"),
+    filters: str | None = Query(None),
+    # Legacy param — still supported, but prefer filters JSON
+    activity_type_id: uuid.UUID | None = Query(None),
     current_user: User = Depends(get_current_user),
     accessible_dv_ids: list[uuid.UUID] | None = Depends(get_accessible_dimension_value_ids),
     db: Session = Depends(get_db),
 ):
+    import json
+
     service = ActivityService(db)
-    activities = service.list_by_org(
-        current_user.organization_id,
-        accessible_dv_ids=accessible_dv_ids,
-        activity_type_id=activity_type_id,
+
+    # Merge legacy activity_type_id param into filters if provided
+    merged_filters = filters
+    if activity_type_id:
+        try:
+            f = json.loads(filters) if filters else {}
+        except (json.JSONDecodeError, TypeError):
+            f = {}
+        f["activity_type_id"] = str(activity_type_id)
+        merged_filters = json.dumps(f)
+
+    params = ListParams(
+        page=page, limit=limit, search=search,
+        sort_by=sort_by, sort_order=sort_order, filters=merged_filters,
     )
+    rows, total = service.list_by_org_paginated(
+        current_user.organization_id,
+        params=params,
+        accessible_dv_ids=accessible_dv_ids,
+    )
+
+    # Load forms for generated title resolution
+    activities = [activity for activity, _count in rows]
     forms = _load_forms_by_type(db, activities, current_user.organization_id)
-    return [
-        _build_activity_response(
-            a, forms.get(str(a.activity_type_id)) if a.activity_type_id else None
+
+    data = []
+    for activity, participant_count in rows:
+        resp = _build_activity_response(
+            activity, forms.get(str(activity.activity_type_id)) if activity.activity_type_id else None
         )
-        for a in activities
-    ]
+        resp["participant_count"] = participant_count or 0
+        data.append(resp)
+
+    return PaginatedResponse(count=total, data=data)
+
+
+@activity_router.get("/filters", dependencies=[Depends(require_permissions("activity:view"))])
+def get_activity_filters(
+    current_user: User = Depends(get_current_user),
+    accessible_dv_ids: list[uuid.UUID] | None = Depends(get_accessible_dimension_value_ids),
+    db: Session = Depends(get_db),
+):
+    """Return available filter definitions for activity list."""
+    from app.common.helpers.filter_definitions import (
+        build_dimension_filters,
+        build_meta_field_filters,
+    )
+
+    org_id = current_user.organization_id
+    result = []
+
+    # Activity type filter
+    at_service = ActivityTypeService(db)
+    activity_types = at_service.list_by_org(org_id)
+    if activity_types:
+        result.append({
+            "key": "activity_type_id",
+            "label": "Activity Type",
+            "type": "select",
+            "options": [{"value": str(at.id), "label": at.name} for at in activity_types],
+        })
+
+    # Dimension filters (scoped by user access)
+    result.extend(build_dimension_filters(db, org_id, accessible_dv_ids))
+
+    # Meta field filters (where is_filterable=true)
+    scope_keys = [f"activity:{at.id}" for at in activity_types]
+    result.extend(build_meta_field_filters(db, org_id, scope_keys))
+
+    # Date filter for start_date
+    result.append({
+        "key": "start_date",
+        "label": "Start Date",
+        "type": "date_range",
+    })
+
+    return {"filters": result}
 
 
 @activity_router.get(

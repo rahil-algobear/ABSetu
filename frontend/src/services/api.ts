@@ -310,10 +310,38 @@ export const activityFormApi = {
 
 // --- Activities ---
 
+export interface ActivityListParams {
+  search?: string;
+  filters?: string;
+  sort_by?: string;
+  sort_order?: string;
+  page?: number;
+  limit?: number;
+  activity_type_id?: string;
+}
+
+export interface ActivityFilterDefinition {
+  key: string;
+  label: string;
+  type: "select" | "range" | "date_range" | "boolean" | "text";
+  options?: { value: string; label: string }[];
+  min?: number;
+  max?: number;
+}
+
 export const activityApi = {
   list: async (activityTypeId?: string): Promise<Activity[]> => {
     const params = activityTypeId ? { activity_type_id: activityTypeId } : {};
-    const response = await authAxios.get<Activity[]>('/activities/', { params });
+    // Legacy: returns PaginatedResponse now, extract data for backward compat
+    const response = await authAxios.get<PaginatedResponse<Activity>>('/activities/', { params });
+    return response.data.data;
+  },
+  listPaginated: async (params: ActivityListParams): Promise<PaginatedResponse<Activity>> => {
+    const response = await authAxios.get<PaginatedResponse<Activity>>('/activities/', { params });
+    return response.data;
+  },
+  getFilters: async (): Promise<{ filters: ActivityFilterDefinition[] }> => {
+    const response = await authAxios.get<{ filters: ActivityFilterDefinition[] }>('/activities/filters');
     return response.data;
   },
   listByEntity: async (entityId: string): Promise<Activity[]> => {

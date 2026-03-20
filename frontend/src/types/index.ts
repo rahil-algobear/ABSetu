@@ -185,6 +185,7 @@ export interface Activity {
   meta: Record<string, unknown> | null;
   activity_type_name: string | null;
   dimensions: DimensionInfo[];
+  participant_count: number;
   updated_at: number | null;
 }
 
