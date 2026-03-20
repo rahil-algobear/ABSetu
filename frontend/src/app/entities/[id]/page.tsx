@@ -245,7 +245,10 @@ export default function EntityDetailPage() {
                   <tbody>
                     {activities.map((a) => (
                       <tr key={a.id} className="border-b last:border-0">
-                        <td className="py-2 pr-4 whitespace-nowrap">{a.date}</td>
+                        <td className="py-2 pr-4 whitespace-nowrap">
+                          {a.start_date}
+                          {a.end_date && a.end_date !== a.start_date && ` – ${a.end_date}`}
+                        </td>
                         <td className="py-2 pr-4">
                           {a.activity_type_name ? (
                             <Badge variant="secondary">{a.activity_type_name}</Badge>
