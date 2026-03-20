@@ -218,7 +218,7 @@ function EntityTypeEntitiesContent() {
         <p className="text-gray-500 text-sm">No {typeName.toLowerCase()} found.</p>
       ) : (
         <>
-          <Table>
+          <Table className="rounded-lg border border-gray-200 shadow-sm">
             <TableHeader>
               <TableRow>
                 <SortableTableHead
