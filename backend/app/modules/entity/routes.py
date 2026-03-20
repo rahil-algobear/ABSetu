@@ -242,8 +242,9 @@ def get_entity_filters(
         }
         sortable_keys = [c["key"] for c in columns if c.get("sortable")]
 
-    # Dimension filters (scoped by user access + list config)
-    filters.extend(build_dimension_filters(db, org_id, accessible_dv_ids, filterable_keys))
+    # Dimension filters (scoped by user access only — not by list config,
+    # since entity list config doesn't include dimension columns)
+    filters.extend(build_dimension_filters(db, org_id, accessible_dv_ids))
 
     # Meta field filters (scoped by list config)
     scope_keys = [f"entity:{et.id}" for et in entity_types]
