@@ -218,7 +218,8 @@ function EntityTypeEntitiesContent() {
         <p className="text-gray-500 text-sm">No {typeName.toLowerCase()} found.</p>
       ) : (
         <>
-          <Table className="rounded-lg border border-gray-200 shadow-sm">
+          <div className="bg-white shadow-sm border rounded-lg overflow-hidden">
+          <Table>
             <TableHeader>
               <TableRow>
                 <SortableTableHead
@@ -307,6 +308,7 @@ function EntityTypeEntitiesContent() {
               ))}
             </TableBody>
           </Table>
+          </div>
 
           <Pagination
             currentPage={listParams.page}
