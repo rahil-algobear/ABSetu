@@ -115,6 +115,7 @@ export default function ActivityTypesPage() {
       ) : activityTypes.length === 0 ? (
         <p className="text-gray-500 text-sm">No activity types yet.</p>
       ) : (
+        <div className="bg-white shadow-sm border rounded-lg overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow>
@@ -153,6 +154,7 @@ export default function ActivityTypesPage() {
             ))}
           </TableBody>
         </Table>
+        </div>
       )}
 
       <Dialog

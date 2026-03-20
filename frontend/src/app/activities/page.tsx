@@ -82,6 +82,7 @@ function ActivitiesPageContent() {
       ) : activities.length === 0 ? (
         <p className="text-gray-500">No {typeName.toLowerCase()}s yet.</p>
       ) : (
+        <div className="bg-white shadow-sm border rounded-lg overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow>
@@ -122,6 +123,7 @@ function ActivitiesPageContent() {
             ))}
           </TableBody>
         </Table>
+        </div>
       )}
     </PageLayout>
   );
