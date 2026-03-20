@@ -828,57 +828,51 @@ export default function MetaFieldsPage() {
               )}
             </div>
           ) : (
-            <div className="space-y-4">
-              {flatGroups.map((group) => (
-                <div key={group.scopeKey} className="border rounded-lg overflow-hidden">
-                  <div className="bg-gray-50 px-4 py-2 flex items-center justify-between border-b">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-gray-700">{group.scopeLabel}</span>
-                      <span className="text-xs text-gray-400">
-                        {group.fields.length} field{group.fields.length !== 1 ? "s" : ""}
-                      </span>
-                    </div>
-                  </div>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Label</TableHead>
-                        <TableHead>Type</TableHead>
-                        <TableHead>Required</TableHead>
-                        <TableHead className="w-20">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {group.fields.map((field, index) => (
-                        <TableRow key={field.key}>
-                          <TableCell className="font-medium">{field.label}</TableCell>
-                          <TableCell>
-                            {FIELD_TYPES.find((ft) => ft.value === field.type)?.label || field.type}
-                          </TableCell>
-                          <TableCell>{field.required ? "Yes" : "No"}</TableCell>
-                          <TableCell>
-                            <div className="flex gap-1">
-                              <button
-                                onClick={() => openEdit(index, group.scopeKey)}
-                                className="text-gray-400 hover:text-purple-600"
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </button>
-                              <button
-                                onClick={() => handleDelete(index, group.scopeKey)}
-                                className="text-gray-400 hover:text-red-500"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              ))}
-            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Scope</TableHead>
+                  <TableHead>Label</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Required</TableHead>
+                  <TableHead className="w-20">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {flatGroups.map((group, gi) => (
+                  group.fields.map((field, index) => (
+                    <TableRow key={`${group.scopeKey}-${field.key}`} className={gi > 0 && index === 0 ? "border-t-4 border-t-gray-100" : ""}>
+                      <TableCell className="text-sm text-gray-500 align-top">
+                        {index === 0 && (
+                          <span className="font-medium text-gray-600">{group.scopeLabel}</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="font-medium">{field.label}</TableCell>
+                      <TableCell>
+                        {FIELD_TYPES.find((ft) => ft.value === field.type)?.label || field.type}
+                      </TableCell>
+                      <TableCell>{field.required ? "Yes" : "No"}</TableCell>
+                      <TableCell>
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => openEdit(index, group.scopeKey)}
+                            className="text-gray-400 hover:text-purple-600"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(index, group.scopeKey)}
+                            className="text-gray-400 hover:text-red-500"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ))}
+              </TableBody>
+            </Table>
           )}
         </>
       )}
