@@ -27,7 +27,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DynamicMetaForm, MetaFieldDisplay } from "@/components/DynamicMetaForm";
-import { Plus, Pencil, X } from "lucide-react";
+import { Plus, Pencil, X, ChevronRight } from "lucide-react";
+import Link from "next/link";
 import toast from "react-hot-toast";
 
 /**
@@ -233,36 +234,34 @@ export default function EntityDetailPage() {
             {activities.length === 0 ? (
               <p className="text-gray-500 text-sm">No sessions</p>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b text-left text-gray-500">
-                      <th className="pb-2 pr-4 font-medium">Date</th>
-                      <th className="pb-2 pr-4 font-medium">Type</th>
-                      <th className="pb-2 font-medium">Notes</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {activities.map((a) => (
-                      <tr key={a.id} className="border-b last:border-0">
-                        <td className="py-2 pr-4 whitespace-nowrap">
-                          {a.start_date}
-                          {a.end_date && a.end_date !== a.start_date && ` – ${a.end_date}`}
-                        </td>
-                        <td className="py-2 pr-4">
-                          {a.activity_type_name ? (
-                            <Badge variant="secondary">{a.activity_type_name}</Badge>
-                          ) : (
-                            <span className="text-gray-400">—</span>
-                          )}
-                        </td>
-                        <td className="py-2 text-gray-600 truncate max-w-[200px]">
-                          {a.notes || "—"}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="space-y-2">
+                {activities.map((a) => (
+                  <Link
+                    key={a.id}
+                    href={`/activities/${a.id}`}
+                    className="flex items-center justify-between p-2 border rounded hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium">
+                        {a.start_date}
+                        {a.end_date && a.end_date !== a.start_date && ` – ${a.end_date}`}
+                      </div>
+                      {a.dimensions?.length > 0 && (
+                        <div className="flex gap-1 mt-1 flex-wrap">
+                          {a.dimensions.map((dim) => (
+                            <Badge key={dim.value_id} variant="secondary" className="text-xs">
+                              {dim.value_name}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                      {a.notes && (
+                        <p className="text-xs text-gray-500 mt-1 truncate max-w-[300px]">{a.notes}</p>
+                      )}
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-gray-400 shrink-0 ml-2" />
+                  </Link>
+                ))}
               </div>
             )}
           </CardContent>
