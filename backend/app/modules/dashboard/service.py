@@ -9,6 +9,7 @@ from sqlalchemy import exists, func, or_
 from sqlalchemy.orm import Session, Query
 
 from app.modules.activity.model import Activity, ActivityForm, ActivityType, ActivityParticipant
+from app.modules.activity.routes import _resolve_generated_title
 from app.modules.entity.model import Entity, EntityType
 from app.modules.beneficiary.model import Enrollment
 from app.modules.auth.model import User
@@ -357,29 +358,9 @@ class DashboardService:
             )
             type_name = a.activity_type.name if a.activity_type else None
 
-            # Resolve title
-            title = a.title
+            # Resolve title: generated from dimensions first, then DB
             form = forms_by_type.get(str(a.activity_type_id)) if a.activity_type_id else None
-            if not title and form and form.elements:
-                title_el = next(
-                    (el for el in form.elements
-                     if el.get("type") == "default" and el.get("ref_id") == "title"),
-                    None,
-                )
-                if title_el:
-                    config = title_el.get("config") or {}
-                    if config.get("mode") == "generated":
-                        dim_ids = config.get("dimension_ids", [])
-                        separator = config.get("separator", " - ")
-                        parts = []
-                        for dim_id in dim_ids:
-                            for d in a.dimensions or []:
-                                dv = d.dimension_value
-                                if dv and dv.dimension and str(dv.dimension.id) == dim_id:
-                                    parts.append(dv.name)
-                                    break
-                        if parts:
-                            title = separator.join(parts)
+            title = _resolve_generated_title(a, form) or a.title
 
             recent_activities.append(
                 RecentActivity(
