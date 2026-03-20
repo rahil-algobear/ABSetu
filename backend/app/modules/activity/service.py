@@ -193,18 +193,21 @@ class ActivityService:
 
     def list_by_entity(self, entity_id: uuid.UUID, org_id: uuid.UUID) -> list[Activity]:
         """Return activities where the given entity is a participant."""
-        activity_ids_subq = (
+        participant_activity_ids = (
             self.db.query(ActivityParticipant.activity_id)
             .filter(
                 ActivityParticipant.participant_type == "entity",
                 ActivityParticipant.participant_id == entity_id,
             )
-            .subquery()
+            .all()
         )
+        activity_ids = [row[0] for row in participant_activity_ids]
+        if not activity_ids:
+            return []
         return (
             self.db.query(Activity)
             .filter(
-                Activity.id.in_(activity_ids_subq),
+                Activity.id.in_(activity_ids),
                 Activity.organization_id == org_id,
             )
             .options(
