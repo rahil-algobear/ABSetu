@@ -77,11 +77,13 @@ export default function MetaFieldsPage() {
   // Activity tab view filters
   const [activityFilterTypeId, setActivityFilterTypeId] = useState<string>("");
   const [activityFilterDimId, setActivityFilterDimId] = useState<string>("");
+  const [activityFilterDvId, setActivityFilterDvId] = useState<string>("");
 
   // Participant tab
   const [participantEntityId, setParticipantEntityId] = useState<string>("");
   const [participantFilterTypeId, setParticipantFilterTypeId] = useState<string>("");
   const [participantFilterDimId, setParticipantFilterDimId] = useState<string>("");
+  const [participantFilterDvId, setParticipantFilterDvId] = useState<string>("");
 
   // Modal scope state (for activity/participant add/edit)
   const [modalActivityTypeId, setModalActivityTypeId] = useState<string>("");
@@ -150,11 +152,13 @@ export default function MetaFieldsPage() {
       case "activity":
         setActivityFilterTypeId("");
         setActivityFilterDimId("");
+        setActivityFilterDvId("");
         break;
       case "participant":
         setParticipantEntityId(entityTypesList[0]?.id || "user");
         setParticipantFilterTypeId("");
         setParticipantFilterDimId("");
+        setParticipantFilterDvId("");
         break;
     }
   };
@@ -188,6 +192,7 @@ export default function MetaFieldsPage() {
       // Apply view filters
       if (activityFilterTypeId && atId !== activityFilterTypeId) continue;
       if (activityFilterDimId && dimId !== activityFilterDimId) continue;
+      if (activityFilterDvId && dvId !== activityFilterDvId) continue;
 
       // Build label
       const labels: string[] = [];
@@ -214,7 +219,7 @@ export default function MetaFieldsPage() {
       return a.scopeLabel.localeCompare(b.scopeLabel);
     });
     return groups;
-  }, [allSchemas, activityFilterTypeId, activityFilterDimId, activityTypes, allDimensionValues, dimensions]);
+  }, [allSchemas, activityFilterTypeId, activityFilterDimId, activityFilterDvId, activityTypes, allDimensionValues, dimensions]);
 
   // --- Flat table groups for Participant tab ---
   const participantGroups = useMemo((): ScopeGroup[] => {
@@ -239,6 +244,7 @@ export default function MetaFieldsPage() {
 
       if (participantFilterTypeId && atId !== participantFilterTypeId) continue;
       if (participantFilterDimId && dimId !== participantFilterDimId) continue;
+      if (participantFilterDvId && dvId !== participantFilterDvId) continue;
 
       const labels: string[] = [];
       if (atId) labels.push(activityTypes.find((a) => a.id === atId)?.name || atId);
@@ -264,7 +270,7 @@ export default function MetaFieldsPage() {
       return a.scopeLabel.localeCompare(b.scopeLabel);
     });
     return groups;
-  }, [allSchemas, participantEntityId, participantFilterTypeId, participantFilterDimId, activityTypes, allDimensionValues, dimensions]);
+  }, [allSchemas, participantEntityId, participantFilterTypeId, participantFilterDimId, participantFilterDvId, activityTypes, allDimensionValues, dimensions]);
 
   // Participant entity pill field counts
   const participantEntityCounts = useMemo(() => {
@@ -502,8 +508,8 @@ export default function MetaFieldsPage() {
   const flatGroups = activeSection === "activity" ? activityGroups : participantGroups;
   const totalFlatFields = flatGroups.reduce((sum, g) => sum + g.fields.length, 0);
   const hasFilters = activeSection === "activity"
-    ? !!(activityFilterTypeId || activityFilterDimId)
-    : !!(participantFilterTypeId || participantFilterDimId);
+    ? !!(activityFilterTypeId || activityFilterDimId || activityFilterDvId)
+    : !!(participantFilterTypeId || participantFilterDimId || participantFilterDvId);
 
   return (
     <>
@@ -628,7 +634,10 @@ export default function MetaFieldsPage() {
               <select
                 className="border rounded-md px-3 py-1.5 text-sm"
                 value={activityFilterDimId}
-                onChange={(e) => setActivityFilterDimId(e.target.value)}
+                onChange={(e) => {
+                  setActivityFilterDimId(e.target.value);
+                  setActivityFilterDvId("");
+                }}
               >
                 <option value="">All</option>
                 {dimensions.map((d) => (
@@ -637,9 +646,27 @@ export default function MetaFieldsPage() {
               </select>
             </div>
 
+            {activityFilterDimId && (
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Value</label>
+                <select
+                  className="border rounded-md px-3 py-1.5 text-sm"
+                  value={activityFilterDvId}
+                  onChange={(e) => setActivityFilterDvId(e.target.value)}
+                >
+                  <option value="">All</option>
+                  {allDimensionValues
+                    .filter((dv) => dv.dimension_id === activityFilterDimId)
+                    .map((dv) => (
+                      <option key={dv.id} value={dv.id}>{dv.name}</option>
+                    ))}
+                </select>
+              </div>
+            )}
+
             {hasFilters && (
               <button
-                onClick={() => { setActivityFilterTypeId(""); setActivityFilterDimId(""); }}
+                onClick={() => { setActivityFilterTypeId(""); setActivityFilterDimId(""); setActivityFilterDvId(""); }}
                 className="text-xs text-purple-600 hover:text-purple-800 pb-2"
               >
                 Clear filters
@@ -659,6 +686,7 @@ export default function MetaFieldsPage() {
                     setParticipantEntityId(opt.id);
                     setParticipantFilterTypeId("");
                     setParticipantFilterDimId("");
+                    setParticipantFilterDvId("");
                   }}
                   className={`px-3 py-1 text-sm rounded-md whitespace-nowrap transition-colors ${
                     participantEntityId === opt.id
@@ -696,7 +724,10 @@ export default function MetaFieldsPage() {
                 <select
                   className="border rounded-md px-3 py-1.5 text-sm"
                   value={participantFilterDimId}
-                  onChange={(e) => setParticipantFilterDimId(e.target.value)}
+                  onChange={(e) => {
+                    setParticipantFilterDimId(e.target.value);
+                    setParticipantFilterDvId("");
+                  }}
                 >
                   <option value="">All</option>
                   {dimensions.map((d) => (
@@ -705,9 +736,27 @@ export default function MetaFieldsPage() {
                 </select>
               </div>
 
-              {(participantFilterTypeId || participantFilterDimId) && (
+              {participantFilterDimId && (
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">Value</label>
+                  <select
+                    className="border rounded-md px-3 py-1.5 text-sm"
+                    value={participantFilterDvId}
+                    onChange={(e) => setParticipantFilterDvId(e.target.value)}
+                  >
+                    <option value="">All</option>
+                    {allDimensionValues
+                      .filter((dv) => dv.dimension_id === participantFilterDimId)
+                      .map((dv) => (
+                        <option key={dv.id} value={dv.id}>{dv.name}</option>
+                      ))}
+                  </select>
+                </div>
+              )}
+
+              {(participantFilterTypeId || participantFilterDimId || participantFilterDvId) && (
                 <button
-                  onClick={() => { setParticipantFilterTypeId(""); setParticipantFilterDimId(""); }}
+                  onClick={() => { setParticipantFilterTypeId(""); setParticipantFilterDimId(""); setParticipantFilterDvId(""); }}
                   className="text-xs text-purple-600 hover:text-purple-800 pb-2"
                 >
                   Clear filters
@@ -816,9 +865,11 @@ export default function MetaFieldsPage() {
                     if (activeSection === "activity") {
                       setActivityFilterTypeId("");
                       setActivityFilterDimId("");
+                      setActivityFilterDvId("");
                     } else {
                       setParticipantFilterTypeId("");
                       setParticipantFilterDimId("");
+                      setParticipantFilterDvId("");
                     }
                   }}
                   className="text-sm text-purple-600 hover:text-purple-800 mt-2"
