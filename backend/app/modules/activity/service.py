@@ -216,7 +216,7 @@ class ActivityService:
                 .joinedload(ActivityDimension.dimension_value)
                 .joinedload(DimensionValue.dimension),
             )
-            .order_by(Activity.date.desc())
+            .order_by(Activity.created_at.desc())
             .all()
         )
 
