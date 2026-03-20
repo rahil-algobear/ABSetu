@@ -5,14 +5,14 @@ Dashboard service — aggregates stats across modules
 import uuid
 from datetime import date, timedelta
 
-from sqlalchemy import func
+from sqlalchemy import exists, func, or_
 from sqlalchemy.orm import Session, Query
 
 from app.modules.activity.model import Activity, ActivityForm, ActivityType, ActivityParticipant
 from app.modules.entity.model import Entity, EntityType
 from app.modules.beneficiary.model import Enrollment
 from app.modules.auth.model import User
-from app.modules.dimension.model import ActivityDimension
+from app.modules.dimension.model import ActivityDimension, DimensionValue, EntityDimension, EnrollmentDimension
 from app.modules.dashboard.schemas import (
     CountByItem,
     DashboardStats,
@@ -24,6 +24,92 @@ from app.modules.dashboard.schemas import (
 class DashboardService:
     def __init__(self, db: Session):
         self.db = db
+
+    def _get_restricted_dims(
+        self, accessible_dv_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, list[uuid.UUID]]:
+        """Group user's accessible dimension value IDs by dimension."""
+        dv_dim_rows = (
+            self.db.query(DimensionValue.id, DimensionValue.dimension_id)
+            .filter(DimensionValue.id.in_(accessible_dv_ids))
+            .all()
+        )
+        restricted_dims: dict[uuid.UUID, list[uuid.UUID]] = {}
+        for dv_id, dim_id in dv_dim_rows:
+            restricted_dims.setdefault(dim_id, []).append(dv_id)
+        return restricted_dims
+
+    def _apply_activity_access_scoping(
+        self,
+        query: Query,
+        restricted_dims: dict[uuid.UUID, list[uuid.UUID]],
+    ) -> Query:
+        """Apply per-dimension user-access scoping to an Activity query."""
+        for dim_id, allowed_ids in restricted_dims.items():
+            dim_values_subq = (
+                self.db.query(DimensionValue.id)
+                .filter(DimensionValue.dimension_id == dim_id)
+                .subquery()
+            )
+            query = query.filter(
+                or_(
+                    ~exists()
+                    .where(ActivityDimension.activity_id == Activity.id)
+                    .where(ActivityDimension.dimension_value_id.in_(dim_values_subq)),
+                    exists()
+                    .where(ActivityDimension.activity_id == Activity.id)
+                    .where(ActivityDimension.dimension_value_id.in_(allowed_ids)),
+                )
+            )
+        return query
+
+    def _apply_entity_access_scoping(
+        self,
+        query: Query,
+        restricted_dims: dict[uuid.UUID, list[uuid.UUID]],
+    ) -> Query:
+        """Apply per-dimension user-access scoping to an Entity query."""
+        for dim_id, allowed_ids in restricted_dims.items():
+            dim_values_subq = (
+                self.db.query(DimensionValue.id)
+                .filter(DimensionValue.dimension_id == dim_id)
+                .subquery()
+            )
+            query = query.filter(
+                or_(
+                    ~exists()
+                    .where(EntityDimension.entity_id == Entity.id)
+                    .where(EntityDimension.dimension_value_id.in_(dim_values_subq)),
+                    exists()
+                    .where(EntityDimension.entity_id == Entity.id)
+                    .where(EntityDimension.dimension_value_id.in_(allowed_ids)),
+                )
+            )
+        return query
+
+    def _apply_enrollment_access_scoping(
+        self,
+        query: Query,
+        restricted_dims: dict[uuid.UUID, list[uuid.UUID]],
+    ) -> Query:
+        """Apply per-dimension user-access scoping to an Enrollment query."""
+        for dim_id, allowed_ids in restricted_dims.items():
+            dim_values_subq = (
+                self.db.query(DimensionValue.id)
+                .filter(DimensionValue.dimension_id == dim_id)
+                .subquery()
+            )
+            query = query.filter(
+                or_(
+                    ~exists()
+                    .where(EnrollmentDimension.enrollment_id == Enrollment.id)
+                    .where(EnrollmentDimension.dimension_value_id.in_(dim_values_subq)),
+                    exists()
+                    .where(EnrollmentDimension.enrollment_id == Enrollment.id)
+                    .where(EnrollmentDimension.dimension_value_id.in_(allowed_ids)),
+                )
+            )
+        return query
 
     def _apply_activity_filters(
         self,
@@ -54,36 +140,55 @@ class DashboardService:
         organization_id: uuid.UUID,
         dimension_value_ids: list[str] | None = None,
         activity_type_id: str | None = None,
+        accessible_dv_ids: list[uuid.UUID] | None = None,
     ) -> DashboardStats:
         org_filter = {"organization_id": organization_id}
         has_filters = bool(dimension_value_ids or activity_type_id)
 
+        # Pre-compute restricted dimensions for user-access scoping
+        restricted_dims = self._get_restricted_dims(accessible_dv_ids) if accessible_dv_ids else {}
+
         # --- Totals ---
-        total_entities = self.db.query(func.count(Entity.id)).filter_by(**org_filter).scalar() or 0
+        entity_count_q = self.db.query(func.count(Entity.id)).filter_by(**org_filter)
+        if restricted_dims:
+            entity_count_q = self._apply_entity_access_scoping(entity_count_q, restricted_dims)
+        total_entities = entity_count_q.scalar() or 0
 
         # Activity count respects filters
         activity_count_q = self.db.query(func.count(Activity.id)).filter_by(**org_filter)
         activity_count_q = self._apply_activity_filters(
             activity_count_q, dimension_value_ids, activity_type_id
         )
+        if restricted_dims:
+            activity_count_q = self._apply_activity_access_scoping(activity_count_q, restricted_dims)
         total_activities = activity_count_q.scalar() or 0
 
-        total_enrollments = self.db.query(func.count(Enrollment.id)).filter_by(**org_filter).scalar() or 0
-        active_enrollments = (
+        enrollment_count_q = self.db.query(func.count(Enrollment.id)).filter_by(**org_filter)
+        if restricted_dims:
+            enrollment_count_q = self._apply_enrollment_access_scoping(enrollment_count_q, restricted_dims)
+        total_enrollments = enrollment_count_q.scalar() or 0
+
+        active_enrollment_q = (
             self.db.query(func.count(Enrollment.id))
             .filter_by(**org_filter)
             .filter(Enrollment.release_date.is_(None))
-            .scalar()
-            or 0
         )
+        if restricted_dims:
+            active_enrollment_q = self._apply_enrollment_access_scoping(active_enrollment_q, restricted_dims)
+        active_enrollments = active_enrollment_q.scalar() or 0
+
         total_users = self.db.query(func.count(User.id)).filter_by(**org_filter).scalar() or 0
 
         # --- Entities by type ---
-        entities_by_type_rows = (
+        entity_type_q = (
             self.db.query(EntityType.name, func.count(Entity.id))
             .join(Entity, Entity.entity_type_id == EntityType.id)
             .filter(Entity.organization_id == organization_id)
-            .group_by(EntityType.name)
+        )
+        if restricted_dims:
+            entity_type_q = self._apply_entity_access_scoping(entity_type_q, restricted_dims)
+        entities_by_type_rows = (
+            entity_type_q.group_by(EntityType.name)
             .order_by(func.count(Entity.id).desc())
             .all()
         )
@@ -101,6 +206,8 @@ class DashboardService:
         type_q = self._apply_activity_filters(
             type_q, dimension_value_ids, activity_type_id, need_type_join=True
         )
+        if restricted_dims:
+            type_q = self._apply_activity_access_scoping(type_q, restricted_dims)
         activities_by_type_rows = (
             type_q.group_by(ActivityType.name)
             .order_by(func.count(Activity.id).desc())
@@ -109,7 +216,7 @@ class DashboardService:
         activities_by_type = [CountByItem(label=name, count=cnt) for name, cnt in activities_by_type_rows]
 
         # --- Activities by dimension value (with filters) ---
-        from app.modules.dimension.model import DimensionValue, Dimension
+        from app.modules.dimension.model import Dimension
 
         dim_q = (
             self.db.query(
@@ -125,6 +232,8 @@ class DashboardService:
         dim_q = self._apply_activity_filters(
             dim_q, dimension_value_ids, activity_type_id
         )
+        if restricted_dims:
+            dim_q = self._apply_activity_access_scoping(dim_q, restricted_dims)
         activities_by_dimension_rows = (
             dim_q.group_by(Dimension.name, DimensionValue.name, Dimension.sort_order, DimensionValue.sort_order)
             .order_by(Dimension.sort_order, DimensionValue.sort_order)
@@ -152,11 +261,13 @@ class DashboardService:
         time_q = self._apply_activity_filters(
             time_q, dimension_value_ids, activity_type_id
         )
+        if restricted_dims:
+            time_q = self._apply_activity_access_scoping(time_q, restricted_dims)
         activities_over_time_rows = time_q.group_by("period").order_by("period").all()
         activities_over_time = [TimeSeriesPoint(period=p, count=c) for p, c in activities_over_time_rows]
 
         # --- Enrollments over time (last 12 months) ---
-        enrollments_over_time_rows = (
+        enroll_time_q = (
             self.db.query(
                 func.to_char(Enrollment.admission_date, "YYYY-MM").label("period"),
                 func.count(Enrollment.id),
@@ -165,7 +276,11 @@ class DashboardService:
                 Enrollment.organization_id == organization_id,
                 Enrollment.admission_date >= twelve_months_ago,
             )
-            .group_by("period")
+        )
+        if restricted_dims:
+            enroll_time_q = self._apply_enrollment_access_scoping(enroll_time_q, restricted_dims)
+        enrollments_over_time_rows = (
+            enroll_time_q.group_by("period")
             .order_by("period")
             .all()
         )
@@ -188,6 +303,8 @@ class DashboardService:
         recent_q = self._apply_activity_filters(
             recent_q, dimension_value_ids, activity_type_id
         )
+        if restricted_dims:
+            recent_q = self._apply_activity_access_scoping(recent_q, restricted_dims)
         recent_rows = (
             recent_q.order_by(Activity.start_date.desc(), Activity.created_at.desc())
             .limit(10)
