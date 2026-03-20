@@ -162,7 +162,7 @@ class ListConfigService:
         order += 1
 
         # Static: created_at
-        cols.append(self._col("static", "created_at", "Created", order, sortable=True))
+        cols.append(self._col("static", "created_at", "Created", order, sortable=True, filterable=True))
 
         return cols
 
@@ -177,15 +177,12 @@ class ListConfigService:
         cols: list[dict] = []
         order = 0
 
-        cols.append(self._col("static", "start_date", "Start Date", order, sortable=True))
+        cols.append(self._col("static", "start_date", "Start Date", order, sortable=True, filterable=True))
         order += 1
         cols.append(self._col("static", "end_date", "End Date", order, sortable=True))
         order += 1
         cols.append(self._col("static", "title", "Title", order, sortable=True))
         order += 1
-
-        # Dimensions
-        order = self._add_dimension_columns(org_id, cols, order)
 
         # Meta fields
         meta_service = MetaFieldSchemaService(self.db)
@@ -205,25 +202,6 @@ class ListConfigService:
         cols.append(self._col("static", "created_at", "Created", order, sortable=True))
 
         return cols
-
-    def _add_dimension_columns(
-        self, org_id: uuid.UUID, cols: list[dict], order: int
-    ) -> int:
-        from app.modules.dimension.model import Dimension
-
-        dims = (
-            self.db.query(Dimension)
-            .filter_by(organization_id=org_id)
-            .order_by(Dimension.sort_order)
-            .all()
-        )
-        for dim in dims:
-            cols.append(self._col(
-                "dimension", f"dim:{dim.id}", dim.name, order,
-                filterable=True, sortable=False,
-            ))
-            order += 1
-        return order
 
     @staticmethod
     def _col(

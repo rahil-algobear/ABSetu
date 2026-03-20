@@ -136,10 +136,6 @@ function ActivityTypeListContent() {
           return "—";
       }
     }
-    if (col.source === "dimension") {
-      const dim = activity.dimensions.find((d) => col.label === d.dimension_name);
-      return dim ? dim.value_name : "—";
-    }
     if (col.source === "meta") {
       const metaKey = col.key.replace(/^meta:/, "");
       const val = activity.meta?.[metaKey];
