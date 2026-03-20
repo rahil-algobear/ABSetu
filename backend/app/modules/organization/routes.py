@@ -195,7 +195,6 @@ def _validate_entity_type(entity_type: str, org_id, db: Session) -> None:
 
 @router.get(
     "/meta-field-schemas/{entity_type}",
-    dependencies=[Depends(require_permissions("org:settings"))],
 )
 def get_meta_field_schema(
     entity_type: str,
@@ -210,7 +209,6 @@ def get_meta_field_schema(
 
 @router.get(
     "/meta-field-schemas",
-    dependencies=[Depends(require_permissions("org:settings"))],
 )
 def get_all_meta_field_schemas(
     current_user: User = Depends(get_current_user),
