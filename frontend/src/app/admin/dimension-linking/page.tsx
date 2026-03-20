@@ -154,15 +154,15 @@ export default function DimensionLinkingPage() {
       </div>
 
       {/* Matrix */}
-      <div className="overflow-x-auto border rounded-lg">
+      <div className="overflow-x-auto bg-white shadow-sm border rounded-lg overflow-hidden">
         <table className="min-w-full text-sm">
           <thead>
             <tr className="bg-gray-50">
-              <th className="px-3 py-2 text-left font-medium text-gray-700 border-b">
+              <th className="px-3 py-2 text-left font-medium text-gray-700 border-b border-r border-gray-200">
                 {dim1 ? dim1.name : ""} \ {dim2 ? dim2.name : ""}
               </th>
               {values2.map((v2) => (
-                <th key={v2.id} className="px-3 py-2 text-center font-medium text-gray-700 border-b whitespace-nowrap">
+                <th key={v2.id} className="px-3 py-2 text-center font-medium text-gray-700 border-b border-r border-gray-200 last:border-r-0 whitespace-nowrap">
                   {v2.name}
                 </th>
               ))}
@@ -171,14 +171,14 @@ export default function DimensionLinkingPage() {
           <tbody>
             {values1.map((v1) => (
               <tr key={v1.id} className="border-b last:border-b-0 bg-white">
-                <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">
+                <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap border-r border-gray-200">
                   {v1.name}
                 </td>
                 {values2.map((v2) => {
                   const key = `${v1.id}:${v2.id}`;
                   const checked = displayPairs.has(key);
                   return (
-                    <td key={v2.id} className="px-3 py-2 text-center">
+                    <td key={v2.id} className="px-3 py-2 text-center border-r border-gray-200 last:border-r-0">
                       <input
                         type="checkbox"
                         checked={checked}
