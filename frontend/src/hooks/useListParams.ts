@@ -24,7 +24,7 @@ interface UseListParamsReturn {
   // Filters
   activeFilters: FilterValue[];
   setActiveFilters: (filters: FilterValue[]) => void;
-  removeFilter: (key: string) => void;
+  removeFilter: (key: string, value?: string) => void;
 
   // Sort
   sortBy: string | null;
@@ -74,10 +74,12 @@ function buildOrderedUrl(
     sp.set("search", params.search);
   }
 
-  // 2. Filters
+  // 2. Filters — repeated params for multi-value (like ABWealth)
   for (const f of params.filters) {
-    const val = Array.isArray(f.value) ? f.value.join(",") : f.value;
-    sp.set(`filter_${f.key}`, val);
+    const vals = Array.isArray(f.value) ? f.value : [f.value];
+    for (const v of vals) {
+      sp.append(`filter_${f.key}`, v);
+    }
   }
 
   // 3. Sort (omit defaults)
@@ -125,19 +127,22 @@ export function useListParams(
   const search = searchParams.get("search") || "";
 
   const activeFilters = useMemo((): FilterValue[] => {
-    const filters: FilterValue[] = [];
+    // Collect all values per filter key (supports repeated params)
+    const filterMap = new Map<string, string[]>();
     searchParams.forEach((value, key) => {
       if (key.startsWith("filter_")) {
-        const filterKey = key.slice(7); // Remove "filter_" prefix
-        filters.push({
-          key: filterKey,
-          label: filterKey, // Will be enriched by the page component
-          value: value.includes(",") ? value.split(",") : value,
-          displayValue: value,
-        });
+        const filterKey = key.slice(7);
+        const arr = filterMap.get(filterKey) || [];
+        arr.push(value);
+        filterMap.set(filterKey, arr);
       }
     });
-    return filters;
+    return Array.from(filterMap.entries()).map(([key, values]) => ({
+      key,
+      label: key, // Will be enriched by the page component
+      value: values.length === 1 ? values[0] : values,
+      displayValue: values.join(", "),
+    }));
   }, [searchParams]);
 
   const sortBy = searchParams.get("sort_by") || defaultSortBy;
@@ -210,8 +215,22 @@ export function useListParams(
   );
 
   const removeFilter = useCallback(
-    (key: string) => {
-      const updated = activeFilters.filter((f) => f.key !== key);
+    (key: string, value?: string) => {
+      if (!value) {
+        // Remove entire filter
+        const updated = activeFilters.filter((f) => f.key !== key);
+        setActiveFilters(updated);
+        return;
+      }
+      // Remove specific value from a multi-value filter
+      const updated = activeFilters
+        .map((f) => {
+          if (f.key !== key) return f;
+          const vals = Array.isArray(f.value) ? f.value.filter((v) => v !== value) : [];
+          if (vals.length === 0) return null;
+          return { ...f, value: vals.length === 1 ? vals[0] : vals };
+        })
+        .filter(Boolean) as FilterValue[];
       setActiveFilters(updated);
     },
     [activeFilters, setActiveFilters],
