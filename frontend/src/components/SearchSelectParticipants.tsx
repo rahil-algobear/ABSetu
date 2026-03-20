@@ -8,6 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { DateInput } from "@/components/ui/date-input";
 import { Dialog } from "@/components/ui/dialog";
 import { DynamicMetaForm } from "@/components/DynamicMetaForm";
 import { Plus, Search, X } from "lucide-react";
@@ -370,9 +371,7 @@ function MetaFieldCell({
 
   if (field.type === "date") {
     return (
-      <input
-        type="date"
-        className="border rounded px-2 py-1 text-xs w-full"
+      <DateInput
         value={(value as string) || ""}
         onChange={(e) => onChange(e.target.value)}
         required={field.required}

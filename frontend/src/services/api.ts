@@ -17,6 +17,7 @@ import {
   MetaFieldSchemas,
   OTPVerifyData,
   Organization,
+  PaginatedResponse,
   Permission,
   Role,
   DimensionValueLink,
@@ -131,7 +132,7 @@ export const dimensionApi = {
     const response = await authAxios.get<Dimension>(`/dimensions/${id}`);
     return response.data;
   },
-  create: async (data: { name: string; key: string; sort_order?: number }): Promise<Dimension> => {
+  create: async (data: { name: string; key?: string; sort_order?: number }): Promise<Dimension> => {
     const response = await authAxios.post<Dimension>('/dimensions/', data);
     return response.data;
   },
@@ -197,7 +198,7 @@ export const entityTypeApi = {
     const response = await authAxios.get<EntityType>(`/entity-types/${id}`);
     return response.data;
   },
-  create: async (data: { name: string; key: string; config?: Record<string, unknown>; sort_order?: number }): Promise<EntityType> => {
+  create: async (data: { name: string; key?: string; config?: Record<string, unknown>; sort_order?: number }): Promise<EntityType> => {
     const response = await authAxios.post<EntityType>('/entity-types/', data);
     return response.data;
   },
@@ -213,10 +214,38 @@ export const entityTypeApi = {
 
 // --- Entities ---
 
+export interface EntityListParams {
+  search?: string;
+  filters?: string;
+  sort_by?: string;
+  sort_order?: string;
+  page?: number;
+  limit?: number;
+  entity_type_id?: string;
+}
+
+export interface EntityFilterDefinition {
+  key: string;
+  label: string;
+  type: "select" | "range" | "date_range" | "boolean" | "text";
+  options?: { value: string; label: string }[];
+  min?: number;
+  max?: number;
+}
+
 export const entityApi = {
   list: async (entityTypeId?: string): Promise<Entity[]> => {
     const params = entityTypeId ? `?entity_type_id=${entityTypeId}` : '';
-    const response = await authAxios.get<Entity[]>(`/entities/${params}`);
+    // Legacy: returns PaginatedResponse now, extract data for backward compat
+    const response = await authAxios.get<PaginatedResponse<Entity>>(`/entities/${params}`);
+    return response.data.data;
+  },
+  listPaginated: async (params: EntityListParams): Promise<PaginatedResponse<Entity>> => {
+    const response = await authAxios.get<PaginatedResponse<Entity>>('/entities/', { params });
+    return response.data;
+  },
+  getFilters: async (): Promise<{ filters: EntityFilterDefinition[] }> => {
+    const response = await authAxios.get<{ filters: EntityFilterDefinition[] }>('/entities/filters');
     return response.data;
   },
   get: async (id: string): Promise<Entity> => {

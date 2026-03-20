@@ -783,6 +783,7 @@ export default function MetaFieldsPage() {
               No form fields defined yet.
             </p>
           ) : (
+            <div className="bg-white shadow-sm border rounded-lg overflow-hidden">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -832,6 +833,7 @@ export default function MetaFieldsPage() {
                 ))}
               </TableBody>
             </Table>
+            </div>
           )}
         </>
       )}
@@ -877,6 +879,7 @@ export default function MetaFieldsPage() {
               )}
             </div>
           ) : (
+            <div className="bg-white shadow-sm border rounded-lg overflow-hidden">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -922,6 +925,7 @@ export default function MetaFieldsPage() {
                 ))}
               </TableBody>
             </Table>
+            </div>
           )}
         </>
       )}

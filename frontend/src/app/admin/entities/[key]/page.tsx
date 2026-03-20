@@ -1,17 +1,24 @@
 "use client";
 
-import { useState } from "react";
-import { useParams } from "next/navigation";
+import { Suspense, useState, useMemo } from "react";
+import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { entityApi, entityTypeApi, metaFieldSchemaApi } from "@/services/api";
 import { Entity, MetaFieldDefinition } from "@/types";
 import { Can } from "@/components/Auth/Permissions";
+import { useListParams } from "@/hooks/useListParams";
+import type { FilterDefinition } from "@/components/ui/filter-modal";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { Dialog } from "@/components/ui/dialog";
 import { DynamicMetaForm } from "@/components/DynamicMetaForm";
+import { PageHeader } from "@/components/ui/page-header";
+import { ListToolbar } from "@/components/ui/list-toolbar";
+import { Pagination } from "@/components/ui/pagination";
+import { SortableTableHead } from "@/components/ui/sortable-table-head";
 import {
   Table,
   TableHeader,
@@ -20,20 +27,20 @@ import {
   TableHead,
   TableCell,
 } from "@/components/ui/page-table";
-import { PageHeader } from "@/components/ui/page-header";
 import { PageContent } from "@/components/ui/page-content";
-import { Plus, Pencil, Search } from "lucide-react";
+import { Plus, Pencil } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
+import { formatDate, DATE_FORMATS } from "@/utils/date";
 
-export default function EntityTypeEntitiesPage() {
+function EntityTypeEntitiesContent() {
   const { key: entityTypeKey } = useParams<{ key: string }>();
   const queryClient = useQueryClient();
+  const router = useRouter();
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Entity | null>(null);
   const [form, setForm] = useState({ name: "" });
   const [metaValues, setMetaValues] = useState<Record<string, unknown>>({});
-  const [search, setSearch] = useState("");
 
   // Find the entity type by key
   const { data: entityTypes = [] } = useQuery({
@@ -43,11 +50,50 @@ export default function EntityTypeEntitiesPage() {
 
   const entityType = entityTypes.find((et) => et.key === entityTypeKey);
 
-  const { data: entities = [], isLoading } = useQuery({
-    queryKey: ["entities", entityType?.id],
-    queryFn: () => entityApi.list(entityType!.id),
+  // Fetch filter definitions (needed before useListParams for slug mapping)
+  const { data: filterData } = useQuery({
+    queryKey: ["entity-filters"],
+    queryFn: entityApi.getFilters,
+  });
+
+  // All definitions (for slug mapping in useListParams)
+  const allFilterDefs: FilterDefinition[] = useMemo(() => {
+    return (filterData?.filters || []).map((f) => ({
+      key: f.key,
+      label: f.label,
+      type: f.type as FilterDefinition["type"],
+      options: f.options,
+      min: f.min,
+      max: f.max,
+    }));
+  }, [filterData]);
+
+  // Definitions for the filter modal (without entity_type_id — implicit from URL)
+  const filterDefinitions: FilterDefinition[] = useMemo(() => {
+    return allFilterDefs.filter((f) => f.key !== "entity_type_id");
+  }, [allFilterDefs]);
+
+  // List params from URL — uses filter definitions for slug mapping
+  const listParams = useListParams({
+    defaultSortBy: "created_at",
+    defaultSortOrder: "desc",
+    filterDefinitions: allFilterDefs,
+  });
+
+  // Paginated entity list — scoped to entity type
+  const { data: response, isLoading } = useQuery({
+    queryKey: ["entities", entityType?.id, listParams.apiParams],
+    queryFn: () =>
+      entityApi.listPaginated({
+        ...listParams.apiParams,
+        entity_type_id: entityType!.id,
+      }),
     enabled: !!entityType,
   });
+
+  const entities = response?.data || [];
+  const totalCount = response?.count || 0;
+  const totalPages = Math.ceil(totalCount / listParams.limit);
 
   // Use entity-type-specific meta fields if available
   const metaSchemaKey = entityType ? `entity:${entityType.id}` : "";
@@ -55,6 +101,19 @@ export default function EntityTypeEntitiesPage() {
     queryKey: ["meta-field-schemas", metaSchemaKey],
     queryFn: () => metaFieldSchemaApi.get(metaSchemaKey),
   });
+
+  // Derive unique dimension columns from loaded entities
+  const dimensionColumns = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const e of entities) {
+      for (const dim of e.dimensions) {
+        if (!seen.has(dim.dimension_key)) {
+          seen.set(dim.dimension_key, dim.dimension_name);
+        }
+      }
+    }
+    return Array.from(seen.entries()).map(([key, name]) => ({ key, name }));
+  }, [entities]);
 
   const createMutation = useMutation({
     mutationFn: entityApi.create,
@@ -84,7 +143,8 @@ export default function EntityTypeEntitiesPage() {
     setModalOpen(true);
   };
 
-  const openEdit = (item: Entity) => {
+  const openEdit = (e: React.MouseEvent, item: Entity) => {
+    e.stopPropagation();
     setEditing(item);
     setForm({ name: item.name });
     setMetaValues(item.meta || {});
@@ -102,7 +162,7 @@ export default function EntityTypeEntitiesPage() {
     if (editing) {
       updateMutation.mutate({
         id: editing.id,
-        data: { name: form.name, meta: meta || null },
+        data: { name: form.name, meta: meta || undefined },
       });
     } else {
       createMutation.mutate({
@@ -112,12 +172,6 @@ export default function EntityTypeEntitiesPage() {
       });
     }
   };
-
-  const filtered = entities.filter(
-    (e) =>
-      e.name.toLowerCase().includes(search.toLowerCase()) ||
-      (e.case_number || "").toLowerCase().includes(search.toLowerCase())
-  );
 
   const typeName = entityType?.name || "Entity";
   const config = (entityType?.config || {}) as Record<string, boolean>;
@@ -137,69 +191,121 @@ export default function EntityTypeEntitiesPage() {
         }
       />
       <PageContent>
-      <div className="relative mb-4">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-        <Input
-          placeholder={`Search ${typeName.toLowerCase()}...`}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-10"
-        />
-      </div>
+      <ListToolbar
+        search={listParams.search}
+        onSearchChange={listParams.setSearch}
+        filterDefinitions={filterDefinitions}
+        activeFilters={listParams.activeFilters}
+        onFiltersChange={listParams.setActiveFilters}
+        onRemoveFilter={listParams.removeFilter}
+        searchPlaceholder={`Search ${typeName.toLowerCase()}...`}
+      />
 
       {isLoading ? (
         <p className="text-gray-500 text-sm">Loading...</p>
-      ) : filtered.length === 0 ? (
+      ) : entities.length === 0 ? (
         <p className="text-gray-500 text-sm">No {typeName.toLowerCase()} found.</p>
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              {hasCaseNumber && <TableHead>Case No.</TableHead>}
-              {metaFields.map((f) => (
-                <TableHead key={f.key}>{f.label}</TableHead>
-              ))}
-              <TableHead>Enrollments</TableHead>
-              <TableHead>Activities</TableHead>
-              <TableHead className="w-20">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filtered.map((e) => (
-              <TableRow key={e.id}>
-                <TableCell>
-                  <Link
-                    href={`/entities/${e.id}`}
-                    className="text-purple-600 hover:underline"
-                  >
-                    {e.name}
-                  </Link>
-                </TableCell>
-                {hasCaseNumber && <TableCell>{e.case_number || "—"}</TableCell>}
-                {metaFields.map((f) => (
-                  <TableCell key={f.key}>
-                    {e.meta?.[f.key] !== undefined
-                      ? String(e.meta[f.key])
-                      : "—"}
-                  </TableCell>
+        <>
+          <div className="bg-white shadow-sm border rounded-lg overflow-hidden">
+          <Table stickyRows={1} className="h-[calc(100vh-400px)] lg:h-[calc(100vh-300px)]">
+            <TableHeader>
+              <TableRow>
+                <SortableTableHead
+                  label="Name"
+                  sortKey="name"
+                  currentSortBy={listParams.sortBy}
+                  currentSortOrder={listParams.sortOrder}
+                  onSort={listParams.setSorting}
+                />
+                {hasCaseNumber && (
+                  <SortableTableHead
+                    label="Case No."
+                    sortKey="case_number"
+                    currentSortBy={listParams.sortBy}
+                    currentSortOrder={listParams.sortOrder}
+                    onSort={listParams.setSorting}
+                  />
+                )}
+                {dimensionColumns.map((dc) => (
+                  <TableHead key={dc.key}>{dc.name}</TableHead>
                 ))}
-                <TableCell>{e.enrollment_count}</TableCell>
-                <TableCell>{e.activity_count}</TableCell>
-                <TableCell>
-                  <Can permission="entity:edit">
-                    <button
-                      onClick={() => openEdit(e)}
-                      className="text-gray-400 hover:text-purple-600"
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </button>
-                  </Can>
-                </TableCell>
+                {metaFields.map((f) => (
+                  <TableHead key={f.key}>{f.label}</TableHead>
+                ))}
+                <TableHead>Enrollments</TableHead>
+                <TableHead>Activities</TableHead>
+                <SortableTableHead
+                  label="Created"
+                  sortKey="created_at"
+                  currentSortBy={listParams.sortBy}
+                  currentSortOrder={listParams.sortOrder}
+                  onSort={listParams.setSorting}
+                />
+                <TableHead className="w-20">Actions</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {entities.map((e) => (
+                <TableRow
+                  key={e.id}
+                  onClick={() => router.push(`/entities/${e.id}`)}
+                >
+                  <TableCell className="font-medium">
+                    <Link
+                      href={`/entities/${e.id}`}
+                      className="text-primary hover:underline"
+                      onClick={(ev) => ev.stopPropagation()}
+                    >
+                      {e.name}
+                    </Link>
+                  </TableCell>
+                  {hasCaseNumber && <TableCell>{e.case_number || "—"}</TableCell>}
+                  {dimensionColumns.map((dc) => {
+                    const dim = e.dimensions.find((d) => d.dimension_key === dc.key);
+                    return (
+                      <TableCell key={dc.key}>
+                        {dim ? dim.value_name : "—"}
+                      </TableCell>
+                    );
+                  })}
+                  {metaFields.map((f) => (
+                    <TableCell key={f.key}>
+                      {e.meta?.[f.key] !== undefined
+                        ? String(e.meta[f.key])
+                        : "—"}
+                    </TableCell>
+                  ))}
+                  <TableCell>{e.enrollment_count}</TableCell>
+                  <TableCell>{e.activity_count}</TableCell>
+                  <TableCell className="text-gray-500">
+                    {formatDate(e.updated_at, DATE_FORMATS.DISPLAY)}
+                  </TableCell>
+                  <TableCell>
+                    <Can permission="entity:edit">
+                      <button
+                        onClick={(ev) => openEdit(ev, e)}
+                        className="text-gray-400 hover:text-primary"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                    </Can>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          <Pagination
+            currentPage={listParams.page}
+            totalPages={totalPages}
+            totalItems={totalCount}
+            itemsPerPage={listParams.limit}
+            onPageChange={listParams.setPage}
+            onItemsPerPageChange={listParams.setLimit}
+            itemLabel={typeName.toLowerCase()}
+          />
+          </div>
+        </>
       )}
 
       <Dialog
@@ -232,5 +338,13 @@ export default function EntityTypeEntitiesPage() {
       </Dialog>
       </PageContent>
     </>
+  );
+}
+
+export default function EntityTypeEntitiesPage() {
+  return (
+    <Suspense fallback={<p className="text-gray-500 text-sm p-4">Loading...</p>}>
+      <EntityTypeEntitiesContent />
+    </Suspense>
   );
 }

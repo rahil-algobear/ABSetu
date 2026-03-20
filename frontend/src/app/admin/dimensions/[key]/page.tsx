@@ -146,6 +146,7 @@ export default function DimensionValuesPage() {
       ) : values.length === 0 ? (
         <p className="text-gray-500 text-sm">No values yet.</p>
       ) : (
+        <div className="bg-white shadow-sm border rounded-lg overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow>
@@ -192,6 +193,7 @@ export default function DimensionValuesPage() {
             ))}
           </TableBody>
         </Table>
+        </div>
       )}
 
       <Dialog

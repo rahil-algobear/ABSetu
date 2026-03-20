@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { Suspense, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -23,8 +23,9 @@ import { PageLayout } from "@/components/ui/page-layout";
 import { PageContent } from "@/components/ui/page-content";
 import { PageHeader } from "@/components/ui/page-header";
 import { Plus } from "lucide-react";
+import { formatDate } from "@/utils/date";
 
-export default function ActivitiesPage() {
+function ActivitiesPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const typeKey = searchParams.get("type");
@@ -83,6 +84,7 @@ export default function ActivitiesPage() {
       ) : activities.length === 0 ? (
         <p className="text-gray-500">No {typeName.toLowerCase()}s yet.</p>
       ) : (
+        <div className="bg-white shadow-sm border rounded-lg overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow>
@@ -101,8 +103,8 @@ export default function ActivitiesPage() {
                 key={a.id}
                 onClick={() => router.push(`/activities/${a.id}`)}
               >
-                <TableCell>{a.start_date}</TableCell>
-                <TableCell>{a.end_date || "—"}</TableCell>
+                <TableCell>{formatDate(a.start_date)}</TableCell>
+                <TableCell>{formatDate(a.end_date)}</TableCell>
                 <TableCell className="font-medium">
                   {getActivityTitle(a)}
                 </TableCell>
@@ -123,8 +125,17 @@ export default function ActivitiesPage() {
             ))}
           </TableBody>
         </Table>
+        </div>
       )}
       </PageContent>
     </PageLayout>
+  );
+}
+
+export default function ActivitiesPage() {
+  return (
+    <Suspense fallback={<PageLayout><PageContent><p className="text-gray-500">Loading...</p></PageContent></PageLayout>}>
+      <ActivitiesPageContent />
+    </Suspense>
   );
 }

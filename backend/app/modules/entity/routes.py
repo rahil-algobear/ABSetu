@@ -13,6 +13,8 @@ from app.common.dependencies import (
     get_current_user,
     require_permissions,
 )
+from app.common.schemas.base_response import PaginatedResponse
+from app.common.schemas.list_params import ListParams
 from app.core.database import get_db
 from app.modules.auth.model import User
 from app.modules.entity.schemas import (
@@ -146,21 +148,89 @@ def delete_entity_type(
 
 @entity_router.get("/", dependencies=[Depends(require_permissions("entity:view"))])
 def list_entities(
+    page: int = Query(1, ge=1),
+    limit: int = Query(25, ge=1, le=100),
+    search: str | None = Query(None),
+    sort_by: str | None = Query(None),
+    sort_order: str = Query("desc", pattern="^(asc|desc)$"),
+    filters: str | None = Query(None),
+    # Legacy param — still supported, but prefer filters JSON
     entity_type_id: uuid.UUID | None = Query(None),
     current_user: User = Depends(get_current_user),
     accessible_dv_ids: list[uuid.UUID] | None = Depends(get_accessible_dimension_value_ids),
     db: Session = Depends(get_db),
 ):
+    import json
+
     service = EntityService(db)
-    rows = service.list_by_org(
+
+    # Merge legacy entity_type_id param into filters if provided
+    merged_filters = filters
+    if entity_type_id:
+        try:
+            f = json.loads(filters) if filters else {}
+        except (json.JSONDecodeError, TypeError):
+            f = {}
+        f["entity_type_id"] = str(entity_type_id)
+        merged_filters = json.dumps(f)
+
+    params = ListParams(
+        page=page, limit=limit, search=search,
+        sort_by=sort_by, sort_order=sort_order, filters=merged_filters,
+    )
+    rows, total = service.list_by_org_paginated(
         current_user.organization_id,
-        entity_type_id=entity_type_id,
+        params=params,
         accessible_dv_ids=accessible_dv_ids,
     )
-    return [
+    data = [
         _build_entity_response(entity, enrollment_count, activity_count)
         for entity, enrollment_count, activity_count in rows
     ]
+    return PaginatedResponse(count=total, data=data)
+
+
+@entity_router.get("/filters", dependencies=[Depends(require_permissions("entity:view"))])
+def get_entity_filters(
+    current_user: User = Depends(get_current_user),
+    accessible_dv_ids: list[uuid.UUID] | None = Depends(get_accessible_dimension_value_ids),
+    db: Session = Depends(get_db),
+):
+    """Return available filter definitions for entity list."""
+    from app.common.helpers.filter_definitions import (
+        build_dimension_filters,
+        build_meta_field_filters,
+    )
+
+    org_id = current_user.organization_id
+    result = []
+
+    # Entity type filter
+    et_service = EntityTypeService(db)
+    entity_types = et_service.list_by_org(org_id)
+    if entity_types:
+        result.append({
+            "key": "entity_type_id",
+            "label": "Entity Type",
+            "type": "select",
+            "options": [{"value": str(et.id), "label": et.name} for et in entity_types],
+        })
+
+    # Dimension filters (scoped by user access)
+    result.extend(build_dimension_filters(db, org_id, accessible_dv_ids))
+
+    # Meta field filters (where is_filterable=true)
+    scope_keys = [f"entity:{et.id}" for et in entity_types]
+    result.extend(build_meta_field_filters(db, org_id, scope_keys))
+
+    # Date filter for created_at
+    result.append({
+        "key": "created_at",
+        "label": "Created Date",
+        "type": "date_range",
+    })
+
+    return {"filters": result}
 
 
 @entity_router.get(
