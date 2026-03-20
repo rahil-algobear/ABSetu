@@ -160,8 +160,20 @@ function ActivityTypeListContent() {
                       currentSortOrder={listParams.sortOrder}
                       onSort={listParams.setSorting}
                     />
-                    <TableHead>End Date</TableHead>
-                    <TableHead>Title</TableHead>
+                    <SortableTableHead
+                      label="End Date"
+                      sortKey="end_date"
+                      currentSortBy={listParams.sortBy}
+                      currentSortOrder={listParams.sortOrder}
+                      onSort={listParams.setSorting}
+                    />
+                    <SortableTableHead
+                      label="Title"
+                      sortKey="title"
+                      currentSortBy={listParams.sortBy}
+                      currentSortOrder={listParams.sortOrder}
+                      onSort={listParams.setSorting}
+                    />
                     {dimensionColumns.map((dc) => (
                       <TableHead key={dc.key}>{dc.name}</TableHead>
                     ))}
