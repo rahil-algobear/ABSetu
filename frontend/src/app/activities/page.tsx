@@ -261,38 +261,9 @@ export default function ActivitiesPage() {
           const titleConfig = el.config || { mode: "free_text" };
           const titleMode = (titleConfig.mode as string) || "free_text";
 
-          if (titleMode === "generated") {
-            // Build preview from currently selected dimension values
-            const dimIds = (titleConfig.dimension_ids as string[]) || [];
-            const separator = (titleConfig.separator as string) || " - ";
-            const parts: string[] = [];
-            for (const dimId of dimIds) {
-              const dimValues = allDimensionValues.filter(
-                (dv) => dv.dimension_id === dimId
-              );
-              const selectedDv = dimValues.find((dv) =>
-                formData.dimension_value_ids.includes(dv.id)
-              );
-              if (selectedDv) parts.push(selectedDv.name);
-            }
-            const preview = parts.length > 0 ? parts.join(separator) : "";
-            return (
-              <div key="default-title">
-                <label className="text-sm font-medium">
-                  Title
-                </label>
-                <Input
-                  value={preview}
-                  disabled
-                  placeholder="Generated from selected dimensions..."
-                  className="bg-gray-50 mt-1"
-                />
-                <p className="text-xs text-gray-400 mt-0.5">Auto-generated from dimensions</p>
-              </div>
-            );
-          }
+          // Generated titles are resolved server-side — nothing to show on create
+          if (titleMode === "generated") return null;
 
-          // Free text mode
           return (
             <div key="default-title">
               <label className="text-sm font-medium">

@@ -380,20 +380,8 @@ export default function ActivityDetailPage() {
                 if (el.type === "default" && el.ref_id === "title") {
                   const titleConfig = el.config || { mode: "free_text" };
                   const titleMode = (titleConfig.mode as string) || "free_text";
-                  if (titleMode === "generated") {
-                    // Generated title is read-only — shown as display, not editable
-                    return (
-                      <div key="edit-title">
-                        <label className="text-sm font-medium">Title</label>
-                        <Input
-                          value={activityTitle}
-                          disabled
-                          className="bg-gray-50 mt-1"
-                        />
-                        <p className="text-xs text-gray-400 mt-0.5">Auto-generated from dimensions</p>
-                      </div>
-                    );
-                  }
+                  // Generated titles are resolved server-side — nothing to edit
+                  if (titleMode === "generated") return null;
                   return (
                     <div key="edit-title">
                       <label className="text-sm font-medium">
