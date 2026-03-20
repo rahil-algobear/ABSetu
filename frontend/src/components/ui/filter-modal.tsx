@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Dialog } from "./dialog";
 import { Button } from "./button";
 import { Input } from "./input";
+import { DateInput } from "./date-input";
 import { X } from "lucide-react";
 import { FilterValue } from "@/hooks/useListParams";
 
@@ -218,24 +219,24 @@ export function FilterModal({
 
               {def.type === "date_range" && (
                 <div className="flex gap-2 items-center">
-                  <Input
-                    type="date"
+                  <DateInput
                     value={
                       (typeof localFilters[def.key] === "string"
                         ? (localFilters[def.key] as string).split(":")[0]
                         : "") || ""
                     }
                     onChange={(e) => handleDateChange(def.key, "start", e.target.value)}
+                    hint="(From)"
                   />
                   <span className="text-gray-400">to</span>
-                  <Input
-                    type="date"
+                  <DateInput
                     value={
                       (typeof localFilters[def.key] === "string"
                         ? (localFilters[def.key] as string).split(":")[1]
                         : "") || ""
                     }
                     onChange={(e) => handleDateChange(def.key, "end", e.target.value)}
+                    hint="(To)"
                   />
                 </div>
               )}

@@ -4,10 +4,13 @@ Activity, ActivityType, ActivityParticipant, ActivityForm services
 
 import uuid
 
+from sqlalchemy import exists, func
 from sqlalchemy.orm import Session, joinedload
 
 from app.common.exceptions import NotFoundError, ValidationError
+from app.common.helpers.list_query import apply_filters, apply_search, apply_sort, paginate
 from app.common.helpers.slugify import slugify
+from app.common.schemas.list_params import ListParams
 from app.modules.activity.model import Activity, ActivityForm, ActivityParticipant, ActivityType
 from app.modules.dimension.model import ActivityDimension, DimensionValue
 
@@ -68,22 +71,24 @@ class ActivityService:
     def __init__(self, db: Session):
         self.db = db
 
-    def list_by_org(
+    def _build_base_query(
         self,
         org_id: uuid.UUID,
         accessible_dv_ids: list[uuid.UUID] | None = None,
-        activity_type_id: uuid.UUID | None = None,
-    ) -> list[Activity]:
-        query = self.db.query(Activity).filter_by(organization_id=org_id)
+    ):
+        """Build the base activity query with participant count and dimension access scoping."""
+        participant_count = (
+            self.db.query(func.count(ActivityParticipant.id))
+            .filter(ActivityParticipant.activity_id == Activity.id)
+            .correlate(Activity)
+            .scalar_subquery()
+        )
 
-        if activity_type_id:
-            query = query.filter(Activity.activity_type_id == activity_type_id)
+        query = self.db.query(Activity, participant_count).filter_by(
+            organization_id=org_id
+        )
 
         if accessible_dv_ids:
-            from sqlalchemy import exists, or_
-
-            # Per-dimension scoping: only filter dimensions where user has restrictions.
-            # If user has no assignments for a dimension, they see all values for it.
             dv_dim_rows = (
                 self.db.query(DimensionValue.id, DimensionValue.dimension_id)
                 .filter(DimensionValue.id.in_(accessible_dv_ids))
@@ -94,34 +99,77 @@ class ActivityService:
                 restricted_dims.setdefault(dim_id, []).append(dv_id)
 
             for dim_id, allowed_ids in restricted_dims.items():
-                dim_values_subq = (
-                    self.db.query(DimensionValue.id)
-                    .filter(DimensionValue.dimension_id == dim_id)
-                    .subquery()
-                )
                 query = query.filter(
-                    or_(
-                        # Activity has no values from this dimension → unrestricted
-                        ~exists()
-                        .where(ActivityDimension.activity_id == Activity.id)
-                        .where(ActivityDimension.dimension_value_id.in_(dim_values_subq)),
-                        # Activity has at least one allowed value from this dimension
-                        exists()
-                        .where(ActivityDimension.activity_id == Activity.id)
-                        .where(ActivityDimension.dimension_value_id.in_(allowed_ids)),
-                    )
+                    exists()
+                    .where(ActivityDimension.activity_id == Activity.id)
+                    .where(ActivityDimension.dimension_value_id.in_(allowed_ids))
                 )
 
-        return (
-            query.options(
-                joinedload(Activity.activity_type),
-                joinedload(Activity.dimensions)
-                .joinedload(ActivityDimension.dimension_value)
-                .joinedload(DimensionValue.dimension),
-            )
-            .order_by(Activity.start_date.desc())
+        return query
+
+    @staticmethod
+    def get_sort_config() -> dict:
+        """Sort keys available for activity list."""
+        return {
+            "title": Activity.title,
+            "start_date": Activity.start_date,
+            "end_date": Activity.end_date,
+            "created_at": Activity.created_at,
+        }
+
+    @staticmethod
+    def get_filter_config() -> dict:
+        """Filter config for activity list."""
+        return {
+            "activity_type_id": {"type": "exact", "column": Activity.activity_type_id},
+            "start_date": {"type": "date_range", "column": Activity.start_date},
+        }
+
+    def get_dimension_filter_config(self, org_id: uuid.UUID) -> dict:
+        """Build dimension filter config dynamically from org's dimensions."""
+        from app.modules.dimension.model import Dimension
+
+        dims = (
+            self.db.query(Dimension)
+            .filter_by(organization_id=org_id)
             .all()
         )
+        config = {}
+        for dim in dims:
+            config[f"dim:{dim.id}"] = {
+                "type": "dimension",
+                "assoc_model": ActivityDimension,
+                "assoc_fk": ActivityDimension.activity_id,
+                "assoc_dv": ActivityDimension.dimension_value_id,
+                "parent_pk": Activity.id,
+            }
+        return config
+
+    def list_by_org_paginated(
+        self,
+        org_id: uuid.UUID,
+        params: ListParams,
+        accessible_dv_ids: list[uuid.UUID] | None = None,
+    ) -> tuple[list[tuple], int]:
+        """Paginated list with search, filter, sort support."""
+        query = self._build_base_query(org_id, accessible_dv_ids)
+
+        # Search
+        query = apply_search(query, params.search, [Activity.title])
+
+        # Filters (static + dimension)
+        filter_config = self.get_filter_config()
+        filter_config.update(self.get_dimension_filter_config(org_id))
+        query = apply_filters(query, params.filters, filter_config)
+
+        # Sort
+        query = apply_sort(
+            query, params.sort_by, params.sort_order,
+            self.get_sort_config(), Activity.start_date.desc(),
+        )
+
+        # Paginate
+        return paginate(query, params.page, params.limit)
 
     def get_by_id(self, activity_id: uuid.UUID) -> Activity:
         activity = (

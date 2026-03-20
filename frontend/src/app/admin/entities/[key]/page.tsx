@@ -249,11 +249,11 @@ function EntityTypeEntitiesContent() {
               {entities.map((e) => (
                 <TableRow
                   key={e.id}
-                  onClick={() => router.push(`/entities/${e.id}`)}
+                  onClick={() => router.push(`/entities/details/${e.id}`)}
                 >
                   <TableCell className="font-medium">
                     <Link
-                      href={`/entities/${e.id}`}
+                      href={`/entities/details/${e.id}`}
                       className="text-primary hover:underline"
                       onClick={(ev) => ev.stopPropagation()}
                     >
