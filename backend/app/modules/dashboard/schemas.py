@@ -18,6 +18,7 @@ class TimeSeriesPoint(BaseModel):
 class RecentActivity(BaseModel):
     id: str
     date: str
+    title: str | None
     type_name: str | None
     notes: str | None
     participant_count: int
