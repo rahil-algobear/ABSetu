@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { Suspense, useState, useMemo, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -77,7 +77,7 @@ function getFilteredValues(
   );
 }
 
-export default function ActivitiesPage() {
+function ActivitiesPageContent() {
   const [showCreate, setShowCreate] = useState(false);
   const queryClient = useQueryClient();
   const router = useRouter();
@@ -581,5 +581,13 @@ export default function ActivitiesPage() {
         </Table>
       )}
     </PageLayout>
+  );
+}
+
+export default function ActivitiesPage() {
+  return (
+    <Suspense fallback={<PageLayout className="p-4"><p className="text-gray-500">Loading...</p></PageLayout>}>
+      <ActivitiesPageContent />
+    </Suspense>
   );
 }

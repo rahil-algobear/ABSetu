@@ -347,7 +347,7 @@ function EnrollmentForm({
   });
 
   const selectableDimensions = useMemo(
-    () => dimensions.filter((d) => !d.is_system),
+    () => dimensions,
     [dimensions]
   );
 
