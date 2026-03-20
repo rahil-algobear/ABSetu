@@ -88,7 +88,7 @@ export function TableRow({ children, className = "", onClick }: TableRowProps) {
 
 export function TableHead({ children, className = "", style }: TableHeadProps) {
   return (
-    <th className={`px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${className}`} style={style}>
+    <th className={`px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-200 last:border-r-0 ${className}`} style={style}>
       {children}
     </th>
   );
@@ -107,7 +107,7 @@ export function TableCell({ children, className = "", colSpan }: TableCellProps)
     : "px-4 lg:px-4 py-4 whitespace-nowrap text-sm text-gray-900";
 
   return (
-    <td className={`${baseClasses} ${className}`} colSpan={colSpan}>
+    <td className={`${baseClasses} border-r border-gray-200 last:border-r-0 ${className}`} colSpan={colSpan}>
       {children}
     </td>
   );
