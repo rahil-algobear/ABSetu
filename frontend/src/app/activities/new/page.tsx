@@ -251,7 +251,7 @@ function NewActivityPageContent() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["activities"] });
       toast.success(`${typeName} created`);
-      router.push(`/activities/type/${typeKey}`);
+      router.push(`/activities/${typeKey}`);
     },
     onError: () => toast.error(`Failed to create ${typeName.toLowerCase()}`),
   });

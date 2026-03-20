@@ -276,7 +276,7 @@ export default function EntityDetailPage() {
                 {filteredActivities.map((a) => (
                   <Link
                     key={a.id}
-                    href={`/activities/${a.id}`}
+                    href={`/activities/details/${a.id}`}
                     className="flex items-center justify-between p-2 border rounded hover:bg-gray-50 transition-colors"
                   >
                     <div className="min-w-0">

@@ -179,13 +179,13 @@ function ActivityTypeListContent() {
                   {activities.map((a) => (
                     <TableRow
                       key={a.id}
-                      onClick={() => router.push(`/activities/${a.id}`)}
+                      onClick={() => router.push(`/activities/details/${a.id}`)}
                     >
                       <TableCell>{formatDate(a.start_date)}</TableCell>
                       <TableCell>{formatDate(a.end_date)}</TableCell>
                       <TableCell className="font-medium">
                         <Link
-                          href={`/activities/${a.id}`}
+                          href={`/activities/details/${a.id}`}
                           className="text-primary hover:underline"
                           onClick={(ev) => ev.stopPropagation()}
                         >

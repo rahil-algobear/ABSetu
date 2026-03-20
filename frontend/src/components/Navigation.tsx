@@ -288,7 +288,7 @@ function NavigationContent() {
 
   // Activity types as top-level nav links
   const activityTypeLinks = activityTypes.map((at) => ({
-    href: `/activities/type/${at.key}`,
+    href: `/activities/${at.key}`,
     key: at.key,
     label: at.name,
     icon: CalendarDays,
@@ -436,7 +436,7 @@ function NavigationContent() {
 
                 {/* Activity types as top-level links */}
                 {activityTypeLinks.map((item) => {
-                  const active = pathname === `/activities/type/${item.key}`;
+                  const active = pathname === `/activities/${item.key}`;
                   return (
                     <Can key={item.href} permission={item.permission}>
                       <Link
@@ -527,7 +527,7 @@ function NavigationContent() {
             {/* Activity types as top-level links */}
             {activityTypeLinks.map((item) => {
               if (!can(item.permission)) return null;
-              const active = pathname === `/activities/type/${item.key}`;
+              const active = pathname === `/activities/${item.key}`;
               return (
                 <Link
                   key={item.href}
