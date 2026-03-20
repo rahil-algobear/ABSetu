@@ -173,20 +173,22 @@ export default function ListSettingsPage() {
           ))}
         </div>
 
-        {/* Type selector */}
+        {/* Type selector (tab buttons) */}
         {types.length > 0 && (
-          <div className="mb-4">
-            <select
-              value={selectedTypeId}
-              onChange={(e) => handleTypeChange(e.target.value)}
-              className="block w-full max-w-xs rounded-md border border-gray-300 bg-white py-2 px-3 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            >
-              {types.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
+          <div className="flex flex-wrap gap-2 mb-4">
+            {types.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => handleTypeChange(t.id)}
+                className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                  selectedTypeId === t.id
+                    ? "bg-purple-50 text-purple-700 border border-purple-200"
+                    : "text-gray-600 hover:bg-gray-100 border border-gray-200"
+                }`}
+              >
+                {t.name}
+              </button>
+            ))}
           </div>
         )}
 

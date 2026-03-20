@@ -251,12 +251,13 @@ def get_entity_filters(
         scope_keys = [f"entity:{entity_type_id}"]
     filters.extend(build_meta_field_filters(db, org_id, scope_keys, filterable_keys))
 
-    # Date filter for created_at
-    filters.append({
-        "key": "created_at",
-        "label": "Created Date",
-        "type": "date_range",
-    })
+    # Date filter for created_at (only if list config allows or no config)
+    if filterable_keys is None or "created_at" in filterable_keys:
+        filters.append({
+            "key": "created_at",
+            "label": "Created Date",
+            "type": "date_range",
+        })
 
     # Visible columns sorted by sort_order
     visible_columns = sorted(

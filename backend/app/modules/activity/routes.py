@@ -318,12 +318,13 @@ def get_activity_filters(
         scope_keys = [f"activity:{activity_type_id}"]
     filters.extend(build_meta_field_filters(db, org_id, scope_keys, filterable_keys))
 
-    # Date filter for start_date
-    filters.append({
-        "key": "start_date",
-        "label": "Start Date",
-        "type": "date_range",
-    })
+    # Date filter for start_date (only if list config allows or no config)
+    if filterable_keys is None or "start_date" in filterable_keys:
+        filters.append({
+            "key": "start_date",
+            "label": "Start Date",
+            "type": "date_range",
+        })
 
     # Visible columns sorted by sort_order
     visible_columns = sorted(
