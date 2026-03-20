@@ -51,7 +51,11 @@ const emptyField: MetaFieldDefinition = {
   type: "text",
   required: false,
   options: [],
+  is_filterable: false,
+  is_sortable: false,
 };
+
+const UNSORTABLE_TYPES: MetaFieldType[] = ["multiselect", "boolean"];
 
 type SectionKind = "entity" | "dimension" | "other" | "activity" | "participant";
 
@@ -791,6 +795,8 @@ export default function MetaFieldsPage() {
                   <TableHead>Label</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Required</TableHead>
+                  <TableHead>Filterable</TableHead>
+                  <TableHead>Sortable</TableHead>
                   <TableHead>Default</TableHead>
                   <TableHead>Options</TableHead>
                   <TableHead className="w-20 text-center">Actions</TableHead>
@@ -807,6 +813,8 @@ export default function MetaFieldsPage() {
                       {FIELD_TYPES.find((ft) => ft.value === field.type)?.label || field.type}
                     </TableCell>
                     <TableCell>{field.required ? "Yes" : "No"}</TableCell>
+                    <TableCell>{field.is_filterable ? "Yes" : "No"}</TableCell>
+                    <TableCell>{UNSORTABLE_TYPES.includes(field.type) ? "—" : field.is_sortable ? "Yes" : "No"}</TableCell>
                     <TableCell className="text-sm text-gray-500">
                       {field.default != null && field.default !== ""
                         ? field.type === "boolean"
@@ -887,6 +895,8 @@ export default function MetaFieldsPage() {
                   <TableHead>Label</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Required</TableHead>
+                  <TableHead>Filterable</TableHead>
+                  <TableHead>Sortable</TableHead>
                   <TableHead className="w-20 text-center">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -904,6 +914,8 @@ export default function MetaFieldsPage() {
                         {FIELD_TYPES.find((ft) => ft.value === field.type)?.label || field.type}
                       </TableCell>
                       <TableCell>{field.required ? "Yes" : "No"}</TableCell>
+                      <TableCell>{field.is_filterable ? "Yes" : "No"}</TableCell>
+                      <TableCell>{UNSORTABLE_TYPES.includes(field.type) ? "—" : field.is_sortable ? "Yes" : "No"}</TableCell>
                       <TableCell>
                         <div className="flex items-center justify-center gap-2">
                           <button
@@ -1041,7 +1053,14 @@ export default function MetaFieldsPage() {
               id="field-type"
               className="w-full border rounded-md p-2 text-sm"
               value={fieldForm.type}
-              onChange={(e) => setFieldForm({ ...fieldForm, type: e.target.value as MetaFieldType })}
+              onChange={(e) => {
+                const newType = e.target.value as MetaFieldType;
+                setFieldForm({
+                  ...fieldForm,
+                  type: newType,
+                  is_sortable: UNSORTABLE_TYPES.includes(newType) ? false : fieldForm.is_sortable,
+                });
+              }}
             >
               {FIELD_TYPES.map((ft) => (
                 <option key={ft.value} value={ft.value}>{ft.label}</option>
@@ -1054,6 +1073,23 @@ export default function MetaFieldsPage() {
               onCheckedChange={(checked) => setFieldForm({ ...fieldForm, required: checked })}
             />
             <Label>Required</Label>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={fieldForm.is_filterable || false}
+                onCheckedChange={(checked) => setFieldForm({ ...fieldForm, is_filterable: checked })}
+              />
+              <Label>Filterable</Label>
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={fieldForm.is_sortable || false}
+                disabled={UNSORTABLE_TYPES.includes(fieldForm.type)}
+                onCheckedChange={(checked) => setFieldForm({ ...fieldForm, is_sortable: checked })}
+              />
+              <Label className={UNSORTABLE_TYPES.includes(fieldForm.type) ? "text-gray-400" : ""}>Sortable</Label>
+            </div>
           </div>
           {showOptions && (
             <div>
