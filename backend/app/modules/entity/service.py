@@ -9,7 +9,9 @@ from sqlalchemy import exists, func, or_
 from sqlalchemy.orm import Session
 
 from app.common.exceptions import NotFoundError, ValidationError
+from app.common.helpers.list_query import apply_filters, apply_search, apply_sort, paginate
 from app.common.helpers.slugify import slugify
+from app.common.schemas.list_params import ListParams
 from app.modules.activity.model import ActivityParticipant
 from app.modules.beneficiary.model import Enrollment
 from app.modules.dimension.model import DimensionValue, EntityDimension
@@ -90,12 +92,12 @@ class EntityService:
             .replace("{SERIAL}", serial)
         )
 
-    def list_by_org(
+    def _build_base_query(
         self,
         org_id: uuid.UUID,
-        entity_type_id: uuid.UUID | None = None,
         accessible_dv_ids: list[uuid.UUID] | None = None,
-    ) -> list[tuple]:
+    ):
+        """Build the base entity query with subqueries and dimension access scoping."""
         enrollment_count = (
             self.db.query(func.count(Enrollment.id))
             .filter(Enrollment.entity_id == Entity.id)
@@ -116,12 +118,7 @@ class EntityService:
             organization_id=org_id
         )
 
-        if entity_type_id:
-            query = query.filter(Entity.entity_type_id == entity_type_id)
-
         if accessible_dv_ids:
-            # Per-dimension scoping: only filter dimensions where user has restrictions.
-            # If user has no assignments for a dimension, they see all values for it.
             dv_dim_rows = (
                 self.db.query(DimensionValue.id, DimensionValue.dimension_id)
                 .filter(DimensionValue.id.in_(accessible_dv_ids))
@@ -139,18 +136,93 @@ class EntityService:
                 )
                 query = query.filter(
                     or_(
-                        # Entity has no values from this dimension → unrestricted
                         ~exists()
                         .where(EntityDimension.entity_id == Entity.id)
                         .where(EntityDimension.dimension_value_id.in_(dim_values_subq)),
-                        # Entity has at least one allowed value from this dimension
                         exists()
                         .where(EntityDimension.entity_id == Entity.id)
                         .where(EntityDimension.dimension_value_id.in_(allowed_ids)),
                     )
                 )
 
+        return query
+
+    @staticmethod
+    def get_sort_config() -> dict:
+        """Sort keys available for entity list."""
+        return {
+            "name": Entity.name,
+            "case_number": Entity.case_number,
+            "created_at": Entity.created_at,
+        }
+
+    @staticmethod
+    def get_filter_config() -> dict:
+        """Filter config for entity list."""
+        return {
+            "entity_type_id": {"type": "exact", "column": Entity.entity_type_id},
+        }
+
+    def get_dimension_filter_config(self, org_id: uuid.UUID) -> dict:
+        """Build dimension filter config dynamically from org's dimensions."""
+        from app.modules.dimension.model import Dimension
+
+        dims = (
+            self.db.query(Dimension)
+            .filter_by(organization_id=org_id)
+            .filter(Dimension.is_system.is_(None))
+            .all()
+        )
+        config = {}
+        for dim in dims:
+            config[f"dim:{dim.id}"] = {
+                "type": "dimension",
+                "assoc_model": EntityDimension,
+                "assoc_fk": EntityDimension.entity_id,
+                "assoc_dv": EntityDimension.dimension_value_id,
+                "parent_pk": Entity.id,
+            }
+        return config
+
+    def list_by_org(
+        self,
+        org_id: uuid.UUID,
+        entity_type_id: uuid.UUID | None = None,
+        accessible_dv_ids: list[uuid.UUID] | None = None,
+    ) -> list[tuple]:
+        """Legacy list method — returns all entities (no pagination)."""
+        query = self._build_base_query(org_id, accessible_dv_ids)
+
+        if entity_type_id:
+            query = query.filter(Entity.entity_type_id == entity_type_id)
+
         return query.order_by(Entity.created_at.desc()).all()
+
+    def list_by_org_paginated(
+        self,
+        org_id: uuid.UUID,
+        params: ListParams,
+        accessible_dv_ids: list[uuid.UUID] | None = None,
+    ) -> tuple[list[tuple], int]:
+        """Paginated list with search, filter, sort support."""
+        query = self._build_base_query(org_id, accessible_dv_ids)
+
+        # Search
+        query = apply_search(query, params.search, [Entity.name, Entity.case_number])
+
+        # Filters (static + dimension)
+        filter_config = self.get_filter_config()
+        filter_config.update(self.get_dimension_filter_config(org_id))
+        query = apply_filters(query, params.filters, filter_config)
+
+        # Sort
+        query = apply_sort(
+            query, params.sort_by, params.sort_order,
+            self.get_sort_config(), Entity.created_at.desc(),
+        )
+
+        # Paginate
+        return paginate(query, params.page, params.limit)
 
     def get_by_id(self, entity_id: uuid.UUID, org_id: uuid.UUID) -> Entity:
         entity = self.db.query(Entity).filter_by(id=entity_id, organization_id=org_id).first()
