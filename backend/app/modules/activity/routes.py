@@ -500,7 +500,11 @@ def get_activity_form(
             "activity_type_id": str(activity_type_id),
             "elements": list(ActivityFormService.DEFAULT_ELEMENTS),
         }
-    return ActivityFormResponse.dump_from_model(form)
+    # Ensure new default elements are present in existing forms
+    patched_elements = ActivityFormService._ensure_defaults(list(form.elements))
+    resp = ActivityFormResponse.dump_from_model(form)
+    resp["elements"] = patched_elements
+    return resp
 
 
 @form_router.put(
