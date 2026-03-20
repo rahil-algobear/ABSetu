@@ -5,12 +5,12 @@ Entity and EntityType services
 import uuid
 from datetime import datetime
 
-from sqlalchemy import exists
+from sqlalchemy import exists, or_
 from sqlalchemy.orm import Session
 
 from app.common.exceptions import NotFoundError, ValidationError
 from app.common.helpers.slugify import slugify
-from app.modules.dimension.model import EntityDimension
+from app.modules.dimension.model import DimensionValue, EntityDimension
 from app.modules.entity.model import Entity, EntityType
 from app.modules.organization.model import Organization
 
@@ -100,11 +100,35 @@ class EntityService:
             query = query.filter_by(entity_type_id=entity_type_id)
 
         if accessible_dv_ids:
-            query = query.filter(
-                exists()
-                .where(EntityDimension.entity_id == Entity.id)
-                .where(EntityDimension.dimension_value_id.in_(accessible_dv_ids))
+            # Per-dimension scoping: only filter dimensions where user has restrictions.
+            # If user has no assignments for a dimension, they see all values for it.
+            dv_dim_rows = (
+                self.db.query(DimensionValue.id, DimensionValue.dimension_id)
+                .filter(DimensionValue.id.in_(accessible_dv_ids))
+                .all()
             )
+            restricted_dims: dict[uuid.UUID, list[uuid.UUID]] = {}
+            for dv_id, dim_id in dv_dim_rows:
+                restricted_dims.setdefault(dim_id, []).append(dv_id)
+
+            for dim_id, allowed_ids in restricted_dims.items():
+                dim_values_subq = (
+                    self.db.query(DimensionValue.id)
+                    .filter(DimensionValue.dimension_id == dim_id)
+                    .subquery()
+                )
+                query = query.filter(
+                    or_(
+                        # Entity has no values from this dimension → unrestricted
+                        ~exists()
+                        .where(EntityDimension.entity_id == Entity.id)
+                        .where(EntityDimension.dimension_value_id.in_(dim_values_subq)),
+                        # Entity has at least one allowed value from this dimension
+                        exists()
+                        .where(EntityDimension.entity_id == Entity.id)
+                        .where(EntityDimension.dimension_value_id.in_(allowed_ids)),
+                    )
+                )
 
         return query.order_by(Entity.created_at.desc()).all()
 
