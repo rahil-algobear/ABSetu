@@ -123,7 +123,7 @@ class ActivityService:
                     at.id for at in
                     self.db.query(ActivityType).filter_by(organization_id=org_id).all()
                 ]
-                scope_keys = [f"activity:{at_id}" for at_id in at_ids]
+                scope_keys = ["activity"] + [f"activity:activity_type:{at_id}" for at_id in at_ids]
                 config.update(build_meta_field_sort_config(
                     self.db, org_id, scope_keys, Activity.meta, meta_sort_keys,
                 ))
@@ -188,7 +188,7 @@ class ActivityService:
                 self.db.query(ActivityType).filter_by(organization_id=org_id).all()
             ]
             filter_config.update(build_meta_field_filter_config(
-                self.db, org_id, [f"activity:{at_id}" for at_id in at_ids],
+                self.db, org_id, ["activity"] + [f"activity:activity_type:{at_id}" for at_id in at_ids],
                 Activity.meta, filterable_keys,
             ))
         query = apply_filters(query, params.filters, filter_config)

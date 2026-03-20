@@ -175,6 +175,8 @@ function NewActivityPageContent() {
 
   const activityMetaFields = useMemo((): MetaFieldDefinition[] => {
     const fields: MetaFieldDefinition[] = [];
+    // Base scope: all activities
+    fields.push(...(allMetaSchemas["activity"] || []));
     if (selectedTypeId) {
       fields.push(...(allMetaSchemas[`activity:activity_type:${selectedTypeId}`] || []));
     }

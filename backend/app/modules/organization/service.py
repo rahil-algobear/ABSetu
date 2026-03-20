@@ -187,9 +187,16 @@ class ListConfigService:
         # Dimensions (visible + filterable for activities)
         order = self._add_dimension_columns(cols, org_id, order, visible=True)
 
-        # Meta fields
+        # Meta fields (base "activity" scope + type-specific scope)
         meta_service = MetaFieldSchemaService(self.db)
-        fields = meta_service.get_schema(org_id, f"activity:{type_id}")
+        seen_keys: set[str] = set()
+        all_fields: list[dict] = []
+        for scope_key in ["activity", f"activity:activity_type:{type_id}"]:
+            for f in meta_service.get_schema(org_id, scope_key):
+                if f["key"] not in seen_keys:
+                    seen_keys.add(f["key"])
+                    all_fields.append(f)
+        fields = all_fields
         for f in fields:
             ftype = f.get("type", "text")
             cols.append(self._col(

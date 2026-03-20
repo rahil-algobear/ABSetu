@@ -316,9 +316,11 @@ export default function ActivityDetailPage() {
     return et?.name || "Participants";
   };
 
-  // Activity meta fields: activity type + dimension values + type×dimension_value combos
+  // Activity meta fields: base + activity type + dimension values + type×dimension_value combos
   const activityTypeFields = useMemo((): MetaFieldDefinition[] => {
     const fields: MetaFieldDefinition[] = [];
+    // Base scope: all activities
+    fields.push(...(allMetaSchemas["activity"] || []));
     if (activityTypeId) {
       fields.push(...(allMetaSchemas[`activity:activity_type:${activityTypeId}`] || []));
     }
