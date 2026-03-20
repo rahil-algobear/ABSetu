@@ -107,6 +107,7 @@ export default function MetaFieldsPage() {
     if (activeSection === "activity") {
       // Build: activity:activity_type:{typeId}[:dimension_value:{dvId}]
       // or: activity:dimension_value:{dvId} (all activity types)
+      // or: activity (all activities, no filters)
       if (activityTypeId && activityDvId) {
         return `activity:activity_type:${activityTypeId}:dimension_value:${activityDvId}`;
       }
@@ -116,7 +117,7 @@ export default function MetaFieldsPage() {
       if (activityDvId) {
         return `activity:dimension_value:${activityDvId}`;
       }
-      return "";
+      return "activity";
     }
 
     if (activeSection === "participant") {
@@ -154,7 +155,7 @@ export default function MetaFieldsPage() {
         setActiveKey("enrollment");
         break;
       case "activity":
-        setActivityTypeId(activityTypes[0]?.id || "");
+        setActivityTypeId("");
         setActivityDimId("");
         setActivityDvId("");
         break;
@@ -194,8 +195,6 @@ export default function MetaFieldsPage() {
         const scope: MetaFieldScope = { type: "activity" };
         if (activityTypeId) scope.activity_type_id = activityTypeId;
         if (activityDvId) scope.dimension_value_id = activityDvId;
-        // Need at least one filter
-        if (!activityTypeId && !activityDvId) return null;
         return scope;
       }
       case "participant": {
@@ -317,6 +316,66 @@ export default function MetaFieldsPage() {
       default: return "";
     }
   }, [activeSection, activeKey, entityTypesList, nonSystemDimensions, dimensions, allDimensionValues, activityTypes, activityTypeId, activityDvId, participantEntityId, participantTypeId, participantDvId]);
+
+  // Collect all configured scopes for activity/participant sections
+  const scopeSummary = useMemo(() => {
+    const dvLabel = (dvId: string) => {
+      const dv = allDimensionValues.find((d) => d.id === dvId);
+      if (!dv) return dvId;
+      const dim = dimensions.find((d) => d.id === dv.dimension_id);
+      return `${dim ? dim.name : ""}: ${dv.name}`;
+    };
+
+    const labelForKey = (key: string): string => {
+      if (key === "activity") return "All activities";
+      const parts = key.split(":");
+      if (parts[0] === "activity") {
+        const labels: string[] = [];
+        for (let i = 1; i < parts.length; i += 2) {
+          const sub = parts[i];
+          const refId = parts[i + 1];
+          if (sub === "activity_type") {
+            labels.push(activityTypes.find((at) => at.id === refId)?.name || refId);
+          } else if (sub === "dimension_value") {
+            labels.push(dvLabel(refId));
+          }
+        }
+        return labels.join(" + ") || key;
+      }
+      if (parts[0] === "participant" && parts[1] === "entity") {
+        const entityId = parts[2];
+        const entityLabel = entityId === "user"
+          ? "Users (staff)"
+          : entityTypesList.find((et) => et.id === entityId)?.name || entityId;
+        const labels: string[] = [entityLabel];
+        for (let i = 3; i < parts.length; i += 2) {
+          const sub = parts[i];
+          const refId = parts[i + 1];
+          if (sub === "activity_type") {
+            labels.push(activityTypes.find((at) => at.id === refId)?.name || refId);
+          } else if (sub === "dimension_value") {
+            labels.push(dvLabel(refId));
+          }
+        }
+        return labels.join(" + ");
+      }
+      return key;
+    };
+
+    const activityScopes: { key: string; label: string; count: number }[] = [];
+    const participantScopes: { key: string; label: string; count: number }[] = [];
+
+    for (const [key, fieldList] of Object.entries(allSchemas)) {
+      if (!fieldList?.length) continue;
+      if (key === "activity" || key.startsWith("activity:")) {
+        activityScopes.push({ key, label: labelForKey(key), count: fieldList.length });
+      } else if (key.startsWith("participant:")) {
+        participantScopes.push({ key, label: labelForKey(key), count: fieldList.length });
+      }
+    }
+
+    return { activityScopes, participantScopes };
+  }, [allSchemas, activityTypes, allDimensionValues, dimensions, entityTypesList]);
 
   // Section pills
   const sections: { key: SectionKind; label: string }[] = [
@@ -637,6 +696,89 @@ export default function MetaFieldsPage() {
             </Table>
           )}
         </>
+      )}
+
+      {/* Scope summary for activity/participant */}
+      {(activeSection === "activity" && scopeSummary.activityScopes.length > 0) && (
+        <div className="mt-6 border-t pt-4">
+          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">All configured activity field scopes</p>
+          <div className="space-y-1">
+            {scopeSummary.activityScopes.map((s) => (
+              <button
+                key={s.key}
+                onClick={() => {
+                  // Parse scope key to set the right filters
+                  const parts = s.key.split(":");
+                  let atId = "";
+                  let dvId = "";
+                  for (let i = 0; i < parts.length; i += 2) {
+                    if (parts[i] === "activity_type") atId = parts[i + 1];
+                    if (parts[i] === "dimension_value") dvId = parts[i + 1];
+                  }
+                  setActivityTypeId(atId);
+                  if (dvId) {
+                    const dv = allDimensionValues.find((d) => d.id === dvId);
+                    setActivityDimId(dv?.dimension_id || "");
+                    setActivityDvId(dvId);
+                  } else {
+                    setActivityDimId("");
+                    setActivityDvId("");
+                  }
+                }}
+                className={`flex items-center justify-between w-full px-3 py-1.5 text-sm rounded-md transition-colors ${
+                  schemaKey === s.key
+                    ? "bg-purple-50 text-purple-700 border border-purple-200"
+                    : "text-gray-600 hover:bg-gray-50 border border-transparent"
+                }`}
+              >
+                <span>{s.label}</span>
+                <span className="text-xs text-gray-400">{s.count} field{s.count !== 1 ? "s" : ""}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {(activeSection === "participant" && scopeSummary.participantScopes.length > 0) && (
+        <div className="mt-6 border-t pt-4">
+          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">All configured participant field scopes</p>
+          <div className="space-y-1">
+            {scopeSummary.participantScopes.map((s) => (
+              <button
+                key={s.key}
+                onClick={() => {
+                  // Parse: participant:entity:{entityId}[:activity_type:{atId}][:dimension_value:{dvId}]
+                  const parts = s.key.split(":");
+                  const entityId = parts[2] || "";
+                  let atId = "";
+                  let dvId = "";
+                  for (let i = 3; i < parts.length; i += 2) {
+                    if (parts[i] === "activity_type") atId = parts[i + 1];
+                    if (parts[i] === "dimension_value") dvId = parts[i + 1];
+                  }
+                  setParticipantEntityId(entityId);
+                  setParticipantTypeId(atId);
+                  if (dvId) {
+                    const dv = allDimensionValues.find((d) => d.id === dvId);
+                    setParticipantDimId(dv?.dimension_id || "");
+                    setParticipantDvId(dvId);
+                  } else {
+                    setParticipantDimId("");
+                    setParticipantDvId("");
+                  }
+                }}
+                className={`flex items-center justify-between w-full px-3 py-1.5 text-sm rounded-md transition-colors ${
+                  schemaKey === s.key
+                    ? "bg-purple-50 text-purple-700 border border-purple-200"
+                    : "text-gray-600 hover:bg-gray-50 border border-transparent"
+                }`}
+              >
+                <span>{s.label}</span>
+                <span className="text-xs text-gray-400">{s.count} field{s.count !== 1 ? "s" : ""}</span>
+              </button>
+            ))}
+          </div>
+        </div>
       )}
 
       {/* Add/Edit field modal */}
