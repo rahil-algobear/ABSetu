@@ -6,7 +6,7 @@ import { usePermissions, Can } from "./Auth/Permissions";
 import { useQuery } from "@tanstack/react-query";
 import { organizationApi, dimensionApi, entityTypeApi, activityTypeApi } from "@/services/api";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Image from "next/image";
 import { clsx } from "clsx";
 
@@ -254,7 +254,6 @@ function NavigationContent() {
   const { userProfile } = usePermissions();
   const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const router = useRouter();
   const { can } = usePermissions();
 
@@ -288,9 +287,8 @@ function NavigationContent() {
   });
 
   // Activity types as top-level nav links
-  const currentTypeKey = searchParams.get("type");
   const activityTypeLinks = activityTypes.map((at) => ({
-    href: `/activities?type=${at.key}`,
+    href: `/activities/type/${at.key}`,
     key: at.key,
     label: at.name,
     icon: CalendarDays,
@@ -438,7 +436,7 @@ function NavigationContent() {
 
                 {/* Activity types as top-level links */}
                 {activityTypeLinks.map((item) => {
-                  const active = pathname === "/activities" && currentTypeKey === item.key;
+                  const active = pathname === `/activities/type/${item.key}`;
                   return (
                     <Can key={item.href} permission={item.permission}>
                       <Link
@@ -529,7 +527,7 @@ function NavigationContent() {
             {/* Activity types as top-level links */}
             {activityTypeLinks.map((item) => {
               if (!can(item.permission)) return null;
-              const active = pathname === "/activities" && currentTypeKey === item.key;
+              const active = pathname === `/activities/type/${item.key}`;
               return (
                 <Link
                   key={item.href}

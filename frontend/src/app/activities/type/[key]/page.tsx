@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useMemo } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
   activityApi,
@@ -41,17 +41,15 @@ function pluralize(word: string): string {
   return word + "s";
 }
 
-function ActivitiesPageContent() {
+function ActivityTypeListContent() {
+  const { key: typeKey } = useParams<{ key: string }>();
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const typeKey = searchParams.get("type");
 
   const { data: activityTypes = [] } = useQuery({
     queryKey: ["activity-types"],
     queryFn: activityTypeApi.list,
   });
 
-  // Determine activity type from URL param
   const activityType = activityTypes.find((c) => c.key === typeKey);
   const selectedTypeId = activityType?.id || "";
   const typeName = activityType?.name || "Activity";
@@ -74,8 +72,10 @@ function ActivitiesPageContent() {
     }));
   }, [filterData]);
 
-  // Definitions for the filter modal (all filters available)
-  const filterDefinitions = allFilterDefs;
+  // Definitions for the filter modal (without activity_type_id — implicit from URL)
+  const filterDefinitions: FilterDefinition[] = useMemo(() => {
+    return allFilterDefs.filter((f) => f.key !== "activity_type_id");
+  }, [allFilterDefs]);
 
   // List params from URL — uses filter definitions for slug mapping
   const listParams = useListParams({
@@ -92,6 +92,7 @@ function ActivitiesPageContent() {
         ...listParams.apiParams,
         activity_type_id: selectedTypeId || undefined,
       }),
+    enabled: !!selectedTypeId,
   });
 
   const activities = response?.data || [];
@@ -164,7 +165,6 @@ function ActivitiesPageContent() {
                     {dimensionColumns.map((dc) => (
                       <TableHead key={dc.key}>{dc.name}</TableHead>
                     ))}
-                    {!activityType && <TableHead>Type</TableHead>}
                     <TableHead>Participants</TableHead>
                     <SortableTableHead
                       label="Created"
@@ -200,11 +200,6 @@ function ActivitiesPageContent() {
                           </TableCell>
                         );
                       })}
-                      {!activityType && (
-                        <TableCell className="text-gray-500">
-                          {a.activity_type_name}
-                        </TableCell>
-                      )}
                       <TableCell>{a.participant_count}</TableCell>
                       <TableCell className="text-gray-500">
                         {formatDate(a.updated_at, DATE_FORMATS.DISPLAY)}
@@ -230,10 +225,10 @@ function ActivitiesPageContent() {
   );
 }
 
-export default function ActivitiesPage() {
+export default function ActivityTypeListPage() {
   return (
     <Suspense fallback={<PageLayout><PageContent><p className="text-gray-500">Loading...</p></PageContent></PageLayout>}>
-      <ActivitiesPageContent />
+      <ActivityTypeListContent />
     </Suspense>
   );
 }

@@ -251,7 +251,7 @@ function NewActivityPageContent() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["activities"] });
       toast.success(`${typeName} created`);
-      router.push(`/activities?type=${typeKey}`);
+      router.push(`/activities/type/${typeKey}`);
     },
     onError: () => toast.error(`Failed to create ${typeName.toLowerCase()}`),
   });
@@ -490,7 +490,7 @@ function NewActivityPageContent() {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => router.push(`/activities?type=${typeKey}`)}
+                onClick={() => router.push(`/activities/type/${typeKey}`)}
               >
                 Cancel
               </Button>
