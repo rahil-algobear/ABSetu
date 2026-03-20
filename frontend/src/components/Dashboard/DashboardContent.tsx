@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/services/auth";
 import { dashboardApi } from "@/services/api";
-import { useVocabulary } from "@/hooks/useVocabulary";
 import { DashboardFilters } from "@/types";
 import { PageContent } from "@/components/ui/page-content";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,7 +26,6 @@ import { RecentActivitiesTable } from "./RecentActivitiesTable";
 
 export default function DashboardContent() {
   const { isAuthenticated } = useAuth();
-  const { v, vPlural } = useVocabulary();
   const [filters, setFilters] = useState<DashboardFilters>({});
 
   const { data: stats, isLoading } = useQuery({
@@ -62,21 +60,21 @@ export default function DashboardContent() {
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatCard
-          title={`Total ${vPlural("entity")}`}
+          title={`Total $Entities`}
           value={stats?.total_entities}
           icon={<Users className="h-5 w-5 text-blue-600" />}
           color="blue"
           loading={isLoading}
         />
         <StatCard
-          title={`${hasFilters ? "Filtered" : "Total"} ${vPlural("activity")}`}
+          title={`${hasFilters ? "Filtered" : "Total"} $Activities`}
           value={stats?.total_activities}
           icon={<Activity className="h-5 w-5 text-emerald-600" />}
           color="emerald"
           loading={isLoading}
         />
         <StatCard
-          title={`Active ${vPlural("enrollment")}`}
+          title={`Active $Enrollments`}
           value={stats?.active_enrollments}
           subtitle={stats ? `${stats.total_enrollments} total` : undefined}
           icon={<UserCheck className="h-5 w-5 text-violet-600" />}
@@ -99,7 +97,7 @@ export default function DashboardContent() {
             <CardHeader>
               <CardTitle className="text-base font-semibold flex items-center gap-2">
                 <TrendingUp className="h-4 w-4 text-gray-500" />
-                {vPlural("activity")} Over Time
+                Activities Over Time
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -118,7 +116,7 @@ export default function DashboardContent() {
             <CardHeader>
               <CardTitle className="text-base font-semibold flex items-center gap-2">
                 <UserCheck className="h-4 w-4 text-gray-500" />
-                {v("enrollment")} Status
+                Enrollment Status
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -144,7 +142,7 @@ export default function DashboardContent() {
           <CardHeader>
             <CardTitle className="text-base font-semibold flex items-center gap-2">
               <BarChart3 className="h-4 w-4 text-gray-500" />
-              {vPlural("activity")} by {v("activity_type")}
+              Activities by Activity Type
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -171,7 +169,7 @@ export default function DashboardContent() {
               <CardHeader>
                 <CardTitle className="text-base font-semibold flex items-center gap-2">
                   <Layers className="h-4 w-4 text-gray-500" />
-                  {vPlural("activity")} by {dimName}
+                  Activities by {dimName}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -196,7 +194,7 @@ export default function DashboardContent() {
           <CardHeader>
             <CardTitle className="text-base font-semibold flex items-center gap-2">
               <Users className="h-4 w-4 text-gray-500" />
-              {vPlural("entity")} by Type
+              Entities by Type
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -212,7 +210,7 @@ export default function DashboardContent() {
             <CardHeader>
               <CardTitle className="text-base font-semibold flex items-center gap-2">
                 <TrendingUp className="h-4 w-4 text-gray-500" />
-                {vPlural("enrollment")} Over Time
+                Enrollments Over Time
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -230,7 +228,7 @@ export default function DashboardContent() {
         <CardHeader>
           <CardTitle className="text-base font-semibold flex items-center gap-2">
             <Activity className="h-4 w-4 text-gray-500" />
-            Recent {vPlural("activity")}
+            Recent Activities
             {hasFilters && (
               <span className="text-xs font-normal text-gray-400 ml-1">
                 (filtered)

@@ -2,7 +2,6 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/services/auth";
-import { useVocabulary } from "@/hooks/useVocabulary";
 import {
   dimensionApi,
   activityTypeApi,
@@ -25,7 +24,6 @@ export function DashboardFiltersBar({
   onChange,
 }: DashboardFiltersProps) {
   const { isAuthenticated } = useAuth();
-  const { v, vPlural, vDim } = useVocabulary();
 
   // --- Load filter options ---
   const { data: dimensions } = useQuery({
@@ -74,7 +72,7 @@ export function DashboardFiltersBar({
       <div className="flex items-center gap-2 mb-3">
         <Filter className="h-4 w-4 text-gray-500" />
         <span className="text-sm font-medium text-gray-700">
-          Filter {vPlural("activity")}
+          Filter Activities
         </span>
         {hasFilters && (
           <button
@@ -90,7 +88,7 @@ export function DashboardFiltersBar({
       <div className="flex flex-wrap gap-2">
         {/* Activity Type */}
         <FilterSelect
-          label={v("activity_type")}
+          label="Activity Type"
           value={filters.activity_type_id || ""}
           options={(allTypes ?? []).map((t) => ({
             value: t.id,
@@ -111,7 +109,7 @@ export function DashboardFiltersBar({
               selectedValueIds={filters.dimension_value_ids ?? []}
               isExpanded={expandedDimId === dim.id}
               values={expandedDimId === dim.id ? dimValues ?? [] : []}
-              displayName={vDim(dim)}
+              displayName={dim.name}
               onToggleExpand={() =>
                 setExpandedDimId(expandedDimId === dim.id ? null : dim.id)
               }
