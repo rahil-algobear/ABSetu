@@ -55,10 +55,12 @@ class DashboardService:
                 or_(
                     ~exists()
                     .where(ActivityDimension.activity_id == Activity.id)
-                    .where(ActivityDimension.dimension_value_id.in_(dim_values_subq)),
+                    .where(ActivityDimension.dimension_value_id.in_(dim_values_subq))
+                    .correlate(Activity),
                     exists()
                     .where(ActivityDimension.activity_id == Activity.id)
-                    .where(ActivityDimension.dimension_value_id.in_(allowed_ids)),
+                    .where(ActivityDimension.dimension_value_id.in_(allowed_ids))
+                    .correlate(Activity),
                 )
             )
         return query
@@ -79,10 +81,12 @@ class DashboardService:
                 or_(
                     ~exists()
                     .where(EntityDimension.entity_id == Entity.id)
-                    .where(EntityDimension.dimension_value_id.in_(dim_values_subq)),
+                    .where(EntityDimension.dimension_value_id.in_(dim_values_subq))
+                    .correlate(Entity),
                     exists()
                     .where(EntityDimension.entity_id == Entity.id)
-                    .where(EntityDimension.dimension_value_id.in_(allowed_ids)),
+                    .where(EntityDimension.dimension_value_id.in_(allowed_ids))
+                    .correlate(Entity),
                 )
             )
         return query
@@ -110,14 +114,18 @@ class DashboardService:
                 or_(
                     ~exists()
                     .where(EntityDimension.entity_id == Entity.id)
-                    .where(EntityDimension.dimension_value_id.in_(dim_values_subq)),
+                    .where(EntityDimension.dimension_value_id.in_(dim_values_subq))
+                    .correlate(Entity),
                     exists()
                     .where(EntityDimension.entity_id == Entity.id)
-                    .where(EntityDimension.dimension_value_id.in_(allowed_ids)),
+                    .where(EntityDimension.dimension_value_id.in_(allowed_ids))
+                    .correlate(Entity),
                 )
             )
         query = query.filter(
-            Enrollment.entity_id.in_(accessible_entities_q.subquery())
+            Enrollment.entity_id.in_(
+                accessible_entities_q.correlate(None).subquery()
+            )
         )
         return query
 
