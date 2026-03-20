@@ -1,144 +1,109 @@
-# V2 Implementation Plan
+# Plan: Simplify MetaFieldSchema — Typed FK Columns
 
-## Scope
+## Goal
+Replace `scope_key` (string) with typed FK columns + `scope_type` enum. The service layer abstracts the DB format — frontend and other backend consumers keep using structured `MetaFieldScope` objects and `{scope_key: fields}` dicts.
 
-Implement the V2 architecture changes: Entity/EntityType, Activity Categories, Activity Participants, updated Enrollments, Form Fields rename, and all supporting backend + frontend changes.
+## Current State
+- `meta_field_schemas` table has: `organization_id`, `scope_key` (string), `fields` (JSONB)
+- `scope_key` encodes scope as colon-separated strings like `"entity:{uuid}"`, `"activity:activity_type:{uuid}:dimension_value:{uuid}"`
+- Routes build/parse scope_key strings with ~200 lines of validation code
+- Consumers (activity/routes.py, entity/routes.py) use `get_all_schemas()` which returns `{scope_key: fields}`
+- Frontend sends `MetaFieldScope` objects; receives `{scope_key: fields}` dicts
 
-## Phase 1: Backend — Database & Models
+## New DB Schema
 
-### 1.1 New Models + Migration
+```python
+class MetaFieldSchema(BaseModel):
+    __tablename__ = "meta_field_schemas"
 
-Create a single Alembic migration that:
+    organization_id    = Column(UUID, FK("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    scope_type         = Column(String, nullable=False)  # "entity", "dimension", "enrollment", "activity", "participant"
+    entity_type_id     = Column(UUID, FK("entity_types.id", ondelete="CASCADE"), nullable=True)
+    activity_type_id   = Column(UUID, FK("activity_types.id", ondelete="CASCADE"), nullable=True)
+    dimension_id       = Column(UUID, FK("dimensions.id", ondelete="CASCADE"), nullable=True)
+    dimension_value_id = Column(UUID, FK("dimension_values.id", ondelete="CASCADE"), nullable=True)
+    fields             = Column(JSONB, nullable=False, default=list)
 
-**New tables:**
-- `entity_types` — org-defined person categories (name, key, config JSONB, sort_order)
-- `entities` — all tracked people (entity_type_id FK, case_number, name, meta)
-- `entity_tags` — links entities to dimension_values
-- `activity_categories` — form builder config (name, key, sections JSONB, sort_order)
-- `activity_participants` — polymorphic (participant_type, participant_id, section_key, status, meta)
+    # CHECK constraints prevent invalid combos
+    # Unique constraint on (org_id, scope_type, coalesce(entity_type_id), coalesce(activity_type_id), coalesce(dimension_id), coalesce(dimension_value_id))
+```
 
-**Modified tables:**
-- `activity_types` — add `category_id` FK to activity_categories
-- `enrollments` — change `beneficiary_id` to `entity_id`
+### Valid scope_type + FK combinations
 
-**Data migration within the same Alembic migration:**
-- Migrate `beneficiaries` → `entities` (create "Beneficiary" entity_type first)
-- Migrate `facilitators` → `entities` (create "Facilitator" entity_type first)
-- Migrate `beneficiary_tags` → `entity_tags`
-- Migrate `participations` → `activity_participants` (participant_type="entity", section_key="entity_type:beneficiary")
-- Migrate `activity_facilitators` → `activity_participants` (participant_type="entity", section_key="entity_type:facilitator")
-- Create default "Sessions" activity_category, link all existing activity_types to it
+| scope_type    | entity_type_id | activity_type_id | dimension_id | dimension_value_id |
+|---------------|----------------|------------------|--------------|--------------------|
+| entity        | required       | —                | —            | —                  |
+| dimension     | —              | —                | required     | —                  |
+| enrollment    | —              | —                | —            | —                  |
+| activity      | —              | optional         | —            | optional           |
+| participant   | required*      | optional         | —            | optional           |
 
-**Drop old tables:**
-- `beneficiaries`, `facilitators`, `activity_facilitators`, `participations`, `beneficiary_tags`
+*participant entity_type_id can be a special sentinel UUID for "user" type
 
-### 1.2 Update SQLAlchemy Models
+### Sentinel for "user" participant type
+Instead of magic string "user" in scope_key, use a well-known sentinel UUID constant (`USER_PARTICIPANT_SENTINEL = UUID("00000000-0000-0000-0000-000000000000")`). The service layer translates "user" ↔ sentinel transparently.
 
-- **New module:** `app/modules/entity/` with model.py, schemas.py, service.py, routes.py
-  - EntityType model + CRUD
-  - Entity model + CRUD (replaces Beneficiary + Facilitator)
-  - EntityTag model
-- **Update:** `app/modules/activity/model.py`
-  - Add ActivityCategory model
-  - Add ActivityParticipant model (replaces Participation + ActivityFacilitator)
-  - Add category_id to ActivityType
-  - Remove Facilitator, ActivityFacilitator, Participation models
-- **Update:** `app/modules/beneficiary/` → remove module entirely (replaced by entity module)
-- **Update:** `app/modules/dimension/model.py` — remove BeneficiaryTag, replace with EntityTag import or move EntityTag here
+## Changes
 
-### 1.3 Update Schemas
+### Step 1: Model (`backend/app/modules/organization/model.py`)
+- Remove `scope_key` column
+- Add `scope_type`, `entity_type_id`, `activity_type_id`, `dimension_id`, `dimension_value_id` columns with FKs
+- Add CHECK constraint ensuring correct FK combos per scope_type
+- Add unique constraint on (org_id, scope_type, entity_type_id, activity_type_id, dimension_id, dimension_value_id) using COALESCE for null-safe uniqueness
+- Add relationships to EntityType, ActivityType, Dimension, DimensionValue
 
-- **New:** EntityType schemas (Create, Update, Response)
-- **New:** Entity schemas (Create, Update, Response) — includes entity_type info
-- **New:** ActivityCategory schemas (Create, Update, Response) — sections config validation
-- **New:** ActivityParticipant schemas (replaces ParticipationRecord/Response)
-- **Update:** ActivityType schemas — add category_id
-- **Update:** Enrollment schemas — entity_id instead of beneficiary_id
+### Step 2: Service (`backend/app/modules/organization/service.py`)
+The service is the **only** interface to the DB. It handles all translation.
 
-### 1.4 Update Services
+Key methods (public API signatures unchanged for backward compat):
 
-- **New:** EntityTypeService, EntityService (absorbs BeneficiaryService + FacilitatorService logic)
-- **New:** ActivityCategoryService
-- **Update:** ActivityService — use ActivityParticipant instead of Participation
-- **Update:** ParticipationService → ActivityParticipantService
-- **Remove:** BeneficiaryService, FacilitatorService (logic moves to EntityService)
+- `get_schema(org_id, scope_key: str) -> list[dict]` — parses scope_key → FK query
+- `get_all_schemas(org_id) -> dict[str, list[dict]]` — returns {scope_key: fields}, consumers see no change
+- `update_schema(org_id, scope_key: str, fields) -> list[dict]` — parses scope_key → FK columns for storage
 
-### 1.5 Update Routes
+New structured versions:
+- `get_schema_by_scope(org_id, scope: MetaFieldScope) -> list[dict]` — direct query, no string parsing
+- `update_schema_by_scope(org_id, scope: MetaFieldScope, fields) -> list[dict]` — direct write, no string building
 
-- **New:** `/api/entity-types` — CRUD (permissions: entity_type:view, entity_type:manage)
-- **New:** `/api/entities` — CRUD (permissions: entity:view, entity:create, entity:edit, entity:manage)
-- **New:** `/api/activity-categories` — CRUD (permissions: activity_type:manage — categories are part of activity type config)
-- **Update:** `/api/activities/{id}/participants` — replaces /participations endpoint
-- **Update:** `/api/enrollments` — use entity_id
-- **Remove:** `/api/beneficiaries`, `/api/facilitators` routes (replaced by /api/entities)
+Internal helpers:
+- `_parse_scope_key(scope_key: str) -> dict` — parse scope_key string → {scope_type, entity_type_id, ...}
+- `_row_to_scope_key(row) -> str` — build scope_key string from row FK columns
+- `_scope_to_filters(scope: MetaFieldScope) -> dict` — MetaFieldScope → query filter dict
 
-### 1.6 Update Permissions
+### Step 3: Routes (`backend/app/modules/organization/routes.py`)
+- **Delete** `_validate_entity_type()` entirely (~130 lines) — FK constraints handle validation
+- **Simplify** `_resolve_scope_key()` → just validate scope_type is known + required fields present, then call service directly with MetaFieldScope
+- Route handlers become thin wrappers
 
-Update `app/seeds/initial.py`:
-- Remove: `beneficiary:view`, `beneficiary:create`, `beneficiary:edit`, `facilitator:view`, `facilitator:manage`
-- Add: `entity:view`, `entity:create`, `entity:edit`, `entity:manage`, `entity_type:view`, `entity_type:manage`
+### Step 4: Migration
+Create migration that:
+1. Adds new columns (scope_type, entity_type_id, activity_type_id, dimension_id, dimension_value_id)
+2. Parses existing scope_key values and populates new columns (handle "user" → sentinel)
+3. Adds CHECK constraint and unique constraint
+4. Drops scope_key column and old unique constraint
 
-### 1.7 Update Seeds
+### Step 5: Seed file (`backend/app/seeds/kshamata.py`)
+- Update to use new columns directly instead of scope_key strings
 
-- **initial.py:** Update permission keys, default role assignments
-- **kshamata.py:** Create entity_types (Beneficiary, Facilitator), activity_category (Sessions with sections config), migrate dimension references
+### Step 6: Frontend — NO changes needed
+- Frontend sends `MetaFieldScope` objects (unchanged)
+- Frontend receives `{scope_key: fields}` dicts (unchanged — service builds these)
+- scope_key strings are opaque to the frontend; it only uses them as dict keys
 
-## Phase 2: Frontend
+## Files Changed
+1. `backend/app/modules/organization/model.py` — new columns, constraints
+2. `backend/app/modules/organization/service.py` — translation logic (the core of this change)
+3. `backend/app/modules/organization/routes.py` — massive simplification
+4. `backend/app/modules/organization/schemas.py` — no change (MetaFieldScope stays as-is)
+5. `backend/migrations/versions/...` — data migration
+6. `backend/app/seeds/kshamata.py` — use new columns
+7. `backend/app/modules/activity/routes.py` — **no change** (uses get_all_schemas which still returns scope_key dict)
+8. `backend/app/modules/entity/routes.py` — **no change** (uses get_schema)
+9. Frontend — **no change**
 
-### 2.1 Types
-
-Update `src/types/index.ts`:
-- Add: EntityType, Entity, ActivityCategory, ActivityParticipant
-- Remove: Beneficiary, Facilitator types
-- Update: Enrollment (entity_id), Activity (participants)
-
-### 2.2 API Services
-
-Update `src/services/api.ts`:
-- Add: entityTypeApi, entityApi, activityCategoryApi
-- Replace: beneficiaryApi → entityApi, facilitatorApi → entityApi
-- Update: activityApi.getParticipations → getParticipants, markParticipations → markParticipants
-- Update: enrollmentApi — entity_id instead of beneficiary_id
-
-### 2.3 Pages — Entity Management
-
-- `/beneficiaries` → `/entities` (or keep URL, update to use entity API)
-- `/beneficiaries/[id]` → `/entities/[id]` (entity detail with enrollments)
-- `/admin/beneficiaries` → remove (replaced by entity type tabs)
-- `/admin/facilitators` → remove (replaced by entity type tabs)
-- New: `/admin/entities/[entityTypeKey]` — generic entity list page per type
-- New: `/admin/entity-types` — entity type CRUD
-
-### 2.4 Pages — Activity Categories
-
-- New: `/admin/activity-categories` — CRUD with sections builder UI
-- Update: `/admin/activity-types` — add category_id selector
-
-### 2.5 Pages — Activities
-
-- Update: `/activities/page.tsx` — activity creation form uses category sections
-- Update: `/activities/[id]/page.tsx` — show participants grouped by section, use ActivityParticipant
-
-### 2.6 Pages — Admin Layout
-
-- Update: `/admin/layout.tsx` — dynamic tabs for entity types, add Activity Categories tab
-
-### 2.7 Meta Fields → Form Fields
-
-- Rename: `/admin/meta-fields` → `/admin/form-fields`
-- Update entity type selector to include participant:{category_key} and activity:{category_key}
-- Update Navigation references
-
-### 2.8 Permissions
-
-- Update all `<Can>` and `can()` checks from beneficiary/facilitator permissions to entity permissions
-
-## Execution Order
-
-1. Backend models + migration (1.1 - 1.2)
-2. Backend schemas + services + routes (1.3 - 1.5)
-3. Backend permissions + seeds (1.6 - 1.7)
-4. Frontend types + API (2.1 - 2.2)
-5. Frontend pages (2.3 - 2.8)
-
-Each step builds on the previous. Backend first so frontend has APIs to work with.
+## What this buys us
+- **FK cascade deletes:** Delete an entity type → its meta schemas auto-delete
+- **Referential integrity:** Can't create a meta schema pointing to a nonexistent activity type
+- **~130 lines of validation code deleted** from routes.py
+- **Service encapsulates DB format:** Everything else speaks scope_key strings or MetaFieldScope objects
+- **Clean JOINs** possible for future queries ("which entity types have meta schemas?")
