@@ -364,13 +364,10 @@ export default function ActivityDetailPage() {
           <CardTitle className="text-base">Details</CardTitle>
           {!editingDetails && (
             <Can permission="activity:create">
-              <button
-                onClick={openDetailEditing}
-                className="text-gray-400 hover:text-purple-600 p-1"
-                title="Edit details"
-              >
-                <Pencil className="h-4 w-4" />
-              </button>
+              <Button size="sm" variant="outline" onClick={openDetailEditing}>
+                <Pencil className="h-3.5 w-3.5 mr-1" />
+                Edit
+              </Button>
             </Can>
           )}
         </CardHeader>
