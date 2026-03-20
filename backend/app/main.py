@@ -126,6 +126,7 @@ async def sqlalchemy_integrity_error_handler(request: Request, exc: exc.Integrit
 @app.exception_handler(exc.SQLAlchemyError)
 async def sqlalchemy_error_handler(request: Request, exc: exc.SQLAlchemyError):
     """Handle all other SQLAlchemy errors"""
+    logger.exception("SQLAlchemy error on %s %s", request.method, request.url.path)
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
