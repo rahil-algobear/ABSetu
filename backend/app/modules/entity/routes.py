@@ -7,12 +7,12 @@ import uuid
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.core.database import get_db
 from app.common.dependencies import (
     get_accessible_dimension_value_ids,
     get_current_user,
     require_permissions,
 )
+from app.core.database import get_db
 from app.modules.auth.model import User
 from app.modules.entity.schemas import (
     DimensionInfo,
@@ -141,6 +141,14 @@ def delete_entity_type(
 # --- Entities ---
 
 
+def _check_entity_access(db, entity, accessible_dv_ids):
+    """Check the current user has dimension access to this entity."""
+    from app.modules.dimension.service import UserDimensionAccessService
+
+    record_dv_ids = [d.dimension_value_id for d in entity.dimensions or []]
+    UserDimensionAccessService(db).check_record_access(accessible_dv_ids, record_dv_ids)
+
+
 @entity_router.get("/", dependencies=[Depends(require_permissions("entity:view"))])
 def list_entities(
     entity_type_id: uuid.UUID | None = Query(None),
@@ -164,10 +172,12 @@ def list_entities(
 def get_entity(
     entity_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
+    accessible_dv_ids: list[uuid.UUID] | None = Depends(get_accessible_dimension_value_ids),
     db: Session = Depends(get_db),
 ):
     service = EntityService(db)
     entity = service.get_by_id(entity_id, current_user.organization_id)
+    _check_entity_access(db, entity, accessible_dv_ids)
     return _build_entity_response(entity)
 
 
@@ -206,9 +216,12 @@ def update_entity(
     entity_id: uuid.UUID,
     data: EntityUpdate,
     current_user: User = Depends(get_current_user),
+    accessible_dv_ids: list[uuid.UUID] | None = Depends(get_accessible_dimension_value_ids),
     db: Session = Depends(get_db),
 ):
     service = EntityService(db)
+    entity = service.get_by_id(entity_id, current_user.organization_id)
+    _check_entity_access(db, entity, accessible_dv_ids)
     entity = service.update(
         entity_id,
         current_user.organization_id,
