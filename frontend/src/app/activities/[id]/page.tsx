@@ -32,6 +32,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Trash2, Pencil, Calendar, FileText, Users, Type } from "lucide-react";
 import toast from "react-hot-toast";
 import { formatDate } from "@/utils/date";
+import { DateInput } from "@/components/ui/date-input";
 
 export default function ActivityDetailPage() {
   const params = useParams();
@@ -405,8 +406,7 @@ export default function ActivityDetailPage() {
                           <label className="text-sm font-medium">
                             Start Date{el.required && <span className="text-red-500 ml-0.5">*</span>}
                           </label>
-                          <Input
-                            type="date"
+                          <DateInput
                             value={detailFormData.start_date}
                             onChange={(e) => setDetailFormData({ ...detailFormData, start_date: e.target.value })}
                             required={el.required}
@@ -417,8 +417,7 @@ export default function ActivityDetailPage() {
                           <label className="text-sm font-medium">
                             End Date
                           </label>
-                          <Input
-                            type="date"
+                          <DateInput
                             value={detailFormData.end_date}
                             onChange={(e) => setDetailFormData({ ...detailFormData, end_date: e.target.value })}
                             min={detailFormData.start_date}

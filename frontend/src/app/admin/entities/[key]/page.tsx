@@ -30,6 +30,7 @@ import {
 import { Plus, Pencil } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
+import { formatDate, DATE_FORMATS } from "@/utils/date";
 
 function EntityTypeEntitiesContent() {
   const { key: entityTypeKey } = useParams<{ key: string }>();
@@ -277,9 +278,7 @@ function EntityTypeEntitiesContent() {
                   <TableCell>{e.enrollment_count}</TableCell>
                   <TableCell>{e.activity_count}</TableCell>
                   <TableCell className="text-gray-500">
-                    {e.updated_at
-                      ? new Date(e.updated_at * 1000).toLocaleDateString()
-                      : "—"}
+                    {formatDate(e.updated_at, DATE_FORMATS.DISPLAY)}
                   </TableCell>
                   <TableCell>
                     <Can permission="entity:edit">
