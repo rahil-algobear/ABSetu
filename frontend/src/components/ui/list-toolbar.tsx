@@ -61,7 +61,7 @@ export function ListToolbar({
   const [showFilterModal, setShowFilterModal] = useState(false);
 
   return (
-    <div className="bg-white shadow-sm border border-gray-100 rounded-lg px-4 py-3 mb-4">
+    <div className="px-0 py-3 mb-4">
       {/* Desktop: single row — search (fixed) | filter button | chips (scrollable) */}
       <div className="hidden lg:flex flex-row w-full gap-3 items-center">
         <div className="flex-shrink-0 w-64 relative">

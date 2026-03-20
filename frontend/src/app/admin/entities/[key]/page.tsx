@@ -218,7 +218,8 @@ function EntityTypeEntitiesContent() {
         <p className="text-gray-500 text-sm">No {typeName.toLowerCase()} found.</p>
       ) : (
         <>
-          <Table>
+          <div className="bg-white shadow-sm border rounded-lg overflow-hidden">
+          <Table stickyRows={1} className="h-[calc(100vh-400px)] lg:h-[calc(100vh-300px)]">
             <TableHeader>
               <TableRow>
                 <SortableTableHead
@@ -307,7 +308,6 @@ function EntityTypeEntitiesContent() {
               ))}
             </TableBody>
           </Table>
-
           <Pagination
             currentPage={listParams.page}
             totalPages={totalPages}
@@ -317,6 +317,7 @@ function EntityTypeEntitiesContent() {
             onItemsPerPageChange={listParams.setLimit}
             itemLabel={typeName.toLowerCase()}
           />
+          </div>
         </>
       )}
 
