@@ -142,6 +142,9 @@ class ListConfigService:
             cols.append(self._col("static", "case_number", "Case No.", order, sortable=True))
             order += 1
 
+        # Dimensions (hidden by default, but filterable)
+        order = self._add_dimension_columns(cols, org_id, order)
+
         # Meta fields
         meta_service = MetaFieldSchemaService(self.db)
         fields = meta_service.get_schema(org_id, f"entity:{type_id}")
@@ -184,6 +187,9 @@ class ListConfigService:
         cols.append(self._col("static", "title", "Title", order, sortable=True))
         order += 1
 
+        # Dimensions (visible + filterable for activities)
+        order = self._add_dimension_columns(cols, org_id, order, visible=True)
+
         # Meta fields
         meta_service = MetaFieldSchemaService(self.db)
         fields = meta_service.get_schema(org_id, f"activity:{type_id}")
@@ -202,6 +208,35 @@ class ListConfigService:
         cols.append(self._col("static", "created_at", "Created", order, sortable=True))
 
         return cols
+
+    def _add_dimension_columns(
+        self, cols: list[dict], org_id: uuid.UUID, order: int,
+        visible: bool = False,
+    ) -> int:
+        """Add dimension columns — filterable=True, sortable=False.
+
+        Dimensions need to be in the list config so their keys appear in
+        filterable_keys (used by build_dimension_filters).
+        Each column stores ``dimension_key`` (slug) so the frontend can
+        match against DimensionInfo.dimension_key for rendering.
+        """
+        from app.modules.dimension.model import Dimension
+
+        dims = (
+            self.db.query(Dimension)
+            .filter_by(organization_id=org_id)
+            .order_by(Dimension.sort_order)
+            .all()
+        )
+        for dim in dims:
+            col = self._col(
+                "dimension", f"dim:{dim.id}", dim.name, order,
+                visible=visible, filterable=True, sortable=False,
+            )
+            col["dimension_key"] = dim.key
+            cols.append(col)
+            order += 1
+        return order
 
     @staticmethod
     def _col(

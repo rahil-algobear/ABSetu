@@ -229,6 +229,7 @@ export interface ListColumnConfig {
   sortable: boolean;
   sort_order: number;
   meta_type?: MetaFieldType;
+  dimension_key?: string;
 }
 
 // --- Roles & Permissions ---
