@@ -78,7 +78,7 @@ export function TableBody({ children, className = "" }: TableBodyProps) {
 export function TableRow({ children, className = "", onClick }: TableRowProps) {
   return (
     <tr
-      className={`hover:bg-gray-50 transition-colors border-b border-gray-200 ${onClick ? 'cursor-pointer' : ''} ${className}`}
+      className={`hover:bg-gray-50 transition-colors ${onClick ? 'cursor-pointer' : ''} ${className}`}
       onClick={onClick}
     >
       {children}
