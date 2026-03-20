@@ -308,8 +308,6 @@ function EntityTypeEntitiesContent() {
               ))}
             </TableBody>
           </Table>
-          </div>
-
           <Pagination
             currentPage={listParams.page}
             totalPages={totalPages}
@@ -319,6 +317,7 @@ function EntityTypeEntitiesContent() {
             onItemsPerPageChange={listParams.setLimit}
             itemLabel={typeName.toLowerCase()}
           />
+          </div>
         </>
       )}
 
