@@ -142,9 +142,6 @@ class ListConfigService:
             cols.append(self._col("static", "case_number", "Case No.", order, sortable=True))
             order += 1
 
-        # Dimensions
-        order = self._add_dimension_columns(org_id, cols, order)
-
         # Meta fields
         meta_service = MetaFieldSchemaService(self.db)
         fields = meta_service.get_schema(org_id, f"entity:{type_id}")

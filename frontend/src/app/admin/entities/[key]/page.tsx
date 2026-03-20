@@ -124,11 +124,6 @@ function EntityTypeEntitiesContent() {
           return "—";
       }
     }
-    if (col.source === "dimension") {
-      // col.key is "dim:{id}" — match by dimension name via entity.dimensions
-      const dim = entity.dimensions.find((d) => `dim:${d.value_id}` === col.key || col.label === d.dimension_name);
-      return dim ? dim.value_name : "—";
-    }
     if (col.source === "meta") {
       // col.key is "meta:{field_key}"
       const metaKey = col.key.replace(/^meta:/, "");
