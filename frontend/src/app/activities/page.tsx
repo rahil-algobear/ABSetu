@@ -30,6 +30,17 @@ import { Plus } from "lucide-react";
 import Link from "next/link";
 import { formatDate, DATE_FORMATS } from "@/utils/date";
 
+/** Simple English pluralizer for display names */
+function pluralize(word: string): string {
+  if (word.endsWith("y") && !/[aeiou]y$/i.test(word)) {
+    return word.slice(0, -1) + "ies";
+  }
+  if (word.endsWith("s") || word.endsWith("x") || word.endsWith("z") || word.endsWith("sh") || word.endsWith("ch")) {
+    return word + "es";
+  }
+  return word + "s";
+}
+
 function ActivitiesPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -63,10 +74,8 @@ function ActivitiesPageContent() {
     }));
   }, [filterData]);
 
-  // Definitions for the filter modal (without activity_type_id — implicit from URL)
-  const filterDefinitions: FilterDefinition[] = useMemo(() => {
-    return allFilterDefs.filter((f) => f.key !== "activity_type_id");
-  }, [allFilterDefs]);
+  // Definitions for the filter modal (all filters available)
+  const filterDefinitions = allFilterDefs;
 
   // List params from URL — uses filter definitions for slug mapping
   const listParams = useListParams({
@@ -111,7 +120,7 @@ function ActivitiesPageContent() {
   return (
     <PageLayout>
       <PageHeader
-        title={`${typeName}s`}
+        title={pluralize(typeName)}
         actions={
           <Can permission="activity:create">
             <Button size="sm" onClick={() => router.push(`/activities/new?type=${typeKey}`)}>
@@ -130,13 +139,13 @@ function ActivitiesPageContent() {
           activeFilters={listParams.activeFilters}
           onFiltersChange={listParams.setActiveFilters}
           onRemoveFilter={listParams.removeFilter}
-          searchPlaceholder={`Search ${typeName.toLowerCase()}s...`}
+          searchPlaceholder={`Search ${pluralize(typeName).toLowerCase()}...`}
         />
 
         {isLoading ? (
           <p className="text-gray-500 text-sm">Loading...</p>
         ) : activities.length === 0 ? (
-          <p className="text-gray-500 text-sm">No {typeName.toLowerCase()}s found.</p>
+          <p className="text-gray-500 text-sm">No {pluralize(typeName).toLowerCase()} found.</p>
         ) : (
           <>
             <div className="bg-white shadow-sm border rounded-lg overflow-hidden">
@@ -211,7 +220,7 @@ function ActivitiesPageContent() {
                 itemsPerPage={listParams.limit}
                 onPageChange={listParams.setPage}
                 onItemsPerPageChange={listParams.setLimit}
-                itemLabel={`${typeName.toLowerCase()}s`}
+                itemLabel={pluralize(typeName).toLowerCase()}
               />
             </div>
           </>
