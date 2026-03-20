@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { dimensionApi } from "@/services/api";
 import { Dimension } from "@/types";
-import { Can } from "@/components/Auth/Permissions";
+import { Can, usePermissions } from "@/components/Auth/Permissions";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +24,8 @@ import { Plus, Pencil, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
 
 export default function ManageDimensionsPage() {
+  const { can } = usePermissions();
+  const canManage = can("dimension:manage");
   const queryClient = useQueryClient();
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Dimension | null>(null);
@@ -118,7 +120,7 @@ export default function ManageDimensionsPage() {
             <TableRow>
               <TableHead>Name</TableHead>
               <TableHead>Values</TableHead>
-              <TableHead className="w-20 text-center">Actions</TableHead>
+              {canManage && <TableHead className="w-20 text-center">Actions</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -126,6 +128,7 @@ export default function ManageDimensionsPage() {
               <DimensionRow
                 key={dim.id}
                 dimension={dim}
+                showActions={canManage}
                 onEdit={() => openEdit(dim)}
                 onDelete={() => {
                   if (confirm(`Delete dimension "${dim.name}"? This will remove all its values and linked data.`))
@@ -170,10 +173,12 @@ export default function ManageDimensionsPage() {
 /** Row component that fetches the value count for a dimension */
 function DimensionRow({
   dimension,
+  showActions,
   onEdit,
   onDelete,
 }: {
   dimension: Dimension;
+  showActions: boolean;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -187,8 +192,8 @@ function DimensionRow({
     <TableRow>
       <TableCell className="font-medium">{dimension.name}</TableCell>
       <TableCell className="text-gray-500">{values.length}</TableCell>
-      <TableCell>
-        <Can permission="dimension:manage">
+      {showActions && (
+        <TableCell>
           <div className="flex items-center justify-center gap-2">
             <button onClick={onEdit} className="text-gray-400 hover:text-purple-600">
               <Pencil className="h-4 w-4" />
@@ -197,8 +202,8 @@ function DimensionRow({
               <Trash2 className="h-4 w-4" />
             </button>
           </div>
-        </Can>
-      </TableCell>
+        </TableCell>
+      )}
     </TableRow>
   );
 }
