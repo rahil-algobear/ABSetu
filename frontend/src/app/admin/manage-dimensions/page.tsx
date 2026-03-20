@@ -118,7 +118,7 @@ export default function ManageDimensionsPage() {
             <TableRow>
               <TableHead>Name</TableHead>
               <TableHead>Values</TableHead>
-              <TableHead className="w-20">Actions</TableHead>
+              <TableHead className="w-20 text-center">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -189,7 +189,7 @@ function DimensionRow({
       <TableCell className="text-gray-500">{values.length}</TableCell>
       <TableCell>
         <Can permission="dimension:manage">
-          <div className="flex gap-1">
+          <div className="flex items-center justify-center gap-2">
             <button onClick={onEdit} className="text-gray-400 hover:text-purple-600">
               <Pencil className="h-4 w-4" />
             </button>

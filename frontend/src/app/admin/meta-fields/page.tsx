@@ -793,7 +793,7 @@ export default function MetaFieldsPage() {
                   <TableHead>Required</TableHead>
                   <TableHead>Default</TableHead>
                   <TableHead>Options</TableHead>
-                  <TableHead className="w-20">Actions</TableHead>
+                  <TableHead className="w-20 text-center">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -820,7 +820,7 @@ export default function MetaFieldsPage() {
                       {field.options?.length ? field.options.join(", ") : "\u2014"}
                     </TableCell>
                     <TableCell>
-                      <div className="flex gap-1">
+                      <div className="flex items-center justify-center gap-2">
                         <button onClick={() => openEdit(index)} className="text-gray-400 hover:text-purple-600">
                           <Pencil className="h-4 w-4" />
                         </button>
@@ -887,7 +887,7 @@ export default function MetaFieldsPage() {
                   <TableHead>Label</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Required</TableHead>
-                  <TableHead className="w-20">Actions</TableHead>
+                  <TableHead className="w-20 text-center">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -905,7 +905,7 @@ export default function MetaFieldsPage() {
                       </TableCell>
                       <TableCell>{field.required ? "Yes" : "No"}</TableCell>
                       <TableCell>
-                        <div className="flex gap-1">
+                        <div className="flex items-center justify-center gap-2">
                           <button
                             onClick={() => openEdit(index, group.scopeKey)}
                             className="text-gray-400 hover:text-purple-600"

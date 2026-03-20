@@ -127,7 +127,7 @@ export default function EntityTypesPage() {
               <TableHead>Name</TableHead>
               <TableHead>Case Numbers</TableHead>
               <TableHead>Enrollable</TableHead>
-              <TableHead className="w-20">Actions</TableHead>
+              <TableHead className="w-20 text-center">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -140,7 +140,7 @@ export default function EntityTypesPage() {
                   <TableCell>{config.can_enroll ? "Yes" : "No"}</TableCell>
                   <TableCell>
                     <Can permission="entity_type:manage">
-                      <div className="flex gap-1">
+                      <div className="flex items-center justify-center gap-2">
                         <button
                           onClick={() => openEdit(et)}
                           className="text-gray-400 hover:text-purple-600"

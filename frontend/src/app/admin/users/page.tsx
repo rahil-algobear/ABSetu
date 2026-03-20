@@ -349,7 +349,7 @@ export default function UsersPage() {
               {dimensions.map((dim) => (
                 <TableHead key={dim.id}>{dim.name}</TableHead>
               ))}
-              <TableHead className="w-24">Actions</TableHead>
+              <TableHead className="w-24 text-center">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -397,7 +397,7 @@ export default function UsersPage() {
                 })}
                 <TableCell>
                   <Can permission="user:manage">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center justify-center gap-2">
                       <button
                         onClick={() => openEdit(user)}
                         className="text-gray-400 hover:text-purple-600"

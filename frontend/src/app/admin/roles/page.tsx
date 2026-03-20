@@ -196,7 +196,7 @@ export default function RolesPage() {
               <TableHead>Name</TableHead>
               <TableHead>Permissions</TableHead>
               <TableHead>Users</TableHead>
-              <TableHead className="w-20">Actions</TableHead>
+              <TableHead className="w-20 text-center">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -232,7 +232,7 @@ export default function RolesPage() {
                 <TableCell>
                   <Can permission="role:manage">
                     {!role.is_system && (
-                      <div className="flex gap-1">
+                      <div className="flex items-center justify-center gap-2">
                         <button
                           onClick={() => openEdit(role)}
                           className="text-gray-400 hover:text-purple-600"

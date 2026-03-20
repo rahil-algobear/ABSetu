@@ -122,7 +122,7 @@ export default function ActivityTypesPage() {
             <TableRow>
               <TableHead>Name</TableHead>
               <TableHead>Key</TableHead>
-              <TableHead className="w-20">Actions</TableHead>
+              <TableHead className="w-20 text-center">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -132,7 +132,7 @@ export default function ActivityTypesPage() {
                 <TableCell className="text-gray-400 text-sm font-mono">{at.key}</TableCell>
                 <TableCell>
                   <Can permission="activity_type:manage">
-                    <div className="flex gap-1">
+                    <div className="flex items-center justify-center gap-2">
                       <button
                         onClick={() => openEdit(at)}
                         className="text-gray-400 hover:text-purple-600"

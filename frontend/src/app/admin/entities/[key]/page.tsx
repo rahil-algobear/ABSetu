@@ -242,7 +242,7 @@ function EntityTypeEntitiesContent() {
                   currentSortOrder={listParams.sortOrder}
                   onSort={listParams.setSorting}
                 />
-                <TableHead className="w-20">Actions</TableHead>
+                <TableHead className="w-20 text-center">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -282,14 +282,16 @@ function EntityTypeEntitiesContent() {
                     {formatDate(e.updated_at, DATE_FORMATS.DISPLAY)}
                   </TableCell>
                   <TableCell>
-                    <Can permission="entity:edit">
-                      <button
-                        onClick={(ev) => openEdit(ev, e)}
-                        className="text-gray-400 hover:text-primary"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </button>
-                    </Can>
+                    <div className="flex items-center justify-center gap-2">
+                      <Can permission="entity:edit">
+                        <button
+                          onClick={(ev) => openEdit(ev, e)}
+                          className="text-gray-400 hover:text-primary"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                      </Can>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
