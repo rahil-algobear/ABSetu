@@ -121,6 +121,7 @@ export default function ActivitiesPage() {
   });
 
   const [formData, setFormData] = useState({
+    title: "",
     start_date: new Date().toISOString().split("T")[0],
     end_date: "" as string,
     notes: "",
@@ -239,6 +240,7 @@ export default function ActivitiesPage() {
       queryClient.invalidateQueries({ queryKey: ["activities"] });
       setShowCreate(false);
       setFormData({
+        title: "",
         start_date: new Date().toISOString().split("T")[0],
         end_date: "",
         notes: "",
@@ -255,6 +257,59 @@ export default function ActivitiesPage() {
   const renderElement = (el: ActivityFormElement) => {
     switch (el.type) {
       case "default": {
+        if (el.ref_id === "title") {
+          const titleConfig = el.config || { mode: "free_text" };
+          const titleMode = (titleConfig.mode as string) || "free_text";
+
+          if (titleMode === "generated") {
+            // Build preview from currently selected dimension values
+            const dimIds = (titleConfig.dimension_ids as string[]) || [];
+            const separator = (titleConfig.separator as string) || " - ";
+            const parts: string[] = [];
+            for (const dimId of dimIds) {
+              const dimValues = allDimensionValues.filter(
+                (dv) => dv.dimension_id === dimId
+              );
+              const selectedDv = dimValues.find((dv) =>
+                formData.dimension_value_ids.includes(dv.id)
+              );
+              if (selectedDv) parts.push(selectedDv.name);
+            }
+            const preview = parts.length > 0 ? parts.join(separator) : "";
+            return (
+              <div key="default-title">
+                <label className="text-sm font-medium">
+                  Title
+                </label>
+                <Input
+                  value={preview}
+                  disabled
+                  placeholder="Generated from selected dimensions..."
+                  className="bg-gray-50 mt-1"
+                />
+                <p className="text-xs text-gray-400 mt-0.5">Auto-generated from dimensions</p>
+              </div>
+            );
+          }
+
+          // Free text mode
+          return (
+            <div key="default-title">
+              <label className="text-sm font-medium">
+                Title{el.required && <span className="text-red-500 ml-0.5">*</span>}
+              </label>
+              <Input
+                placeholder="Activity title..."
+                value={formData.title}
+                onChange={(e) =>
+                  setFormData({ ...formData, title: e.target.value })
+                }
+                required={el.required}
+                className="mt-1"
+              />
+            </div>
+          );
+        }
         if (el.ref_id === "start_date") {
           return (
             <div key="default-start_date">
@@ -415,9 +470,8 @@ export default function ActivitiesPage() {
   // Use form builder elements if available
   const hasFormConfig = formElements.length > 0;
 
-  // Get the first dimension value name to use as activity title (e.g. intervention name)
   const getActivityTitle = (a: typeof activities[0]) => {
-    // Use the first dimension value as the title (typically the intervention)
+    if (a.title) return a.title;
     if (a.dimensions.length > 0) return a.dimensions[0].value_name;
     return typeName;
   };
@@ -444,6 +498,7 @@ export default function ActivitiesPage() {
               onSubmit={(e) => {
                 e.preventDefault();
                 const payload = {
+                  title: formData.title || undefined,
                   start_date: formData.start_date,
                   end_date: formData.end_date || undefined,
                   notes: formData.notes || undefined,

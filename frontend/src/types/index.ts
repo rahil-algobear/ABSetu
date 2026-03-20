@@ -167,6 +167,7 @@ export interface Activity {
   id: string;
   organization_id: string;
   activity_type_id: string | null;
+  title: string | null;
   start_date: string;
   end_date: string | null;
   notes: string | null;

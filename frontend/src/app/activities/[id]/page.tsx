@@ -28,7 +28,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PageLayout } from "@/components/ui/page-layout";
-import { Trash2, Pencil, Calendar, FileText, Users } from "lucide-react";
+import { Trash2, Pencil, Calendar, FileText, Users, Type } from "lucide-react";
 import toast from "react-hot-toast";
 
 export default function ActivityDetailPage() {
@@ -40,6 +40,7 @@ export default function ActivityDetailPage() {
   const [editingSections, setEditingSections] = useState(false);
   const [editingDetails, setEditingDetails] = useState(false);
   const [detailFormData, setDetailFormData] = useState({
+    title: "",
     start_date: "",
     end_date: "",
     notes: "",
@@ -201,6 +202,7 @@ export default function ActivityDetailPage() {
   const openDetailEditing = () => {
     if (!activity) return;
     setDetailFormData({
+      title: activity.title || "",
       start_date: activity.start_date,
       end_date: activity.end_date || "",
       notes: activity.notes || "",
@@ -211,6 +213,7 @@ export default function ActivityDetailPage() {
 
   const handleDetailSave = () => {
     const payload: Record<string, unknown> = {
+      title: detailFormData.title || undefined,
       start_date: detailFormData.start_date,
       end_date: detailFormData.end_date || undefined,
       notes: detailFormData.notes || undefined,
@@ -331,8 +334,7 @@ export default function ActivityDetailPage() {
   if (isLoading) return <PageLayout className="p-4"><p>Loading...</p></PageLayout>;
   if (!activity) return <PageLayout className="p-4"><p>Not found</p></PageLayout>;
 
-  // Use first dimension value as activity title
-  const activityTitle = activity.dimensions.length > 0 ? activity.dimensions[0].value_name : "Activity";
+  const activityTitle = activity.title || (activity.dimensions.length > 0 ? activity.dimensions[0].value_name : "Activity");
 
   return (
     <PageLayout className="p-4 space-y-4">
@@ -375,6 +377,38 @@ export default function ActivityDetailPage() {
           {editingDetails ? (
             <form onSubmit={(e) => { e.preventDefault(); handleDetailSave(); }} className="space-y-3">
               {detailElements.map((el) => {
+                if (el.type === "default" && el.ref_id === "title") {
+                  const titleConfig = el.config || { mode: "free_text" };
+                  const titleMode = (titleConfig.mode as string) || "free_text";
+                  if (titleMode === "generated") {
+                    // Generated title is read-only — shown as display, not editable
+                    return (
+                      <div key="edit-title">
+                        <label className="text-sm font-medium">Title</label>
+                        <Input
+                          value={activityTitle}
+                          disabled
+                          className="bg-gray-50 mt-1"
+                        />
+                        <p className="text-xs text-gray-400 mt-0.5">Auto-generated from dimensions</p>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div key="edit-title">
+                      <label className="text-sm font-medium">
+                        Title{el.required && <span className="text-red-500 ml-0.5">*</span>}
+                      </label>
+                      <Input
+                        placeholder="Activity title..."
+                        value={detailFormData.title}
+                        onChange={(e) => setDetailFormData({ ...detailFormData, title: e.target.value })}
+                        required={el.required}
+                        className="mt-1"
+                      />
+                    </div>
+                  );
+                }
                 if (el.type === "default" && el.ref_id === "start_date") {
                   return (
                     <div key="edit-start_date">
@@ -439,6 +473,23 @@ export default function ActivityDetailPage() {
           ) : (
             <div className="space-y-3">
               {detailElements.map((el) => {
+                // Title element
+                if (el.type === "default" && el.ref_id === "title") {
+                  return (
+                    <div key="title" className="flex items-center gap-2">
+                      <Type className="h-4 w-4 text-gray-400 shrink-0" />
+                      <div>
+                        <p className="text-xs text-gray-500">Title</p>
+                        {activity.title ? (
+                          <p className="text-sm font-medium">{activity.title}</p>
+                        ) : (
+                          <p className="text-sm text-gray-300 italic">Not set</p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                }
+
                 // Dimension elements
                 if (el.type === "dimension") {
                   // Map form element ref_id (dimension UUID) to the dimension's key
