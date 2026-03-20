@@ -95,7 +95,7 @@ export function ListToolbar({
   }, 0);
 
   return (
-    <div className="px-0 py-3 mb-4">
+    <div className="px-0 py-2 mb-2">
       {/* Desktop: single row — search (fixed) | filter button | chips (scrollable) */}
       <div className="hidden lg:flex flex-row w-full gap-3 items-center">
         <div className="flex-shrink-0 w-64 relative">
