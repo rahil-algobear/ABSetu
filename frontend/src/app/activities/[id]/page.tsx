@@ -302,7 +302,10 @@ export default function ActivityDetailPage() {
           </Badge>
         ))}
       </div>
-      <p className="text-gray-500 mb-4">{activity.date}</p>
+      <p className="text-gray-500 mb-4">
+        {activity.start_date}
+        {activity.end_date && activity.end_date !== activity.start_date && ` — ${activity.end_date}`}
+      </p>
 
       {activity.activity_type_name && (
         <p className="text-sm text-gray-500 mb-2">Type: {activity.activity_type_name}</p>

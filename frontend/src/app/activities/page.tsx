@@ -118,7 +118,8 @@ export default function ActivitiesPage() {
   });
 
   const [formData, setFormData] = useState({
-    date: new Date().toISOString().split("T")[0],
+    start_date: new Date().toISOString().split("T")[0],
+    end_date: "" as string,
     notes: "",
     dimension_value_ids: [] as string[],
   });
@@ -131,11 +132,11 @@ export default function ActivitiesPage() {
     enabled: !!selectedTypeId,
   });
 
-  // Sorted visible elements from form config
+  // Sorted visible elements from form config — on create page, only show "create" stage elements
   const formElements: ActivityFormElement[] = useMemo(() => {
     if (!formConfig?.elements?.length) return [];
     return [...formConfig.elements]
-      .filter((el) => el.visible)
+      .filter((el) => el.visible && el.stage === "create")
       .sort((a, b) => a.sort_order - b.sort_order);
   }, [formConfig]);
 
@@ -179,7 +180,8 @@ export default function ActivitiesPage() {
       queryClient.invalidateQueries({ queryKey: ["activities"] });
       setShowCreate(false);
       setFormData({
-        date: new Date().toISOString().split("T")[0],
+        start_date: new Date().toISOString().split("T")[0],
+        end_date: "",
         notes: "",
         dimension_value_ids: [],
       });
@@ -192,6 +194,56 @@ export default function ActivitiesPage() {
   // Render a single form element based on its type
   const renderElement = (el: ActivityFormElement) => {
     switch (el.type) {
+      case "default": {
+        if (el.ref_id === "start_date") {
+          return (
+            <div key="default-start_date">
+              <label className="text-sm font-medium">
+                Date{el.required && <span className="text-red-500 ml-0.5">*</span>}
+              </label>
+              <div className="flex gap-2 mt-1">
+                <Input
+                  type="date"
+                  value={formData.start_date}
+                  onChange={(e) =>
+                    setFormData({ ...formData, start_date: e.target.value })
+                  }
+                  required={el.required}
+                />
+                <Input
+                  type="date"
+                  value={formData.end_date}
+                  onChange={(e) =>
+                    setFormData({ ...formData, end_date: e.target.value })
+                  }
+                  placeholder="End date (optional)"
+                  min={formData.start_date}
+                />
+              </div>
+              <p className="text-xs text-gray-400 mt-0.5">Leave end date empty for single-day activities</p>
+            </div>
+          );
+        }
+        if (el.ref_id === "notes") {
+          return (
+            <div key="default-notes">
+              <label className="text-sm font-medium">
+                Notes{el.required && <span className="text-red-500 ml-0.5">*</span>}
+              </label>
+              <Input
+                placeholder="Optional notes..."
+                value={formData.notes}
+                onChange={(e) =>
+                  setFormData({ ...formData, notes: e.target.value })
+                }
+                required={el.required}
+              />
+            </div>
+          );
+        }
+        return null;
+      }
+
       case "dimension": {
         const dim = dimensions.find((d) => d.id === el.ref_id);
         if (!dim) return null;
@@ -297,7 +349,10 @@ export default function ActivitiesPage() {
               onSubmit={(e) => {
                 e.preventDefault();
                 const payload = {
-                  ...formData,
+                  start_date: formData.start_date,
+                  end_date: formData.end_date || undefined,
+                  notes: formData.notes || undefined,
+                  dimension_value_ids: formData.dimension_value_ids,
                   activity_type_id: selectedTypeId || undefined,
                   ...(activityMetaFields.length > 0 ? { meta: metaValues } : {}),
                 };
@@ -313,33 +368,6 @@ export default function ActivitiesPage() {
                   </p>
                 )
               }
-
-              {hasFormConfig && (
-                <>
-                  <div>
-                    <label className="text-sm font-medium">Date</label>
-                    <Input
-                      type="date"
-                      value={formData.date}
-                      onChange={(e) =>
-                        setFormData({ ...formData, date: e.target.value })
-                      }
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-medium">Notes</label>
-                    <Input
-                      placeholder="Optional notes..."
-                      value={formData.notes}
-                      onChange={(e) =>
-                        setFormData({ ...formData, notes: e.target.value })
-                      }
-                    />
-                  </div>
-                </>
-              )}
 
               <div className="flex gap-2">
                 {hasFormConfig && (
@@ -382,7 +410,10 @@ export default function ActivitiesPage() {
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-medium">{a.date}</p>
+                      <p className="text-sm font-medium">
+                        {a.start_date}
+                        {a.end_date && a.end_date !== a.start_date && ` — ${a.end_date}`}
+                      </p>
                       {a.activity_type_name && (
                         <p className="text-xs text-gray-500">{a.activity_type_name}</p>
                       )}
