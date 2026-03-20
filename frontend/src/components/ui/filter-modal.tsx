@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Dialog } from "./dialog";
 import { Button } from "./button";
 import { Input } from "./input";
+import { X } from "lucide-react";
 import { FilterValue } from "@/hooks/useListParams";
 
 export interface FilterOption {
@@ -59,6 +60,18 @@ export function FilterModal({
       arr.push(value);
     }
     setLocalFilters({ ...localFilters, [key]: arr.length > 0 ? arr : [] });
+  };
+
+  const handleSelectAll = (def: FilterDefinition) => {
+    if (!def.options) return;
+    setLocalFilters({
+      ...localFilters,
+      [def.key]: def.options.map((o) => o.value),
+    });
+  };
+
+  const handleClearGroup = (key: string) => {
+    setLocalFilters({ ...localFilters, [key]: [] });
   };
 
   const handleRangeChange = (key: string, field: "min" | "max", val: string) => {
@@ -117,126 +130,156 @@ export function FilterModal({
   };
 
   return (
-    <Dialog open={open} onClose={onClose} title="Filters" className="max-w-lg">
-      <div className="space-y-5 max-h-[60vh] overflow-y-auto">
-        {filterDefinitions.map((def) => (
+    <Dialog open={open} onClose={onClose} className="max-w-lg p-0">
+      {/* Header */}
+      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-300">
+        <h2 className="text-lg font-semibold">Filters</h2>
+        <button
+          onClick={onClose}
+          className="text-gray-400 hover:text-gray-600 transition-colors"
+        >
+          <X size={18} />
+        </button>
+      </div>
+
+      {/* Scrollable content */}
+      <div className="max-h-[60vh] overflow-y-auto">
+        {filterDefinitions.map((def, i) => (
           <div key={def.key}>
-            <p className="text-sm font-medium text-gray-700 mb-2">{def.label}</p>
-
-            {def.type === "select" && def.options && (
-              <div className="flex flex-wrap gap-2">
-                {def.options.map((opt) => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => handleSelectToggle(def.key, opt.value)}
-                    className={`px-3 py-1.5 text-sm rounded-full border transition-colors ${
-                      isSelectActive(def.key, opt.value)
-                        ? "bg-blue-100 border-blue-400 text-blue-700"
-                        : "bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
+            {i > 0 && <div className="border-t border-gray-200" />}
+            <div className="px-6 py-4">
+              <div className="flex items-center gap-3 mb-2">
+                <p className="text-sm font-medium text-gray-700">{def.label}</p>
+                {def.type === "select" && def.options && def.options.length > 0 && (
+                  <div className="text-xs text-gray-600">
+                    <span
+                      onClick={() => handleSelectAll(def)}
+                      className="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+                    >
+                      Select All
+                    </span>
+                    {" / "}
+                    <span
+                      onClick={() => handleClearGroup(def.key)}
+                      className="text-gray-600 hover:text-gray-800 hover:underline cursor-pointer"
+                    >
+                      Clear
+                    </span>
+                  </div>
+                )}
               </div>
-            )}
 
-            {def.type === "range" && (
-              <div className="flex gap-2 items-center">
-                <Input
-                  type="number"
-                  placeholder="Min"
-                  value={
-                    (typeof localFilters[def.key] === "string"
-                      ? (localFilters[def.key] as string).split(":")[0]
-                      : "") || ""
-                  }
-                  onChange={(e) => handleRangeChange(def.key, "min", e.target.value)}
-                  className="w-28"
-                />
-                <span className="text-gray-400">to</span>
-                <Input
-                  type="number"
-                  placeholder="Max"
-                  value={
-                    (typeof localFilters[def.key] === "string"
-                      ? (localFilters[def.key] as string).split(":")[1]
-                      : "") || ""
-                  }
-                  onChange={(e) => handleRangeChange(def.key, "max", e.target.value)}
-                  className="w-28"
-                />
-              </div>
-            )}
+              {def.type === "select" && def.options && (
+                <div className="flex flex-wrap gap-2">
+                  {def.options.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => handleSelectToggle(def.key, opt.value)}
+                      className={`px-3 py-1.5 text-sm rounded-full border transition-colors ${
+                        isSelectActive(def.key, opt.value)
+                          ? "bg-blue-100 border-blue-400 text-blue-700"
+                          : "bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              )}
 
-            {def.type === "date_range" && (
-              <div className="flex gap-2 items-center">
-                <Input
-                  type="date"
-                  value={
-                    (typeof localFilters[def.key] === "string"
-                      ? (localFilters[def.key] as string).split(":")[0]
-                      : "") || ""
-                  }
-                  onChange={(e) => handleDateChange(def.key, "start", e.target.value)}
-                />
-                <span className="text-gray-400">to</span>
-                <Input
-                  type="date"
-                  value={
-                    (typeof localFilters[def.key] === "string"
-                      ? (localFilters[def.key] as string).split(":")[1]
-                      : "") || ""
-                  }
-                  onChange={(e) => handleDateChange(def.key, "end", e.target.value)}
-                />
-              </div>
-            )}
-
-            {def.type === "boolean" && (
-              <div className="flex gap-2">
-                {["true", "false"].map((v) => (
-                  <button
-                    key={v}
-                    type="button"
-                    onClick={() =>
-                      setLocalFilters({
-                        ...localFilters,
-                        [def.key]: localFilters[def.key] === v ? "" : v,
-                      })
+              {def.type === "range" && (
+                <div className="flex gap-2 items-center">
+                  <Input
+                    type="number"
+                    placeholder="Min"
+                    value={
+                      (typeof localFilters[def.key] === "string"
+                        ? (localFilters[def.key] as string).split(":")[0]
+                        : "") || ""
                     }
-                    className={`px-3 py-1.5 text-sm rounded-full border transition-colors ${
-                      localFilters[def.key] === v
-                        ? "bg-blue-100 border-blue-400 text-blue-700"
-                        : "bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
-                    }`}
-                  >
-                    {v === "true" ? "Yes" : "No"}
-                  </button>
-                ))}
-              </div>
-            )}
+                    onChange={(e) => handleRangeChange(def.key, "min", e.target.value)}
+                    className="w-28"
+                  />
+                  <span className="text-gray-400">to</span>
+                  <Input
+                    type="number"
+                    placeholder="Max"
+                    value={
+                      (typeof localFilters[def.key] === "string"
+                        ? (localFilters[def.key] as string).split(":")[1]
+                        : "") || ""
+                    }
+                    onChange={(e) => handleRangeChange(def.key, "max", e.target.value)}
+                    className="w-28"
+                  />
+                </div>
+              )}
+
+              {def.type === "date_range" && (
+                <div className="flex gap-2 items-center">
+                  <Input
+                    type="date"
+                    value={
+                      (typeof localFilters[def.key] === "string"
+                        ? (localFilters[def.key] as string).split(":")[0]
+                        : "") || ""
+                    }
+                    onChange={(e) => handleDateChange(def.key, "start", e.target.value)}
+                  />
+                  <span className="text-gray-400">to</span>
+                  <Input
+                    type="date"
+                    value={
+                      (typeof localFilters[def.key] === "string"
+                        ? (localFilters[def.key] as string).split(":")[1]
+                        : "") || ""
+                    }
+                    onChange={(e) => handleDateChange(def.key, "end", e.target.value)}
+                  />
+                </div>
+              )}
+
+              {def.type === "boolean" && (
+                <div className="flex gap-2">
+                  {["true", "false"].map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() =>
+                        setLocalFilters({
+                          ...localFilters,
+                          [def.key]: localFilters[def.key] === v ? "" : v,
+                        })
+                      }
+                      className={`px-3 py-1.5 text-sm rounded-full border transition-colors ${
+                        localFilters[def.key] === v
+                          ? "bg-blue-100 border-blue-400 text-blue-700"
+                          : "bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
+                      }`}
+                    >
+                      {v === "true" ? "Yes" : "No"}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         ))}
 
         {filterDefinitions.length === 0 && (
-          <p className="text-sm text-gray-500">No filters available.</p>
+          <p className="text-sm text-gray-500 px-6 py-4">No filters available.</p>
         )}
       </div>
 
-      <div className="flex justify-between pt-4 mt-4 border-t">
-        <Button variant="ghost" size="sm" onClick={handleClear}>
-          Clear All
+      {/* Footer */}
+      <div className="border-t border-gray-300 px-6 py-4 flex justify-end gap-3">
+        <Button variant="outline" size="sm" onClick={handleClear}>
+          Clear Filters
         </Button>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button size="sm" onClick={handleApply}>
-            Apply
-          </Button>
-        </div>
+        <Button size="sm" onClick={handleApply}>
+          Apply Filters
+        </Button>
       </div>
     </Dialog>
   );
