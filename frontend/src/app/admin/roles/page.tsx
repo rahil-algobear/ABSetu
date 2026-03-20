@@ -188,6 +188,7 @@ export default function RolesPage() {
       ) : roles.length === 0 ? (
         <p className="text-gray-500 text-sm">No roles yet.</p>
       ) : (
+        <div className="bg-white shadow-sm border rounded-lg overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow>
@@ -258,6 +259,7 @@ export default function RolesPage() {
             ))}
           </TableBody>
         </Table>
+        </div>
       )}
 
       <Dialog
