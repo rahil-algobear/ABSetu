@@ -20,6 +20,7 @@ import {
   TableCell,
 } from "@/components/ui/page-table";
 import { DynamicMetaForm } from "@/components/DynamicMetaForm";
+import { PageHeader } from "@/components/ui/page-header";
 import { Plus, Pencil, Trash2, LayoutGrid } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -119,23 +120,25 @@ export default function DimensionValuesPage() {
 
   return (
     <>
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold">{dimension.name}</h2>
-        <div className="flex gap-2">
-          {dimensions.length > 1 && (
-            <Button size="sm" variant="outline" onClick={() => setMatrixOpen(true)}>
-              <LayoutGrid className="h-4 w-4 mr-1" />
-              View Matrix
-            </Button>
-          )}
-          <Can permission="dimension:manage">
-            <Button size="sm" onClick={openAdd}>
-              <Plus className="h-4 w-4 mr-1" />
-              Add {dimension.name}
-            </Button>
-          </Can>
-        </div>
-      </div>
+      <PageHeader
+        title={dimension.name}
+        actions={
+          <div className="flex gap-2">
+            {dimensions.length > 1 && (
+              <Button size="sm" variant="outline" onClick={() => setMatrixOpen(true)}>
+                <LayoutGrid className="h-4 w-4 mr-1" />
+                View Matrix
+              </Button>
+            )}
+            <Can permission="dimension:manage">
+              <Button size="sm" onClick={openAdd}>
+                <Plus className="h-4 w-4 mr-1" />
+                Add {dimension.name}
+              </Button>
+            </Can>
+          </div>
+        }
+      />
 
       {isLoading ? (
         <p className="text-gray-500 text-sm">Loading...</p>

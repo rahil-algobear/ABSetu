@@ -17,6 +17,7 @@ import {
   TableHead,
   TableCell,
 } from "@/components/ui/page-table";
+import { PageHeader } from "@/components/ui/page-header";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -89,15 +90,17 @@ export default function ActivityTypesPage() {
 
   return (
     <>
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold">Activity Types</h2>
-        <Can permission="activity_type:manage">
-          <Button size="sm" onClick={openCreate}>
-            <Plus className="h-4 w-4 mr-1" />
-            Add Activity Type
-          </Button>
-        </Can>
-      </div>
+      <PageHeader
+        title="Activity Types"
+        actions={
+          <Can permission="activity_type:manage">
+            <Button size="sm" onClick={openCreate}>
+              <Plus className="h-4 w-4 mr-1" />
+              Add Activity Type
+            </Button>
+          </Can>
+        }
+      />
 
       <p className="text-sm text-gray-500 mb-4">
         Activity types define the structural type of an activity. Use the{" "}

@@ -30,6 +30,7 @@ import {
   TableHead,
   TableCell,
 } from "@/components/ui/page-table";
+import { PageHeader } from "@/components/ui/page-header";
 import { Plus, Pencil, Trash2, GripVertical } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -513,14 +514,10 @@ export default function MetaFieldsPage() {
 
   return (
     <>
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold">Form Fields</h2>
-      </div>
-
-      <p className="text-sm text-gray-500 mb-4">
-        Define form fields for entities, dimensions, activities, and participants.
-        Fields appear in create/edit forms and are stored as metadata.
-      </p>
+      <PageHeader
+        title="Form Fields"
+        description="Define form fields for entities, dimensions, activities, and participants. Fields appear in create/edit forms and are stored as metadata."
+      />
 
       {/* Section selector */}
       <div className="flex gap-2 mb-3 overflow-x-auto pb-1">

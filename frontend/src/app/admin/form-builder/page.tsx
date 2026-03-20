@@ -17,6 +17,7 @@ import {
   MetaFieldSchemas,
 } from "@/types";
 import { Can } from "@/components/Auth/Permissions";
+import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Dialog } from "@/components/ui/dialog";
@@ -233,26 +234,24 @@ export default function FormBuilderPage() {
 
   return (
     <>
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold">Form Builder</h2>
-        <Can permission="activity_type:manage">
-          {isDirty && (
-            <Button
-              size="sm"
-              onClick={() => saveMutation.mutate()}
-              disabled={saveMutation.isPending}
-            >
-              <Save className="h-4 w-4 mr-1" />
-              Save
-            </Button>
-          )}
-        </Can>
-      </div>
-
-      <p className="text-sm text-gray-500 mb-4">
-        Configure what form elements appear when recording an activity.
-        Choose an activity type and add the elements you want.
-      </p>
+      <PageHeader
+        title="Form Builder"
+        description="Configure what form elements appear when recording an activity. Choose an activity type and add the elements you want."
+        actions={
+          <Can permission="activity_type:manage">
+            {isDirty && (
+              <Button
+                size="sm"
+                onClick={() => saveMutation.mutate()}
+                disabled={saveMutation.isPending}
+              >
+                <Save className="h-4 w-4 mr-1" />
+                Save
+              </Button>
+            )}
+          </Can>
+        }
+      />
 
       {/* Activity Type selector */}
       <div className="mb-6">

@@ -17,6 +17,7 @@ import {
   TableHead,
   TableCell,
 } from "@/components/ui/page-table";
+import { PageHeader } from "@/components/ui/page-header";
 import { Plus, Pencil, Trash2, Shield, Check } from "lucide-react";
 import toast from "react-hot-toast";
 // Group permission keys by area for better UX
@@ -170,15 +171,17 @@ export default function RolesPage() {
 
   return (
     <>
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold">Roles</h2>
-        <Can permission="role:manage">
-          <Button size="sm" onClick={openCreate}>
-            <Plus className="h-4 w-4 mr-1" />
-            Add Role
-          </Button>
-        </Can>
-      </div>
+      <PageHeader
+        title="Roles"
+        actions={
+          <Can permission="role:manage">
+            <Button size="sm" onClick={openCreate}>
+              <Plus className="h-4 w-4 mr-1" />
+              Add Role
+            </Button>
+          </Can>
+        }
+      />
 
       {isLoading ? (
         <p className="text-gray-500 text-sm">Loading...</p>

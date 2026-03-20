@@ -29,6 +29,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DynamicMetaForm, MetaFieldDisplay } from "@/components/DynamicMetaForm";
+import { PageHeader } from "@/components/ui/page-header";
 import { Plus, Pencil, X, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
@@ -119,8 +120,8 @@ export default function EntityDetailPage() {
 
   return (
     <PageLayout className="p-4">
-      <h1 className="text-2xl font-bold mb-1">{entity.name}</h1>
-      <div className="flex gap-1 items-center mb-2">
+      <PageHeader title={entity.name} />
+      <div className="flex gap-1 items-center mb-2 -mt-2">
         {entity.case_number && (
           <span className="text-gray-500">{entity.case_number}</span>
         )}

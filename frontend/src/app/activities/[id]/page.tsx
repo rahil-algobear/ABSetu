@@ -28,6 +28,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PageLayout } from "@/components/ui/page-layout";
+import { PageHeader } from "@/components/ui/page-header";
 import { Trash2, Pencil, Calendar, FileText, Users } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -337,26 +338,24 @@ export default function ActivityDetailPage() {
   return (
     <PageLayout className="p-4 space-y-4">
       {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">{activityTitle}</h1>
-          {activity.activity_type_name && (
-            <p className="text-sm text-gray-500">{activity.activity_type_name}</p>
-          )}
-        </div>
-        <Can permission="activity:create">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={handleDelete}
-            disabled={deleteMutation.isPending}
-            className="text-red-500 hover:text-red-700 hover:bg-red-50"
-          >
-            <Trash2 className="h-4 w-4 mr-1" />
-            Delete
-          </Button>
-        </Can>
-      </div>
+      <PageHeader
+        title={activityTitle}
+        description={activity.activity_type_name || undefined}
+        actions={
+          <Can permission="activity:create">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleDelete}
+              disabled={deleteMutation.isPending}
+              className="text-red-500 hover:text-red-700 hover:bg-red-50"
+            >
+              <Trash2 className="h-4 w-4 mr-1" />
+              Delete
+            </Button>
+          </Can>
+        }
+      />
 
       {/* Details Card */}
       <Card>

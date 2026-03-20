@@ -18,6 +18,7 @@ import {
   TableHead,
   TableCell,
 } from "@/components/ui/page-table";
+import { PageHeader } from "@/components/ui/page-header";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -92,21 +93,18 @@ export default function ManageDimensionsPage() {
 
   return (
     <>
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold">Dimensions</h2>
-        <Can permission="dimension:manage">
-          <Button size="sm" onClick={openCreate}>
-            <Plus className="h-4 w-4 mr-1" />
-            Add Dimension
-          </Button>
-        </Can>
-      </div>
-
-      <p className="text-sm text-gray-500 mb-4">
-        Dimensions define how your organization scopes data for access control and reporting
-        (e.g. Location, Programme, Funder). Each dimension has values that can be assigned to
-        activities, entities, and enrollments.
-      </p>
+      <PageHeader
+        title="Dimensions"
+        description="Dimensions define how your organization scopes data for access control and reporting (e.g. Location, Programme, Funder). Each dimension has values that can be assigned to activities, entities, and enrollments."
+        actions={
+          <Can permission="dimension:manage">
+            <Button size="sm" onClick={openCreate}>
+              <Plus className="h-4 w-4 mr-1" />
+              Add Dimension
+            </Button>
+          </Can>
+        }
+      />
 
       {isLoading ? (
         <p className="text-gray-500 text-sm">Loading...</p>

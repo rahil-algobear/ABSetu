@@ -6,6 +6,7 @@ import { useAuth } from "@/services/auth";
 import { dashboardApi } from "@/services/api";
 import { DashboardFilters } from "@/types";
 import { PageContent } from "@/components/ui/page-content";
+import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Users,
@@ -47,12 +48,11 @@ export default function DashboardContent() {
 
   return (
     <PageContent>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          Overview of your organization&apos;s data
-        </p>
-      </div>
+      <PageHeader
+        title="Dashboard"
+        description="Overview of your organization's data"
+        className="mb-6"
+      />
 
       {/* Filters */}
       <DashboardFiltersBar filters={filters} onChange={setFilters} />

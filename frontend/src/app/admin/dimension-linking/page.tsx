@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { dimensionApi, dimensionValueLinkApi } from "@/services/api";
 import { Dimension, DimensionValue, DimensionValueLink } from "@/types";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
 import { LayoutGrid } from "lucide-react";
 import { DimensionMatrixDialog } from "@/components/DimensionMatrixDialog";
 import { usePermissions } from "@/components/Auth/Permissions";
@@ -112,17 +113,16 @@ export default function DimensionLinkingPage() {
 
   return (
     <>
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold">Dimension Linking</h2>
-        <Button size="sm" variant="outline" onClick={() => setMatrixOpen(true)}>
-          <LayoutGrid className="h-4 w-4 mr-1" />
-          View Matrix
-        </Button>
-      </div>
-
-      <p className="text-sm text-gray-500 mb-4">
-        Define valid combinations between dimension values. Check cells to create links.
-      </p>
+      <PageHeader
+        title="Dimension Linking"
+        description="Define valid combinations between dimension values. Check cells to create links."
+        actions={
+          <Button size="sm" variant="outline" onClick={() => setMatrixOpen(true)}>
+            <LayoutGrid className="h-4 w-4 mr-1" />
+            View Matrix
+          </Button>
+        }
+      />
 
       {/* Dimension selectors */}
       <div className="flex gap-4 mb-4">

@@ -21,6 +21,7 @@ import {
   TableHead,
   TableCell,
 } from "@/components/ui/page-table";
+import { PageHeader } from "@/components/ui/page-header";
 import { Plus, Pencil, Phone, Shield, Trash2 } from "lucide-react";
 
 import toast from "react-hot-toast";
@@ -320,15 +321,17 @@ export default function UsersPage() {
 
   return (
     <>
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold">Users</h2>
-        <Can permission="user:manage">
-          <Button size="sm" onClick={openCreate}>
-            <Plus className="h-4 w-4 mr-1" />
-            Add User
-          </Button>
-        </Can>
-      </div>
+      <PageHeader
+        title="Users"
+        actions={
+          <Can permission="user:manage">
+            <Button size="sm" onClick={openCreate}>
+              <Plus className="h-4 w-4 mr-1" />
+              Add User
+            </Button>
+          </Can>
+        }
+      />
 
       {isLoading ? (
         <p className="text-gray-500 text-sm">Loading...</p>

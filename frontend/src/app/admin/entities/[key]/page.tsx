@@ -20,6 +20,7 @@ import {
   TableHead,
   TableCell,
 } from "@/components/ui/page-table";
+import { PageHeader } from "@/components/ui/page-header";
 import { Plus, Pencil, Search } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
@@ -123,15 +124,17 @@ export default function EntityTypeEntitiesPage() {
 
   return (
     <>
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold">{typeName}</h2>
-        <Can permission="entity:create">
-          <Button size="sm" onClick={openCreate}>
-            <Plus className="h-4 w-4 mr-1" />
-            Add {typeName}
-          </Button>
-        </Can>
-      </div>
+      <PageHeader
+        title={typeName}
+        actions={
+          <Can permission="entity:create">
+            <Button size="sm" onClick={openCreate}>
+              <Plus className="h-4 w-4 mr-1" />
+              Add {typeName}
+            </Button>
+          </Can>
+        }
+      />
 
       <div className="relative mb-4">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />

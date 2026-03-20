@@ -33,6 +33,7 @@ import { Badge } from "@/components/ui/badge";
 import { DynamicMetaForm } from "@/components/DynamicMetaForm";
 import { SearchSelectParticipants } from "@/components/SearchSelectParticipants";
 import { PageLayout } from "@/components/ui/page-layout";
+import { PageHeader } from "@/components/ui/page-header";
 import { Plus } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
@@ -424,15 +425,17 @@ export default function ActivitiesPage() {
 
   return (
     <PageLayout className="p-4">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold">{typeName}s</h1>
-        <Can permission="activity:create">
-          <Button size="sm" onClick={() => setShowCreate(true)}>
-            <Plus className="h-4 w-4 mr-1" />
-            New {typeName}
-          </Button>
-        </Can>
-      </div>
+      <PageHeader
+        title={`${typeName}s`}
+        actions={
+          <Can permission="activity:create">
+            <Button size="sm" onClick={() => setShowCreate(true)}>
+              <Plus className="h-4 w-4 mr-1" />
+              New {typeName}
+            </Button>
+          </Can>
+        }
+      />
 
       {showCreate && (
         <Card className="mb-4">

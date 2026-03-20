@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog } from "@/components/ui/dialog";
 import { DynamicMetaForm } from "@/components/DynamicMetaForm";
 import { PageLayout } from "@/components/ui/page-layout";
+import { PageHeader } from "@/components/ui/page-header";
 import { Plus, Search } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
@@ -63,15 +64,17 @@ export default function EntitiesPage() {
 
   return (
     <PageLayout className="p-4">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold">Entities</h1>
-        <Can permission="entity:create">
-          <Button size="sm" onClick={() => setShowCreate(true)}>
-            <Plus className="h-4 w-4 mr-1" />
-            Add
-          </Button>
-        </Can>
-      </div>
+      <PageHeader
+        title="Entities"
+        actions={
+          <Can permission="entity:create">
+            <Button size="sm" onClick={() => setShowCreate(true)}>
+              <Plus className="h-4 w-4 mr-1" />
+              Add
+            </Button>
+          </Can>
+        }
+      />
 
       <div className="flex gap-2 mb-4">
         <div className="relative flex-1">
