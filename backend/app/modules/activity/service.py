@@ -135,6 +135,7 @@ class ActivityService:
         return {
             "activity_type_id": {"type": "exact", "column": Activity.activity_type_id},
             "start_date": {"type": "date_range", "column": Activity.start_date},
+            "created_at": {"type": "date_range", "column": Activity.created_at},
         }
 
     def get_dimension_filter_config(self, org_id: uuid.UUID) -> dict:

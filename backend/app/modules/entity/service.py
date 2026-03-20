@@ -173,6 +173,7 @@ class EntityService:
         """Filter config for entity list."""
         return {
             "entity_type_id": {"type": "exact", "column": Entity.entity_type_id},
+            "created_at": {"type": "date_range", "column": Entity.created_at},
         }
 
     def get_dimension_filter_config(self, org_id: uuid.UUID) -> dict:

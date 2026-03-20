@@ -147,8 +147,11 @@ export default function ListSettingsPage() {
   };
 
   const canToggleFilterable = (col: ListColumnConfig) => {
-    // Static count columns and certain columns can't be filtered
-    if (col.source === "static" && ["enrollment_count", "activity_count", "participant_count", "name", "case_number"].includes(col.key)) return false;
+    // Only static fields with backend filter support can be toggled
+    if (col.source === "static") {
+      const filterableStatic = new Set(["created_at", "start_date"]);
+      return filterableStatic.has(col.key);
+    }
     return true;
   };
 
