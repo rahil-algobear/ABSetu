@@ -170,7 +170,6 @@ class EntityService:
         dims = (
             self.db.query(Dimension)
             .filter_by(organization_id=org_id)
-            .filter(Dimension.is_system.is_(None))
             .all()
         )
         config = {}
