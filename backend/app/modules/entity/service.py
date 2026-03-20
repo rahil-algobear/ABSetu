@@ -143,7 +143,14 @@ class EntityService:
         org_id: uuid.UUID,
         data: dict,
         dimension_value_ids: list[str] | None = None,
+        accessible_dv_ids: list[uuid.UUID] | None = None,
     ) -> Entity:
+        from app.modules.dimension.service import UserDimensionAccessService
+
+        UserDimensionAccessService(self.db).validate_dimension_values(
+            accessible_dv_ids, dimension_value_ids or []
+        )
+
         org = self.db.query(Organization).filter_by(id=org_id).first()
         if not org:
             raise NotFoundError("Organization not found")
@@ -188,8 +195,17 @@ class EntityService:
         return entity
 
     def update_dimensions(
-        self, entity_id: uuid.UUID, org_id: uuid.UUID, dimension_value_ids: list[str]
+        self,
+        entity_id: uuid.UUID,
+        org_id: uuid.UUID,
+        dimension_value_ids: list[str],
+        accessible_dv_ids: list[uuid.UUID] | None = None,
     ) -> Entity:
+        from app.modules.dimension.service import UserDimensionAccessService
+
+        UserDimensionAccessService(self.db).validate_dimension_values(
+            accessible_dv_ids, dimension_value_ids or []
+        )
         entity = self.get_by_id(entity_id, org_id)
         self.db.query(EntityDimension).filter_by(entity_id=entity.id).delete()
         for dv_id in dimension_value_ids:

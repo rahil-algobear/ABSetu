@@ -195,13 +195,6 @@ def create_activity(
     accessible_dv_ids: list[uuid.UUID] | None = Depends(get_accessible_dimension_value_ids),
     db: Session = Depends(get_db),
 ):
-    # Validate dimension values are within user's allowed scope
-    from app.modules.dimension.service import UserDimensionAccessService
-
-    UserDimensionAccessService(db).validate_dimension_values(
-        accessible_dv_ids, data.dimension_value_ids or []
-    )
-
     # Validate required form elements from form builder config
     activity_type_id = data.activity_type_id
     if activity_type_id:
@@ -235,6 +228,7 @@ def create_activity(
         current_user.id,
         data.model_dump(exclude={"dimension_value_ids"}),
         data.dimension_value_ids,
+        accessible_dv_ids=accessible_dv_ids,
     )
     return _build_activity_response(activity)
 

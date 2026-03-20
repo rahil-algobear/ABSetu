@@ -179,18 +179,12 @@ def create_entity(
     accessible_dv_ids: list[uuid.UUID] | None = Depends(get_accessible_dimension_value_ids),
     db: Session = Depends(get_db),
 ):
-    # Validate dimension values are within user's allowed scope
-    from app.modules.dimension.service import UserDimensionAccessService
-
-    UserDimensionAccessService(db).validate_dimension_values(
-        accessible_dv_ids, data.dimension_value_ids or []
-    )
-
     service = EntityService(db)
     entity = service.create(
         current_user.organization_id,
         data.model_dump(exclude={"dimension_value_ids"}),
         dimension_value_ids=data.dimension_value_ids,
+        accessible_dv_ids=accessible_dv_ids,
     )
     return _build_entity_response(entity)
 
@@ -223,18 +217,12 @@ def update_entity_dimensions(
     accessible_dv_ids: list[uuid.UUID] | None = Depends(get_accessible_dimension_value_ids),
     db: Session = Depends(get_db),
 ):
-    # Validate submitted dimension values are within user's allowed scope
-    from app.modules.dimension.service import UserDimensionAccessService
-
-    UserDimensionAccessService(db).validate_dimension_values(
-        accessible_dv_ids, dimension_value_ids or []
-    )
-
     service = EntityService(db)
     entity = service.update_dimensions(
         entity.id,
         entity.organization_id,
         dimension_value_ids,
+        accessible_dv_ids=accessible_dv_ids,
     )
     return _build_entity_response(entity)
 

@@ -145,7 +145,14 @@ class ActivityService:
         user_id: uuid.UUID,
         data: dict,
         dimension_value_ids: list[str],
+        accessible_dv_ids: list[uuid.UUID] | None = None,
     ) -> Activity:
+        from app.modules.dimension.service import UserDimensionAccessService
+
+        UserDimensionAccessService(self.db).validate_dimension_values(
+            accessible_dv_ids, dimension_value_ids or []
+        )
+
         activity_type_id = data.get("activity_type_id")
         if activity_type_id:
             at = (
