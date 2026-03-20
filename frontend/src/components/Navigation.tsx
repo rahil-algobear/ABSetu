@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { Suspense, useState, useRef, useEffect } from "react";
 import { useAuth } from "../services/auth";
 import { usePermissions, Can } from "./Auth/Permissions";
 import { useQuery } from "@tanstack/react-query";
@@ -249,7 +249,7 @@ function MobileSection({
 
 /* ── Main Navigation ── */
 
-export default function Navigation() {
+function NavigationContent() {
   const { logout, isAuthenticated } = useAuth();
   const { userProfile } = usePermissions();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -588,5 +588,13 @@ export default function Navigation() {
         </div>
       )}
     </header>
+  );
+}
+
+export default function Navigation() {
+  return (
+    <Suspense>
+      <NavigationContent />
+    </Suspense>
   );
 }

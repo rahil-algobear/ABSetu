@@ -101,11 +101,9 @@ export function DashboardFiltersBar({
 
         {/* Dimensions */}
         {(dimensions ?? [])
-          .filter((d) => !d.is_system)
           .map((dim) => (
             <DimensionFilter
               key={dim.id}
-              dimension={dim}
               selectedValueIds={filters.dimension_value_ids ?? []}
               isExpanded={expandedDimId === dim.id}
               values={expandedDimId === dim.id ? dimValues ?? [] : []}

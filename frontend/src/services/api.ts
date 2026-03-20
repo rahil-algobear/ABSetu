@@ -132,7 +132,7 @@ export const dimensionApi = {
     const response = await authAxios.get<Dimension>(`/dimensions/${id}`);
     return response.data;
   },
-  create: async (data: { name: string; key: string; sort_order?: number }): Promise<Dimension> => {
+  create: async (data: { name: string; key?: string; sort_order?: number }): Promise<Dimension> => {
     const response = await authAxios.post<Dimension>('/dimensions/', data);
     return response.data;
   },
@@ -198,7 +198,7 @@ export const entityTypeApi = {
     const response = await authAxios.get<EntityType>(`/entity-types/${id}`);
     return response.data;
   },
-  create: async (data: { name: string; key: string; config?: Record<string, unknown>; sort_order?: number }): Promise<EntityType> => {
+  create: async (data: { name: string; key?: string; config?: Record<string, unknown>; sort_order?: number }): Promise<EntityType> => {
     const response = await authAxios.post<EntityType>('/entity-types/', data);
     return response.data;
   },
@@ -221,6 +221,7 @@ export interface EntityListParams {
   sort_order?: string;
   page?: number;
   limit?: number;
+  entity_type_id?: string;
 }
 
 export interface EntityFilterDefinition {
