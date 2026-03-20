@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   activityApi,
   activityFormApi,
+  dimensionApi,
   entityApi,
   entityTypeApi,
   metaFieldSchemaApi,
@@ -23,10 +24,11 @@ import { Can } from "@/components/Auth/Permissions";
 import { DynamicMetaForm, MetaFieldDisplay } from "@/components/DynamicMetaForm";
 import { SearchSelectParticipants } from "@/components/SearchSelectParticipants";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PageLayout } from "@/components/ui/page-layout";
-import { Trash2 } from "lucide-react";
+import { Trash2, Pencil, Calendar, FileText, Users } from "lucide-react";
 import toast from "react-hot-toast";
 
 export default function ActivityDetailPage() {
@@ -36,6 +38,13 @@ export default function ActivityDetailPage() {
   const queryClient = useQueryClient();
 
   const [editingSections, setEditingSections] = useState(false);
+  const [editingDetails, setEditingDetails] = useState(false);
+  const [detailFormData, setDetailFormData] = useState({
+    start_date: "",
+    end_date: "",
+    notes: "",
+  });
+  const [detailMetaValues, setDetailMetaValues] = useState<Record<string, unknown>>({});
   const [participantState, setParticipantState] = useState<
     Record<string, { participant_id: string; participant_type: string; status?: string; meta?: Record<string, unknown> }[]>
   >({});
@@ -53,6 +62,11 @@ export default function ActivityDetailPage() {
   const { data: entityTypes = [] } = useQuery({
     queryKey: ["entity-types"],
     queryFn: entityTypeApi.list,
+  });
+
+  const { data: dimensions = [] } = useQuery({
+    queryKey: ["dimensions"],
+    queryFn: dimensionApi.list,
   });
 
   const { data: allMetaSchemas = {} } = useQuery<MetaFieldSchemas>({
@@ -75,6 +89,14 @@ export default function ActivityDetailPage() {
     if (!formConfig?.elements?.length) return [];
     return formConfig.elements
       .filter((el) => el.type === "entity_type" && el.visible)
+      .sort((a, b) => a.sort_order - b.sort_order);
+  }, [formConfig]);
+
+  // Visible non-participant elements (default + activity_meta + dimension) for the detail/edit view
+  const detailElements: ActivityFormElement[] = useMemo(() => {
+    if (!formConfig?.elements?.length) return [];
+    return formConfig.elements
+      .filter((el) => el.visible && (el.type === "default" || el.type === "activity_meta" || el.type === "dimension"))
       .sort((a, b) => a.sort_order - b.sort_order);
   }, [formConfig]);
 
@@ -155,6 +177,17 @@ export default function ActivityDetailPage() {
     },
   });
 
+  const updateDetailsMutation = useMutation({
+    mutationFn: (data: { start_date?: string; end_date?: string; notes?: string; meta?: Record<string, unknown> }) =>
+      activityApi.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["activity", id] });
+      setEditingDetails(false);
+      toast.success("Details updated");
+    },
+    onError: () => toast.error("Failed to update details"),
+  });
+
   const deleteMutation = useMutation({
     mutationFn: () => activityApi.delete(id),
     onSuccess: () => {
@@ -164,6 +197,29 @@ export default function ActivityDetailPage() {
     },
     onError: () => toast.error("Failed to delete activity"),
   });
+
+  const openDetailEditing = () => {
+    if (!activity) return;
+    setDetailFormData({
+      start_date: activity.start_date,
+      end_date: activity.end_date || "",
+      notes: activity.notes || "",
+    });
+    setDetailMetaValues(activity.meta || {});
+    setEditingDetails(true);
+  };
+
+  const handleDetailSave = () => {
+    const payload: Record<string, unknown> = {
+      start_date: detailFormData.start_date,
+      end_date: detailFormData.end_date || undefined,
+      notes: detailFormData.notes || undefined,
+    };
+    if (activityTypeFields.length > 0) {
+      payload.meta = detailMetaValues;
+    }
+    updateDetailsMutation.mutate(payload as Parameters<typeof updateDetailsMutation.mutate>[0]);
+  };
 
   const handleDelete = () => {
     if (confirm("Delete this activity? This cannot be undone.")) {
@@ -279,9 +335,15 @@ export default function ActivityDetailPage() {
   const activityTitle = activity.dimensions.length > 0 ? activity.dimensions[0].value_name : "Activity";
 
   return (
-    <PageLayout className="p-4">
-      <div className="flex items-center justify-between mb-1">
-        <h1 className="text-2xl font-bold">{activityTitle}</h1>
+    <PageLayout className="p-4 space-y-4">
+      {/* Header */}
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">{activityTitle}</h1>
+          {activity.activity_type_name && (
+            <p className="text-sm text-gray-500">{activity.activity_type_name}</p>
+          )}
+        </div>
         <Can permission="activity:create">
           <Button
             size="sm"
@@ -295,41 +357,176 @@ export default function ActivityDetailPage() {
           </Button>
         </Can>
       </div>
-      <div className="flex gap-1 mb-1 flex-wrap">
-        {activity.dimensions.slice(1).map((dim) => (
-          <Badge key={dim.value_id} variant="secondary">
-            {dim.dimension_name}: {dim.value_name}
-          </Badge>
-        ))}
-      </div>
-      <p className="text-gray-500 mb-4">{activity.date}</p>
 
-      {activity.activity_type_name && (
-        <p className="text-sm text-gray-500 mb-2">Type: {activity.activity_type_name}</p>
-      )}
+      {/* Details Card */}
+      <Card>
+        <CardHeader className="flex-row items-center justify-between pb-2">
+          <CardTitle className="text-base">Details</CardTitle>
+          {!editingDetails && (
+            <Can permission="activity:create">
+              <Button size="sm" variant="outline" onClick={openDetailEditing}>
+                <Pencil className="h-3.5 w-3.5 mr-1" />
+                Edit
+              </Button>
+            </Can>
+          )}
+        </CardHeader>
+        <CardContent>
+          {editingDetails ? (
+            <form onSubmit={(e) => { e.preventDefault(); handleDetailSave(); }} className="space-y-3">
+              {detailElements.map((el) => {
+                if (el.type === "default" && el.ref_id === "start_date") {
+                  return (
+                    <div key="edit-start_date">
+                      <label className="text-sm font-medium">
+                        Date{el.required && <span className="text-red-500 ml-0.5">*</span>}
+                      </label>
+                      <div className="flex gap-2 mt-1">
+                        <Input
+                          type="date"
+                          value={detailFormData.start_date}
+                          onChange={(e) => setDetailFormData({ ...detailFormData, start_date: e.target.value })}
+                          required={el.required}
+                        />
+                        <Input
+                          type="date"
+                          value={detailFormData.end_date}
+                          onChange={(e) => setDetailFormData({ ...detailFormData, end_date: e.target.value })}
+                          min={detailFormData.start_date}
+                        />
+                      </div>
+                      <p className="text-xs text-gray-400 mt-0.5">Leave end date empty for single-day activities</p>
+                    </div>
+                  );
+                }
+                if (el.type === "default" && el.ref_id === "notes") {
+                  return (
+                    <div key="edit-notes">
+                      <label className="text-sm font-medium">
+                        Notes{el.required && <span className="text-red-500 ml-0.5">*</span>}
+                      </label>
+                      <Input
+                        placeholder="Notes..."
+                        value={detailFormData.notes}
+                        onChange={(e) => setDetailFormData({ ...detailFormData, notes: e.target.value })}
+                        required={el.required}
+                      />
+                    </div>
+                  );
+                }
+                if (el.type === "activity_meta") {
+                  return (
+                    <div key="edit-activity_meta">
+                      <DynamicMetaForm
+                        fields={activityTypeFields}
+                        values={detailMetaValues}
+                        onChange={setDetailMetaValues}
+                      />
+                    </div>
+                  );
+                }
+                return null;
+              })}
+              <div className="flex gap-2 pt-2">
+                <Button type="submit" disabled={updateDetailsMutation.isPending}>
+                  Save
+                </Button>
+                <Button type="button" variant="outline" onClick={() => setEditingDetails(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          ) : (
+            <div className="space-y-3">
+              {detailElements.map((el) => {
+                // Dimension elements
+                if (el.type === "dimension") {
+                  // Map form element ref_id (dimension UUID) to the dimension's key
+                  const dimDef = dimensions.find((d) => d.id === el.ref_id);
+                  const dimInfo = dimDef
+                    ? activity.dimensions.find((d) => d.dimension_key === dimDef.key)
+                    : undefined;
+                  return (
+                    <div key={`dim-${el.ref_id}`}>
+                      <p className="text-xs text-gray-500">{dimInfo?.dimension_name || dimDef?.name || el.ref_id}</p>
+                      {dimInfo ? (
+                        <p className="text-sm font-medium">{dimInfo.value_name}</p>
+                      ) : (
+                        <p className="text-sm text-gray-300 italic">Not set</p>
+                      )}
+                    </div>
+                  );
+                }
 
-      {activity.notes && (
-        <p className="text-sm text-gray-600 mb-4">{activity.notes}</p>
-      )}
+                // Date
+                if (el.type === "default" && el.ref_id === "start_date") {
+                  return (
+                    <div key="start_date" className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4 text-gray-400 shrink-0" />
+                      <div>
+                        <p className="text-xs text-gray-500">Date</p>
+                        <p className="text-sm font-medium">
+                          {activity.start_date}
+                          {activity.end_date && activity.end_date !== activity.start_date
+                            ? ` — ${activity.end_date}`
+                            : ""}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                }
 
-      {/* Activity meta display */}
-      {activity.meta && Object.keys(activity.meta).length > 0 && activityTypeFields.length > 0 && (
-        <Card className="mb-4">
-          <CardContent className="py-3">
-            <MetaFieldDisplay fields={activityTypeFields} values={activity.meta} />
-          </CardContent>
-        </Card>
-      )}
+                // Notes
+                if (el.type === "default" && el.ref_id === "notes") {
+                  return (
+                    <div key="notes" className="flex items-start gap-2">
+                      <FileText className="h-4 w-4 text-gray-400 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-xs text-gray-500">Notes</p>
+                        {activity.notes ? (
+                          <p className="text-sm">{activity.notes}</p>
+                        ) : (
+                          <p className="text-sm text-gray-300 italic">Not set</p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                }
+
+                // Activity meta fields
+                if (el.type === "activity_meta" && activityTypeFields.length > 0) {
+                  return (
+                    <div key="activity_meta">
+                      <hr className="border-gray-100 mb-3" />
+                      <MetaFieldDisplay
+                        fields={activityTypeFields}
+                        values={activity.meta}
+                        showEmpty
+                      />
+                    </div>
+                  );
+                }
+
+                return null;
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Participant sections from form builder */}
       {entityTypeElements.length > 0 ? (
         <Card>
-          <CardHeader className="flex-row items-center justify-between">
-            <CardTitle className="text-lg">Participants</CardTitle>
+          <CardHeader className="flex-row items-center justify-between pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Users className="h-4 w-4 text-gray-500" />
+              Participants
+            </CardTitle>
             <Can permission="activity:create">
               {!editingSections && (
-                <Button size="sm" onClick={openEditing}>
-                  Edit Participants
+                <Button size="sm" variant="outline" onClick={openEditing}>
+                  <Pencil className="h-3.5 w-3.5 mr-1" />
+                  Edit
                 </Button>
               )}
             </Can>
@@ -472,12 +669,15 @@ export default function ActivityDetailPage() {
 
                 return (
                   <div key={sectionKey}>
-                    <h3 className="text-sm font-semibold mb-1">
+                    <h3 className="text-sm font-semibold mb-1 flex items-center gap-1.5">
                       {getElementLabel(el)}
                       {el.required && <span className="text-red-500 ml-0.5">*</span>}
+                      <Badge variant="secondary" className="text-xs font-normal ml-1">
+                        {sectionParticipants.length}
+                      </Badge>
                     </h3>
                     {sectionParticipants.length === 0 ? (
-                      <p className="text-gray-500 text-xs">None recorded</p>
+                      <p className="text-gray-400 text-xs italic py-2">No participants added yet</p>
                     ) : useTable ? (
                       <div className="border rounded-md overflow-x-auto">
                         <table className="w-full text-sm">
@@ -525,14 +725,11 @@ export default function ActivityDetailPage() {
                         </table>
                       </div>
                     ) : (
-                      <div className="space-y-1">
+                      <div className="flex flex-wrap gap-1.5">
                         {sectionParticipants.map((p) => (
-                          <div
-                            key={p.id}
-                            className="p-2 border rounded text-sm"
-                          >
-                            <span>{p.participant_name || p.participant_id}</span>
-                          </div>
+                          <Badge key={p.id} variant="outline" className="text-sm font-normal py-1 px-2">
+                            {p.participant_name || p.participant_id}
+                          </Badge>
                         ))}
                       </div>
                     )}
@@ -546,11 +743,14 @@ export default function ActivityDetailPage() {
         /* No form config — show flat participant list */
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Participants</CardTitle>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Users className="h-4 w-4 text-gray-500" />
+              Participants
+            </CardTitle>
           </CardHeader>
           <CardContent>
             {participants.length === 0 ? (
-              <p className="text-gray-500 text-sm">No participants recorded</p>
+              <p className="text-gray-400 text-sm italic">No participants recorded</p>
             ) : (
               <div className="space-y-1">
                 {participants.map((p) => (

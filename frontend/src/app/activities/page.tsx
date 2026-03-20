@@ -9,8 +9,10 @@ import {
   activityFormApi,
   dimensionApi,
   dimensionValueLinkApi,
+  entityApi,
   entityTypeApi,
   metaFieldSchemaApi,
+  userApi,
 } from "@/services/api";
 import {
   ActivityForm,
@@ -29,6 +31,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { DynamicMetaForm } from "@/components/DynamicMetaForm";
+import { SearchSelectParticipants } from "@/components/SearchSelectParticipants";
 import { PageLayout } from "@/components/ui/page-layout";
 import { Plus } from "lucide-react";
 import Link from "next/link";
@@ -118,11 +121,15 @@ export default function ActivitiesPage() {
   });
 
   const [formData, setFormData] = useState({
-    date: new Date().toISOString().split("T")[0],
+    start_date: new Date().toISOString().split("T")[0],
+    end_date: "" as string,
     notes: "",
     dimension_value_ids: [] as string[],
   });
   const [metaValues, setMetaValues] = useState<Record<string, unknown>>({});
+  const [participantState, setParticipantState] = useState<
+    Record<string, { participant_id: string; participant_type: string; status?: string; meta?: Record<string, unknown> }[]>
+  >({});
 
   // Load form builder config for the activity type
   const { data: formConfig } = useQuery<ActivityForm>({
@@ -131,13 +138,45 @@ export default function ActivitiesPage() {
     enabled: !!selectedTypeId,
   });
 
-  // Sorted visible elements from form config
+  // Sorted visible elements from form config — on create page, only show "create" stage elements
   const formElements: ActivityFormElement[] = useMemo(() => {
     if (!formConfig?.elements?.length) return [];
     return [...formConfig.elements]
-      .filter((el) => el.visible)
+      .filter((el) => el.visible && el.stage === "create")
       .sort((a, b) => a.sort_order - b.sort_order);
   }, [formConfig]);
+
+  // Entity type elements that are in "create" stage (participant capture at creation)
+  const createEntityElements: ActivityFormElement[] = useMemo(() => {
+    return formElements.filter((el) => el.type === "entity_type");
+  }, [formElements]);
+
+  const createEntitySourceIds = useMemo(() => {
+    return createEntityElements
+      .filter((el) => el.ref_id && el.ref_id !== "user")
+      .map((el) => el.ref_id!);
+  }, [createEntityElements]);
+
+  const hasCreateUserSection = createEntityElements.some((el) => el.ref_id === "user");
+
+  const { data: createEntitiesByType = {} } = useQuery({
+    queryKey: ["entities-for-create", createEntitySourceIds.join(",")],
+    queryFn: async () => {
+      const result: Record<string, { id: string; name: string }[]> = {};
+      for (const typeId of createEntitySourceIds) {
+        const entities = await entityApi.list(typeId);
+        result[typeId] = entities.map((e) => ({ id: e.id, name: e.name }));
+      }
+      return result;
+    },
+    enabled: createEntitySourceIds.length > 0,
+  });
+
+  const { data: createUsers = [] } = useQuery({
+    queryKey: ["users"],
+    queryFn: userApi.list,
+    enabled: hasCreateUserSection,
+  });
 
   // Derive meta fields: activity type + dimension values + type×dimension_value combos
   const activityMetaFields = useMemo((): MetaFieldDefinition[] => {
@@ -174,16 +213,39 @@ export default function ActivitiesPage() {
   }, [dimensions, allDimensionValues, formData.dimension_value_ids]);
 
   const createMutation = useMutation({
-    mutationFn: activityApi.create,
+    mutationFn: async (payload: Parameters<typeof activityApi.create>[0]) => {
+      const activity = await activityApi.create(payload);
+      // Save participants if any were selected during creation
+      const allRecords: { participant_type: string; participant_id: string; section_key: string; status?: string; meta?: Record<string, unknown> }[] = [];
+      for (const el of createEntityElements) {
+        const sectionKey = el.ref_id || el.type;
+        const sectionState = participantState[sectionKey] || [];
+        for (const p of sectionState) {
+          allRecords.push({
+            participant_type: p.participant_type,
+            participant_id: p.participant_id,
+            section_key: sectionKey,
+            status: p.status,
+            meta: p.meta,
+          });
+        }
+      }
+      if (allRecords.length > 0) {
+        await activityApi.saveParticipants(activity.id, allRecords);
+      }
+      return activity;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["activities"] });
       setShowCreate(false);
       setFormData({
-        date: new Date().toISOString().split("T")[0],
+        start_date: new Date().toISOString().split("T")[0],
+        end_date: "",
         notes: "",
         dimension_value_ids: [],
       });
       setMetaValues({});
+      setParticipantState({});
       toast.success(`${typeName} created`);
     },
     onError: () => toast.error(`Failed to create ${typeName.toLowerCase()}`),
@@ -192,6 +254,56 @@ export default function ActivitiesPage() {
   // Render a single form element based on its type
   const renderElement = (el: ActivityFormElement) => {
     switch (el.type) {
+      case "default": {
+        if (el.ref_id === "start_date") {
+          return (
+            <div key="default-start_date">
+              <label className="text-sm font-medium">
+                Date{el.required && <span className="text-red-500 ml-0.5">*</span>}
+              </label>
+              <div className="flex gap-2 mt-1">
+                <Input
+                  type="date"
+                  value={formData.start_date}
+                  onChange={(e) =>
+                    setFormData({ ...formData, start_date: e.target.value })
+                  }
+                  required={el.required}
+                />
+                <Input
+                  type="date"
+                  value={formData.end_date}
+                  onChange={(e) =>
+                    setFormData({ ...formData, end_date: e.target.value })
+                  }
+                  placeholder="End date (optional)"
+                  min={formData.start_date}
+                />
+              </div>
+              <p className="text-xs text-gray-400 mt-0.5">Leave end date empty for single-day activities</p>
+            </div>
+          );
+        }
+        if (el.ref_id === "notes") {
+          return (
+            <div key="default-notes">
+              <label className="text-sm font-medium">
+                Notes{el.required && <span className="text-red-500 ml-0.5">*</span>}
+              </label>
+              <Input
+                placeholder="Optional notes..."
+                value={formData.notes}
+                onChange={(e) =>
+                  setFormData({ ...formData, notes: e.target.value })
+                }
+                required={el.required}
+              />
+            </div>
+          );
+        }
+        return null;
+      }
+
       case "dimension": {
         const dim = dimensions.find((d) => d.id === el.ref_id);
         if (!dim) return null;
@@ -243,10 +355,45 @@ export default function ActivitiesPage() {
         );
       }
 
-      case "entity_type":
-        // Entity types are rendered on the activity detail page (participants)
-        // On create, we just show a note
-        return null;
+      case "entity_type": {
+        const isUserSource = el.ref_id === "user";
+        const sectionKey = el.ref_id || el.type;
+        const options = isUserSource
+          ? createUsers.map((u) => ({ id: u.id, name: `${u.first_name} ${u.last_name}` }))
+          : (createEntitiesByType[el.ref_id || ""] || []);
+        const participantType = isUserSource ? "user" : "entity";
+        const sectionState = participantState[sectionKey] || [];
+        const captureStatus = el.config?.capture_status as boolean || false;
+        const statuses = (el.config?.statuses as string[]) || ["present", "absent"];
+        const defaultStatus = (el.config?.default_status as string) || statuses[0];
+        const etLabel = isUserSource
+          ? "Users (staff)"
+          : entityTypes.find((t) => t.id === el.ref_id)?.name || "Participants";
+
+        return (
+          <div key={`entity-${sectionKey}`}>
+            <h3 className="text-sm font-semibold mb-2">
+              {etLabel}
+              {el.required && <span className="text-red-500 ml-0.5">*</span>}
+            </h3>
+            <SearchSelectParticipants
+              sectionKey={sectionKey}
+              options={options}
+              participantType={participantType}
+              selected={sectionState}
+              onChange={(records) =>
+                setParticipantState({ ...participantState, [sectionKey]: records })
+              }
+              captureStatus={captureStatus}
+              statuses={statuses}
+              defaultStatus={defaultStatus}
+              metaFields={[]}
+              entityTypeId={isUserSource ? null : (el.ref_id || null)}
+              entityTypeName={etLabel}
+            />
+          </div>
+        );
+      }
 
       case "activity_meta":
         if (activityMetaFields.length === 0) return null;
@@ -297,7 +444,10 @@ export default function ActivitiesPage() {
               onSubmit={(e) => {
                 e.preventDefault();
                 const payload = {
-                  ...formData,
+                  start_date: formData.start_date,
+                  end_date: formData.end_date || undefined,
+                  notes: formData.notes || undefined,
+                  dimension_value_ids: formData.dimension_value_ids,
                   activity_type_id: selectedTypeId || undefined,
                   ...(activityMetaFields.length > 0 ? { meta: metaValues } : {}),
                 };
@@ -313,33 +463,6 @@ export default function ActivitiesPage() {
                   </p>
                 )
               }
-
-              {hasFormConfig && (
-                <>
-                  <div>
-                    <label className="text-sm font-medium">Date</label>
-                    <Input
-                      type="date"
-                      value={formData.date}
-                      onChange={(e) =>
-                        setFormData({ ...formData, date: e.target.value })
-                      }
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-medium">Notes</label>
-                    <Input
-                      placeholder="Optional notes..."
-                      value={formData.notes}
-                      onChange={(e) =>
-                        setFormData({ ...formData, notes: e.target.value })
-                      }
-                    />
-                  </div>
-                </>
-              )}
 
               <div className="flex gap-2">
                 {hasFormConfig && (
@@ -382,7 +505,10 @@ export default function ActivitiesPage() {
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-medium">{a.date}</p>
+                      <p className="text-sm font-medium">
+                        {a.start_date}
+                        {a.end_date && a.end_date !== a.start_date && ` — ${a.end_date}`}
+                      </p>
                       {a.activity_type_name && (
                         <p className="text-xs text-gray-500">{a.activity_type_name}</p>
                       )}
