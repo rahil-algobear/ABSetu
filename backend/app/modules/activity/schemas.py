@@ -73,6 +73,7 @@ class DimensionInfo(BaseModel):
 class ActivityCreate(BaseModel):
     activity_type_id: str | None = None
     dimension_value_ids: list[str] = []
+    title: str | None = None
     start_date: datetime.date
     end_date: datetime.date | None = None
     notes: str | None = None
@@ -80,6 +81,7 @@ class ActivityCreate(BaseModel):
 
 
 class ActivityUpdate(BaseModel):
+    title: str | None = None
     start_date: Optional[datetime.date] = None
     end_date: Optional[datetime.date] = None
     notes: str | None = None
@@ -89,6 +91,7 @@ class ActivityUpdate(BaseModel):
 class ActivityResponse(BaseResponseSchema):
     organization_id: str
     activity_type_id: str | None = None
+    title: str | None = None
     start_date: datetime.date
     end_date: datetime.date | None = None
     notes: str | None = None

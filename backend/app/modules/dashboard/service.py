@@ -8,7 +8,7 @@ from datetime import date, timedelta
 from sqlalchemy import func
 from sqlalchemy.orm import Session, Query
 
-from app.modules.activity.model import Activity, ActivityType, ActivityParticipant
+from app.modules.activity.model import Activity, ActivityForm, ActivityType, ActivityParticipant
 from app.modules.entity.model import Entity, EntityType
 from app.modules.beneficiary.model import Enrollment
 from app.modules.auth.model import User
@@ -172,9 +172,18 @@ class DashboardService:
         enrollments_over_time = [TimeSeriesPoint(period=p, count=c) for p, c in enrollments_over_time_rows]
 
         # --- Recent activities (last 10, with filters) ---
+        from sqlalchemy.orm import joinedload
+        from app.modules.dimension.model import DimensionValue as DV2, Dimension as Dim2
+
         recent_q = (
             self.db.query(Activity)
             .filter_by(**org_filter)
+            .options(
+                joinedload(Activity.activity_type),
+                joinedload(Activity.dimensions)
+                .joinedload(ActivityDimension.dimension_value)
+                .joinedload(DV2.dimension),
+            )
         )
         recent_q = self._apply_activity_filters(
             recent_q, dimension_value_ids, activity_type_id
@@ -185,6 +194,17 @@ class DashboardService:
             .all()
         )
 
+        # Load forms for title resolution
+        forms_by_type: dict[str, ActivityForm | None] = {}
+        for a in recent_rows:
+            key = str(a.activity_type_id) if a.activity_type_id else None
+            if key and key not in forms_by_type:
+                forms_by_type[key] = (
+                    self.db.query(ActivityForm)
+                    .filter_by(activity_type_id=a.activity_type_id, organization_id=organization_id)
+                    .first()
+                )
+
         recent_activities = []
         for a in recent_rows:
             participant_count = (
@@ -194,10 +214,36 @@ class DashboardService:
                 or 0
             )
             type_name = a.activity_type.name if a.activity_type else None
+
+            # Resolve title
+            title = a.title
+            form = forms_by_type.get(str(a.activity_type_id)) if a.activity_type_id else None
+            if not title and form and form.elements:
+                title_el = next(
+                    (el for el in form.elements
+                     if el.get("type") == "default" and el.get("ref_id") == "title"),
+                    None,
+                )
+                if title_el:
+                    config = title_el.get("config") or {}
+                    if config.get("mode") == "generated":
+                        dim_ids = config.get("dimension_ids", [])
+                        separator = config.get("separator", " - ")
+                        parts = []
+                        for dim_id in dim_ids:
+                            for d in a.dimensions or []:
+                                dv = d.dimension_value
+                                if dv and dv.dimension and str(dv.dimension.id) == dim_id:
+                                    parts.append(dv.name)
+                                    break
+                        if parts:
+                            title = separator.join(parts)
+
             recent_activities.append(
                 RecentActivity(
                     id=str(a.id),
                     date=str(a.start_date),
+                    title=title,
                     type_name=type_name,
                     notes=a.notes,
                     participant_count=participant_count,

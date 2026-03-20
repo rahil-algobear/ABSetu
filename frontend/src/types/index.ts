@@ -169,6 +169,7 @@ export interface Activity {
   id: string;
   organization_id: string;
   activity_type_id: string | null;
+  title: string | null;
   start_date: string;
   end_date: string | null;
   notes: string | null;
@@ -260,6 +261,7 @@ export interface TimeSeriesPoint {
 export interface RecentActivity {
   id: string;
   date: string;
+  title: string | null;
   type_name: string | null;
   notes: string | null;
   participant_count: number;
