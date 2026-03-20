@@ -309,28 +309,38 @@ def get_activity_filters(
         }
         sortable_keys = [c["key"] for c in columns if c.get("sortable")]
 
+    # Build field-level filters (will be sorted by list config order)
+    field_filters: list[dict] = []
+
     # Dimension filters (scoped by user access + list config)
-    filters.extend(build_dimension_filters(db, org_id, accessible_dv_ids, filterable_keys))
+    field_filters.extend(build_dimension_filters(db, org_id, accessible_dv_ids, filterable_keys))
 
     # Meta field filters (scoped by list config)
     scope_keys = [f"activity:{at.id}" for at in activity_types]
     if activity_type_id:
         scope_keys = [f"activity:{activity_type_id}"]
-    filters.extend(build_meta_field_filters(db, org_id, scope_keys, filterable_keys))
+    field_filters.extend(build_meta_field_filters(db, org_id, scope_keys, filterable_keys))
 
     # Date filters (only if list config allows or no config)
     if filterable_keys is None or "start_date" in filterable_keys:
-        filters.append({
+        field_filters.append({
             "key": "start_date",
             "label": "Start Date",
             "type": "date_range",
         })
     if filterable_keys is None or "created_at" in filterable_keys:
-        filters.append({
+        field_filters.append({
             "key": "created_at",
             "label": "Created Date",
             "type": "date_range",
         })
+
+    # Sort field filters to match list config column order
+    if columns:
+        order_map = {c["key"]: c.get("sort_order", 0) for c in columns}
+        field_filters.sort(key=lambda f: order_map.get(f["key"], 9999))
+
+    filters.extend(field_filters)
 
     # Visible columns sorted by sort_order
     visible_columns = sorted(

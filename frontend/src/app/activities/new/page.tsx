@@ -490,7 +490,7 @@ function NewActivityPageContent() {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => router.push(`/activities/type/${typeKey}`)}
+                onClick={() => router.push(`/activities/${typeKey}`)}
               >
                 Cancel
               </Button>
