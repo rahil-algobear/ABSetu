@@ -72,9 +72,6 @@ function ActivityTypeListContent() {
     }));
   }, [filterData]);
 
-  // Sortable keys from backend (includes meta fields marked is_sortable)
-  const sortableKeys = useMemo(() => new Set(filterData?.sortable_keys || []), [filterData]);
-
   // Definitions for the filter modal (without activity_type_id — implicit from URL)
   const filterDefinitions: FilterDefinition[] = useMemo(() => {
     return allFilterDefs.filter((f) => f.key !== "activity_type_id");

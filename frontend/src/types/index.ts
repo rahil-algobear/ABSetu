@@ -212,8 +212,6 @@ export interface MetaFieldDefinition {
   required?: boolean;
   options?: string[]; // for select/multiselect
   default?: string | number | boolean | string[];
-  is_filterable?: boolean;
-  is_sortable?: boolean;
 }
 
 export type MetaEntityType = string; // dynamic key for meta field schemas: "entity:{key}" | "enrollment" | "activity" | etc.

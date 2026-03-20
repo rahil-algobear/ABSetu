@@ -147,25 +147,14 @@ class EntityService:
 
         return query
 
-    def get_sort_config(self, org_id: uuid.UUID | None = None) -> dict:
-        """Sort keys available for entity list, including sortable meta fields."""
-        config = {
+    @staticmethod
+    def get_sort_config() -> dict:
+        """Sort keys available for entity list."""
+        return {
             "name": Entity.name,
             "case_number": Entity.case_number,
             "created_at": Entity.created_at,
         }
-        if org_id:
-            from app.common.helpers.filter_definitions import build_meta_field_sort_config
-
-            et_ids = [
-                et.id for et in
-                self.db.query(EntityType).filter_by(organization_id=org_id).all()
-            ]
-            scope_keys = [f"entity:{et_id}" for et_id in et_ids]
-            config.update(build_meta_field_sort_config(
-                self.db, org_id, scope_keys, Entity.meta,
-            ))
-        return config
 
     @staticmethod
     def get_filter_config() -> dict:
@@ -220,23 +209,15 @@ class EntityService:
         # Search
         query = apply_search(query, params.search, [Entity.name, Entity.case_number])
 
-        # Filters (static + dimension + meta)
+        # Filters (static + dimension)
         filter_config = self.get_filter_config()
         filter_config.update(self.get_dimension_filter_config(org_id))
-        from app.common.helpers.filter_definitions import build_meta_field_filter_config
-        et_ids = [
-            et.id for et in
-            self.db.query(EntityType).filter_by(organization_id=org_id).all()
-        ]
-        filter_config.update(build_meta_field_filter_config(
-            self.db, org_id, [f"entity:{et_id}" for et_id in et_ids], Entity.meta,
-        ))
         query = apply_filters(query, params.filters, filter_config)
 
-        # Sort (includes sortable meta fields)
+        # Sort
         query = apply_sort(
             query, params.sort_by, params.sort_order,
-            self.get_sort_config(org_id), Entity.created_at.desc(),
+            self.get_sort_config(), Entity.created_at.desc(),
         )
 
         # Paginate

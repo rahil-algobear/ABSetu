@@ -68,9 +68,6 @@ function EntityTypeEntitiesContent() {
     }));
   }, [filterData]);
 
-  // Sortable keys from backend (includes meta fields marked is_sortable)
-  const sortableKeys = useMemo(() => new Set(filterData?.sortable_keys || []), [filterData]);
-
   // Definitions for the filter modal (without entity_type_id — implicit from URL)
   const filterDefinitions: FilterDefinition[] = useMemo(() => {
     return allFilterDefs.filter((f) => f.key !== "entity_type_id");
@@ -233,20 +230,9 @@ function EntityTypeEntitiesContent() {
                 {dimensionColumns.map((dc) => (
                   <TableHead key={dc.key}>{dc.name}</TableHead>
                 ))}
-                {metaFields.map((f) =>
-                  sortableKeys.has(`meta:${f.key}`) ? (
-                    <SortableTableHead
-                      key={f.key}
-                      label={f.label}
-                      sortKey={`meta:${f.key}`}
-                      currentSortBy={listParams.sortBy}
-                      currentSortOrder={listParams.sortOrder}
-                      onSort={listParams.setSorting}
-                    />
-                  ) : (
-                    <TableHead key={f.key}>{f.label}</TableHead>
-                  )
-                )}
+                {metaFields.map((f) => (
+                  <TableHead key={f.key}>{f.label}</TableHead>
+                ))}
                 <TableHead>Enrollments</TableHead>
                 <TableHead>Activities</TableHead>
                 <SortableTableHead

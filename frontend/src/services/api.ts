@@ -244,8 +244,8 @@ export const entityApi = {
     const response = await authAxios.get<PaginatedResponse<Entity>>('/entities/', { params });
     return response.data;
   },
-  getFilters: async (): Promise<{ filters: EntityFilterDefinition[]; sortable_keys: string[] }> => {
-    const response = await authAxios.get<{ filters: EntityFilterDefinition[]; sortable_keys: string[] }>('/entities/filters');
+  getFilters: async (): Promise<{ filters: EntityFilterDefinition[] }> => {
+    const response = await authAxios.get<{ filters: EntityFilterDefinition[] }>('/entities/filters');
     return response.data;
   },
   get: async (id: string): Promise<Entity> => {
@@ -334,8 +334,8 @@ export const activityApi = {
     const response = await authAxios.get<PaginatedResponse<Activity>>('/activities/', { params });
     return response.data;
   },
-  getFilters: async (): Promise<{ filters: ActivityFilterDefinition[]; sortable_keys: string[] }> => {
-    const response = await authAxios.get<{ filters: ActivityFilterDefinition[]; sortable_keys: string[] }>('/activities/filters');
+  getFilters: async (): Promise<{ filters: ActivityFilterDefinition[] }> => {
+    const response = await authAxios.get<{ filters: ActivityFilterDefinition[] }>('/activities/filters');
     return response.data;
   },
   listByEntity: async (entityId: string): Promise<Activity[]> => {

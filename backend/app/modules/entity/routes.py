@@ -230,11 +230,7 @@ def get_entity_filters(
         "type": "date_range",
     })
 
-    # Sortable keys (static + meta)
-    sort_config = EntityService(db).get_sort_config(org_id)
-    sortable_keys = list(sort_config.keys())
-
-    return {"filters": result, "sortable_keys": sortable_keys}
+    return {"filters": result}
 
 
 @entity_router.get(
