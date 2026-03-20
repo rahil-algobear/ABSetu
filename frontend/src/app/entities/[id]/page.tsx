@@ -6,11 +6,13 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   entityApi,
   enrollmentApi,
+  activityApi,
   metaFieldSchemaApi,
   dimensionApi,
   dimensionValueLinkApi,
 } from "@/services/api";
 import {
+  Activity,
   Dimension,
   DimensionValue,
   DimensionValueLink,
@@ -84,6 +86,12 @@ export default function EntityDetailPage() {
   const { data: enrollmentMetaFields = [] } = useQuery<MetaFieldDefinition[]>({
     queryKey: ["meta-field-schemas", "enrollment"],
     queryFn: () => metaFieldSchemaApi.get("enrollment"),
+  });
+
+  const { data: activities = [] } = useQuery<Activity[]>({
+    queryKey: ["activities-entity", id],
+    queryFn: () => activityApi.listByEntity(id),
+    enabled: !!entity,
   });
 
   const canEnroll = entity?.entity_type_config?.can_enroll !== false;
@@ -215,6 +223,48 @@ export default function EntityDetailPage() {
           </CardContent>
         </Card>
       )}
+
+      <Can permission="activity:view">
+        <Card className="mt-4">
+          <CardHeader>
+            <CardTitle className="text-lg">Sessions</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {activities.length === 0 ? (
+              <p className="text-gray-500 text-sm">No sessions</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b text-left text-gray-500">
+                      <th className="pb-2 pr-4 font-medium">Date</th>
+                      <th className="pb-2 pr-4 font-medium">Type</th>
+                      <th className="pb-2 font-medium">Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {activities.map((a) => (
+                      <tr key={a.id} className="border-b last:border-0">
+                        <td className="py-2 pr-4 whitespace-nowrap">{a.date}</td>
+                        <td className="py-2 pr-4">
+                          {a.activity_type_name ? (
+                            <Badge variant="secondary">{a.activity_type_name}</Badge>
+                          ) : (
+                            <span className="text-gray-400">—</span>
+                          )}
+                        </td>
+                        <td className="py-2 text-gray-600 truncate max-w-[200px]">
+                          {a.notes || "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </Can>
     </PageLayout>
   );
 }

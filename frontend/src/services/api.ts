@@ -285,6 +285,10 @@ export const activityApi = {
     const response = await authAxios.get<Activity[]>('/activities/', { params });
     return response.data;
   },
+  listByEntity: async (entityId: string): Promise<Activity[]> => {
+    const response = await authAxios.get<Activity[]>(`/activities/entity/${entityId}`);
+    return response.data;
+  },
   get: async (id: string): Promise<Activity> => {
     const response = await authAxios.get<Activity>(`/activities/${id}`);
     return response.data;

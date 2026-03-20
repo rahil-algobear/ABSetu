@@ -175,6 +175,20 @@ def list_activities(
 
 
 @activity_router.get(
+    "/entity/{entity_id}",
+    dependencies=[Depends(require_permissions("activity:view"))],
+)
+def list_activities_by_entity(
+    entity_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    service = ActivityService(db)
+    activities = service.list_by_entity(entity_id, current_user.organization_id)
+    return [_build_activity_response(a) for a in activities]
+
+
+@activity_router.get(
     "/{activity_id}",
     dependencies=[Depends(require_permissions("activity:view"))],
 )

@@ -191,6 +191,32 @@ class ActivityService:
         self.db.refresh(activity)
         return self.get_by_id(activity.id)
 
+    def list_by_entity(self, entity_id: uuid.UUID, org_id: uuid.UUID) -> list[Activity]:
+        """Return activities where the given entity is a participant."""
+        activity_ids_subq = (
+            self.db.query(ActivityParticipant.activity_id)
+            .filter(
+                ActivityParticipant.participant_type == "entity",
+                ActivityParticipant.participant_id == entity_id,
+            )
+            .subquery()
+        )
+        return (
+            self.db.query(Activity)
+            .filter(
+                Activity.id.in_(activity_ids_subq),
+                Activity.organization_id == org_id,
+            )
+            .options(
+                joinedload(Activity.activity_type),
+                joinedload(Activity.dimensions)
+                .joinedload(ActivityDimension.dimension_value)
+                .joinedload(DimensionValue.dimension),
+            )
+            .order_by(Activity.date.desc())
+            .all()
+        )
+
     def delete(self, activity_id: uuid.UUID) -> None:
         activity = self.get_by_id(activity_id)
         self.db.delete(activity)
