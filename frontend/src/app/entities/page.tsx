@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog } from "@/components/ui/dialog";
 import { DynamicMetaForm } from "@/components/DynamicMetaForm";
 import { PageLayout } from "@/components/ui/page-layout";
+import { PageContent } from "@/components/ui/page-content";
 import { PageHeader } from "@/components/ui/page-header";
 import { Plus, Search } from "lucide-react";
 import Link from "next/link";
@@ -63,7 +64,7 @@ export default function EntitiesPage() {
   );
 
   return (
-    <PageLayout className="p-4">
+    <PageLayout>
       <PageHeader
         title="Entities"
         actions={
@@ -76,6 +77,7 @@ export default function EntitiesPage() {
         }
       />
 
+      <PageContent>
       <div className="flex gap-2 mb-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -209,6 +211,7 @@ export default function EntitiesPage() {
           ))}
         </div>
       )}
+      </PageContent>
     </PageLayout>
   );
 }

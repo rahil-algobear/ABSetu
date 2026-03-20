@@ -22,6 +22,7 @@ import {
   TableCell,
 } from "@/components/ui/page-table";
 import { PageHeader } from "@/components/ui/page-header";
+import { PageContent } from "@/components/ui/page-content";
 import { Plus, Pencil, Phone, Shield, Trash2 } from "lucide-react";
 
 import toast from "react-hot-toast";
@@ -332,7 +333,7 @@ export default function UsersPage() {
           </Can>
         }
       />
-
+      <PageContent>
       {isLoading ? (
         <p className="text-gray-500 text-sm">Loading...</p>
       ) : users.length === 0 ? (
@@ -623,6 +624,7 @@ export default function UsersPage() {
           </form>
         )}
       </Dialog>
+      </PageContent>
     </>
   );
 }

@@ -28,6 +28,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PageLayout } from "@/components/ui/page-layout";
+import { PageContent } from "@/components/ui/page-content";
 import { PageHeader } from "@/components/ui/page-header";
 import { Trash2, Pencil, Calendar, FileText, Users, Type } from "lucide-react";
 import toast from "react-hot-toast";
@@ -332,13 +333,13 @@ export default function ActivityDetailPage() {
     return fields;
   }, [activityTypeId, activity, allMetaSchemas]);
 
-  if (isLoading) return <PageLayout className="p-4"><p>Loading...</p></PageLayout>;
-  if (!activity) return <PageLayout className="p-4"><p>Not found</p></PageLayout>;
+  if (isLoading) return <PageLayout><PageContent><p>Loading...</p></PageContent></PageLayout>;
+  if (!activity) return <PageLayout><PageContent><p>Not found</p></PageContent></PageLayout>;
 
   const activityTitle = activity.title || (activity.dimensions.length > 0 ? activity.dimensions[0].value_name : "Activity");
 
   return (
-    <PageLayout className="p-4 space-y-4">
+    <PageLayout>
       {/* Header */}
       <PageHeader
         title={activityTitle}
@@ -359,6 +360,7 @@ export default function ActivityDetailPage() {
         }
       />
 
+      <PageContent className="space-y-4">
       {/* Details Card */}
       <Card>
         <CardHeader className="flex-row items-center justify-between pb-2">
@@ -818,6 +820,7 @@ export default function ActivityDetailPage() {
           </CardContent>
         </Card>
       )}
+      </PageContent>
     </PageLayout>
   );
 }

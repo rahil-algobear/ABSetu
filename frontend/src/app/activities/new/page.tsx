@@ -31,6 +31,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DynamicMetaForm } from "@/components/DynamicMetaForm";
 import { SearchSelectParticipants } from "@/components/SearchSelectParticipants";
 import { PageLayout } from "@/components/ui/page-layout";
+import { PageContent } from "@/components/ui/page-content";
 import { PageHeader } from "@/components/ui/page-header";
 import { usePermissions } from "@/components/Auth/Permissions";
 import { useDimensionAutoSelect } from "@/hooks/useDimensionAutoSelect";
@@ -447,9 +448,10 @@ export default function NewActivityPage() {
   const hasFormConfig = formElements.length > 0;
 
   return (
-    <PageLayout className="p-4">
+    <PageLayout>
       <PageHeader title={`New ${typeName}`} />
 
+      <PageContent>
       <Card>
         <CardHeader>
           <CardTitle className="text-lg">Create {typeName}</CardTitle>
@@ -497,6 +499,7 @@ export default function NewActivityPage() {
           </form>
         </CardContent>
       </Card>
+      </PageContent>
     </PageLayout>
   );
 }

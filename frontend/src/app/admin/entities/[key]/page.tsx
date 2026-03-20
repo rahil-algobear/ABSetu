@@ -21,6 +21,7 @@ import {
   TableCell,
 } from "@/components/ui/page-table";
 import { PageHeader } from "@/components/ui/page-header";
+import { PageContent } from "@/components/ui/page-content";
 import { Plus, Pencil, Search } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
@@ -135,7 +136,7 @@ export default function EntityTypeEntitiesPage() {
           </Can>
         }
       />
-
+      <PageContent>
       <div className="relative mb-4">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
         <Input
@@ -229,6 +230,7 @@ export default function EntityTypeEntitiesPage() {
           </div>
         </form>
       </Dialog>
+      </PageContent>
     </>
   );
 }

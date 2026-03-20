@@ -19,6 +19,7 @@ import {
   TableCell,
 } from "@/components/ui/page-table";
 import { PageHeader } from "@/components/ui/page-header";
+import { PageContent } from "@/components/ui/page-content";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -105,7 +106,7 @@ export default function ManageDimensionsPage() {
           </Can>
         }
       />
-
+      <PageContent>
       {isLoading ? (
         <p className="text-gray-500 text-sm">Loading...</p>
       ) : manageable.length === 0 ? (
@@ -159,6 +160,7 @@ export default function ManageDimensionsPage() {
           </div>
         </form>
       </Dialog>
+      </PageContent>
     </>
   );
 }
