@@ -218,6 +218,7 @@ function EntityTypeEntitiesContent() {
         <p className="text-gray-500 text-sm">No {typeName.toLowerCase()} found.</p>
       ) : (
         <>
+          <div className="bg-white shadow-sm border rounded-lg overflow-hidden">
           <Table>
             <TableHeader>
               <TableRow>
@@ -307,7 +308,6 @@ function EntityTypeEntitiesContent() {
               ))}
             </TableBody>
           </Table>
-
           <Pagination
             currentPage={listParams.page}
             totalPages={totalPages}
@@ -317,6 +317,7 @@ function EntityTypeEntitiesContent() {
             onItemsPerPageChange={listParams.setLimit}
             itemLabel={typeName.toLowerCase()}
           />
+          </div>
         </>
       )}
 
