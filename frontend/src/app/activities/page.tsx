@@ -22,6 +22,7 @@ import {
 import { PageLayout } from "@/components/ui/page-layout";
 import { PageHeader } from "@/components/ui/page-header";
 import { Plus } from "lucide-react";
+import { formatDate } from "@/utils/date";
 
 export default function ActivitiesPage() {
   const router = useRouter();
@@ -99,8 +100,8 @@ export default function ActivitiesPage() {
                 key={a.id}
                 onClick={() => router.push(`/activities/${a.id}`)}
               >
-                <TableCell>{a.start_date}</TableCell>
-                <TableCell>{a.end_date || "—"}</TableCell>
+                <TableCell>{formatDate(a.start_date)}</TableCell>
+                <TableCell>{formatDate(a.end_date)}</TableCell>
                 <TableCell className="font-medium">
                   {getActivityTitle(a)}
                 </TableCell>

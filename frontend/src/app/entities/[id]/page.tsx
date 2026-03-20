@@ -33,6 +33,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Plus, Pencil, X, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
+import { formatDate } from "@/utils/date";
 
 /**
  * Cascading dimension filter — reused from activities page pattern.
@@ -215,8 +216,8 @@ export default function EntityDetailPage() {
                             ))}
                           </div>
                           <p className="text-xs text-gray-500">
-                            {e.admission_date}
-                            {e.release_date ? ` to ${e.release_date}` : ""}
+                            {formatDate(e.admission_date)}
+                            {e.release_date ? ` to ${formatDate(e.release_date)}` : ""}
                           </p>
                         </div>
                         <div className="flex items-center gap-2">
@@ -280,8 +281,8 @@ export default function EntityDetailPage() {
                         {a.title || (a.dimensions?.length > 0 ? a.dimensions[0].value_name : a.activity_type_name || "Activity")}
                       </div>
                       <div className="text-xs text-gray-500 mt-0.5">
-                        {a.start_date}
-                        {a.end_date && a.end_date !== a.start_date && ` – ${a.end_date}`}
+                        {formatDate(a.start_date)}
+                        {a.end_date && a.end_date !== a.start_date && ` – ${formatDate(a.end_date)}`}
                       </div>
                       {a.dimensions?.length > 0 && (
                         <div className="flex gap-1 mt-1 flex-wrap">
