@@ -53,6 +53,16 @@ const emptyField: MetaFieldDefinition = {
 
 type SectionKind = "entity" | "dimension" | "other" | "activity" | "participant";
 
+interface ScopeGroup {
+  scopeKey: string;
+  scopeLabel: string;
+  fields: MetaFieldDefinition[];
+  activityTypeId: string;
+  dimensionValueId: string;
+  dimensionId: string;
+  entityId: string;
+}
+
 export default function MetaFieldsPage() {
   const queryClient = useQueryClient();
 
@@ -60,19 +70,24 @@ export default function MetaFieldsPage() {
   const [activeKey, setActiveKey] = useState<string>("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editingScopeKey, setEditingScopeKey] = useState<string>("");
   const [fieldForm, setFieldForm] = useState<MetaFieldDefinition>({ ...emptyField });
   const [optionsText, setOptionsText] = useState("");
 
-  // Activity section: activity type (required or "all") + optional dimension value filter
-  const [activityTypeId, setActivityTypeId] = useState<string>(""); // "" = all
-  const [activityDimId, setActivityDimId] = useState<string>(""); // which dimension to filter
-  const [activityDvId, setActivityDvId] = useState<string>(""); // selected dimension value (optional)
+  // Activity tab view filters
+  const [activityFilterTypeId, setActivityFilterTypeId] = useState<string>("");
+  const [activityFilterDimId, setActivityFilterDimId] = useState<string>("");
 
-  // Participant section state
+  // Participant tab
   const [participantEntityId, setParticipantEntityId] = useState<string>("");
-  const [participantTypeId, setParticipantTypeId] = useState<string>(""); // "" = all
-  const [participantDimId, setParticipantDimId] = useState<string>("");
-  const [participantDvId, setParticipantDvId] = useState<string>("");
+  const [participantFilterTypeId, setParticipantFilterTypeId] = useState<string>("");
+  const [participantFilterDimId, setParticipantFilterDimId] = useState<string>("");
+
+  // Modal scope state (for activity/participant add/edit)
+  const [modalActivityTypeId, setModalActivityTypeId] = useState<string>("");
+  const [modalDimId, setModalDimId] = useState<string>("");
+  const [modalDvId, setModalDvId] = useState<string>("");
+  const [modalEntityId, setModalEntityId] = useState<string>("");
 
   const { data: dimensions = [] } = useQuery<Dimension[]>({
     queryKey: ["dimensions"],
@@ -100,38 +115,14 @@ export default function MetaFieldsPage() {
     enabled: dimensions.length > 0,
   });
 
-  const nonSystemDimensions = dimensions;
+  const { data: allSchemas = {} as MetaFieldSchemas } = useQuery<MetaFieldSchemas>({
+    queryKey: ["meta-field-schemas"],
+    queryFn: metaFieldSchemaApi.getAll,
+  });
 
-  // Derive the schema key from section + activeKey
+  // Schema key for entity/dimension/other tabs only
   const schemaKey = useMemo(() => {
-    if (activeSection === "activity") {
-      // Build: activity:activity_type:{typeId}[:dimension_value:{dvId}]
-      // or: activity:dimension_value:{dvId} (all activity types)
-      // or: activity (all activities, no filters)
-      if (activityTypeId && activityDvId) {
-        return `activity:activity_type:${activityTypeId}:dimension_value:${activityDvId}`;
-      }
-      if (activityTypeId) {
-        return `activity:activity_type:${activityTypeId}`;
-      }
-      if (activityDvId) {
-        return `activity:dimension_value:${activityDvId}`;
-      }
-      return "activity";
-    }
-
-    if (activeSection === "participant") {
-      if (!participantEntityId) return "";
-      let key = `participant:entity:${participantEntityId}`;
-      if (participantTypeId) {
-        key += `:activity_type:${participantTypeId}`;
-      }
-      if (participantDvId) {
-        key += `:dimension_value:${participantDvId}`;
-      }
-      return key;
-    }
-
+    if (activeSection === "activity" || activeSection === "participant") return "";
     if (!activeKey) return "";
     switch (activeSection) {
       case "entity": return `entity:${activeKey}`;
@@ -139,7 +130,9 @@ export default function MetaFieldsPage() {
       case "other": return activeKey;
       default: return "";
     }
-  }, [activeSection, activeKey, activityTypeId, activityDvId, participantEntityId, participantTypeId, participantDvId]);
+  }, [activeSection, activeKey]);
+
+  const fields = schemaKey ? (allSchemas[schemaKey] || []) : [];
 
   // Auto-select first ID when section changes
   const selectSection = (section: SectionKind) => {
@@ -149,21 +142,19 @@ export default function MetaFieldsPage() {
         setActiveKey(entityTypesList[0]?.id || "");
         break;
       case "dimension":
-        setActiveKey(nonSystemDimensions[0]?.id || "");
+        setActiveKey(dimensions[0]?.id || "");
         break;
       case "other":
         setActiveKey("enrollment");
         break;
       case "activity":
-        setActivityTypeId("");
-        setActivityDimId("");
-        setActivityDvId("");
+        setActivityFilterTypeId("");
+        setActivityFilterDimId("");
         break;
       case "participant":
         setParticipantEntityId(entityTypesList[0]?.id || "user");
-        setParticipantTypeId("");
-        setParticipantDimId("");
-        setParticipantDvId("");
+        setParticipantFilterTypeId("");
+        setParticipantFilterDimId("");
         break;
     }
   };
@@ -175,14 +166,177 @@ export default function MetaFieldsPage() {
     }
   }, [entityTypesList]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const { data: allSchemas = {} as MetaFieldSchemas } = useQuery<MetaFieldSchemas>({
-    queryKey: ["meta-field-schemas"],
-    queryFn: metaFieldSchemaApi.getAll,
-  });
+  // --- Flat table groups for Activity tab ---
+  const activityGroups = useMemo((): ScopeGroup[] => {
+    const groups: ScopeGroup[] = [];
+    for (const [key, fieldList] of Object.entries(allSchemas)) {
+      if (!fieldList?.length) continue;
+      if (key !== "activity" && !key.startsWith("activity:")) continue;
 
-  const fields = schemaKey ? (allSchemas[schemaKey] || []) : [];
+      // Parse scope key
+      const parts = key.split(":");
+      let atId = "";
+      let dvId = "";
+      for (let i = 1; i < parts.length; i += 2) {
+        if (parts[i] === "activity_type") atId = parts[i + 1];
+        if (parts[i] === "dimension_value") dvId = parts[i + 1];
+      }
+      const dimId = dvId
+        ? allDimensionValues.find((d) => d.id === dvId)?.dimension_id || ""
+        : "";
 
-  // Build structured scope for the API
+      // Apply view filters
+      if (activityFilterTypeId && atId !== activityFilterTypeId) continue;
+      if (activityFilterDimId && dimId !== activityFilterDimId) continue;
+
+      // Build label
+      const labels: string[] = [];
+      if (atId) labels.push(activityTypes.find((a) => a.id === atId)?.name || atId);
+      if (dvId) {
+        const dv = allDimensionValues.find((d) => d.id === dvId);
+        const dim = dv ? dimensions.find((d) => d.id === dv.dimension_id) : null;
+        labels.push(dim ? `${dim.name}: ${dv!.name}` : dv?.name || dvId);
+      }
+
+      groups.push({
+        scopeKey: key,
+        scopeLabel: labels.length > 0 ? labels.join(" + ") : "All activities",
+        fields: fieldList,
+        activityTypeId: atId,
+        dimensionValueId: dvId,
+        dimensionId: dimId,
+        entityId: "",
+      });
+    }
+    groups.sort((a, b) => {
+      if (a.scopeKey === "activity") return -1;
+      if (b.scopeKey === "activity") return 1;
+      return a.scopeLabel.localeCompare(b.scopeLabel);
+    });
+    return groups;
+  }, [allSchemas, activityFilterTypeId, activityFilterDimId, activityTypes, allDimensionValues, dimensions]);
+
+  // --- Flat table groups for Participant tab ---
+  const participantGroups = useMemo((): ScopeGroup[] => {
+    if (!participantEntityId) return [];
+    const groups: ScopeGroup[] = [];
+    const prefix = `participant:entity:${participantEntityId}`;
+
+    for (const [key, fieldList] of Object.entries(allSchemas)) {
+      if (!fieldList?.length) continue;
+      if (key !== prefix && !key.startsWith(prefix + ":")) continue;
+
+      const parts = key.split(":");
+      let atId = "";
+      let dvId = "";
+      for (let i = 3; i < parts.length; i += 2) {
+        if (parts[i] === "activity_type") atId = parts[i + 1];
+        if (parts[i] === "dimension_value") dvId = parts[i + 1];
+      }
+      const dimId = dvId
+        ? allDimensionValues.find((d) => d.id === dvId)?.dimension_id || ""
+        : "";
+
+      if (participantFilterTypeId && atId !== participantFilterTypeId) continue;
+      if (participantFilterDimId && dimId !== participantFilterDimId) continue;
+
+      const labels: string[] = [];
+      if (atId) labels.push(activityTypes.find((a) => a.id === atId)?.name || atId);
+      if (dvId) {
+        const dv = allDimensionValues.find((d) => d.id === dvId);
+        const dim = dv ? dimensions.find((d) => d.id === dv.dimension_id) : null;
+        labels.push(dim ? `${dim.name}: ${dv!.name}` : dv?.name || dvId);
+      }
+
+      groups.push({
+        scopeKey: key,
+        scopeLabel: labels.length > 0 ? labels.join(" + ") : "All",
+        fields: fieldList,
+        activityTypeId: atId,
+        dimensionValueId: dvId,
+        dimensionId: dimId,
+        entityId: participantEntityId,
+      });
+    }
+    groups.sort((a, b) => {
+      if (!a.activityTypeId && !a.dimensionValueId) return -1;
+      if (!b.activityTypeId && !b.dimensionValueId) return 1;
+      return a.scopeLabel.localeCompare(b.scopeLabel);
+    });
+    return groups;
+  }, [allSchemas, participantEntityId, participantFilterTypeId, participantFilterDimId, activityTypes, allDimensionValues, dimensions]);
+
+  // Participant entity pill field counts
+  const participantEntityCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const [key, fieldList] of Object.entries(allSchemas)) {
+      if (!fieldList?.length || !key.startsWith("participant:entity:")) continue;
+      const entityId = key.split(":")[2];
+      counts[entityId] = (counts[entityId] || 0) + fieldList.length;
+    }
+    return counts;
+  }, [allSchemas]);
+
+  // Build MetaFieldScope from IDs
+  const buildScope = (
+    section: SectionKind,
+    opts: { entityId?: string; activityTypeId?: string; dvId?: string },
+  ): MetaFieldScope => {
+    if (section === "activity") {
+      const scope: MetaFieldScope = { type: "activity" };
+      if (opts.activityTypeId) scope.activity_type_id = opts.activityTypeId;
+      if (opts.dvId) scope.dimension_value_id = opts.dvId;
+      return scope;
+    }
+    const scope: MetaFieldScope = { type: "participant", entity_type_id: opts.entityId || "" };
+    if (opts.activityTypeId) scope.activity_type_id = opts.activityTypeId;
+    if (opts.dvId) scope.dimension_value_id = opts.dvId;
+    return scope;
+  };
+
+  // Build scope key from modal state
+  const buildScopeKeyFromModal = (): string => {
+    if (activeSection === "activity") {
+      if (modalActivityTypeId && modalDvId)
+        return `activity:activity_type:${modalActivityTypeId}:dimension_value:${modalDvId}`;
+      if (modalActivityTypeId) return `activity:activity_type:${modalActivityTypeId}`;
+      if (modalDvId) return `activity:dimension_value:${modalDvId}`;
+      return "activity";
+    }
+    if (activeSection === "participant") {
+      let key = `participant:entity:${modalEntityId}`;
+      if (modalActivityTypeId) key += `:activity_type:${modalActivityTypeId}`;
+      if (modalDvId) key += `:dimension_value:${modalDvId}`;
+      return key;
+    }
+    return "";
+  };
+
+  // Parse scope key to extract IDs
+  const parseScopeKey = (key: string) => {
+    const parts = key.split(":");
+    let activityTypeId = "";
+    let dimensionValueId = "";
+    let entityId = "";
+    if (parts[0] === "activity") {
+      for (let i = 1; i < parts.length; i += 2) {
+        if (parts[i] === "activity_type") activityTypeId = parts[i + 1];
+        if (parts[i] === "dimension_value") dimensionValueId = parts[i + 1];
+      }
+    } else if (parts[0] === "participant" && parts[1] === "entity") {
+      entityId = parts[2] || "";
+      for (let i = 3; i < parts.length; i += 2) {
+        if (parts[i] === "activity_type") activityTypeId = parts[i + 1];
+        if (parts[i] === "dimension_value") dimensionValueId = parts[i + 1];
+      }
+    }
+    const dimensionId = dimensionValueId
+      ? allDimensionValues.find((d) => d.id === dimensionValueId)?.dimension_id || ""
+      : "";
+    return { activityTypeId, dimensionValueId, dimensionId, entityId };
+  };
+
+  // Current scope for entity/dimension/other tabs
   const currentScope = useMemo((): MetaFieldScope | null => {
     switch (activeSection) {
       case "entity":
@@ -191,28 +345,14 @@ export default function MetaFieldsPage() {
         return activeKey ? { type: "dimension", dimension_id: activeKey } : null;
       case "other":
         return activeKey ? { type: activeKey } : null;
-      case "activity": {
-        const scope: MetaFieldScope = { type: "activity" };
-        if (activityTypeId) scope.activity_type_id = activityTypeId;
-        if (activityDvId) scope.dimension_value_id = activityDvId;
-        return scope;
-      }
-      case "participant": {
-        if (!participantEntityId) return null;
-        const scope: MetaFieldScope = { type: "participant", entity_type_id: participantEntityId };
-        if (participantTypeId) scope.activity_type_id = participantTypeId;
-        if (participantDvId) scope.dimension_value_id = participantDvId;
-        return scope;
-      }
       default:
         return null;
     }
-  }, [activeSection, activeKey, activityTypeId, activityDvId, participantEntityId, participantTypeId, participantDvId]);
+  }, [activeSection, activeKey]);
 
   const updateMutation = useMutation({
-    mutationFn: (newFields: MetaFieldDefinition[]) => {
-      if (!currentScope) throw new Error("No scope selected");
-      return metaFieldSchemaApi.update(currentScope, newFields);
+    mutationFn: ({ scope, newFields }: { scope: MetaFieldScope; newFields: MetaFieldDefinition[] }) => {
+      return metaFieldSchemaApi.update(scope, newFields);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["meta-field-schemas"] });
@@ -221,24 +361,55 @@ export default function MetaFieldsPage() {
     onError: () => toast.error("Failed to update"),
   });
 
+  const saveFields = (scope: MetaFieldScope, newFields: MetaFieldDefinition[]) => {
+    updateMutation.mutate({ scope, newFields });
+  };
+
   const openAdd = () => {
     setEditingIndex(null);
+    setEditingScopeKey("");
     setFieldForm({ ...emptyField });
     setOptionsText("");
+    if (activeSection === "activity") {
+      setModalActivityTypeId("");
+      setModalDimId("");
+      setModalDvId("");
+    } else if (activeSection === "participant") {
+      setModalEntityId(participantEntityId);
+      setModalActivityTypeId("");
+      setModalDimId("");
+      setModalDvId("");
+    }
     setModalOpen(true);
   };
 
-  const openEdit = (index: number) => {
-    const f = fields[index];
+  const openEdit = (index: number, scopeKey?: string) => {
+    const sk = scopeKey || schemaKey;
+    const targetFields = allSchemas[sk] || [];
+    const f = targetFields[index];
+    if (!f) return;
     setEditingIndex(index);
+    setEditingScopeKey(sk);
     setFieldForm({ ...f });
     setOptionsText(f.options?.join("\n") || "");
+
+    if (activeSection === "activity" || activeSection === "participant") {
+      const parsed = parseScopeKey(sk);
+      setModalActivityTypeId(parsed.activityTypeId);
+      setModalDvId(parsed.dimensionValueId);
+      setModalDimId(parsed.dimensionId);
+      if (activeSection === "participant") {
+        setModalEntityId(parsed.entityId);
+      }
+    }
+
     setModalOpen(true);
   };
 
   const closeModal = () => {
     setModalOpen(false);
     setEditingIndex(null);
+    setEditingScopeKey("");
   };
 
   const handleSave = (e: React.FormEvent) => {
@@ -257,125 +428,60 @@ export default function MetaFieldsPage() {
       : undefined;
     const field: MetaFieldDefinition = { ...fieldForm, key, options, default: defaultVal };
 
-    let updated: MetaFieldDefinition[];
-    if (editingIndex !== null) {
-      updated = fields.map((f, i) => (i === editingIndex ? field : f));
+    if (activeSection === "activity" || activeSection === "participant") {
+      const targetScopeKey = editingIndex !== null ? editingScopeKey : buildScopeKeyFromModal();
+      const existingFields = allSchemas[targetScopeKey] || [];
+      const updated = editingIndex !== null
+        ? existingFields.map((f, i) => (i === editingIndex ? field : f))
+        : [...existingFields, field];
+      const parsed = parseScopeKey(targetScopeKey);
+      const scope = buildScope(activeSection, {
+        entityId: parsed.entityId,
+        activityTypeId: parsed.activityTypeId,
+        dvId: parsed.dimensionValueId,
+      });
+      saveFields(scope, updated);
     } else {
-      updated = [...fields, field];
+      if (!currentScope) return;
+      const updated = editingIndex !== null
+        ? fields.map((f, i) => (i === editingIndex ? field : f))
+        : [...fields, field];
+      saveFields(currentScope, updated);
     }
-
-    updateMutation.mutate(updated);
     closeModal();
   };
 
-  const handleDelete = (index: number) => {
-    if (!confirm(`Delete field "${fields[index].label}"?`)) return;
-    const updated = fields.filter((_, i) => i !== index);
-    updateMutation.mutate(updated);
+  const handleDelete = (index: number, scopeKey?: string) => {
+    const sk = scopeKey || schemaKey;
+    const targetFields = allSchemas[sk] || [];
+    if (!confirm(`Delete field "${targetFields[index]?.label}"?`)) return;
+    const updated = targetFields.filter((_, i) => i !== index);
+
+    if (activeSection === "activity" || activeSection === "participant") {
+      const parsed = parseScopeKey(sk);
+      const scope = buildScope(activeSection, {
+        entityId: parsed.entityId,
+        activityTypeId: parsed.activityTypeId,
+        dvId: parsed.dimensionValueId,
+      });
+      saveFields(scope, updated);
+    } else {
+      if (!currentScope) return;
+      saveFields(currentScope, updated);
+    }
   };
 
   const showOptions = fieldForm.type === "select" || fieldForm.type === "multiselect";
 
-  // Build label for the currently selected schema
+  // Selected label for entity/dimension/other header
   const selectedLabel = useMemo(() => {
-    const dvLabel = (dvId: string) => {
-      const dv = allDimensionValues.find((d) => d.id === dvId);
-      if (!dv) return "";
-      const dim = dimensions.find((d) => d.id === dv.dimension_id);
-      return `${dim ? dim.name : ""}: ${dv.name}`;
-    };
-
     switch (activeSection) {
       case "entity": return entityTypesList.find((et) => et.id === activeKey)?.name || activeKey;
-      case "dimension": {
-        const dim = nonSystemDimensions.find((d) => d.id === activeKey);
-        return dim ? dim.name : activeKey;
-      }
+      case "dimension": return dimensions.find((d) => d.id === activeKey)?.name || activeKey;
       case "other": return "Enrollments";
-      case "activity": {
-        const typeName = activityTypes.find((c) => c.id === activityTypeId)?.name;
-        const parts = ["Activity"];
-        if (typeName) parts.push(typeName);
-        else parts.push("All");
-        if (activityDvId) parts.push(dvLabel(activityDvId));
-        return parts.join(" \u2192 ");
-      }
-      case "participant": {
-        const entityLabel = participantEntityId === "user"
-          ? "Users"
-          : entityTypesList.find((et) => et.id === participantEntityId)?.name || participantEntityId;
-        const parts = [`Participant: ${entityLabel}`];
-        if (participantTypeId) {
-          const typeName = activityTypes.find((c) => c.id === participantTypeId)?.name;
-          parts.push(typeName || "activity type");
-        }
-        if (participantDvId) parts.push(dvLabel(participantDvId));
-        if (!participantTypeId && !participantDvId) parts.push("(all)");
-        return parts.join(" \u2192 ");
-      }
       default: return "";
     }
-  }, [activeSection, activeKey, entityTypesList, nonSystemDimensions, dimensions, allDimensionValues, activityTypes, activityTypeId, activityDvId, participantEntityId, participantTypeId, participantDvId]);
-
-  // Collect all configured scopes for activity/participant sections
-  const scopeSummary = useMemo(() => {
-    const dvLabel = (dvId: string) => {
-      const dv = allDimensionValues.find((d) => d.id === dvId);
-      if (!dv) return dvId;
-      const dim = dimensions.find((d) => d.id === dv.dimension_id);
-      return `${dim ? dim.name : ""}: ${dv.name}`;
-    };
-
-    const labelForKey = (key: string): string => {
-      if (key === "activity") return "All activities";
-      const parts = key.split(":");
-      if (parts[0] === "activity") {
-        const labels: string[] = [];
-        for (let i = 1; i < parts.length; i += 2) {
-          const sub = parts[i];
-          const refId = parts[i + 1];
-          if (sub === "activity_type") {
-            labels.push(activityTypes.find((at) => at.id === refId)?.name || refId);
-          } else if (sub === "dimension_value") {
-            labels.push(dvLabel(refId));
-          }
-        }
-        return labels.join(" + ") || key;
-      }
-      if (parts[0] === "participant" && parts[1] === "entity") {
-        const entityId = parts[2];
-        const entityLabel = entityId === "user"
-          ? "Users (staff)"
-          : entityTypesList.find((et) => et.id === entityId)?.name || entityId;
-        const labels: string[] = [entityLabel];
-        for (let i = 3; i < parts.length; i += 2) {
-          const sub = parts[i];
-          const refId = parts[i + 1];
-          if (sub === "activity_type") {
-            labels.push(activityTypes.find((at) => at.id === refId)?.name || refId);
-          } else if (sub === "dimension_value") {
-            labels.push(dvLabel(refId));
-          }
-        }
-        return labels.join(" + ");
-      }
-      return key;
-    };
-
-    const activityScopes: { key: string; label: string; count: number }[] = [];
-    const participantScopes: { key: string; label: string; count: number }[] = [];
-
-    for (const [key, fieldList] of Object.entries(allSchemas)) {
-      if (!fieldList?.length) continue;
-      if (key === "activity" || key.startsWith("activity:")) {
-        activityScopes.push({ key, label: labelForKey(key), count: fieldList.length });
-      } else if (key.startsWith("participant:")) {
-        participantScopes.push({ key, label: labelForKey(key), count: fieldList.length });
-      }
-    }
-
-    return { activityScopes, participantScopes };
-  }, [allSchemas, activityTypes, allDimensionValues, dimensions, entityTypesList]);
+  }, [activeSection, activeKey, entityTypesList, dimensions]);
 
   // Section pills
   const sections: { key: SectionKind; label: string }[] = [
@@ -391,6 +497,13 @@ export default function MetaFieldsPage() {
     { id: "user", name: "Users (staff)" },
     ...entityTypesList,
   ];
+
+  const isActivityOrParticipant = activeSection === "activity" || activeSection === "participant";
+  const flatGroups = activeSection === "activity" ? activityGroups : participantGroups;
+  const totalFlatFields = flatGroups.reduce((sum, g) => sum + g.fields.length, 0);
+  const hasFilters = activeSection === "activity"
+    ? !!(activityFilterTypeId || activityFilterDimId)
+    : !!(participantFilterTypeId || participantFilterDimId);
 
   return (
     <>
@@ -447,7 +560,7 @@ export default function MetaFieldsPage() {
 
         {activeSection === "dimension" && (
           <div className="flex gap-2 overflow-x-auto pb-1">
-            {nonSystemDimensions.map((d) => (
+            {dimensions.map((d) => (
               <button
                 key={d.id}
                 onClick={() => setActiveKey(d.id)}
@@ -493,14 +606,15 @@ export default function MetaFieldsPage() {
           </div>
         )}
 
+        {/* Activity tab: view filter dropdowns */}
         {activeSection === "activity" && (
           <div className="flex items-end gap-3 flex-wrap">
             <div>
-              <label className="text-xs text-gray-500 block mb-1">Activity Type</label>
+              <label className="text-xs text-gray-500 block mb-1">Filter by Activity Type</label>
               <select
                 className="border rounded-md px-3 py-1.5 text-sm"
-                value={activityTypeId}
-                onChange={(e) => setActivityTypeId(e.target.value)}
+                value={activityFilterTypeId}
+                onChange={(e) => setActivityFilterTypeId(e.target.value)}
               >
                 <option value="">All</option>
                 {activityTypes.map((at) => (
@@ -510,76 +624,65 @@ export default function MetaFieldsPage() {
             </div>
 
             <div>
-              <label className="text-xs text-gray-500 block mb-1">Dimension (optional)</label>
+              <label className="text-xs text-gray-500 block mb-1">Filter by Dimension</label>
               <select
                 className="border rounded-md px-3 py-1.5 text-sm"
-                value={activityDimId}
-                onChange={(e) => {
-                  setActivityDimId(e.target.value);
-                  setActivityDvId("");
-                }}
+                value={activityFilterDimId}
+                onChange={(e) => setActivityFilterDimId(e.target.value)}
               >
-                <option value="">No filter</option>
+                <option value="">All</option>
                 {dimensions.map((d) => (
                   <option key={d.id} value={d.id}>{d.name}</option>
                 ))}
               </select>
             </div>
 
-            {activityDimId && (
-              <div>
-                <label className="text-xs text-gray-500 block mb-1">Value</label>
-                <select
-                  className="border rounded-md px-3 py-1.5 text-sm"
-                  value={activityDvId}
-                  onChange={(e) => setActivityDvId(e.target.value)}
-                >
-                  <option value="">Select...</option>
-                  {allDimensionValues
-                    .filter((dv) => dv.dimension_id === activityDimId)
-                    .map((dv) => (
-                      <option key={dv.id} value={dv.id}>{dv.name}</option>
-                    ))}
-                </select>
-              </div>
+            {hasFilters && (
+              <button
+                onClick={() => { setActivityFilterTypeId(""); setActivityFilterDimId(""); }}
+                className="text-xs text-purple-600 hover:text-purple-800 pb-2"
+              >
+                Clear filters
+              </button>
             )}
           </div>
         )}
 
+        {/* Participant tab: entity pills + view filter dropdowns */}
         {activeSection === "participant" && (
           <div className="space-y-3">
-            {/* Entity type selector */}
-            <div>
-              <label className="text-xs text-gray-500 block mb-1">Entity Type</label>
-              <div className="flex gap-2 overflow-x-auto pb-1">
-                {participantEntityOptions.map((opt) => (
-                  <button
-                    key={opt.id}
-                    onClick={() => {
-                      setParticipantEntityId(opt.id);
-                      setParticipantTypeId("");
-                      setParticipantDvId("");
-                    }}
-                    className={`px-3 py-1 text-sm rounded-md whitespace-nowrap transition-colors ${
-                      participantEntityId === opt.id
-                        ? "bg-purple-50 text-purple-700 border border-purple-200 font-medium"
-                        : "bg-white text-gray-600 border border-gray-200 hover:border-gray-300"
-                    }`}
-                  >
-                    {opt.name}
-                  </button>
-                ))}
-              </div>
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {participantEntityOptions.map((opt) => (
+                <button
+                  key={opt.id}
+                  onClick={() => {
+                    setParticipantEntityId(opt.id);
+                    setParticipantFilterTypeId("");
+                    setParticipantFilterDimId("");
+                  }}
+                  className={`px-3 py-1 text-sm rounded-md whitespace-nowrap transition-colors ${
+                    participantEntityId === opt.id
+                      ? "bg-purple-50 text-purple-700 border border-purple-200 font-medium"
+                      : "bg-white text-gray-600 border border-gray-200 hover:border-gray-300"
+                  }`}
+                >
+                  {opt.name}
+                  {(participantEntityCounts[opt.id] || 0) > 0 && (
+                    <span className="ml-1 text-xs text-gray-400">
+                      ({participantEntityCounts[opt.id]})
+                    </span>
+                  )}
+                </button>
+              ))}
             </div>
 
-            {/* Scope selectors */}
             <div className="flex items-end gap-3 flex-wrap">
               <div>
-                <label className="text-xs text-gray-500 block mb-1">Activity Type</label>
+                <label className="text-xs text-gray-500 block mb-1">Filter by Activity Type</label>
                 <select
                   className="border rounded-md px-3 py-1.5 text-sm"
-                  value={participantTypeId}
-                  onChange={(e) => setParticipantTypeId(e.target.value)}
+                  value={participantFilterTypeId}
+                  onChange={(e) => setParticipantFilterTypeId(e.target.value)}
                 >
                   <option value="">All</option>
                   {activityTypes.map((at) => (
@@ -589,46 +692,34 @@ export default function MetaFieldsPage() {
               </div>
 
               <div>
-                <label className="text-xs text-gray-500 block mb-1">Dimension (optional)</label>
+                <label className="text-xs text-gray-500 block mb-1">Filter by Dimension</label>
                 <select
                   className="border rounded-md px-3 py-1.5 text-sm"
-                  value={participantDimId}
-                  onChange={(e) => {
-                    setParticipantDimId(e.target.value);
-                    setParticipantDvId("");
-                  }}
+                  value={participantFilterDimId}
+                  onChange={(e) => setParticipantFilterDimId(e.target.value)}
                 >
-                  <option value="">No filter</option>
+                  <option value="">All</option>
                   {dimensions.map((d) => (
                     <option key={d.id} value={d.id}>{d.name}</option>
                   ))}
                 </select>
               </div>
 
-              {participantDimId && (
-                <div>
-                  <label className="text-xs text-gray-500 block mb-1">Value</label>
-                  <select
-                    className="border rounded-md px-3 py-1.5 text-sm"
-                    value={participantDvId}
-                    onChange={(e) => setParticipantDvId(e.target.value)}
-                  >
-                    <option value="">Select...</option>
-                    {allDimensionValues
-                      .filter((dv) => dv.dimension_id === participantDimId)
-                      .map((dv) => (
-                        <option key={dv.id} value={dv.id}>{dv.name}</option>
-                      ))}
-                  </select>
-                </div>
+              {(participantFilterTypeId || participantFilterDimId) && (
+                <button
+                  onClick={() => { setParticipantFilterTypeId(""); setParticipantFilterDimId(""); }}
+                  className="text-xs text-purple-600 hover:text-purple-800 pb-2"
+                >
+                  Clear filters
+                </button>
               )}
             </div>
           </div>
         )}
       </div>
 
-      {/* Fields table */}
-      {schemaKey && (
+      {/* Fields table for entity/dimension/other (single-scope, unchanged) */}
+      {!isActivityOrParticipant && schemaKey && (
         <>
           <div className="flex items-center justify-between mb-3">
             <p className="text-sm font-medium text-gray-700">
@@ -698,87 +789,98 @@ export default function MetaFieldsPage() {
         </>
       )}
 
-      {/* Scope summary for activity/participant */}
-      {(activeSection === "activity" && scopeSummary.activityScopes.length > 0) && (
-        <div className="mt-6 border-t pt-4">
-          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">All configured activity field scopes</p>
-          <div className="space-y-1">
-            {scopeSummary.activityScopes.map((s) => (
-              <button
-                key={s.key}
-                onClick={() => {
-                  // Parse scope key to set the right filters
-                  const parts = s.key.split(":");
-                  let atId = "";
-                  let dvId = "";
-                  for (let i = 0; i < parts.length; i += 2) {
-                    if (parts[i] === "activity_type") atId = parts[i + 1];
-                    if (parts[i] === "dimension_value") dvId = parts[i + 1];
-                  }
-                  setActivityTypeId(atId);
-                  if (dvId) {
-                    const dv = allDimensionValues.find((d) => d.id === dvId);
-                    setActivityDimId(dv?.dimension_id || "");
-                    setActivityDvId(dvId);
-                  } else {
-                    setActivityDimId("");
-                    setActivityDvId("");
-                  }
-                }}
-                className={`flex items-center justify-between w-full px-3 py-1.5 text-sm rounded-md transition-colors ${
-                  schemaKey === s.key
-                    ? "bg-purple-50 text-purple-700 border border-purple-200"
-                    : "text-gray-600 hover:bg-gray-50 border border-transparent"
-                }`}
-              >
-                <span>{s.label}</span>
-                <span className="text-xs text-gray-400">{s.count} field{s.count !== 1 ? "s" : ""}</span>
-              </button>
-            ))}
+      {/* Grouped flat table for activity/participant */}
+      {isActivityOrParticipant && (
+        <>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm font-medium text-gray-700">
+              {totalFlatFields} field{totalFlatFields !== 1 ? "s" : ""}
+              {hasFilters ? " (filtered)" : ""}
+            </p>
+            <Button size="sm" onClick={openAdd}>
+              <Plus className="h-4 w-4 mr-1" />
+              Add Field
+            </Button>
           </div>
-        </div>
-      )}
 
-      {(activeSection === "participant" && scopeSummary.participantScopes.length > 0) && (
-        <div className="mt-6 border-t pt-4">
-          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">All configured participant field scopes</p>
-          <div className="space-y-1">
-            {scopeSummary.participantScopes.map((s) => (
-              <button
-                key={s.key}
-                onClick={() => {
-                  // Parse: participant:entity:{entityId}[:activity_type:{atId}][:dimension_value:{dvId}]
-                  const parts = s.key.split(":");
-                  const entityId = parts[2] || "";
-                  let atId = "";
-                  let dvId = "";
-                  for (let i = 3; i < parts.length; i += 2) {
-                    if (parts[i] === "activity_type") atId = parts[i + 1];
-                    if (parts[i] === "dimension_value") dvId = parts[i + 1];
-                  }
-                  setParticipantEntityId(entityId);
-                  setParticipantTypeId(atId);
-                  if (dvId) {
-                    const dv = allDimensionValues.find((d) => d.id === dvId);
-                    setParticipantDimId(dv?.dimension_id || "");
-                    setParticipantDvId(dvId);
-                  } else {
-                    setParticipantDimId("");
-                    setParticipantDvId("");
-                  }
-                }}
-                className={`flex items-center justify-between w-full px-3 py-1.5 text-sm rounded-md transition-colors ${
-                  schemaKey === s.key
-                    ? "bg-purple-50 text-purple-700 border border-purple-200"
-                    : "text-gray-600 hover:bg-gray-50 border border-transparent"
-                }`}
-              >
-                <span>{s.label}</span>
-                <span className="text-xs text-gray-400">{s.count} field{s.count !== 1 ? "s" : ""}</span>
-              </button>
-            ))}
-          </div>
-        </div>
+          {flatGroups.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-gray-500 text-sm">
+                {hasFilters
+                  ? "No fields match the current filters."
+                  : "No form fields defined yet."}
+              </p>
+              {hasFilters && (
+                <button
+                  onClick={() => {
+                    if (activeSection === "activity") {
+                      setActivityFilterTypeId("");
+                      setActivityFilterDimId("");
+                    } else {
+                      setParticipantFilterTypeId("");
+                      setParticipantFilterDimId("");
+                    }
+                  }}
+                  className="text-sm text-purple-600 hover:text-purple-800 mt-2"
+                >
+                  Clear filters
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {flatGroups.map((group) => (
+                <div key={group.scopeKey} className="border rounded-lg overflow-hidden">
+                  <div className="bg-gray-50 px-4 py-2 flex items-center justify-between border-b">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-gray-700">{group.scopeLabel}</span>
+                      <span className="text-xs text-gray-400">
+                        {group.fields.length} field{group.fields.length !== 1 ? "s" : ""}
+                      </span>
+                    </div>
+                  </div>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Label</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Required</TableHead>
+                        <TableHead className="w-20">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {group.fields.map((field, index) => (
+                        <TableRow key={field.key}>
+                          <TableCell className="font-medium">{field.label}</TableCell>
+                          <TableCell>
+                            {FIELD_TYPES.find((ft) => ft.value === field.type)?.label || field.type}
+                          </TableCell>
+                          <TableCell>{field.required ? "Yes" : "No"}</TableCell>
+                          <TableCell>
+                            <div className="flex gap-1">
+                              <button
+                                onClick={() => openEdit(index, group.scopeKey)}
+                                className="text-gray-400 hover:text-purple-600"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => handleDelete(index, group.scopeKey)}
+                                className="text-gray-400 hover:text-red-500"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       {/* Add/Edit field modal */}
@@ -788,6 +890,91 @@ export default function MetaFieldsPage() {
         title={editingIndex !== null ? "Edit Field" : "Add Form Field"}
       >
         <form onSubmit={handleSave} className="space-y-3">
+          {/* Scope selection for activity/participant */}
+          {isActivityOrParticipant && (
+            <div className="space-y-3 pb-3 mb-3 border-b">
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Scope</p>
+
+              {activeSection === "participant" && (
+                <div>
+                  <Label htmlFor="modal-entity">Entity Type</Label>
+                  <select
+                    id="modal-entity"
+                    className="w-full border rounded-md p-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-gray-50"
+                    value={modalEntityId}
+                    onChange={(e) => setModalEntityId(e.target.value)}
+                    disabled={editingIndex !== null}
+                  >
+                    {participantEntityOptions.map((opt) => (
+                      <option key={opt.id} value={opt.id}>{opt.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div>
+                <Label htmlFor="modal-activity-type">
+                  Activity Type <span className="text-gray-400 text-xs font-normal">(optional)</span>
+                </Label>
+                <select
+                  id="modal-activity-type"
+                  className="w-full border rounded-md p-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-gray-50"
+                  value={modalActivityTypeId}
+                  onChange={(e) => setModalActivityTypeId(e.target.value)}
+                  disabled={editingIndex !== null}
+                >
+                  <option value="">All</option>
+                  {activityTypes.map((at) => (
+                    <option key={at.id} value={at.id}>{at.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <Label htmlFor="modal-dimension">
+                  Dimension <span className="text-gray-400 text-xs font-normal">(optional)</span>
+                </Label>
+                <select
+                  id="modal-dimension"
+                  className="w-full border rounded-md p-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-gray-50"
+                  value={modalDimId}
+                  onChange={(e) => {
+                    setModalDimId(e.target.value);
+                    setModalDvId("");
+                  }}
+                  disabled={editingIndex !== null}
+                >
+                  <option value="">None</option>
+                  {dimensions.map((d) => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {modalDimId && (
+                <div>
+                  <Label htmlFor="modal-dv">Value</Label>
+                  <select
+                    id="modal-dv"
+                    className="w-full border rounded-md p-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-gray-50"
+                    value={modalDvId}
+                    onChange={(e) => setModalDvId(e.target.value)}
+                    disabled={editingIndex !== null}
+                    required
+                  >
+                    <option value="">Select...</option>
+                    {allDimensionValues
+                      .filter((dv) => dv.dimension_id === modalDimId)
+                      .map((dv) => (
+                        <option key={dv.id} value={dv.id}>{dv.name}</option>
+                      ))}
+                  </select>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Field definition */}
           <div>
             <Label htmlFor="field-label">Label</Label>
             <Input
