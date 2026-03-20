@@ -29,7 +29,7 @@ import { Can } from "@/components/Auth/Permissions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+
 import {
   Table,
   TableHeader,
@@ -457,6 +457,19 @@ export default function ActivitiesPage() {
     return typeName;
   };
 
+  // Derive unique dimension columns from all loaded activities
+  const dimensionColumns = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const a of activities) {
+      for (const dim of a.dimensions) {
+        if (!seen.has(dim.dimension_key)) {
+          seen.set(dim.dimension_key, dim.dimension_name);
+        }
+      }
+    }
+    return Array.from(seen.entries()).map(([key, name]) => ({ key, name }));
+  }, [activities]);
+
   return (
     <PageLayout className="p-4">
       <PageHeader
@@ -532,7 +545,9 @@ export default function ActivitiesPage() {
               <TableHead>Start Date</TableHead>
               <TableHead>End Date</TableHead>
               <TableHead>Title</TableHead>
-              <TableHead>Dimensions</TableHead>
+              {dimensionColumns.map((dc) => (
+                <TableHead key={dc.key}>{dc.name}</TableHead>
+              ))}
               {!activityType && <TableHead>Type</TableHead>}
             </TableRow>
           </TableHeader>
@@ -547,15 +562,14 @@ export default function ActivitiesPage() {
                 <TableCell className="font-medium">
                   {getActivityTitle(a)}
                 </TableCell>
-                <TableCell className="whitespace-normal">
-                  <div className="flex gap-1 flex-wrap">
-                    {a.dimensions.slice(1).map((dim) => (
-                      <Badge key={dim.value_id} variant="secondary" className="text-xs">
-                        {dim.value_name}
-                      </Badge>
-                    ))}
-                  </div>
-                </TableCell>
+                {dimensionColumns.map((dc) => {
+                  const dim = a.dimensions.find((d) => d.dimension_key === dc.key);
+                  return (
+                    <TableCell key={dc.key}>
+                      {dim ? dim.value_name : "—"}
+                    </TableCell>
+                  );
+                })}
                 {!activityType && (
                   <TableCell className="text-gray-500">
                     {a.activity_type_name}
