@@ -144,12 +144,14 @@ export interface ActivityType {
 // --- Activity Form (Form Builder) ---
 
 export interface ActivityFormElement {
-  type: "dimension" | "entity_type" | "activity_meta";
-  ref_id: string | null; // dimension_id, entity_type_id, or "user"
+  type: "default" | "dimension" | "entity_type" | "activity_meta";
+  ref_id: string | null; // dimension_id, entity_type_id, "user", or default field name ("start_date", "notes")
   sort_order: number;
-  display_type: string; // "dropdown", "checklist", "radio", "search_select"
+  display_type: string; // "dropdown", "checklist", "radio", "search_select", "date_range", "textarea"
   visible: boolean;
   required: boolean;
+  stage: "create" | "record"; // "create" = shown on create form, "record" = shown only on edit
+  removable: boolean;
   config?: Record<string, unknown>;
 }
 
@@ -165,7 +167,8 @@ export interface Activity {
   id: string;
   organization_id: string;
   activity_type_id: string | null;
-  date: string;
+  start_date: string;
+  end_date: string | null;
   notes: string | null;
   created_by: string | null;
   meta: Record<string, unknown> | null;

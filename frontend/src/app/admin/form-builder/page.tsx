@@ -32,6 +32,7 @@ import {
   Layers,
   Users,
   SlidersHorizontal,
+  Calendar,
 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -40,6 +41,11 @@ const ELEMENT_TYPES = [
   { value: "entity_type", label: "Entity Type / Users", icon: Users },
   { value: "activity_meta", label: "Activity Meta", icon: SlidersHorizontal },
 ];
+
+const DEFAULT_ELEMENT_LABELS: Record<string, string> = {
+  start_date: "Date",
+  notes: "Notes",
+};
 
 const DISPLAY_TYPES: Record<string, { value: string; label: string }[]> = {
   dimension: [
@@ -126,6 +132,7 @@ export default function FormBuilderPage() {
   };
 
   const removeElement = (index: number) => {
+    if (elements[index]?.removable === false) return;
     setElements(elements.filter((_, i) => i !== index));
     setIsDirty(true);
   };
@@ -155,6 +162,8 @@ export default function FormBuilderPage() {
       display_type: addDisplayType,
       visible: true,
       required: false,
+      stage: "create",
+      removable: true,
     };
 
     setElements([...elements, newElement]);
@@ -174,6 +183,8 @@ export default function FormBuilderPage() {
   // Resolve element label
   const getElementLabel = (el: ActivityFormElement): string => {
     switch (el.type) {
+      case "default":
+        return DEFAULT_ELEMENT_LABELS[el.ref_id || ""] || "Default Field";
       case "dimension": {
         const dim = dimensions.find((d) => d.id === el.ref_id);
         return dim ? dim.name : "Dimension";
@@ -191,6 +202,7 @@ export default function FormBuilderPage() {
   };
 
   const getElementIcon = (type: string) => {
+    if (type === "default") return Calendar;
     const def = ELEMENT_TYPES.find((t) => t.value === type);
     return def?.icon || SlidersHorizontal;
   };
@@ -291,12 +303,14 @@ export default function FormBuilderPage() {
               {elements.map((el, idx) => {
                 const Icon = getElementIcon(el.type);
                 const metaCount = getParticipationMetaCount(el);
+                const isDefault = el.type === "default";
+                const isRemovable = el.removable !== false;
                 return (
                   <div
                     key={`${el.type}-${el.ref_id}-${idx}`}
                     className={`border rounded-lg p-3 flex items-center gap-3 ${
                       el.visible ? "bg-white" : "bg-gray-50 opacity-60"
-                    }`}
+                    } ${isDefault ? "border-purple-200" : ""}`}
                   >
                     {/* Reorder */}
                     <div className="flex flex-col -space-y-1">
@@ -324,11 +338,20 @@ export default function FormBuilderPage() {
                       <div className="min-w-0">
                         <p className="text-sm font-medium truncate">
                           {getElementLabel(el)}
+                          {isDefault && (
+                            <span className="ml-1.5 text-[10px] font-medium text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded">
+                              Default
+                            </span>
+                          )}
                         </p>
                         <p className="text-xs text-gray-400">
-                          {ELEMENT_TYPES.find((t) => t.value === el.type)?.label || el.type}
-                          {" \u00b7 "}
-                          {DISPLAY_TYPES[el.type]?.find((d) => d.value === el.display_type)?.label || el.display_type}
+                          {isDefault ? "Default field" : (ELEMENT_TYPES.find((t) => t.value === el.type)?.label || el.type)}
+                          {!isDefault && (
+                            <>
+                              {" \u00b7 "}
+                              {DISPLAY_TYPES[el.type]?.find((d) => d.value === el.display_type)?.label || el.display_type}
+                            </>
+                          )}
                           {el.required && (
                             <span className="ml-1 text-red-500">
                               {" \u00b7 "}required
@@ -343,16 +366,32 @@ export default function FormBuilderPage() {
                       </div>
                     </div>
 
-                    {/* Display type selector */}
-                    <select
-                      className="border rounded-md px-2 py-1 text-xs"
-                      value={el.display_type}
-                      onChange={(e) => updateElement(idx, { display_type: e.target.value })}
+                    {/* Stage toggle: show during creation */}
+                    <label
+                      className="flex items-center gap-1 text-xs text-gray-500 whitespace-nowrap cursor-pointer"
+                      title={el.stage === "create" ? "Shown during creation" : "Shown only when editing"}
                     >
-                      {(DISPLAY_TYPES[el.type] || []).map((d) => (
-                        <option key={d.value} value={d.value}>{d.label}</option>
-                      ))}
-                    </select>
+                      <input
+                        type="checkbox"
+                        checked={el.stage === "create"}
+                        onChange={(e) => updateElement(idx, { stage: e.target.checked ? "create" : "record" })}
+                        className="rounded"
+                      />
+                      On create
+                    </label>
+
+                    {/* Display type selector (not for default elements) */}
+                    {!isDefault && (
+                      <select
+                        className="border rounded-md px-2 py-1 text-xs"
+                        value={el.display_type}
+                        onChange={(e) => updateElement(idx, { display_type: e.target.value })}
+                      >
+                        {(DISPLAY_TYPES[el.type] || []).map((d) => (
+                          <option key={d.value} value={d.value}>{d.label}</option>
+                        ))}
+                      </select>
+                    )}
 
                     {/* Required toggle */}
                     <button
@@ -374,12 +413,17 @@ export default function FormBuilderPage() {
                       {el.visible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
                     </button>
 
-                    {/* Remove */}
+                    {/* Remove (disabled for default elements) */}
                     <Can permission="activity_type:manage">
                       <button
                         type="button"
                         onClick={() => removeElement(idx)}
-                        className="text-gray-400 hover:text-red-500"
+                        disabled={!isRemovable}
+                        className={isRemovable
+                          ? "text-gray-400 hover:text-red-500"
+                          : "text-gray-200 cursor-not-allowed"
+                        }
+                        title={isRemovable ? "Remove" : "Default fields cannot be removed"}
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>

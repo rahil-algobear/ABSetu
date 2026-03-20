@@ -295,7 +295,8 @@ export const activityApi = {
   },
   create: async (data: {
     activity_type_id?: string;
-    date: string;
+    start_date: string;
+    end_date?: string;
     notes?: string;
     dimension_value_ids?: string[];
     meta?: Record<string, unknown>;

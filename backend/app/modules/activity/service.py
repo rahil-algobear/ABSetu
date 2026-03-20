@@ -119,7 +119,7 @@ class ActivityService:
                 .joinedload(ActivityDimension.dimension_value)
                 .joinedload(DimensionValue.dimension),
             )
-            .order_by(Activity.date.desc())
+            .order_by(Activity.start_date.desc())
             .all()
         )
 
@@ -166,7 +166,8 @@ class ActivityService:
         activity = Activity(
             organization_id=org_id,
             activity_type_id=uuid.UUID(activity_type_id) if activity_type_id else None,
-            date=data["date"],
+            start_date=data["start_date"],
+            end_date=data.get("end_date"),
             notes=data.get("notes"),
             meta=data.get("meta"),
             created_by=user_id,
@@ -260,8 +261,59 @@ class ActivityParticipantService:
 
 
 class ActivityFormService:
+    DEFAULT_ELEMENTS = [
+        {
+            "type": "default",
+            "ref_id": "start_date",
+            "sort_order": 0,
+            "display_type": "date_range",
+            "visible": True,
+            "required": True,
+            "stage": "create",
+            "removable": False,
+        },
+        {
+            "type": "default",
+            "ref_id": "notes",
+            "sort_order": 1,
+            "display_type": "textarea",
+            "visible": True,
+            "required": False,
+            "stage": "record",
+            "removable": False,
+        },
+    ]
+
     def __init__(self, db: Session):
         self.db = db
+
+    @staticmethod
+    def _ensure_defaults(elements: list[dict]) -> list[dict]:
+        """Ensure default elements are present. Preserve user config if they exist."""
+        default_ref_ids = {el["ref_id"] for el in ActivityFormService.DEFAULT_ELEMENTS}
+        existing_defaults = {
+            el["ref_id"]
+            for el in elements
+            if el.get("type") == "default" and el.get("ref_id") in default_ref_ids
+        }
+        # Add missing defaults at the beginning, shift existing elements down
+        missing = [
+            {**el}
+            for el in ActivityFormService.DEFAULT_ELEMENTS
+            if el["ref_id"] not in existing_defaults
+        ]
+        if missing:
+            offset = len(missing)
+            for el in elements:
+                el["sort_order"] = el.get("sort_order", 0) + offset
+            for i, m in enumerate(missing):
+                m["sort_order"] = i
+            elements = missing + elements
+        # Ensure default elements are never removable
+        for el in elements:
+            if el.get("type") == "default" and el.get("ref_id") in default_ref_ids:
+                el["removable"] = False
+        return elements
 
     def get_by_type(self, activity_type_id: uuid.UUID, org_id: uuid.UUID) -> ActivityForm | None:
         return (
@@ -280,6 +332,8 @@ class ActivityFormService:
         )
         if not at:
             raise NotFoundError("Activity type not found")
+
+        elements = self._ensure_defaults(elements)
 
         form = self.get_by_type(activity_type_id, org_id)
         if form:
