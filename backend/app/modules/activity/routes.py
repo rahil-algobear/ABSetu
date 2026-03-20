@@ -149,7 +149,8 @@ def _build_activity_response(a) -> dict:
         updated_at=a.updated_at,
         organization_id=str(a.organization_id),
         activity_type_id=str(a.activity_type_id) if a.activity_type_id else None,
-        date=a.date,
+        start_date=a.start_date,
+        end_date=a.end_date,
         notes=a.notes,
         created_by=str(a.created_by) if a.created_by else None,
         meta=a.meta,
@@ -414,7 +415,10 @@ def get_activity_form(
     service = ActivityFormService(db)
     form = service.get_by_type(activity_type_id, current_user.organization_id)
     if not form:
-        return {"activity_type_id": str(activity_type_id), "elements": []}
+        return {
+            "activity_type_id": str(activity_type_id),
+            "elements": list(ActivityFormService.DEFAULT_ELEMENTS),
+        }
     return ActivityFormResponse.dump_from_model(form)
 
 
