@@ -7,12 +7,14 @@ import {
   entityApi,
   enrollmentApi,
   activityApi,
+  activityTypeApi,
   metaFieldSchemaApi,
   dimensionApi,
   dimensionValueLinkApi,
 } from "@/services/api";
 import {
   Activity,
+  ActivityType,
   Dimension,
   DimensionValue,
   DimensionValueLink,
@@ -94,6 +96,21 @@ export default function EntityDetailPage() {
     queryFn: () => activityApi.listByEntity(id),
     enabled: !!entity,
   });
+
+  const { data: activityTypes = [] } = useQuery<ActivityType[]>({
+    queryKey: ["activity-types"],
+    queryFn: activityTypeApi.list,
+    enabled: activities.length > 0,
+  });
+
+  const [activityTypeFilter, setActivityTypeFilter] = useState<string>("");
+
+  const filteredActivities = useMemo(
+    () => activityTypeFilter
+      ? activities.filter((a) => a.activity_type_id === activityTypeFilter)
+      : activities,
+    [activities, activityTypeFilter]
+  );
 
   const canEnroll = entity?.entity_type_config?.can_enroll !== false;
 
@@ -228,14 +245,30 @@ export default function EntityDetailPage() {
       <Can permission="activity:view">
         <Card className="mt-4">
           <CardHeader>
-            <CardTitle className="text-lg">Sessions</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg">Activities</CardTitle>
+              {activityTypes.length > 1 && activities.length > 0 && (
+                <select
+                  className="border rounded-md px-2 py-1 text-sm"
+                  value={activityTypeFilter}
+                  onChange={(e) => setActivityTypeFilter(e.target.value)}
+                >
+                  <option value="">All types</option>
+                  {activityTypes.map((at) => (
+                    <option key={at.id} value={at.id}>{at.name}</option>
+                  ))}
+                </select>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
             {activities.length === 0 ? (
-              <p className="text-gray-500 text-sm">No sessions</p>
+              <p className="text-gray-500 text-sm">No activities</p>
+            ) : filteredActivities.length === 0 ? (
+              <p className="text-gray-500 text-sm">No activities for this type</p>
             ) : (
               <div className="space-y-2">
-                {activities.map((a) => (
+                {filteredActivities.map((a) => (
                   <Link
                     key={a.id}
                     href={`/activities/${a.id}`}
