@@ -529,9 +529,10 @@ export default function ActivitiesPage() {
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead>Start Date</TableHead>
+              <TableHead>End Date</TableHead>
               <TableHead>Title</TableHead>
               <TableHead>Dimensions</TableHead>
-              <TableHead>Date</TableHead>
               {!activityType && <TableHead>Type</TableHead>}
             </TableRow>
           </TableHeader>
@@ -541,6 +542,8 @@ export default function ActivitiesPage() {
                 key={a.id}
                 onClick={() => router.push(`/activities/${a.id}`)}
               >
+                <TableCell>{a.start_date}</TableCell>
+                <TableCell>{a.end_date || "—"}</TableCell>
                 <TableCell className="font-medium">
                   {getActivityTitle(a)}
                 </TableCell>
@@ -552,10 +555,6 @@ export default function ActivitiesPage() {
                       </Badge>
                     ))}
                   </div>
-                </TableCell>
-                <TableCell>
-                  {a.start_date}
-                  {a.end_date && a.end_date !== a.start_date && ` — ${a.end_date}`}
                 </TableCell>
                 {!activityType && (
                   <TableCell className="text-gray-500">
