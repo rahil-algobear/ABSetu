@@ -399,22 +399,31 @@ export default function ActivityDetailPage() {
                 if (el.type === "default" && el.ref_id === "start_date") {
                   return (
                     <div key="edit-start_date">
-                      <label className="text-sm font-medium">
-                        Date{el.required && <span className="text-red-500 ml-0.5">*</span>}
-                      </label>
-                      <div className="flex gap-2 mt-1">
-                        <Input
-                          type="date"
-                          value={detailFormData.start_date}
-                          onChange={(e) => setDetailFormData({ ...detailFormData, start_date: e.target.value })}
-                          required={el.required}
-                        />
-                        <Input
-                          type="date"
-                          value={detailFormData.end_date}
-                          onChange={(e) => setDetailFormData({ ...detailFormData, end_date: e.target.value })}
-                          min={detailFormData.start_date}
-                        />
+                      <div className="flex gap-2">
+                        <div className="flex-1">
+                          <label className="text-sm font-medium">
+                            Start Date{el.required && <span className="text-red-500 ml-0.5">*</span>}
+                          </label>
+                          <Input
+                            type="date"
+                            value={detailFormData.start_date}
+                            onChange={(e) => setDetailFormData({ ...detailFormData, start_date: e.target.value })}
+                            required={el.required}
+                            className="mt-1"
+                          />
+                        </div>
+                        <div className="flex-1">
+                          <label className="text-sm font-medium">
+                            End Date
+                          </label>
+                          <Input
+                            type="date"
+                            value={detailFormData.end_date}
+                            onChange={(e) => setDetailFormData({ ...detailFormData, end_date: e.target.value })}
+                            min={detailFormData.start_date}
+                            className="mt-1"
+                          />
+                        </div>
                       </div>
                       <p className="text-xs text-gray-400 mt-0.5">Leave end date empty for single-day activities</p>
                     </div>

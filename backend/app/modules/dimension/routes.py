@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.common.dependencies import (
+    get_accessible_dimension_value_ids,
     get_current_user,
     require_permissions,
 )
@@ -128,15 +129,31 @@ def delete_dimension(
 def list_dimension_values(
     dimension_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
+    accessible_dv_ids: list[uuid.UUID] | None = Depends(
+        get_accessible_dimension_value_ids
+    ),
     db: Session = Depends(get_db),
 ):
-    """List all values for a dimension. No access scoping — dimensions are reference data."""
+    """List values for a dimension, scoped by user's dimension access."""
     # Verify dimension belongs to org
     dim_service = DimensionService(db)
     dim_service.get_by_id(dimension_id, current_user.organization_id)
 
     service = DimensionValueService(db)
     values = service.list_by_dimension(dimension_id)
+
+    # Per-dimension access scoping: if user has restrictions for THIS
+    # dimension, only return values they have access to. If they have
+    # no restrictions for this dimension, return all values.
+    if accessible_dv_ids is not None:
+        accessible_set = set(accessible_dv_ids)
+        # Check if user has any restrictions for this specific dimension
+        restricted_for_dim = any(
+            v.id in accessible_set for v in values
+        )
+        if restricted_for_dim:
+            values = [v for v in values if v.id in accessible_set]
+
     results = []
     for v in values:
         resp = DimensionValueResponse(

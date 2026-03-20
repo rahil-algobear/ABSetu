@@ -36,6 +36,10 @@ def get_profile(current_user: User = Depends(get_current_user)):
             rp.permission.key for rp in current_user.role.role_permissions if rp.permission
         ]
 
+    dimension_value_ids = [
+        str(da.dimension_value_id) for da in (current_user.dimension_access or [])
+    ]
+
     return UserProfileResponse(
         id=str(current_user.id),
         updated_at=current_user.updated_at,
@@ -48,6 +52,7 @@ def get_profile(current_user: User = Depends(get_current_user)):
         role_id=str(current_user.role_id) if current_user.role_id else None,
         role_name=role_name,
         permissions=permissions,
+        dimension_value_ids=dimension_value_ids,
     ).dump()
 
 
