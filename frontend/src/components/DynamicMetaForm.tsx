@@ -120,34 +120,40 @@ export function DynamicMetaForm({ fields, values, onChange }: DynamicMetaFormPro
 export function MetaFieldDisplay({
   fields,
   values,
+  showEmpty = false,
 }: {
   fields: MetaFieldDefinition[];
   values: Record<string, unknown> | null;
+  showEmpty?: boolean;
 }) {
-  if (!values || Object.keys(values).length === 0) return null;
+  const safeValues = values || {};
+  if (!showEmpty && Object.keys(safeValues).length === 0) return null;
 
   return (
-    <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+    <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
       {fields.map((field) => {
-        const val = values[field.key];
-        if (val === undefined || val === null || val === "") return null;
+        const val = safeValues[field.key];
+        const isEmpty = val === undefined || val === null || val === "";
+        if (!showEmpty && isEmpty) return null;
         return (
           <div key={field.key}>
             <dt className="text-gray-500">{field.label}</dt>
-            <dd className="font-medium">
-              {field.type === "boolean"
-                ? val
-                  ? "Yes"
-                  : "No"
-                : Array.isArray(val)
-                  ? val.join(", ")
-                  : String(val)}
+            <dd className={isEmpty ? "text-gray-300 italic" : "font-medium"}>
+              {isEmpty
+                ? "Not set"
+                : field.type === "boolean"
+                  ? val
+                    ? "Yes"
+                    : "No"
+                  : Array.isArray(val)
+                    ? val.join(", ")
+                    : String(val)}
             </dd>
           </div>
         );
       })}
       {/* Show any meta values not in the schema */}
-      {Object.entries(values)
+      {Object.entries(safeValues)
         .filter(([key]) => !fields.some((f) => f.key === key))
         .map(([key, val]) => (
           <div key={key}>

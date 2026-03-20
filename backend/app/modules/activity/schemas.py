@@ -33,12 +33,14 @@ class ActivityTypeResponse(BaseResponseSchema):
 
 
 class ActivityFormElement(BaseModel):
-    type: str  # "dimension", "entity_type", "activity_meta"
-    ref_id: str | None = None  # dimension_id, entity_type_id, or "user"
+    type: str  # "default", "dimension", "entity_type", "activity_meta"
+    ref_id: str | None = None  # dimension_id, entity_type_id, "user", or default field name
     sort_order: int = 0
-    display_type: str = "dropdown"  # "dropdown", "checklist", "radio", "search_select"
+    display_type: str = "dropdown"  # "dropdown", "checklist", "radio", "search_select", "date_range", "textarea"
     visible: bool = True
     required: bool = False
+    stage: str = "create"  # "create" or "record"
+    removable: bool = True
     config: dict[str, Any] | None = None  # element-specific config
 
 
@@ -71,13 +73,15 @@ class DimensionInfo(BaseModel):
 class ActivityCreate(BaseModel):
     activity_type_id: str | None = None
     dimension_value_ids: list[str] = []
-    date: datetime.date
+    start_date: datetime.date
+    end_date: datetime.date | None = None
     notes: str | None = None
     meta: dict[str, Any] | None = None
 
 
 class ActivityUpdate(BaseModel):
-    date: Optional[datetime.date] = None
+    start_date: Optional[datetime.date] = None
+    end_date: Optional[datetime.date] = None
     notes: str | None = None
     meta: dict[str, Any] | None = None
 
@@ -85,7 +89,8 @@ class ActivityUpdate(BaseModel):
 class ActivityResponse(BaseResponseSchema):
     organization_id: str
     activity_type_id: str | None = None
-    date: datetime.date
+    start_date: datetime.date
+    end_date: datetime.date | None = None
     notes: str | None = None
     created_by: str | None = None
     meta: dict[str, Any] | None = None

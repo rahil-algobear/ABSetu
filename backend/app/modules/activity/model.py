@@ -64,7 +64,8 @@ class Activity(BaseModel):
         nullable=True,
         index=True,
     )
-    date = Column(Date, nullable=False)
+    start_date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=True)
     notes = Column(Text, nullable=True)
     created_by = Column(
         UUID(as_uuid=True),
