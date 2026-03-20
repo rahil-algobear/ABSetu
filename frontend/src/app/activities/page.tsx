@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   activityApi,
@@ -30,12 +30,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from "@/components/ui/page-table";
 import { DynamicMetaForm } from "@/components/DynamicMetaForm";
 import { SearchSelectParticipants } from "@/components/SearchSelectParticipants";
 import { PageLayout } from "@/components/ui/page-layout";
 import { PageHeader } from "@/components/ui/page-header";
 import { Plus } from "lucide-react";
-import Link from "next/link";
+
 import toast from "react-hot-toast";
 
 /**
@@ -72,6 +80,7 @@ function getFilteredValues(
 export default function ActivitiesPage() {
   const [showCreate, setShowCreate] = useState(false);
   const queryClient = useQueryClient();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const typeKey = searchParams.get("type");
 
@@ -517,37 +526,46 @@ export default function ActivitiesPage() {
       ) : activities.length === 0 ? (
         <p className="text-gray-500">No {typeName.toLowerCase()}s yet.</p>
       ) : (
-        <div className="flex flex-col gap-4">
-          {activities.map((a) => (
-            <Link key={a.id} href={`/activities/${a.id}`} className="block">
-              <Card className="hover:shadow-md transition-shadow cursor-pointer">
-                <CardContent className="py-3 px-4">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <p className="font-medium">{getActivityTitle(a)}</p>
-                      <div className="flex gap-1 mt-0.5 flex-wrap">
-                        {a.dimensions.slice(1).map((dim) => (
-                          <Badge key={dim.value_id} variant="secondary" className="text-xs">
-                            {dim.value_name}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-medium">
-                        {a.start_date}
-                        {a.end_date && a.end_date !== a.start_date && ` — ${a.end_date}`}
-                      </p>
-                      {a.activity_type_name && (
-                        <p className="text-xs text-gray-500">{a.activity_type_name}</p>
-                      )}
-                    </div>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Title</TableHead>
+              <TableHead>Dimensions</TableHead>
+              <TableHead>Date</TableHead>
+              {!activityType && <TableHead>Type</TableHead>}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {activities.map((a) => (
+              <TableRow
+                key={a.id}
+                onClick={() => router.push(`/activities/${a.id}`)}
+              >
+                <TableCell className="font-medium">
+                  {getActivityTitle(a)}
+                </TableCell>
+                <TableCell className="whitespace-normal">
+                  <div className="flex gap-1 flex-wrap">
+                    {a.dimensions.slice(1).map((dim) => (
+                      <Badge key={dim.value_id} variant="secondary" className="text-xs">
+                        {dim.value_name}
+                      </Badge>
+                    ))}
                   </div>
-                </CardContent>
-              </Card>
-            </Link>
-          ))}
-        </div>
+                </TableCell>
+                <TableCell>
+                  {a.start_date}
+                  {a.end_date && a.end_date !== a.start_date && ` — ${a.end_date}`}
+                </TableCell>
+                {!activityType && (
+                  <TableCell className="text-gray-500">
+                    {a.activity_type_name}
+                  </TableCell>
+                )}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       )}
     </PageLayout>
   );
