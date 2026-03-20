@@ -130,7 +130,7 @@ export function MetaFieldDisplay({
   if (!showEmpty && Object.keys(safeValues).length === 0) return null;
 
   return (
-    <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+    <dl className="space-y-2 text-sm">
       {fields.map((field) => {
         const val = safeValues[field.key];
         const isEmpty = val === undefined || val === null || val === "";
