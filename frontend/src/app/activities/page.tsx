@@ -542,8 +542,8 @@ export default function ActivitiesPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Start Date</TableHead>
-              <TableHead>End Date</TableHead>
+              <TableHead className="w-28">Start Date</TableHead>
+              <TableHead className="w-28">End Date</TableHead>
               <TableHead>Title</TableHead>
               {dimensionColumns.map((dc) => (
                 <TableHead key={dc.key}>{dc.name}</TableHead>
