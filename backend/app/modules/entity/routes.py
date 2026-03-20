@@ -178,10 +178,20 @@ def list_entities(
         page=page, limit=limit, search=search,
         sort_by=sort_by, sort_order=sort_order, filters=merged_filters,
     )
+
+    # Load list config for meta field filter/sort support
+    list_columns = None
+    if entity_type_id:
+        from app.modules.organization.service import ListConfigService
+        list_columns = ListConfigService(db).get_config(
+            current_user.organization_id, f"entity:{entity_type_id}"
+        )
+
     rows, total = service.list_by_org_paginated(
         current_user.organization_id,
         params=params,
         accessible_dv_ids=accessible_dv_ids,
+        list_columns=list_columns,
     )
     data = [
         _build_entity_response(entity, enrollment_count, activity_count)
@@ -192,45 +202,73 @@ def list_entities(
 
 @entity_router.get("/filters", dependencies=[Depends(require_permissions("entity:view"))])
 def get_entity_filters(
+    entity_type_id: str | None = Query(None),
     current_user: User = Depends(get_current_user),
     accessible_dv_ids: list[uuid.UUID] | None = Depends(get_accessible_dimension_value_ids),
     db: Session = Depends(get_db),
 ):
-    """Return available filter definitions for entity list."""
+    """Return available filter definitions, sortable keys, and visible columns for entity list."""
     from app.common.helpers.filter_definitions import (
         build_dimension_filters,
         build_meta_field_filters,
     )
+    from app.modules.organization.service import ListConfigService
 
     org_id = current_user.organization_id
-    result = []
+    filters = []
 
     # Entity type filter
     et_service = EntityTypeService(db)
     entity_types = et_service.list_by_org(org_id)
     if entity_types:
-        result.append({
+        filters.append({
             "key": "entity_type_id",
             "label": "Entity Type",
             "type": "select",
             "options": [{"value": str(et.id), "label": et.name} for et in entity_types],
         })
 
-    # Dimension filters (scoped by user access)
-    result.extend(build_dimension_filters(db, org_id, accessible_dv_ids))
+    # Get list config for this entity type (if specified)
+    list_config_service = ListConfigService(db)
+    columns: list[dict] = []
+    filterable_keys: set[str] | None = None
+    sortable_keys: list[str] = ["name", "case_number", "created_at"]  # static defaults
 
-    # Meta field filters (where is_filterable=true)
+    if entity_type_id:
+        scope = f"entity:{entity_type_id}"
+        columns = list_config_service.get_config(org_id, scope)
+        filterable_keys = {
+            c["key"] for c in columns if c.get("filterable")
+        }
+        sortable_keys = [c["key"] for c in columns if c.get("sortable")]
+
+    # Dimension filters (scoped by user access + list config)
+    filters.extend(build_dimension_filters(db, org_id, accessible_dv_ids, filterable_keys))
+
+    # Meta field filters (scoped by list config)
     scope_keys = [f"entity:{et.id}" for et in entity_types]
-    result.extend(build_meta_field_filters(db, org_id, scope_keys))
+    if entity_type_id:
+        scope_keys = [f"entity:{entity_type_id}"]
+    filters.extend(build_meta_field_filters(db, org_id, scope_keys, filterable_keys))
 
     # Date filter for created_at
-    result.append({
+    filters.append({
         "key": "created_at",
         "label": "Created Date",
         "type": "date_range",
     })
 
-    return {"filters": result}
+    # Visible columns sorted by sort_order
+    visible_columns = sorted(
+        [c for c in columns if c.get("visible")],
+        key=lambda c: c.get("sort_order", 0),
+    )
+
+    return {
+        "filters": filters,
+        "sortable_keys": sortable_keys,
+        "columns": visible_columns,
+    }
 
 
 @entity_router.get(

@@ -107,15 +107,27 @@ class ActivityService:
 
         return query
 
-    @staticmethod
-    def get_sort_config() -> dict:
-        """Sort keys available for activity list."""
-        return {
+    def get_sort_config(self, org_id: uuid.UUID | None = None, sortable_keys: set[str] | None = None) -> dict:
+        """Sort keys available for activity list, optionally including meta fields from list config."""
+        config = {
             "title": Activity.title,
             "start_date": Activity.start_date,
             "end_date": Activity.end_date,
             "created_at": Activity.created_at,
         }
+        if org_id and sortable_keys:
+            meta_sort_keys = {k for k in sortable_keys if k.startswith("meta:")}
+            if meta_sort_keys:
+                from app.common.helpers.filter_definitions import build_meta_field_sort_config
+                at_ids = [
+                    at.id for at in
+                    self.db.query(ActivityType).filter_by(organization_id=org_id).all()
+                ]
+                scope_keys = [f"activity:{at_id}" for at_id in at_ids]
+                config.update(build_meta_field_sort_config(
+                    self.db, org_id, scope_keys, Activity.meta, meta_sort_keys,
+                ))
+        return config
 
     @staticmethod
     def get_filter_config() -> dict:
@@ -150,6 +162,7 @@ class ActivityService:
         org_id: uuid.UUID,
         params: ListParams,
         accessible_dv_ids: list[uuid.UUID] | None = None,
+        list_columns: list[dict] | None = None,
     ) -> tuple[list[tuple], int]:
         """Paginated list with search, filter, sort support."""
         query = self._build_base_query(org_id, accessible_dv_ids)
@@ -157,15 +170,32 @@ class ActivityService:
         # Search
         query = apply_search(query, params.search, [Activity.title])
 
-        # Filters (static + dimension)
+        # Build filter/sort keys from list config
+        filterable_keys = None
+        sortable_keys = None
+        if list_columns:
+            filterable_keys = {c["key"] for c in list_columns if c.get("filterable")}
+            sortable_keys = {c["key"] for c in list_columns if c.get("sortable")}
+
+        # Filters (static + dimension + meta from list config)
         filter_config = self.get_filter_config()
         filter_config.update(self.get_dimension_filter_config(org_id))
+        if filterable_keys:
+            from app.common.helpers.filter_definitions import build_meta_field_filter_config
+            at_ids = [
+                at.id for at in
+                self.db.query(ActivityType).filter_by(organization_id=org_id).all()
+            ]
+            filter_config.update(build_meta_field_filter_config(
+                self.db, org_id, [f"activity:{at_id}" for at_id in at_ids],
+                Activity.meta, filterable_keys,
+            ))
         query = apply_filters(query, params.filters, filter_config)
 
-        # Sort
+        # Sort (includes meta fields from list config)
         query = apply_sort(
             query, params.sort_by, params.sort_order,
-            self.get_sort_config(), Activity.start_date.desc(),
+            self.get_sort_config(org_id, sortable_keys), Activity.start_date.desc(),
         )
 
         # Paginate

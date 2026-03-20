@@ -46,3 +46,22 @@ class MetaFieldSchema(BaseModel):
     __table_args__ = (
         UniqueConstraint("organization_id", "scope_key", name="uq_meta_field_schema_org_scope"),
     )
+
+
+class ListConfig(BaseModel):
+    __tablename__ = "list_configs"
+
+    organization_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    scope = Column(String, nullable=False)  # "entity:{type_id}" or "activity:{type_id}"
+    columns = Column(JSONB, nullable=False, default=list)
+
+    organization = relationship("Organization")
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", "scope", name="uq_list_config_org_scope"),
+    )

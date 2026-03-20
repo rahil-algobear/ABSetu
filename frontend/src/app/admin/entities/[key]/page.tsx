@@ -4,7 +4,7 @@ import { Suspense, useState, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { entityApi, entityTypeApi, metaFieldSchemaApi } from "@/services/api";
-import { Entity, MetaFieldDefinition } from "@/types";
+import { Entity, ListColumnConfig, MetaFieldDefinition } from "@/types";
 import { Can } from "@/components/Auth/Permissions";
 import { useListParams } from "@/hooks/useListParams";
 import type { FilterDefinition } from "@/components/ui/filter-modal";
@@ -12,7 +12,6 @@ import type { FilterDefinition } from "@/components/ui/filter-modal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Dialog } from "@/components/ui/dialog";
 import { DynamicMetaForm } from "@/components/DynamicMetaForm";
 import { PageHeader } from "@/components/ui/page-header";
@@ -50,11 +49,15 @@ function EntityTypeEntitiesContent() {
 
   const entityType = entityTypes.find((et) => et.key === entityTypeKey);
 
-  // Fetch filter definitions (needed before useListParams for slug mapping)
+  // Fetch filter definitions + column config (scoped by entity type)
   const { data: filterData } = useQuery({
-    queryKey: ["entity-filters"],
-    queryFn: entityApi.getFilters,
+    queryKey: ["entity-filters", entityType?.id],
+    queryFn: () => entityApi.getFilters(entityType?.id),
+    enabled: !!entityType,
   });
+
+  const columns: ListColumnConfig[] = filterData?.columns || [];
+  const sortableKeys = new Set(filterData?.sortable_keys || []);
 
   // All definitions (for slug mapping in useListParams)
   const allFilterDefs: FilterDefinition[] = useMemo(() => {
@@ -95,25 +98,48 @@ function EntityTypeEntitiesContent() {
   const totalCount = response?.count || 0;
   const totalPages = Math.ceil(totalCount / listParams.limit);
 
-  // Use entity-type-specific meta fields if available
-  const metaSchemaKey = entityType ? `entity:${entityType.id}` : "";
-  const { data: metaFields = [] } = useQuery<MetaFieldDefinition[]>({
-    queryKey: ["meta-field-schemas", metaSchemaKey],
-    queryFn: () => metaFieldSchemaApi.get(metaSchemaKey),
-  });
-
-  // Derive unique dimension columns from loaded entities
-  const dimensionColumns = useMemo(() => {
-    const seen = new Map<string, string>();
-    for (const e of entities) {
-      for (const dim of e.dimensions) {
-        if (!seen.has(dim.dimension_key)) {
-          seen.set(dim.dimension_key, dim.dimension_name);
-        }
+  // Helper to render a cell value for a given column config
+  const renderCellValue = (entity: Entity, col: ListColumnConfig) => {
+    if (col.source === "static") {
+      switch (col.key) {
+        case "name":
+          return (
+            <Link
+              href={`/entities/details/${entity.id}`}
+              className="text-primary hover:underline"
+              onClick={(ev) => ev.stopPropagation()}
+            >
+              {entity.name}
+            </Link>
+          );
+        case "case_number":
+          return entity.case_number || "—";
+        case "enrollment_count":
+          return entity.enrollment_count;
+        case "activity_count":
+          return entity.activity_count;
+        case "created_at":
+          return formatDate(entity.updated_at, DATE_FORMATS.DISPLAY);
+        default:
+          return "—";
       }
     }
-    return Array.from(seen.entries()).map(([key, name]) => ({ key, name }));
-  }, [entities]);
+    if (col.source === "dimension") {
+      // col.key is "dim:{id}" — match by dimension name via entity.dimensions
+      const dim = entity.dimensions.find((d) => `dim:${d.value_id}` === col.key || col.label === d.dimension_name);
+      return dim ? dim.value_name : "—";
+    }
+    if (col.source === "meta") {
+      // col.key is "meta:{field_key}"
+      const metaKey = col.key.replace(/^meta:/, "");
+      const val = entity.meta?.[metaKey];
+      if (val === undefined || val === null) return "—";
+      if (Array.isArray(val)) return val.join(", ");
+      if (typeof val === "boolean") return val ? "Yes" : "No";
+      return String(val);
+    }
+    return "—";
+  };
 
   const createMutation = useMutation({
     mutationFn: entityApi.create,
@@ -173,9 +199,15 @@ function EntityTypeEntitiesContent() {
     }
   };
 
+  // Meta fields for create/edit form
+  const metaSchemaKey = entityType ? `entity:${entityType.id}` : "";
+  const { data: metaFields = [] } = useQuery<MetaFieldDefinition[]>({
+    queryKey: ["meta-field-schemas", metaSchemaKey],
+    queryFn: () => metaFieldSchemaApi.get(metaSchemaKey),
+    enabled: !!entityType,
+  });
+
   const typeName = entityType?.name || "Entity";
-  const config = (entityType?.config || {}) as Record<string, boolean>;
-  const hasCaseNumber = config.case_number_enabled;
 
   return (
     <>
@@ -211,37 +243,20 @@ function EntityTypeEntitiesContent() {
           <Table stickyRows={1} className="h-[calc(100vh-400px)] lg:h-[calc(100vh-300px)]">
             <TableHeader>
               <TableRow>
-                <SortableTableHead
-                  label="Name"
-                  sortKey="name"
-                  currentSortBy={listParams.sortBy}
-                  currentSortOrder={listParams.sortOrder}
-                  onSort={listParams.setSorting}
-                />
-                {hasCaseNumber && (
-                  <SortableTableHead
-                    label="Case No."
-                    sortKey="case_number"
-                    currentSortBy={listParams.sortBy}
-                    currentSortOrder={listParams.sortOrder}
-                    onSort={listParams.setSorting}
-                  />
+                {columns.map((col) =>
+                  sortableKeys.has(col.key) ? (
+                    <SortableTableHead
+                      key={col.key}
+                      label={col.label}
+                      sortKey={col.key}
+                      currentSortBy={listParams.sortBy}
+                      currentSortOrder={listParams.sortOrder}
+                      onSort={listParams.setSorting}
+                    />
+                  ) : (
+                    <TableHead key={col.key}>{col.label}</TableHead>
+                  )
                 )}
-                {dimensionColumns.map((dc) => (
-                  <TableHead key={dc.key}>{dc.name}</TableHead>
-                ))}
-                {metaFields.map((f) => (
-                  <TableHead key={f.key}>{f.label}</TableHead>
-                ))}
-                <TableHead>Enrollments</TableHead>
-                <TableHead>Activities</TableHead>
-                <SortableTableHead
-                  label="Created"
-                  sortKey="created_at"
-                  currentSortBy={listParams.sortBy}
-                  currentSortOrder={listParams.sortOrder}
-                  onSort={listParams.setSorting}
-                />
                 <TableHead className="w-20 text-center">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -251,36 +266,14 @@ function EntityTypeEntitiesContent() {
                   key={e.id}
                   onClick={() => router.push(`/entities/details/${e.id}`)}
                 >
-                  <TableCell className="font-medium">
-                    <Link
-                      href={`/entities/details/${e.id}`}
-                      className="text-primary hover:underline"
-                      onClick={(ev) => ev.stopPropagation()}
+                  {columns.map((col) => (
+                    <TableCell
+                      key={col.key}
+                      className={col.key === "name" ? "font-medium" : col.key === "created_at" ? "text-gray-500" : ""}
                     >
-                      {e.name}
-                    </Link>
-                  </TableCell>
-                  {hasCaseNumber && <TableCell>{e.case_number || "—"}</TableCell>}
-                  {dimensionColumns.map((dc) => {
-                    const dim = e.dimensions.find((d) => d.dimension_key === dc.key);
-                    return (
-                      <TableCell key={dc.key}>
-                        {dim ? dim.value_name : "—"}
-                      </TableCell>
-                    );
-                  })}
-                  {metaFields.map((f) => (
-                    <TableCell key={f.key}>
-                      {e.meta?.[f.key] !== undefined
-                        ? String(e.meta[f.key])
-                        : "—"}
+                      {renderCellValue(e, col)}
                     </TableCell>
                   ))}
-                  <TableCell>{e.enrollment_count}</TableCell>
-                  <TableCell>{e.activity_count}</TableCell>
-                  <TableCell className="text-gray-500">
-                    {formatDate(e.updated_at, DATE_FORMATS.DISPLAY)}
-                  </TableCell>
                   <TableCell>
                     <div className="flex items-center justify-center gap-2">
                       <Can permission="entity:edit">

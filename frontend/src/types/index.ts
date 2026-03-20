@@ -218,6 +218,19 @@ export type MetaEntityType = string; // dynamic key for meta field schemas: "ent
 
 export type MetaFieldSchemas = Partial<Record<string, MetaFieldDefinition[]>>;
 
+// --- List Configuration ---
+
+export interface ListColumnConfig {
+  source: "static" | "dimension" | "meta";
+  key: string;
+  label: string;
+  visible: boolean;
+  filterable: boolean;
+  sortable: boolean;
+  sort_order: number;
+  meta_type?: MetaFieldType;
+}
+
 // --- Roles & Permissions ---
 
 export interface Permission {

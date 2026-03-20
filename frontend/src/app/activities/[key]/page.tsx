@@ -7,6 +7,7 @@ import {
   activityApi,
   activityTypeApi,
 } from "@/services/api";
+import { Activity, ListColumnConfig } from "@/types";
 import { Can } from "@/components/Auth/Permissions";
 import { useListParams } from "@/hooks/useListParams";
 import type { FilterDefinition } from "@/components/ui/filter-modal";
@@ -54,11 +55,15 @@ function ActivityTypeListContent() {
   const selectedTypeId = activityType?.id || "";
   const typeName = activityType?.name || "Activity";
 
-  // Fetch filter definitions
+  // Fetch filter definitions + column config (scoped by activity type)
   const { data: filterData } = useQuery({
-    queryKey: ["activity-filters"],
-    queryFn: activityApi.getFilters,
+    queryKey: ["activity-filters", selectedTypeId],
+    queryFn: () => activityApi.getFilters(selectedTypeId || undefined),
+    enabled: !!selectedTypeId,
   });
+
+  const columns: ListColumnConfig[] = filterData?.columns || [];
+  const sortableKeys = new Set(filterData?.sortable_keys || []);
 
   // All definitions (for slug mapping in useListParams)
   const allFilterDefs: FilterDefinition[] = useMemo(() => {
@@ -99,24 +104,52 @@ function ActivityTypeListContent() {
   const totalCount = response?.count || 0;
   const totalPages = Math.ceil(totalCount / listParams.limit);
 
-  const getActivityTitle = (a: (typeof activities)[0]) => {
+  const getActivityTitle = (a: Activity) => {
     if (a.title) return a.title;
     if (a.dimensions.length > 0) return a.dimensions[0].value_name;
     return typeName;
   };
 
-  // Derive unique dimension columns from loaded activities
-  const dimensionColumns = useMemo(() => {
-    const seen = new Map<string, string>();
-    for (const a of activities) {
-      for (const dim of a.dimensions) {
-        if (!seen.has(dim.dimension_key)) {
-          seen.set(dim.dimension_key, dim.dimension_name);
-        }
+  // Helper to render a cell value for a given column config
+  const renderCellValue = (activity: Activity, col: ListColumnConfig) => {
+    if (col.source === "static") {
+      switch (col.key) {
+        case "start_date":
+          return formatDate(activity.start_date);
+        case "end_date":
+          return formatDate(activity.end_date);
+        case "title":
+          return (
+            <Link
+              href={`/activities/details/${activity.id}`}
+              className="text-primary hover:underline"
+              onClick={(ev) => ev.stopPropagation()}
+            >
+              {getActivityTitle(activity)}
+            </Link>
+          );
+        case "participant_count":
+          return activity.participant_count;
+        case "created_at":
+          return formatDate(activity.updated_at, DATE_FORMATS.DISPLAY);
+        default:
+          return "—";
       }
     }
-    return Array.from(seen.entries()).map(([key, name]) => ({ key, name }));
-  }, [activities]);
+    if (col.source === "dimension") {
+      const dim = activity.dimensions.find((d) => col.label === d.dimension_name);
+      return dim ? dim.value_name : "—";
+    }
+    if (col.source === "meta") {
+      const metaKey = col.key.replace(/^meta:/, "");
+      const val = activity.meta?.[metaKey];
+      if (val === undefined || val === null) return "—";
+      if (Array.isArray(val)) return val.join(", ");
+      if (typeof val === "boolean") return val ? "Yes" : "No";
+      return String(val);
+    }
+    return "—";
+  };
 
   return (
     <PageLayout>
@@ -153,38 +186,20 @@ function ActivityTypeListContent() {
               <Table stickyRows={1} className="h-[calc(100vh-400px)] lg:h-[calc(100vh-300px)]">
                 <TableHeader>
                   <TableRow>
-                    <SortableTableHead
-                      label="Start Date"
-                      sortKey="start_date"
-                      currentSortBy={listParams.sortBy}
-                      currentSortOrder={listParams.sortOrder}
-                      onSort={listParams.setSorting}
-                    />
-                    <SortableTableHead
-                      label="End Date"
-                      sortKey="end_date"
-                      currentSortBy={listParams.sortBy}
-                      currentSortOrder={listParams.sortOrder}
-                      onSort={listParams.setSorting}
-                    />
-                    <SortableTableHead
-                      label="Title"
-                      sortKey="title"
-                      currentSortBy={listParams.sortBy}
-                      currentSortOrder={listParams.sortOrder}
-                      onSort={listParams.setSorting}
-                    />
-                    {dimensionColumns.map((dc) => (
-                      <TableHead key={dc.key}>{dc.name}</TableHead>
-                    ))}
-                    <TableHead>Participants</TableHead>
-                    <SortableTableHead
-                      label="Created"
-                      sortKey="created_at"
-                      currentSortBy={listParams.sortBy}
-                      currentSortOrder={listParams.sortOrder}
-                      onSort={listParams.setSorting}
-                    />
+                    {columns.map((col) =>
+                      sortableKeys.has(col.key) ? (
+                        <SortableTableHead
+                          key={col.key}
+                          label={col.label}
+                          sortKey={col.key}
+                          currentSortBy={listParams.sortBy}
+                          currentSortOrder={listParams.sortOrder}
+                          onSort={listParams.setSorting}
+                        />
+                      ) : (
+                        <TableHead key={col.key}>{col.label}</TableHead>
+                      )
+                    )}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -193,29 +208,14 @@ function ActivityTypeListContent() {
                       key={a.id}
                       onClick={() => router.push(`/activities/details/${a.id}`)}
                     >
-                      <TableCell>{formatDate(a.start_date)}</TableCell>
-                      <TableCell>{formatDate(a.end_date)}</TableCell>
-                      <TableCell className="font-medium">
-                        <Link
-                          href={`/activities/details/${a.id}`}
-                          className="text-primary hover:underline"
-                          onClick={(ev) => ev.stopPropagation()}
+                      {columns.map((col) => (
+                        <TableCell
+                          key={col.key}
+                          className={col.key === "title" ? "font-medium" : col.key === "created_at" ? "text-gray-500" : ""}
                         >
-                          {getActivityTitle(a)}
-                        </Link>
-                      </TableCell>
-                      {dimensionColumns.map((dc) => {
-                        const dim = a.dimensions.find((d) => d.dimension_key === dc.key);
-                        return (
-                          <TableCell key={dc.key}>
-                            {dim ? dim.value_name : "—"}
-                          </TableCell>
-                        );
-                      })}
-                      <TableCell>{a.participant_count}</TableCell>
-                      <TableCell className="text-gray-500">
-                        {formatDate(a.updated_at, DATE_FORMATS.DISPLAY)}
-                      </TableCell>
+                          {renderCellValue(a, col)}
+                        </TableCell>
+                      ))}
                     </TableRow>
                   ))}
                 </TableBody>

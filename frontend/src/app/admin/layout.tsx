@@ -8,6 +8,7 @@ import { dimensionApi, entityTypeApi } from "@/services/api";
 import {
   Layers,
   ClipboardList,
+  Columns,
   UserCheck,
   Users,
   Shield,
@@ -66,6 +67,7 @@ export default function AdminLayout({
     { href: "/admin/entity-types", label: "Entity Types", icon: UserCheck, permission: "entity_type:manage" },
     { href: "/admin/activity-types", label: "Activity Types", icon: ClipboardList, permission: "activity_type:manage" },
     { href: "/admin/form-builder", label: "Form Builder", icon: LayoutTemplate, permission: "activity_type:manage" },
+    { href: "/admin/list-settings", label: "List Settings", icon: Columns, permission: "org:settings" },
   ];
 
   const allTabs = [...mastersTabs, ...adminTabs];
