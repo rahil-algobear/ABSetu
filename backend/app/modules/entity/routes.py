@@ -193,14 +193,16 @@ def list_entities(
 @entity_router.get("/filters", dependencies=[Depends(require_permissions("entity:view"))])
 def get_entity_filters(
     current_user: User = Depends(get_current_user),
+    accessible_dv_ids: list[uuid.UUID] | None = Depends(get_accessible_dimension_value_ids),
     db: Session = Depends(get_db),
 ):
     """Return available filter definitions for entity list."""
-    from app.modules.dimension.model import Dimension, DimensionValue
-    from app.modules.organization.service import MetaFieldSchemaService
+    from app.common.helpers.filter_definitions import (
+        build_dimension_filters,
+        build_meta_field_filters,
+    )
 
     org_id = current_user.organization_id
-
     result = []
 
     # Entity type filter
@@ -214,55 +216,12 @@ def get_entity_filters(
             "options": [{"value": str(et.id), "label": et.name} for et in entity_types],
         })
 
-    # Dimension filters
-    dims = (
-        db.query(Dimension)
-        .filter_by(organization_id=org_id)
-        .order_by(Dimension.sort_order)
-        .all()
-    )
-    for dim in dims:
-        values = (
-            db.query(DimensionValue)
-            .filter_by(dimension_id=dim.id)
-            .order_by(DimensionValue.sort_order, DimensionValue.name)
-            .all()
-        )
-        if values:
-            result.append({
-                "key": f"dim:{dim.id}",
-                "label": dim.name,
-                "type": "select",
-                "options": [{"value": str(v.id), "label": v.name} for v in values],
-            })
+    # Dimension filters (scoped by user access)
+    result.extend(build_dimension_filters(db, org_id, accessible_dv_ids))
 
     # Meta field filters (where is_filterable=true)
-    meta_service = MetaFieldSchemaService(db)
-    # Get entity-scoped meta fields
-    for et in entity_types:
-        scope_key = f"entity:{et.id}"
-        fields = meta_service.get_schema(org_id, scope_key)
-        for field in fields:
-            if field.get("is_filterable"):
-                ftype = field.get("type", "text")
-                filter_def: dict = {
-                    "key": f"meta:{field['key']}",
-                    "label": field.get("label", field["key"]),
-                }
-                if ftype in ("select", "multiselect") and field.get("options"):
-                    filter_def["type"] = "select"
-                    filter_def["options"] = [
-                        {"value": o, "label": o} for o in field["options"]
-                    ]
-                elif ftype == "number":
-                    filter_def["type"] = "range"
-                elif ftype == "date":
-                    filter_def["type"] = "date_range"
-                elif ftype == "boolean":
-                    filter_def["type"] = "boolean"
-                else:
-                    filter_def["type"] = "text"
-                result.append(filter_def)
+    scope_keys = [f"entity:{et.id}" for et in entity_types]
+    result.extend(build_meta_field_filters(db, org_id, scope_keys))
 
     # Date filter for created_at
     result.append({
