@@ -267,18 +267,19 @@ class ActivityFormService:
             for el in elements
             if el.get("type") == "default" and el.get("ref_id") in default_ref_ids
         }
-        # Add missing defaults at the beginning
+        # Add missing defaults at the beginning, shift existing elements down
         missing = [
             {**el}
             for el in ActivityFormService.DEFAULT_ELEMENTS
             if el["ref_id"] not in existing_defaults
         ]
         if missing:
-            # Insert missing defaults, then existing elements
-            max_sort = max((el.get("sort_order", 0) for el in elements), default=-1)
+            offset = len(missing)
+            for el in elements:
+                el["sort_order"] = el.get("sort_order", 0) + offset
             for i, m in enumerate(missing):
-                m["sort_order"] = max_sort + 1 + i
-            elements = elements + missing
+                m["sort_order"] = i
+            elements = missing + elements
         # Ensure default elements are never removable
         for el in elements:
             if el.get("type") == "default" and el.get("ref_id") in default_ref_ids:

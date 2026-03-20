@@ -23,10 +23,11 @@ import { Can } from "@/components/Auth/Permissions";
 import { DynamicMetaForm, MetaFieldDisplay } from "@/components/DynamicMetaForm";
 import { SearchSelectParticipants } from "@/components/SearchSelectParticipants";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PageLayout } from "@/components/ui/page-layout";
-import { Trash2 } from "lucide-react";
+import { Trash2, Pencil } from "lucide-react";
 import toast from "react-hot-toast";
 
 export default function ActivityDetailPage() {
@@ -36,6 +37,13 @@ export default function ActivityDetailPage() {
   const queryClient = useQueryClient();
 
   const [editingSections, setEditingSections] = useState(false);
+  const [editingDetails, setEditingDetails] = useState(false);
+  const [detailFormData, setDetailFormData] = useState({
+    start_date: "",
+    end_date: "",
+    notes: "",
+  });
+  const [detailMetaValues, setDetailMetaValues] = useState<Record<string, unknown>>({});
   const [participantState, setParticipantState] = useState<
     Record<string, { participant_id: string; participant_type: string; status?: string; meta?: Record<string, unknown> }[]>
   >({});
@@ -77,6 +85,17 @@ export default function ActivityDetailPage() {
       .filter((el) => el.type === "entity_type" && el.visible)
       .sort((a, b) => a.sort_order - b.sort_order);
   }, [formConfig]);
+
+  // Visible non-participant elements (default + activity_meta) for the detail/edit view
+  const detailElements: ActivityFormElement[] = useMemo(() => {
+    if (!formConfig?.elements?.length) return [];
+    return formConfig.elements
+      .filter((el) => el.visible && (el.type === "default" || el.type === "activity_meta"))
+      .sort((a, b) => a.sort_order - b.sort_order);
+  }, [formConfig]);
+
+  // Are there any record-stage fields that need editing?
+  const hasRecordFields = detailElements.some((el) => el.stage === "record");
 
   // Entity type source IDs from form elements
   const entitySourceIds = useMemo(() => {
@@ -155,6 +174,17 @@ export default function ActivityDetailPage() {
     },
   });
 
+  const updateDetailsMutation = useMutation({
+    mutationFn: (data: { start_date?: string; end_date?: string; notes?: string; meta?: Record<string, unknown> }) =>
+      activityApi.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["activity", id] });
+      setEditingDetails(false);
+      toast.success("Details updated");
+    },
+    onError: () => toast.error("Failed to update details"),
+  });
+
   const deleteMutation = useMutation({
     mutationFn: () => activityApi.delete(id),
     onSuccess: () => {
@@ -164,6 +194,29 @@ export default function ActivityDetailPage() {
     },
     onError: () => toast.error("Failed to delete activity"),
   });
+
+  const openDetailEditing = () => {
+    if (!activity) return;
+    setDetailFormData({
+      start_date: activity.start_date,
+      end_date: activity.end_date || "",
+      notes: activity.notes || "",
+    });
+    setDetailMetaValues(activity.meta || {});
+    setEditingDetails(true);
+  };
+
+  const handleDetailSave = () => {
+    const payload: Record<string, unknown> = {
+      start_date: detailFormData.start_date,
+      end_date: detailFormData.end_date || undefined,
+      notes: detailFormData.notes || undefined,
+    };
+    if (activityTypeFields.length > 0) {
+      payload.meta = detailMetaValues;
+    }
+    updateDetailsMutation.mutate(payload as Parameters<typeof updateDetailsMutation.mutate>[0]);
+  };
 
   const handleDelete = () => {
     if (confirm("Delete this activity? This cannot be undone.")) {
@@ -302,27 +355,115 @@ export default function ActivityDetailPage() {
           </Badge>
         ))}
       </div>
-      <p className="text-gray-500 mb-4">
-        {activity.start_date}
-        {activity.end_date && activity.end_date !== activity.start_date && ` — ${activity.end_date}`}
-      </p>
-
-      {activity.activity_type_name && (
-        <p className="text-sm text-gray-500 mb-2">Type: {activity.activity_type_name}</p>
-      )}
-
-      {activity.notes && (
-        <p className="text-sm text-gray-600 mb-4">{activity.notes}</p>
-      )}
-
-      {/* Activity meta display */}
-      {activity.meta && Object.keys(activity.meta).length > 0 && activityTypeFields.length > 0 && (
+      {editingDetails ? (
         <Card className="mb-4">
-          <CardContent className="py-3">
-            <MetaFieldDisplay fields={activityTypeFields} values={activity.meta} />
+          <CardHeader className="flex-row items-center justify-between">
+            <CardTitle className="text-lg">Edit Details</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={(e) => { e.preventDefault(); handleDetailSave(); }} className="space-y-3">
+              {detailElements.map((el) => {
+                if (el.type === "default" && el.ref_id === "start_date") {
+                  return (
+                    <div key="edit-start_date">
+                      <label className="text-sm font-medium">
+                        Date{el.required && <span className="text-red-500 ml-0.5">*</span>}
+                      </label>
+                      <div className="flex gap-2 mt-1">
+                        <Input
+                          type="date"
+                          value={detailFormData.start_date}
+                          onChange={(e) => setDetailFormData({ ...detailFormData, start_date: e.target.value })}
+                          required={el.required}
+                        />
+                        <Input
+                          type="date"
+                          value={detailFormData.end_date}
+                          onChange={(e) => setDetailFormData({ ...detailFormData, end_date: e.target.value })}
+                          min={detailFormData.start_date}
+                        />
+                      </div>
+                      <p className="text-xs text-gray-400 mt-0.5">Leave end date empty for single-day activities</p>
+                    </div>
+                  );
+                }
+                if (el.type === "default" && el.ref_id === "notes") {
+                  return (
+                    <div key="edit-notes">
+                      <label className="text-sm font-medium">
+                        Notes{el.required && <span className="text-red-500 ml-0.5">*</span>}
+                      </label>
+                      <Input
+                        placeholder="Notes..."
+                        value={detailFormData.notes}
+                        onChange={(e) => setDetailFormData({ ...detailFormData, notes: e.target.value })}
+                        required={el.required}
+                      />
+                    </div>
+                  );
+                }
+                if (el.type === "activity_meta" && activityTypeFields.length > 0) {
+                  return (
+                    <div key="edit-activity_meta">
+                      <DynamicMetaForm
+                        fields={activityTypeFields}
+                        values={detailMetaValues}
+                        onChange={setDetailMetaValues}
+                      />
+                    </div>
+                  );
+                }
+                return null;
+              })}
+              <div className="flex gap-2 pt-2">
+                <Button type="submit" disabled={updateDetailsMutation.isPending}>
+                  Save
+                </Button>
+                <Button type="button" variant="outline" onClick={() => setEditingDetails(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </form>
           </CardContent>
         </Card>
+      ) : (
+        <>
+          <div className="flex items-center gap-2 mb-1">
+            <p className="text-gray-500">
+              {activity.start_date}
+              {activity.end_date && activity.end_date !== activity.start_date && ` — ${activity.end_date}`}
+            </p>
+            <Can permission="activity:create">
+              <button
+                onClick={openDetailEditing}
+                className="text-gray-400 hover:text-purple-600"
+                title="Edit details"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+            </Can>
+          </div>
+
+          {activity.activity_type_name && (
+            <p className="text-sm text-gray-500 mb-2">Type: {activity.activity_type_name}</p>
+          )}
+
+          {activity.notes && (
+            <p className="text-sm text-gray-600 mb-2">{activity.notes}</p>
+          )}
+
+          {/* Activity meta display */}
+          {activity.meta && Object.keys(activity.meta).length > 0 && activityTypeFields.length > 0 && (
+            <Card className="mb-4">
+              <CardContent className="py-3">
+                <MetaFieldDisplay fields={activityTypeFields} values={activity.meta} />
+              </CardContent>
+            </Card>
+          )}
+        </>
       )}
+
+      <div className="mb-4" />
 
       {/* Participant sections from form builder */}
       {entityTypeElements.length > 0 ? (
