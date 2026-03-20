@@ -219,7 +219,7 @@ function EntityTypeEntitiesContent() {
       ) : (
         <>
           <div className="bg-white shadow-sm border rounded-lg overflow-hidden">
-          <Table>
+          <Table stickyRows={1} className="h-[calc(100vh-400px)] lg:h-[calc(100vh-300px)]">
             <TableHeader>
               <TableRow>
                 <SortableTableHead
