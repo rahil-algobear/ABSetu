@@ -4,7 +4,7 @@
 
 Our meta field system lets orgs define custom fields (dates, numbers, selects, etc.) on activities, entities, enrollments, and participants. But the dashboard only reports on hardcoded columns — entity counts, activity counts, dimension breakdowns.
 
-Example: A campaign activity category has custom `start_date` and `end_date` fields. Today there's no way to visualize campaign timelines, filter by date ranges, or aggregate by custom select fields on the dashboard.
+Example: A campaign activity type has custom `start_date` and `end_date` fields. Today there's no way to visualize campaign timelines, filter by date ranges, or aggregate by custom select fields on the dashboard.
 
 **Custom fields are only as powerful as the insights you can extract from them.**
 
@@ -77,9 +77,7 @@ A query builder that takes `(scope_key, field_key, field_type, aggregation_type)
 -- Select field: count by value
 SELECT meta->>'region' AS value, COUNT(*)
 FROM activities
-WHERE activity_type_id IN (
-  SELECT id FROM activity_types WHERE category_id = :cat_id
-)
+WHERE activity_type_id = :activity_type_id
 GROUP BY meta->>'region'
 
 -- Date field: distribution by month
@@ -136,7 +134,7 @@ Response example:
   "total_entities": 150,
   "total_activities": 320,
   "meta_field_stats": {
-    "activity:category:abc123": [
+    "activity:type:abc123": [
       {
         "field_key": "campaign_start_date",
         "field_label": "Campaign Start Date",
@@ -165,7 +163,7 @@ Response example:
 #### Option B: Separate endpoint for meta field reports
 
 ```
-GET /api/dashboard/meta-report?scope_key=activity:category:{id}&field_key=campaign_start_date&aggregation=timeline
+GET /api/dashboard/meta-report?scope_key=activity:type:{id}&field_key=campaign_start_date&aggregation=timeline
 ```
 
 **Recommendation:** Start with Option A (extend existing endpoint) for simplicity. Move to Option B if performance requires lazy-loading individual charts.
