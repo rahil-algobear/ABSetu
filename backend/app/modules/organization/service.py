@@ -261,18 +261,35 @@ class ListConfigService:
 
     # ── merge logic ─────────────────────────────────────────────
 
-    @staticmethod
-    def _merge_with_current(saved: list[dict], defaults: list[dict]) -> list[dict]:
+    # Properties that are structural (not user-configurable) and should
+    # always be synced from the current defaults, even on saved configs.
+    _STRUCTURAL_PROPS = {"source", "meta_type", "dimension_key"}
+
+    @classmethod
+    def _merge_with_current(cls, saved: list[dict], defaults: list[dict]) -> list[dict]:
         """Merge saved config with current defaults.
 
         - Preserve saved columns order/visibility/flags
+        - Sync structural properties (source, meta_type, dimension_key) from defaults
         - Drop columns whose key no longer exists in defaults
         - Append new columns (present in defaults but not saved) at the end
         """
-        default_keys = {d["key"] for d in defaults}
+        default_by_key = {d["key"]: d for d in defaults}
 
-        # Keep saved columns that still exist
-        result = [c for c in saved if c["key"] in default_keys]
+        # Keep saved columns that still exist, syncing structural props
+        result = []
+        for c in saved:
+            if c["key"] not in default_by_key:
+                continue
+            merged = {**c}
+            dflt = default_by_key[c["key"]]
+            for prop in cls._STRUCTURAL_PROPS:
+                if prop in dflt:
+                    merged[prop] = dflt[prop]
+                elif prop in merged:
+                    del merged[prop]
+            result.append(merged)
+
         existing_keys = {c["key"] for c in result}
 
         # Append new defaults
