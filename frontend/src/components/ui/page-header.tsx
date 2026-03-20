@@ -29,7 +29,7 @@ export function PageHeader({
       className={`relative bg-white border-b border-gray-50 shadow-sm ${className}`}
     >
       {(!isCollapsible || !isCollapsed) && (
-        <div className="px-4 lg:px-6 pt-6 pb-6">
+        <div className="px-4 lg:px-6 pt-4 pb-4">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 lg:gap-4">
             <div className="flex-1 min-w-0">
               <h1 className="text-2xl font-bold text-gray-900 break-words">
