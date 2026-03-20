@@ -36,7 +36,7 @@ interface TableCellProps {
 }
 
 export function Table({ children, className = "", stickyRows = 0, maxHeight }: TableProps) {
-  const containerStyle = maxHeight ? { maxHeight, height: maxHeight } : {};
+  const containerStyle = maxHeight ? { maxHeight } : {};
 
   return (
     <div
@@ -69,7 +69,7 @@ export function TableHeader({ children, className = "" }: TableHeaderProps) {
 
 export function TableBody({ children, className = "" }: TableBodyProps) {
   return (
-    <tbody className={`bg-white divide-y divide-gray-200 ${className}`}>
+    <tbody className={`bg-white ${className}`}>
       {children}
     </tbody>
   );
@@ -78,7 +78,7 @@ export function TableBody({ children, className = "" }: TableBodyProps) {
 export function TableRow({ children, className = "", onClick }: TableRowProps) {
   return (
     <tr
-      className={`hover:bg-gray-50 transition-colors ${onClick ? 'cursor-pointer' : ''} ${className}`}
+      className={`border-b border-gray-200 hover:bg-gray-50 transition-colors ${onClick ? 'cursor-pointer' : ''} ${className}`}
       onClick={onClick}
     >
       {children}
