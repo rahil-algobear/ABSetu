@@ -8,12 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.common.exceptions import NotFoundError, ValidationError
 from app.common.helpers.slugify import slugify
-from app.modules.dimension.model import (
-    Dimension,
-    DimensionValue,
-    DimensionValueLink,
-    UserDimension,
-)
+from app.modules.dimension.model import Dimension, DimensionValue, DimensionValueLink, UserDimension
 
 
 class DimensionService:
@@ -142,7 +137,7 @@ class DimensionValueLinkService:
             vals_2 = (
                 self.db.query(DimensionValue.id).filter_by(dimension_id=dimension_id_2).subquery()
             )
-            from sqlalchemy import or_, and_
+            from sqlalchemy import and_, or_
 
             query = query.filter(
                 or_(
@@ -284,6 +279,53 @@ class UserDimensionAccessService:
                 raise ForbiddenError(
                     "You do not have access to one or more selected dimension values"
                 )
+
+    def check_record_access(
+        self,
+        accessible_dv_ids: list[uuid.UUID] | None,
+        record_dv_ids: list[uuid.UUID],
+    ) -> None:
+        """
+        Check that a user can access a record based on its dimension values.
+
+        Per-dimension logic: for each restricted dimension, the record must
+        have at least one allowed value OR no values from that dimension.
+        Raises ForbiddenError if the record is outside the user's scope.
+        """
+        if accessible_dv_ids is None or not record_dv_ids:
+            return
+
+        from app.common.exceptions import ForbiddenError
+
+        allowed = {dv_id for dv_id in accessible_dv_ids}
+
+        # Find which dimensions the user has restrictions on
+        rows = (
+            self.db.query(DimensionValue.dimension_id)
+            .filter(DimensionValue.id.in_(accessible_dv_ids))
+            .distinct()
+            .all()
+        )
+        restricted_dim_ids = {row[0] for row in rows}
+
+        # Group record's dimension values by dimension
+        record_rows = (
+            self.db.query(DimensionValue.id, DimensionValue.dimension_id)
+            .filter(DimensionValue.id.in_(record_dv_ids))
+            .all()
+        )
+        dims_to_values: dict[uuid.UUID, list[uuid.UUID]] = {}
+        for dv_id, dim_id in record_rows:
+            dims_to_values.setdefault(dim_id, []).append(dv_id)
+
+        # For each restricted dimension the record has values for,
+        # at least one value must be in the allowed set
+        for dim_id in restricted_dim_ids:
+            record_values = dims_to_values.get(dim_id)
+            if not record_values:
+                continue  # record has no values for this dimension → ok
+            if not any(v in allowed for v in record_values):
+                raise ForbiddenError("You do not have access to this record")
 
     def update_access(
         self, user_id: uuid.UUID, dimension_value_ids: list[uuid.UUID]

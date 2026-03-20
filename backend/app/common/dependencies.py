@@ -130,3 +130,48 @@ def get_accessible_dimension_value_ids(
     access_service = UserDimensionAccessService(db)
     dv_ids = access_service.get_access_value_ids(current_user.id)
     return dv_ids if dv_ids else None
+
+
+def get_accessible_entity(
+    entity_id: uuid.UUID,
+    current_user=Depends(get_current_user),
+    accessible_dv_ids: list[uuid.UUID] | None = Depends(get_accessible_dimension_value_ids),
+    db: Session = Depends(get_db),
+):
+    """
+    Fetch an entity by ID and verify the current user has dimension access to it.
+
+    Usage:
+        @router.get("/{entity_id}")
+        def get_entity(entity=Depends(get_accessible_entity)):
+            ...
+    """
+    from app.modules.dimension.service import UserDimensionAccessService
+    from app.modules.entity.service import EntityService
+
+    entity = EntityService(db).get_by_id(entity_id, current_user.organization_id)
+    record_dv_ids = [d.dimension_value_id for d in entity.dimensions or []]
+    UserDimensionAccessService(db).check_record_access(accessible_dv_ids, record_dv_ids)
+    return entity
+
+
+def get_accessible_activity(
+    activity_id: uuid.UUID,
+    accessible_dv_ids: list[uuid.UUID] | None = Depends(get_accessible_dimension_value_ids),
+    db: Session = Depends(get_db),
+):
+    """
+    Fetch an activity by ID and verify the current user has dimension access to it.
+
+    Usage:
+        @router.get("/{activity_id}")
+        def get_activity(activity=Depends(get_accessible_activity)):
+            ...
+    """
+    from app.modules.activity.service import ActivityService
+    from app.modules.dimension.service import UserDimensionAccessService
+
+    activity = ActivityService(db).get_by_id(activity_id)
+    record_dv_ids = [d.dimension_value_id for d in activity.dimensions or []]
+    UserDimensionAccessService(db).check_record_access(accessible_dv_ids, record_dv_ids)
+    return activity

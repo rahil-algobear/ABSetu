@@ -8,16 +8,8 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.common.exceptions import NotFoundError, ValidationError
 from app.common.helpers.slugify import slugify
-from app.modules.activity.model import (
-    Activity,
-    ActivityForm,
-    ActivityParticipant,
-    ActivityType,
-)
-from app.modules.dimension.model import (
-    ActivityDimension,
-    DimensionValue,
-)
+from app.modules.activity.model import Activity, ActivityForm, ActivityParticipant, ActivityType
+from app.modules.dimension.model import ActivityDimension, DimensionValue
 
 
 class ActivityTypeService:
@@ -88,13 +80,37 @@ class ActivityService:
             query = query.filter(Activity.activity_type_id == activity_type_id)
 
         if accessible_dv_ids:
-            from sqlalchemy import exists
+            from sqlalchemy import exists, or_
 
-            query = query.filter(
-                exists()
-                .where(ActivityDimension.activity_id == Activity.id)
-                .where(ActivityDimension.dimension_value_id.in_(accessible_dv_ids))
+            # Per-dimension scoping: only filter dimensions where user has restrictions.
+            # If user has no assignments for a dimension, they see all values for it.
+            dv_dim_rows = (
+                self.db.query(DimensionValue.id, DimensionValue.dimension_id)
+                .filter(DimensionValue.id.in_(accessible_dv_ids))
+                .all()
             )
+            restricted_dims: dict[uuid.UUID, list[uuid.UUID]] = {}
+            for dv_id, dim_id in dv_dim_rows:
+                restricted_dims.setdefault(dim_id, []).append(dv_id)
+
+            for dim_id, allowed_ids in restricted_dims.items():
+                dim_values_subq = (
+                    self.db.query(DimensionValue.id)
+                    .filter(DimensionValue.dimension_id == dim_id)
+                    .subquery()
+                )
+                query = query.filter(
+                    or_(
+                        # Activity has no values from this dimension → unrestricted
+                        ~exists()
+                        .where(ActivityDimension.activity_id == Activity.id)
+                        .where(ActivityDimension.dimension_value_id.in_(dim_values_subq)),
+                        # Activity has at least one allowed value from this dimension
+                        exists()
+                        .where(ActivityDimension.activity_id == Activity.id)
+                        .where(ActivityDimension.dimension_value_id.in_(allowed_ids)),
+                    )
+                )
 
         return (
             query.options(
@@ -129,7 +145,14 @@ class ActivityService:
         user_id: uuid.UUID,
         data: dict,
         dimension_value_ids: list[str],
+        accessible_dv_ids: list[uuid.UUID] | None = None,
     ) -> Activity:
+        from app.modules.dimension.service import UserDimensionAccessService
+
+        UserDimensionAccessService(self.db).validate_dimension_values(
+            accessible_dv_ids, dimension_value_ids or []
+        )
+
         activity_type_id = data.get("activity_type_id")
         if activity_type_id:
             at = (

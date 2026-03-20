@@ -7,14 +7,14 @@ import uuid
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.core.database import get_db
 from app.common.dependencies import (
+    get_accessible_activity,
     get_accessible_dimension_value_ids,
     get_current_user,
     require_permissions,
 )
 from app.common.exceptions import ValidationError
-from app.modules.auth.model import User
+from app.core.database import get_db
 from app.modules.activity.schemas import (
     ActivityCreate,
     ActivityFormResponse,
@@ -34,9 +34,9 @@ from app.modules.activity.service import (
     ActivityService,
     ActivityTypeService,
 )
-from app.modules.activity.model import Activity
-from app.modules.organization.service import MetaFieldSchemaService
+from app.modules.auth.model import User
 from app.modules.dimension.model import Dimension, DimensionValue
+from app.modules.organization.service import MetaFieldSchemaService
 
 router = APIRouter(tags=["activities"])
 
@@ -179,12 +179,9 @@ def list_activities(
     dependencies=[Depends(require_permissions("activity:view"))],
 )
 def get_activity(
-    activity_id: uuid.UUID,
-    db: Session = Depends(get_db),
+    activity=Depends(get_accessible_activity),
 ):
-    service = ActivityService(db)
-    a = service.get_by_id(activity_id)
-    return _build_activity_response(a)
+    return _build_activity_response(activity)
 
 
 @activity_router.post(
@@ -198,13 +195,6 @@ def create_activity(
     accessible_dv_ids: list[uuid.UUID] | None = Depends(get_accessible_dimension_value_ids),
     db: Session = Depends(get_db),
 ):
-    # Validate dimension values are within user's allowed scope
-    from app.modules.dimension.service import UserDimensionAccessService
-
-    UserDimensionAccessService(db).validate_dimension_values(
-        accessible_dv_ids, data.dimension_value_ids or []
-    )
-
     # Validate required form elements from form builder config
     activity_type_id = data.activity_type_id
     if activity_type_id:
@@ -238,6 +228,7 @@ def create_activity(
         current_user.id,
         data.model_dump(exclude={"dimension_value_ids"}),
         data.dimension_value_ids,
+        accessible_dv_ids=accessible_dv_ids,
     )
     return _build_activity_response(activity)
 
@@ -247,13 +238,13 @@ def create_activity(
     dependencies=[Depends(require_permissions("activity:create"))],
 )
 def update_activity(
-    activity_id: uuid.UUID,
     data: ActivityUpdate,
+    activity=Depends(get_accessible_activity),
     db: Session = Depends(get_db),
 ):
     service = ActivityService(db)
-    activity = service.update(activity_id, data.model_dump(exclude_none=True))
-    return _build_activity_response(activity)
+    updated = service.update(activity.id, data.model_dump(exclude_none=True))
+    return _build_activity_response(updated)
 
 
 @activity_router.delete(
@@ -261,11 +252,11 @@ def update_activity(
     dependencies=[Depends(require_permissions("activity:create"))],
 )
 def delete_activity(
-    activity_id: uuid.UUID,
+    activity=Depends(get_accessible_activity),
     db: Session = Depends(get_db),
 ):
     service = ActivityService(db)
-    service.delete(activity_id)
+    service.delete(activity.id)
     return {"message": "Activity deleted"}
 
 
@@ -294,11 +285,11 @@ def _resolve_participant_name(db, participant_type, participant_id):
     dependencies=[Depends(require_permissions("activity:view"))],
 )
 def get_participants(
-    activity_id: uuid.UUID,
+    activity=Depends(get_accessible_activity),
     db: Session = Depends(get_db),
 ):
     service = ActivityParticipantService(db)
-    participants = service.list_by_activity(activity_id)
+    participants = service.list_by_activity(activity.id)
     results = []
     for p in participants:
         name = _resolve_participant_name(db, p.participant_type, p.participant_id)
@@ -323,21 +314,14 @@ def get_participants(
     status_code=201,
 )
 def save_participants(
-    activity_id: uuid.UUID,
     data: ParticipantBulkCreate,
+    activity=Depends(get_accessible_activity),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    # Validate required entity_type sections from form builder config
-    from sqlalchemy.orm import joinedload
 
-    activity = (
-        db.query(Activity)
-        .options(joinedload(Activity.dimensions))
-        .filter_by(id=activity_id)
-        .first()
-    )
-    if activity and activity.activity_type_id:
+    # Validate required entity_type sections from form builder config
+    if activity.activity_type_id:
         form_service = ActivityFormService(db)
         form = form_service.get_by_type(activity.activity_type_id, current_user.organization_id)
         if form and form.elements:
@@ -365,13 +349,12 @@ def save_participants(
     all_schemas = meta_service.get_all_schemas(current_user.organization_id)
 
     activity_type_id_str = (
-        str(activity.activity_type_id) if activity and activity.activity_type_id else None
+        str(activity.activity_type_id) if activity.activity_type_id else None
     )
     activity_dv_ids = []
-    if activity:
-        for ad in activity.dimensions or []:
-            if ad.dimension_value_id:
-                activity_dv_ids.append(str(ad.dimension_value_id))
+    for ad in activity.dimensions or []:
+        if ad.dimension_value_id:
+            activity_dv_ids.append(str(ad.dimension_value_id))
 
     for record in data.records:
         base = f"participant:entity:{record.section_key}"
@@ -396,7 +379,7 @@ def save_participants(
 
     service = ActivityParticipantService(db)
     participants = service.bulk_create(
-        activity_id,
+        activity.id,
         [r.model_dump() for r in data.records],
     )
     return [

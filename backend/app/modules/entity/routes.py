@@ -7,12 +7,13 @@ import uuid
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.core.database import get_db
 from app.common.dependencies import (
     get_accessible_dimension_value_ids,
+    get_accessible_entity,
     get_current_user,
     require_permissions,
 )
+from app.core.database import get_db
 from app.modules.auth.model import User
 from app.modules.entity.schemas import (
     DimensionInfo,
@@ -162,12 +163,8 @@ def list_entities(
     dependencies=[Depends(require_permissions("entity:view"))],
 )
 def get_entity(
-    entity_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    entity=Depends(get_accessible_entity),
 ):
-    service = EntityService(db)
-    entity = service.get_by_id(entity_id, current_user.organization_id)
     return _build_entity_response(entity)
 
 
@@ -182,18 +179,12 @@ def create_entity(
     accessible_dv_ids: list[uuid.UUID] | None = Depends(get_accessible_dimension_value_ids),
     db: Session = Depends(get_db),
 ):
-    # Validate dimension values are within user's allowed scope
-    from app.modules.dimension.service import UserDimensionAccessService
-
-    UserDimensionAccessService(db).validate_dimension_values(
-        accessible_dv_ids, data.dimension_value_ids or []
-    )
-
     service = EntityService(db)
     entity = service.create(
         current_user.organization_id,
         data.model_dump(exclude={"dimension_value_ids"}),
         dimension_value_ids=data.dimension_value_ids,
+        accessible_dv_ids=accessible_dv_ids,
     )
     return _build_entity_response(entity)
 
@@ -203,15 +194,14 @@ def create_entity(
     dependencies=[Depends(require_permissions("entity:edit"))],
 )
 def update_entity(
-    entity_id: uuid.UUID,
     data: EntityUpdate,
-    current_user: User = Depends(get_current_user),
+    entity=Depends(get_accessible_entity),
     db: Session = Depends(get_db),
 ):
     service = EntityService(db)
     entity = service.update(
-        entity_id,
-        current_user.organization_id,
+        entity.id,
+        entity.organization_id,
         data.model_dump(exclude_none=True),
     )
     return _build_entity_response(entity)
@@ -222,24 +212,17 @@ def update_entity(
     dependencies=[Depends(require_permissions("entity:edit"))],
 )
 def update_entity_dimensions(
-    entity_id: uuid.UUID,
     dimension_value_ids: list[str],
-    current_user: User = Depends(get_current_user),
+    entity=Depends(get_accessible_entity),
     accessible_dv_ids: list[uuid.UUID] | None = Depends(get_accessible_dimension_value_ids),
     db: Session = Depends(get_db),
 ):
-    # Validate dimension values are within user's allowed scope
-    from app.modules.dimension.service import UserDimensionAccessService
-
-    UserDimensionAccessService(db).validate_dimension_values(
-        accessible_dv_ids, dimension_value_ids or []
-    )
-
     service = EntityService(db)
     entity = service.update_dimensions(
-        entity_id,
-        current_user.organization_id,
+        entity.id,
+        entity.organization_id,
         dimension_value_ids,
+        accessible_dv_ids=accessible_dv_ids,
     )
     return _build_entity_response(entity)
 
