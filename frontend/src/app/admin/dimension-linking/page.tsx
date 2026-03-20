@@ -6,6 +6,7 @@ import { dimensionApi, dimensionValueLinkApi } from "@/services/api";
 import { Dimension, DimensionValue, DimensionValueLink } from "@/types";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
+import { PageContent } from "@/components/ui/page-content";
 import { LayoutGrid } from "lucide-react";
 import { DimensionMatrixDialog } from "@/components/DimensionMatrixDialog";
 import { usePermissions } from "@/components/Auth/Permissions";
@@ -123,7 +124,7 @@ export default function DimensionLinkingPage() {
           </Button>
         }
       />
-
+      <PageContent>
       {/* Dimension selectors */}
       <div className="flex gap-4 mb-4">
         <div>
@@ -211,6 +212,7 @@ export default function DimensionLinkingPage() {
         onClose={() => setMatrixOpen(false)}
         showEditButton={false}
       />
+      </PageContent>
     </>
   );
 }

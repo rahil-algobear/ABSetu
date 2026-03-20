@@ -31,6 +31,7 @@ import {
   TableCell,
 } from "@/components/ui/page-table";
 import { PageHeader } from "@/components/ui/page-header";
+import { PageContent } from "@/components/ui/page-content";
 import { Plus, Pencil, Trash2, GripVertical } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -518,7 +519,7 @@ export default function MetaFieldsPage() {
         title="Form Fields"
         description="Define form fields for entities, dimensions, activities, and participants. Fields appear in create/edit forms and are stored as metadata."
       />
-
+      <PageContent>
       {/* Section selector */}
       <div className="flex gap-2 mb-3 overflow-x-auto pb-1">
         {sections.map((s) => (
@@ -1141,6 +1142,7 @@ export default function MetaFieldsPage() {
           </div>
         </form>
       </Dialog>
+      </PageContent>
     </>
   );
 }

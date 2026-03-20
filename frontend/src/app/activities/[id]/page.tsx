@@ -28,10 +28,12 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PageLayout } from "@/components/ui/page-layout";
+import { PageContent } from "@/components/ui/page-content";
 import { PageHeader } from "@/components/ui/page-header";
 import { Trash2, Pencil, Calendar, FileText, Users, Type } from "lucide-react";
 import toast from "react-hot-toast";
 import { formatDate } from "@/utils/date";
+import { DateInput } from "@/components/ui/date-input";
 
 export default function ActivityDetailPage() {
   const params = useParams();
@@ -333,13 +335,13 @@ export default function ActivityDetailPage() {
     return fields;
   }, [activityTypeId, activity, allMetaSchemas]);
 
-  if (isLoading) return <PageLayout className="p-4"><p>Loading...</p></PageLayout>;
-  if (!activity) return <PageLayout className="p-4"><p>Not found</p></PageLayout>;
+  if (isLoading) return <PageLayout><PageContent><p>Loading...</p></PageContent></PageLayout>;
+  if (!activity) return <PageLayout><PageContent><p>Not found</p></PageContent></PageLayout>;
 
   const activityTitle = activity.title || (activity.dimensions.length > 0 ? activity.dimensions[0].value_name : "Activity");
 
   return (
-    <PageLayout className="p-4 space-y-4">
+    <PageLayout>
       {/* Header */}
       <PageHeader
         title={activityTitle}
@@ -360,6 +362,7 @@ export default function ActivityDetailPage() {
         }
       />
 
+      <PageContent className="space-y-4">
       {/* Details Card */}
       <Card>
         <CardHeader className="flex-row items-center justify-between pb-2">
@@ -405,8 +408,7 @@ export default function ActivityDetailPage() {
                           <label className="text-sm font-medium">
                             Start Date{el.required && <span className="text-red-500 ml-0.5">*</span>}
                           </label>
-                          <Input
-                            type="date"
+                          <DateInput
                             value={detailFormData.start_date}
                             onChange={(e) => setDetailFormData({ ...detailFormData, start_date: e.target.value })}
                             required={el.required}
@@ -417,8 +419,7 @@ export default function ActivityDetailPage() {
                           <label className="text-sm font-medium">
                             End Date
                           </label>
-                          <Input
-                            type="date"
+                          <DateInput
                             value={detailFormData.end_date}
                             onChange={(e) => setDetailFormData({ ...detailFormData, end_date: e.target.value })}
                             min={detailFormData.start_date}
@@ -819,6 +820,7 @@ export default function ActivityDetailPage() {
           </CardContent>
         </Card>
       )}
+      </PageContent>
     </PageLayout>
   );
 }

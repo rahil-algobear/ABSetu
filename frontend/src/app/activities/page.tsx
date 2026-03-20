@@ -20,6 +20,7 @@ import {
   TableCell,
 } from "@/components/ui/page-table";
 import { PageLayout } from "@/components/ui/page-layout";
+import { PageContent } from "@/components/ui/page-content";
 import { PageHeader } from "@/components/ui/page-header";
 import { Plus } from "lucide-react";
 import { formatDate } from "@/utils/date";
@@ -64,7 +65,7 @@ function ActivitiesPageContent() {
   }, [activities]);
 
   return (
-    <PageLayout className="p-4">
+    <PageLayout>
       <PageHeader
         title={`${typeName}s`}
         actions={
@@ -77,6 +78,7 @@ function ActivitiesPageContent() {
         }
       />
 
+      <PageContent>
       {isLoading ? (
         <p className="text-gray-500">Loading...</p>
       ) : activities.length === 0 ? (
@@ -125,13 +127,14 @@ function ActivitiesPageContent() {
         </Table>
         </div>
       )}
+      </PageContent>
     </PageLayout>
   );
 }
 
 export default function ActivitiesPage() {
   return (
-    <Suspense fallback={<PageLayout className="p-4"><p className="text-gray-500">Loading...</p></PageLayout>}>
+    <Suspense fallback={<PageLayout><PageContent><p className="text-gray-500">Loading...</p></PageContent></PageLayout>}>
       <ActivitiesPageContent />
     </Suspense>
   );

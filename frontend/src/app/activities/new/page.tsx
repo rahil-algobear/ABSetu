@@ -31,11 +31,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DynamicMetaForm } from "@/components/DynamicMetaForm";
 import { SearchSelectParticipants } from "@/components/SearchSelectParticipants";
 import { PageLayout } from "@/components/ui/page-layout";
+import { PageContent } from "@/components/ui/page-content";
 import { PageHeader } from "@/components/ui/page-header";
 import { usePermissions } from "@/components/Auth/Permissions";
 import { useDimensionAutoSelect } from "@/hooks/useDimensionAutoSelect";
 
 import toast from "react-hot-toast";
+import { DateInput } from "@/components/ui/date-input";
 
 /**
  * Given a set of dimension value links and the currently selected dimension value IDs,
@@ -287,8 +289,7 @@ function NewActivityPageContent() {
                   <label className="text-sm font-medium">
                     Start Date{el.required && <span className="text-red-500 ml-0.5">*</span>}
                   </label>
-                  <Input
-                    type="date"
+                  <DateInput
                     value={formData.start_date}
                     onChange={(e) =>
                       setFormData({ ...formData, start_date: e.target.value })
@@ -301,8 +302,7 @@ function NewActivityPageContent() {
                   <label className="text-sm font-medium">
                     End Date
                   </label>
-                  <Input
-                    type="date"
+                  <DateInput
                     value={formData.end_date}
                     onChange={(e) =>
                       setFormData({ ...formData, end_date: e.target.value })
@@ -447,9 +447,10 @@ function NewActivityPageContent() {
   const hasFormConfig = formElements.length > 0;
 
   return (
-    <PageLayout className="p-4">
+    <PageLayout>
       <PageHeader title={`New ${typeName}`} />
 
+      <PageContent>
       <Card>
         <CardHeader>
           <CardTitle className="text-lg">Create {typeName}</CardTitle>
@@ -497,13 +498,14 @@ function NewActivityPageContent() {
           </form>
         </CardContent>
       </Card>
+      </PageContent>
     </PageLayout>
   );
 }
 
 export default function NewActivityPage() {
   return (
-    <Suspense fallback={<PageLayout className="p-4"><p className="text-gray-500">Loading...</p></PageLayout>}>
+    <Suspense fallback={<PageLayout><PageContent><p className="text-gray-500">Loading...</p></PageContent></PageLayout>}>
       <NewActivityPageContent />
     </Suspense>
   );

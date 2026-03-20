@@ -18,6 +18,7 @@ import {
   TableCell,
 } from "@/components/ui/page-table";
 import { PageHeader } from "@/components/ui/page-header";
+import { PageContent } from "@/components/ui/page-content";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -101,7 +102,7 @@ export default function ActivityTypesPage() {
           </Can>
         }
       />
-
+      <PageContent>
       <p className="text-sm text-gray-500 mb-4">
         Activity types define the structural type of an activity. Use the{" "}
         <a href="/admin/form-builder" className="text-purple-600 underline">
@@ -180,6 +181,7 @@ export default function ActivityTypesPage() {
           </div>
         </form>
       </Dialog>
+      </PageContent>
     </>
   );
 }

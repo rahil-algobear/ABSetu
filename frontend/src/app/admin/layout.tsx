@@ -75,9 +75,9 @@ export default function AdminLayout({
   const hasAccess = !currentTab || can(currentTab.permission);
 
   return (
-    <PageLayout className="p-4">
+    <PageLayout>
       {!loading && !hasAccess ? (
-        <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+        <div className="flex flex-col items-center justify-center py-16 px-4 sm:px-6 text-gray-400">
           <ShieldAlert className="h-12 w-12 mb-3" />
           <p className="text-lg font-medium text-gray-600">Access Denied</p>
           <p className="text-sm mt-1">You don&apos;t have permission to view this page.</p>

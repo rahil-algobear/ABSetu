@@ -47,13 +47,13 @@ export default function DashboardContent() {
   const dimensionEntries = Object.entries(stats?.activities_by_dimension ?? {});
 
   return (
-    <PageContent>
+    <>
       <PageHeader
         title="Dashboard"
         description="Overview of your organization's data"
-        className="mb-6"
       />
 
+      <PageContent>
       {/* Filters */}
       <DashboardFiltersBar filters={filters} onChange={setFilters} />
 
@@ -246,7 +246,8 @@ export default function DashboardContent() {
           )}
         </CardContent>
       </Card>
-    </PageContent>
+      </PageContent>
+    </>
   );
 }
 
