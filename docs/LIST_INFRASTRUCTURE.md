@@ -559,15 +559,12 @@ Update the existing meta field admin page (`/admin/meta-fields`) to show `is_fil
 
 ---
 
-## Open Questions
+## Decisions
 
-1. **Entity type filter**: Keep as top-level query param (`entity_type_id=...`) or move into the filter system (`filter_entity_type_id=...`)? Moving it in makes the URL more consistent but loses the quick-select dropdown UX.
+1. **Entity type filter**: Move into filter system (`filter_entity_type_id=...`). Navigation sidebar reads this param to highlight the selected state. Consistent URL pattern.
 
-2. **Cards vs Table on mobile**: Entity list currently uses cards. Tables can be hard to read on small screens. Options:
-   - Table on desktop, cards on mobile (two render paths)
-   - Responsive table that stacks columns on mobile
-   - Table-only with horizontal scroll
+2. **Cards vs Table**: Table-only on both mobile and desktop. Horizontal scroll on mobile for wider tables.
 
-3. **Search scope**: Should search also search meta field values (JSONB text search)? This is powerful but slower. Could start with core columns only and add meta search later.
+3. **Search scope**: Start with core columns only (name, case_number). Add meta field search later if needed.
 
-4. **Filter chip limit**: If 10+ filters are active, the carousel gets long. Show first N chips + "+X more" badge?
+4. **Filter chip limit**: Show all filter chips for now. Revisit if UX becomes cluttered.

@@ -17,6 +17,7 @@ import {
   MetaFieldSchemas,
   OTPVerifyData,
   Organization,
+  PaginatedResponse,
   Permission,
   Role,
   DimensionValueLink,
@@ -213,10 +214,37 @@ export const entityTypeApi = {
 
 // --- Entities ---
 
+export interface EntityListParams {
+  search?: string;
+  filters?: string;
+  sort_by?: string;
+  sort_order?: string;
+  page?: number;
+  limit?: number;
+}
+
+export interface EntityFilterDefinition {
+  key: string;
+  label: string;
+  type: "select" | "range" | "date_range" | "boolean" | "text";
+  options?: { value: string; label: string }[];
+  min?: number;
+  max?: number;
+}
+
 export const entityApi = {
   list: async (entityTypeId?: string): Promise<Entity[]> => {
     const params = entityTypeId ? `?entity_type_id=${entityTypeId}` : '';
-    const response = await authAxios.get<Entity[]>(`/entities/${params}`);
+    // Legacy: returns PaginatedResponse now, extract data for backward compat
+    const response = await authAxios.get<PaginatedResponse<Entity>>(`/entities/${params}`);
+    return response.data.data;
+  },
+  listPaginated: async (params: EntityListParams): Promise<PaginatedResponse<Entity>> => {
+    const response = await authAxios.get<PaginatedResponse<Entity>>('/entities/', { params });
+    return response.data;
+  },
+  getFilters: async (): Promise<{ filters: EntityFilterDefinition[] }> => {
+    const response = await authAxios.get<{ filters: EntityFilterDefinition[] }>('/entities/filters');
     return response.data;
   },
   get: async (id: string): Promise<Entity> => {
