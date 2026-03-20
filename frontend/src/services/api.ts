@@ -330,12 +330,6 @@ export interface ActivityFilterDefinition {
 }
 
 export const activityApi = {
-  list: async (activityTypeId?: string): Promise<Activity[]> => {
-    const params = activityTypeId ? { activity_type_id: activityTypeId } : {};
-    // Legacy: returns PaginatedResponse now, extract data for backward compat
-    const response = await authAxios.get<PaginatedResponse<Activity>>('/activities/', { params });
-    return response.data.data;
-  },
   listPaginated: async (params: ActivityListParams): Promise<PaginatedResponse<Activity>> => {
     const response = await authAxios.get<PaginatedResponse<Activity>>('/activities/', { params });
     return response.data;

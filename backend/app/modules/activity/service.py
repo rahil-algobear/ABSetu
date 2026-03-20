@@ -4,7 +4,7 @@ Activity, ActivityType, ActivityParticipant, ActivityForm services
 
 import uuid
 
-from sqlalchemy import exists, func, or_
+from sqlalchemy import exists, func
 from sqlalchemy.orm import Session, joinedload
 
 from app.common.exceptions import NotFoundError, ValidationError
@@ -99,20 +99,10 @@ class ActivityService:
                 restricted_dims.setdefault(dim_id, []).append(dv_id)
 
             for dim_id, allowed_ids in restricted_dims.items():
-                dim_values_subq = (
-                    self.db.query(DimensionValue.id)
-                    .filter(DimensionValue.dimension_id == dim_id)
-                    .subquery()
-                )
                 query = query.filter(
-                    or_(
-                        ~exists()
-                        .where(ActivityDimension.activity_id == Activity.id)
-                        .where(ActivityDimension.dimension_value_id.in_(dim_values_subq)),
-                        exists()
-                        .where(ActivityDimension.activity_id == Activity.id)
-                        .where(ActivityDimension.dimension_value_id.in_(allowed_ids)),
-                    )
+                    exists()
+                    .where(ActivityDimension.activity_id == Activity.id)
+                    .where(ActivityDimension.dimension_value_id.in_(allowed_ids))
                 )
 
         return query
@@ -154,55 +144,6 @@ class ActivityService:
                 "parent_pk": Activity.id,
             }
         return config
-
-    def list_by_org(
-        self,
-        org_id: uuid.UUID,
-        accessible_dv_ids: list[uuid.UUID] | None = None,
-        activity_type_id: uuid.UUID | None = None,
-    ) -> list[Activity]:
-        query = self.db.query(Activity).filter_by(organization_id=org_id)
-
-        if activity_type_id:
-            query = query.filter(Activity.activity_type_id == activity_type_id)
-
-        if accessible_dv_ids:
-            dv_dim_rows = (
-                self.db.query(DimensionValue.id, DimensionValue.dimension_id)
-                .filter(DimensionValue.id.in_(accessible_dv_ids))
-                .all()
-            )
-            restricted_dims: dict[uuid.UUID, list[uuid.UUID]] = {}
-            for dv_id, dim_id in dv_dim_rows:
-                restricted_dims.setdefault(dim_id, []).append(dv_id)
-
-            for dim_id, allowed_ids in restricted_dims.items():
-                dim_values_subq = (
-                    self.db.query(DimensionValue.id)
-                    .filter(DimensionValue.dimension_id == dim_id)
-                    .subquery()
-                )
-                query = query.filter(
-                    or_(
-                        ~exists()
-                        .where(ActivityDimension.activity_id == Activity.id)
-                        .where(ActivityDimension.dimension_value_id.in_(dim_values_subq)),
-                        exists()
-                        .where(ActivityDimension.activity_id == Activity.id)
-                        .where(ActivityDimension.dimension_value_id.in_(allowed_ids)),
-                    )
-                )
-
-        return (
-            query.options(
-                joinedload(Activity.activity_type),
-                joinedload(Activity.dimensions)
-                .joinedload(ActivityDimension.dimension_value)
-                .joinedload(DimensionValue.dimension),
-            )
-            .order_by(Activity.start_date.desc())
-            .all()
-        )
 
     def list_by_org_paginated(
         self,
