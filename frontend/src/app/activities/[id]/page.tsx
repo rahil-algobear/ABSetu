@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   activityApi,
   activityFormApi,
+  dimensionApi,
   entityApi,
   entityTypeApi,
   metaFieldSchemaApi,
@@ -63,6 +64,11 @@ export default function ActivityDetailPage() {
     queryFn: entityTypeApi.list,
   });
 
+  const { data: dimensions = [] } = useQuery({
+    queryKey: ["dimensions"],
+    queryFn: dimensionApi.list,
+  });
+
   const { data: allMetaSchemas = {} } = useQuery<MetaFieldSchemas>({
     queryKey: ["meta-field-schemas-all"],
     queryFn: metaFieldSchemaApi.getAll,
@@ -86,11 +92,11 @@ export default function ActivityDetailPage() {
       .sort((a, b) => a.sort_order - b.sort_order);
   }, [formConfig]);
 
-  // Visible non-participant elements (default + activity_meta) for the detail/edit view
+  // Visible non-participant elements (default + activity_meta + dimension) for the detail/edit view
   const detailElements: ActivityFormElement[] = useMemo(() => {
     if (!formConfig?.elements?.length) return [];
     return formConfig.elements
-      .filter((el) => el.visible && (el.type === "default" || el.type === "activity_meta"))
+      .filter((el) => el.visible && (el.type === "default" || el.type === "activity_meta" || el.type === "dimension"))
       .sort((a, b) => a.sort_order - b.sort_order);
   }, [formConfig]);
 
@@ -328,10 +334,6 @@ export default function ActivityDetailPage() {
   // Use first dimension value as activity title
   const activityTitle = activity.dimensions.length > 0 ? activity.dimensions[0].value_name : "Activity";
 
-  // Check if the notes element is visible
-  const notesElement = detailElements.find((el) => el.type === "default" && el.ref_id === "notes");
-  const dateElement = detailElements.find((el) => el.type === "default" && el.ref_id === "start_date");
-
   return (
     <PageLayout className="p-4 space-y-4">
       {/* Header */}
@@ -439,62 +441,77 @@ export default function ActivityDetailPage() {
             </form>
           ) : (
             <div className="space-y-3">
-              {/* Dimensions */}
-              {activity.dimensions.length > 0 && (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {activity.dimensions.map((dim) => (
-                    <div key={dim.value_id}>
-                      <p className="text-xs text-gray-500">{dim.dimension_name}</p>
-                      <p className="text-sm font-medium">{dim.value_name}</p>
+              {detailElements.map((el) => {
+                // Dimension elements
+                if (el.type === "dimension") {
+                  // Map form element ref_id (dimension UUID) to the dimension's key
+                  const dimDef = dimensions.find((d) => d.id === el.ref_id);
+                  const dimInfo = dimDef
+                    ? activity.dimensions.find((d) => d.dimension_key === dimDef.key)
+                    : undefined;
+                  return (
+                    <div key={`dim-${el.ref_id}`}>
+                      <p className="text-xs text-gray-500">{dimInfo?.dimension_name || dimDef?.name || el.ref_id}</p>
+                      {dimInfo ? (
+                        <p className="text-sm font-medium">{dimInfo.value_name}</p>
+                      ) : (
+                        <p className="text-sm text-gray-300 italic">Not set</p>
+                      )}
                     </div>
-                  ))}
-                </div>
-              )}
+                  );
+                }
 
-              {activity.dimensions.length > 0 && <hr className="border-gray-100" />}
+                // Date
+                if (el.type === "default" && el.ref_id === "start_date") {
+                  return (
+                    <div key="start_date" className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4 text-gray-400 shrink-0" />
+                      <div>
+                        <p className="text-xs text-gray-500">Date</p>
+                        <p className="text-sm font-medium">
+                          {activity.start_date}
+                          {activity.end_date && activity.end_date !== activity.start_date
+                            ? ` — ${activity.end_date}`
+                            : ""}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                }
 
-              {/* Date */}
-              {dateElement && (
-                <div className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4 text-gray-400 shrink-0" />
-                  <div>
-                    <p className="text-xs text-gray-500">Date</p>
-                    <p className="text-sm font-medium">
-                      {activity.start_date}
-                      {activity.end_date && activity.end_date !== activity.start_date
-                        ? ` — ${activity.end_date}`
-                        : ""}
-                    </p>
-                  </div>
-                </div>
-              )}
+                // Notes
+                if (el.type === "default" && el.ref_id === "notes") {
+                  return (
+                    <div key="notes" className="flex items-start gap-2">
+                      <FileText className="h-4 w-4 text-gray-400 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-xs text-gray-500">Notes</p>
+                        {activity.notes ? (
+                          <p className="text-sm">{activity.notes}</p>
+                        ) : (
+                          <p className="text-sm text-gray-300 italic">Not set</p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                }
 
-              {/* Notes — always show if the element is visible */}
-              {notesElement && (
-                <div className="flex items-start gap-2">
-                  <FileText className="h-4 w-4 text-gray-400 shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-xs text-gray-500">Notes</p>
-                    {activity.notes ? (
-                      <p className="text-sm">{activity.notes}</p>
-                    ) : (
-                      <p className="text-sm text-gray-300 italic">Not set</p>
-                    )}
-                  </div>
-                </div>
-              )}
+                // Activity meta fields
+                if (el.type === "activity_meta" && activityTypeFields.length > 0) {
+                  return (
+                    <div key="activity_meta">
+                      <hr className="border-gray-100 mb-3" />
+                      <MetaFieldDisplay
+                        fields={activityTypeFields}
+                        values={activity.meta}
+                        showEmpty
+                      />
+                    </div>
+                  );
+                }
 
-              {/* Activity meta — always show all fields */}
-              {activityTypeFields.length > 0 && (
-                <>
-                  <hr className="border-gray-100" />
-                  <MetaFieldDisplay
-                    fields={activityTypeFields}
-                    values={activity.meta}
-                    showEmpty
-                  />
-                </>
-              )}
+                return null;
+              })}
             </div>
           )}
         </CardContent>
