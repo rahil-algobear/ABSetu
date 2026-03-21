@@ -62,6 +62,5 @@ class MetaFieldSchemaUpdate(BaseModel):
 class MetaFieldSchemaResponse(BaseModel):
     """Response for a single meta field schema with structured scope."""
 
-    scope_key: str
     scope: MetaFieldScope
     fields: list[dict[str, Any]]

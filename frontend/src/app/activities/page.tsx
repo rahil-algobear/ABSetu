@@ -22,8 +22,9 @@ import {
   DimensionValueLink,
   EntityType,
   MetaFieldDefinition,
-  MetaFieldSchemas,
+  MetaFieldSchemaItem,
 } from "@/types";
+import { collectActivityFields } from "@/utils/meta-fields";
 import { Can } from "@/components/Auth/Permissions";
 
 import { Button } from "@/components/ui/button";
@@ -125,7 +126,7 @@ function ActivitiesPageContent() {
     queryFn: () => dimensionValueLinkApi.list(),
   });
 
-  const { data: allMetaSchemas = {} } = useQuery<MetaFieldSchemas>({
+  const { data: allMetaSchemas = [] } = useQuery<MetaFieldSchemaItem[]>({
     queryKey: ["meta-field-schemas-all"],
     queryFn: metaFieldSchemaApi.getAll,
   });
@@ -191,19 +192,7 @@ function ActivitiesPageContent() {
 
   // Derive meta fields: activity type + dimension values + type×dimension_value combos
   const activityMetaFields = useMemo((): MetaFieldDefinition[] => {
-    const fields: MetaFieldDefinition[] = [];
-    if (selectedTypeId) {
-      fields.push(...(allMetaSchemas[`activity:activity_type:${selectedTypeId}`] || []));
-    }
-    for (const dvId of formData.dimension_value_ids) {
-      // All types × dimension value
-      fields.push(...(allMetaSchemas[`activity:dimension_value:${dvId}`] || []));
-      // Specific activity type × dimension value
-      if (selectedTypeId) {
-        fields.push(...(allMetaSchemas[`activity:activity_type:${selectedTypeId}:dimension_value:${dvId}`] || []));
-      }
-    }
-    return fields;
+    return collectActivityFields(allMetaSchemas, selectedTypeId || null, formData.dimension_value_ids);
   }, [selectedTypeId, formData.dimension_value_ids, allMetaSchemas]);
 
   // Track selection per dimension for cascading logic

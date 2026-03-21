@@ -17,8 +17,9 @@ import {
   ActivityFormElement,
   ActivityParticipant,
   MetaFieldDefinition,
-  MetaFieldSchemas,
+  MetaFieldSchemaItem,
 } from "@/types";
+import { collectActivityFields, collectParticipantFields } from "@/utils/meta-fields";
 import { Can } from "@/components/Auth/Permissions";
 
 import { DynamicMetaForm, MetaFieldDisplay } from "@/components/DynamicMetaForm";
@@ -71,7 +72,7 @@ export default function ActivityDetailPage() {
     queryFn: dimensionApi.list,
   });
 
-  const { data: allMetaSchemas = {} } = useQuery<MetaFieldSchemas>({
+  const { data: allMetaSchemas = [] } = useQuery<MetaFieldSchemaItem[]>({
     queryKey: ["meta-field-schemas-all"],
     queryFn: metaFieldSchemaApi.getAll,
   });
@@ -134,30 +135,8 @@ export default function ActivityDetailPage() {
   // Get participation meta fields for an entity type element
   const getParticipationMetaFields = (el: ActivityFormElement): MetaFieldDefinition[] => {
     if (!el.ref_id) return [];
-    const fields: MetaFieldDefinition[] = [];
-    const base = `participant:entity:${el.ref_id}`;
-
-    // participant:entity:{ref_id} — all activity types, all dimension values
-    fields.push(...(allMetaSchemas[base] || []));
-
-    // participant:entity:{ref_id}:activity_type:{activityTypeId}
-    if (activityTypeId) {
-      fields.push(...(allMetaSchemas[`${base}:activity_type:${activityTypeId}`] || []));
-    }
-
-    // Per dimension value
-    if (activity?.dimensions) {
-      for (const dim of activity.dimensions) {
-        // participant:entity:{ref_id}:dimension_value:{dvId}
-        fields.push(...(allMetaSchemas[`${base}:dimension_value:${dim.value_id}`] || []));
-        // participant:entity:{ref_id}:activity_type:{typeId}:dimension_value:{dvId}
-        if (activityTypeId) {
-          fields.push(...(allMetaSchemas[`${base}:activity_type:${activityTypeId}:dimension_value:${dim.value_id}`] || []));
-        }
-      }
-    }
-
-    return fields;
+    const dvIds = (activity?.dimensions || []).map((d) => d.value_id);
+    return collectParticipantFields(allMetaSchemas, el.ref_id, activityTypeId || null, dvIds);
   };
 
   // Use ref_id as section_key for participant records
@@ -315,21 +294,8 @@ export default function ActivityDetailPage() {
 
   // Activity meta fields: activity type + dimension values + type×dimension_value combos
   const activityTypeFields = useMemo((): MetaFieldDefinition[] => {
-    const fields: MetaFieldDefinition[] = [];
-    if (activityTypeId) {
-      fields.push(...(allMetaSchemas[`activity:activity_type:${activityTypeId}`] || []));
-    }
-    if (activity?.dimensions) {
-      for (const dim of activity.dimensions) {
-        // All activity types × dimension value
-        fields.push(...(allMetaSchemas[`activity:dimension_value:${dim.value_id}`] || []));
-        // Specific activity type × dimension value
-        if (activityTypeId) {
-          fields.push(...(allMetaSchemas[`activity:activity_type:${activityTypeId}:dimension_value:${dim.value_id}`] || []));
-        }
-      }
-    }
-    return fields;
+    const dvIds = (activity?.dimensions || []).map((d) => d.value_id);
+    return collectActivityFields(allMetaSchemas, activityTypeId || null, dvIds);
   }, [activityTypeId, activity, allMetaSchemas]);
 
   if (isLoading) return <PageLayout className="p-4"><p>Loading...</p></PageLayout>;

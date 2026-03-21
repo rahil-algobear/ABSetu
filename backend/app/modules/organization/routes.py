@@ -135,7 +135,6 @@ def _schema_to_response(row) -> dict:
     if row.entity_type_id:
         et_id = "user" if str(row.entity_type_id) == USER_ENTITY_SENTINEL else str(row.entity_type_id)
     return MetaFieldSchemaResponse(
-        scope_key=row.scope_key,
         scope=MetaFieldScope(
             type=row.scope_type,
             entity_type_id=et_id,

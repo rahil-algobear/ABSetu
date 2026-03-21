@@ -11,12 +11,13 @@ import {
 } from "@/services/api";
 import {
   MetaFieldDefinition,
-  MetaFieldSchemas,
+  MetaFieldSchemaItem,
   MetaFieldType,
   Dimension,
   DimensionValue,
   ActivityType,
 } from "@/types";
+import { findSchema } from "@/utils/meta-fields";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -55,13 +56,8 @@ const emptyField: MetaFieldDefinition = {
 type SectionKind = "entity" | "dimension" | "other" | "activity" | "participant";
 
 interface ScopeGroup {
-  scopeKey: string;
+  schema: MetaFieldSchemaItem;
   scopeLabel: string;
-  fields: MetaFieldDefinition[];
-  activityTypeId: string;
-  dimensionValueId: string;
-  dimensionId: string;
-  entityId: string;
 }
 
 export default function MetaFieldsPage() {
@@ -71,7 +67,7 @@ export default function MetaFieldsPage() {
   const [activeKey, setActiveKey] = useState<string>("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
-  const [editingScopeKey, setEditingScopeKey] = useState<string>("");
+  const [editingSchema, setEditingSchema] = useState<MetaFieldSchemaItem | null>(null);
   const [fieldForm, setFieldForm] = useState<MetaFieldDefinition>({ ...emptyField });
   const [optionsText, setOptionsText] = useState("");
 
@@ -118,24 +114,28 @@ export default function MetaFieldsPage() {
     enabled: dimensions.length > 0,
   });
 
-  const { data: allSchemas = {} as MetaFieldSchemas } = useQuery<MetaFieldSchemas>({
+  const { data: allSchemas = [] } = useQuery<MetaFieldSchemaItem[]>({
     queryKey: ["meta-field-schemas"],
     queryFn: metaFieldSchemaApi.getAll,
   });
 
-  // Schema key for entity/dimension/other tabs only
-  const schemaKey = useMemo(() => {
-    if (activeSection === "activity" || activeSection === "participant") return "";
-    if (!activeKey) return "";
+  // Current scope for entity/dimension/other tabs
+  const currentScope = useMemo((): MetaFieldScope | null => {
+    if (activeSection === "activity" || activeSection === "participant") return null;
+    if (!activeKey) return null;
     switch (activeSection) {
-      case "entity": return `entity:${activeKey}`;
-      case "dimension": return `dimension:${activeKey}`;
-      case "other": return activeKey;
-      default: return "";
+      case "entity": return { type: "entity", entity_type_id: activeKey };
+      case "dimension": return { type: "dimension", dimension_id: activeKey };
+      case "other": return { type: activeKey };
+      default: return null;
     }
   }, [activeSection, activeKey]);
 
-  const fields = schemaKey ? (allSchemas[schemaKey] || []) : [];
+  // Fields for entity/dimension/other tabs
+  const fields = useMemo(() => {
+    if (!currentScope) return [];
+    return findSchema(allSchemas, currentScope)?.fields || [];
+  }, [allSchemas, currentScope]);
 
   // Auto-select first ID when section changes
   const selectSection = (section: SectionKind) => {
@@ -174,18 +174,11 @@ export default function MetaFieldsPage() {
   // --- Flat table groups for Activity tab ---
   const activityGroups = useMemo((): ScopeGroup[] => {
     const groups: ScopeGroup[] = [];
-    for (const [key, fieldList] of Object.entries(allSchemas)) {
-      if (!fieldList?.length) continue;
-      if (key !== "activity" && !key.startsWith("activity:")) continue;
+    for (const item of allSchemas) {
+      if (!item.fields?.length || item.scope.type !== "activity") continue;
 
-      // Parse scope key
-      const parts = key.split(":");
-      let atId = "";
-      let dvId = "";
-      for (let i = 1; i < parts.length; i += 2) {
-        if (parts[i] === "activity_type") atId = parts[i + 1];
-        if (parts[i] === "dimension_value") dvId = parts[i + 1];
-      }
+      const atId = item.scope.activity_type_id || "";
+      const dvId = item.scope.dimension_value_id || "";
       const dimId = dvId
         ? allDimensionValues.find((d) => d.id === dvId)?.dimension_id || ""
         : "";
@@ -195,50 +188,29 @@ export default function MetaFieldsPage() {
       if (activityFilterDimId && dimId !== activityFilterDimId) continue;
       if (activityFilterDvId && dvId !== activityFilterDvId) continue;
 
-      // Build label
-      const labels: string[] = [];
-      if (atId) labels.push(activityTypes.find((a) => a.id === atId)?.name || atId);
-      if (dvId) {
-        const dv = allDimensionValues.find((d) => d.id === dvId);
-        const dim = dv ? dimensions.find((d) => d.id === dv.dimension_id) : null;
-        labels.push(dim ? `${dim.name}: ${dv!.name}` : dv?.name || dvId);
-      }
-
-      groups.push({
-        scopeKey: key,
-        scopeLabel: labels.length > 0 ? labels.join(" + ") : "All activities",
-        fields: fieldList,
-        activityTypeId: atId,
-        dimensionValueId: dvId,
-        dimensionId: dimId,
-        entityId: "",
-      });
+      groups.push({ schema: item, scopeLabel: buildScopeLabel(atId, dvId, "All activities") });
     }
     groups.sort((a, b) => {
-      if (a.scopeKey === "activity") return -1;
-      if (b.scopeKey === "activity") return 1;
+      const aBase = !a.schema.scope.activity_type_id && !a.schema.scope.dimension_value_id;
+      const bBase = !b.schema.scope.activity_type_id && !b.schema.scope.dimension_value_id;
+      if (aBase && !bBase) return -1;
+      if (!aBase && bBase) return 1;
       return a.scopeLabel.localeCompare(b.scopeLabel);
     });
     return groups;
-  }, [allSchemas, activityFilterTypeId, activityFilterDimId, activityFilterDvId, activityTypes, allDimensionValues, dimensions]);
+  }, [allSchemas, activityFilterTypeId, activityFilterDimId, activityFilterDvId, activityTypes, allDimensionValues, dimensions]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- Flat table groups for Participant tab ---
   const participantGroups = useMemo((): ScopeGroup[] => {
     if (!participantEntityId) return [];
     const groups: ScopeGroup[] = [];
-    const prefix = `participant:entity:${participantEntityId}`;
 
-    for (const [key, fieldList] of Object.entries(allSchemas)) {
-      if (!fieldList?.length) continue;
-      if (key !== prefix && !key.startsWith(prefix + ":")) continue;
+    for (const item of allSchemas) {
+      if (!item.fields?.length || item.scope.type !== "participant") continue;
+      if ((item.scope.entity_type_id || "") !== participantEntityId) continue;
 
-      const parts = key.split(":");
-      let atId = "";
-      let dvId = "";
-      for (let i = 3; i < parts.length; i += 2) {
-        if (parts[i] === "activity_type") atId = parts[i + 1];
-        if (parts[i] === "dimension_value") dvId = parts[i + 1];
-      }
+      const atId = item.scope.activity_type_id || "";
+      const dvId = item.scope.dimension_value_id || "";
       const dimId = dvId
         ? allDimensionValues.find((d) => d.id === dvId)?.dimension_id || ""
         : "";
@@ -247,115 +219,64 @@ export default function MetaFieldsPage() {
       if (participantFilterDimId && dimId !== participantFilterDimId) continue;
       if (participantFilterDvId && dvId !== participantFilterDvId) continue;
 
-      const labels: string[] = [];
-      if (atId) labels.push(activityTypes.find((a) => a.id === atId)?.name || atId);
-      if (dvId) {
-        const dv = allDimensionValues.find((d) => d.id === dvId);
-        const dim = dv ? dimensions.find((d) => d.id === dv.dimension_id) : null;
-        labels.push(dim ? `${dim.name}: ${dv!.name}` : dv?.name || dvId);
-      }
-
-      groups.push({
-        scopeKey: key,
-        scopeLabel: labels.length > 0 ? labels.join(" + ") : "All",
-        fields: fieldList,
-        activityTypeId: atId,
-        dimensionValueId: dvId,
-        dimensionId: dimId,
-        entityId: participantEntityId,
-      });
+      groups.push({ schema: item, scopeLabel: buildScopeLabel(atId, dvId, "All") });
     }
     groups.sort((a, b) => {
-      if (!a.activityTypeId && !a.dimensionValueId) return -1;
-      if (!b.activityTypeId && !b.dimensionValueId) return 1;
+      const aBase = !a.schema.scope.activity_type_id && !a.schema.scope.dimension_value_id;
+      const bBase = !b.schema.scope.activity_type_id && !b.schema.scope.dimension_value_id;
+      if (aBase && !bBase) return -1;
+      if (!aBase && bBase) return 1;
       return a.scopeLabel.localeCompare(b.scopeLabel);
     });
     return groups;
-  }, [allSchemas, participantEntityId, participantFilterTypeId, participantFilterDimId, participantFilterDvId, activityTypes, allDimensionValues, dimensions]);
+  }, [allSchemas, participantEntityId, participantFilterTypeId, participantFilterDimId, participantFilterDvId, activityTypes, allDimensionValues, dimensions]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Build a display label from activity type + dimension value IDs
+  const buildScopeLabel = (atId: string, dvId: string, fallback: string): string => {
+    const labels: string[] = [];
+    if (atId) labels.push(activityTypes.find((a) => a.id === atId)?.name || atId);
+    if (dvId) {
+      const dv = allDimensionValues.find((d) => d.id === dvId);
+      const dim = dv ? dimensions.find((d) => d.id === dv.dimension_id) : null;
+      labels.push(dim ? `${dim.name}: ${dv!.name}` : dv?.name || dvId);
+    }
+    return labels.length > 0 ? labels.join(" + ") : fallback;
+  };
 
   // Participant entity pill field counts
   const participantEntityCounts = useMemo(() => {
     const counts: Record<string, number> = {};
-    for (const [key, fieldList] of Object.entries(allSchemas)) {
-      if (!fieldList?.length || !key.startsWith("participant:entity:")) continue;
-      const entityId = key.split(":")[2];
-      counts[entityId] = (counts[entityId] || 0) + fieldList.length;
+    for (const item of allSchemas) {
+      if (!item.fields?.length || item.scope.type !== "participant") continue;
+      const entityId = item.scope.entity_type_id || "";
+      counts[entityId] = (counts[entityId] || 0) + item.fields.length;
     }
     return counts;
   }, [allSchemas]);
 
-  // Build MetaFieldScope from IDs
-  const buildScope = (
-    section: SectionKind,
-    opts: { entityId?: string; activityTypeId?: string; dvId?: string },
-  ): MetaFieldScope => {
-    if (section === "activity") {
+  // Build MetaFieldScope from modal state for activity/participant
+  const buildScopeFromModal = (): MetaFieldScope => {
+    if (activeSection === "activity") {
       const scope: MetaFieldScope = { type: "activity" };
-      if (opts.activityTypeId) scope.activity_type_id = opts.activityTypeId;
-      if (opts.dvId) scope.dimension_value_id = opts.dvId;
+      if (modalActivityTypeId) scope.activity_type_id = modalActivityTypeId;
+      if (modalDvId) scope.dimension_value_id = modalDvId;
       return scope;
     }
-    const scope: MetaFieldScope = { type: "participant", entity_type_id: opts.entityId || "" };
-    if (opts.activityTypeId) scope.activity_type_id = opts.activityTypeId;
-    if (opts.dvId) scope.dimension_value_id = opts.dvId;
+    const scope: MetaFieldScope = { type: "participant", entity_type_id: modalEntityId };
+    if (modalActivityTypeId) scope.activity_type_id = modalActivityTypeId;
+    if (modalDvId) scope.dimension_value_id = modalDvId;
     return scope;
   };
 
-  // Build scope key from modal state
-  const buildScopeKeyFromModal = (): string => {
-    if (activeSection === "activity") {
-      if (modalActivityTypeId && modalDvId)
-        return `activity:activity_type:${modalActivityTypeId}:dimension_value:${modalDvId}`;
-      if (modalActivityTypeId) return `activity:activity_type:${modalActivityTypeId}`;
-      if (modalDvId) return `activity:dimension_value:${modalDvId}`;
-      return "activity";
-    }
-    if (activeSection === "participant") {
-      let key = `participant:entity:${modalEntityId}`;
-      if (modalActivityTypeId) key += `:activity_type:${modalActivityTypeId}`;
-      if (modalDvId) key += `:dimension_value:${modalDvId}`;
-      return key;
-    }
-    return "";
+  // Find the schema item matching a given scope
+  const findMatchingSchema = (scope: MetaFieldScope): MetaFieldSchemaItem | undefined => {
+    return findSchema(allSchemas, scope);
   };
 
-  // Parse scope key to extract IDs
-  const parseScopeKey = (key: string) => {
-    const parts = key.split(":");
-    let activityTypeId = "";
-    let dimensionValueId = "";
-    let entityId = "";
-    if (parts[0] === "activity") {
-      for (let i = 1; i < parts.length; i += 2) {
-        if (parts[i] === "activity_type") activityTypeId = parts[i + 1];
-        if (parts[i] === "dimension_value") dimensionValueId = parts[i + 1];
-      }
-    } else if (parts[0] === "participant" && parts[1] === "entity") {
-      entityId = parts[2] || "";
-      for (let i = 3; i < parts.length; i += 2) {
-        if (parts[i] === "activity_type") activityTypeId = parts[i + 1];
-        if (parts[i] === "dimension_value") dimensionValueId = parts[i + 1];
-      }
-    }
-    const dimensionId = dimensionValueId
-      ? allDimensionValues.find((d) => d.id === dimensionValueId)?.dimension_id || ""
-      : "";
-    return { activityTypeId, dimensionValueId, dimensionId, entityId };
+  // Count fields for a given scope
+  const countFieldsForScope = (scope: Partial<MetaFieldScope> & { type: string }): number => {
+    return findSchema(allSchemas, scope)?.fields?.length || 0;
   };
-
-  // Current scope for entity/dimension/other tabs
-  const currentScope = useMemo((): MetaFieldScope | null => {
-    switch (activeSection) {
-      case "entity":
-        return activeKey ? { type: "entity", entity_type_id: activeKey } : null;
-      case "dimension":
-        return activeKey ? { type: "dimension", dimension_id: activeKey } : null;
-      case "other":
-        return activeKey ? { type: activeKey } : null;
-      default:
-        return null;
-    }
-  }, [activeSection, activeKey]);
 
   const updateMutation = useMutation({
     mutationFn: ({ scope, newFields }: { scope: MetaFieldScope; newFields: MetaFieldDefinition[] }) => {
@@ -374,7 +295,7 @@ export default function MetaFieldsPage() {
 
   const openAdd = () => {
     setEditingIndex(null);
-    setEditingScopeKey("");
+    setEditingSchema(null);
     setFieldForm({ ...emptyField });
     setOptionsText("");
     if (activeSection === "activity") {
@@ -390,23 +311,22 @@ export default function MetaFieldsPage() {
     setModalOpen(true);
   };
 
-  const openEdit = (index: number, scopeKey?: string) => {
-    const sk = scopeKey || schemaKey;
-    const targetFields = allSchemas[sk] || [];
-    const f = targetFields[index];
+  const openEdit = (index: number, schema?: MetaFieldSchemaItem) => {
+    const target = schema || (currentScope ? findMatchingSchema(currentScope) : undefined);
+    const f = target?.fields[index];
     if (!f) return;
     setEditingIndex(index);
-    setEditingScopeKey(sk);
+    setEditingSchema(target!);
     setFieldForm({ ...f });
     setOptionsText(f.options?.join("\n") || "");
 
     if (activeSection === "activity" || activeSection === "participant") {
-      const parsed = parseScopeKey(sk);
-      setModalActivityTypeId(parsed.activityTypeId);
-      setModalDvId(parsed.dimensionValueId);
-      setModalDimId(parsed.dimensionId);
+      setModalActivityTypeId(target!.scope.activity_type_id || "");
+      setModalDvId(target!.scope.dimension_value_id || "");
+      const dvId = target!.scope.dimension_value_id || "";
+      setModalDimId(dvId ? allDimensionValues.find((d) => d.id === dvId)?.dimension_id || "" : "");
       if (activeSection === "participant") {
-        setModalEntityId(parsed.entityId);
+        setModalEntityId(target!.scope.entity_type_id || "");
       }
     }
 
@@ -416,7 +336,7 @@ export default function MetaFieldsPage() {
   const closeModal = () => {
     setModalOpen(false);
     setEditingIndex(null);
-    setEditingScopeKey("");
+    setEditingSchema(null);
   };
 
   const handleSave = (e: React.FormEvent) => {
@@ -436,17 +356,13 @@ export default function MetaFieldsPage() {
     const field: MetaFieldDefinition = { ...fieldForm, key, options, default: defaultVal };
 
     if (activeSection === "activity" || activeSection === "participant") {
-      const targetScopeKey = editingIndex !== null ? editingScopeKey : buildScopeKeyFromModal();
-      const existingFields = allSchemas[targetScopeKey] || [];
+      const scope = editingIndex !== null && editingSchema
+        ? editingSchema.scope
+        : buildScopeFromModal();
+      const existingFields = findMatchingSchema(scope)?.fields || [];
       const updated = editingIndex !== null
         ? existingFields.map((f, i) => (i === editingIndex ? field : f))
         : [...existingFields, field];
-      const parsed = parseScopeKey(targetScopeKey);
-      const scope = buildScope(activeSection, {
-        entityId: parsed.entityId,
-        activityTypeId: parsed.activityTypeId,
-        dvId: parsed.dimensionValueId,
-      });
       saveFields(scope, updated);
     } else {
       if (!currentScope) return;
@@ -458,24 +374,12 @@ export default function MetaFieldsPage() {
     closeModal();
   };
 
-  const handleDelete = (index: number, scopeKey?: string) => {
-    const sk = scopeKey || schemaKey;
-    const targetFields = allSchemas[sk] || [];
-    if (!confirm(`Delete field "${targetFields[index]?.label}"?`)) return;
-    const updated = targetFields.filter((_, i) => i !== index);
-
-    if (activeSection === "activity" || activeSection === "participant") {
-      const parsed = parseScopeKey(sk);
-      const scope = buildScope(activeSection, {
-        entityId: parsed.entityId,
-        activityTypeId: parsed.activityTypeId,
-        dvId: parsed.dimensionValueId,
-      });
-      saveFields(scope, updated);
-    } else {
-      if (!currentScope) return;
-      saveFields(currentScope, updated);
-    }
+  const handleDelete = (index: number, schema?: MetaFieldSchemaItem) => {
+    const target = schema || (currentScope ? findMatchingSchema(currentScope) : undefined);
+    if (!target) return;
+    if (!confirm(`Delete field "${target.fields[index]?.label}"?`)) return;
+    const updated = target.fields.filter((_, i) => i !== index);
+    saveFields(target.scope, updated);
   };
 
   const showOptions = fieldForm.type === "select" || fieldForm.type === "multiselect";
@@ -507,7 +411,7 @@ export default function MetaFieldsPage() {
 
   const isActivityOrParticipant = activeSection === "activity" || activeSection === "participant";
   const flatGroups = activeSection === "activity" ? activityGroups : participantGroups;
-  const totalFlatFields = flatGroups.reduce((sum, g) => sum + g.fields.length, 0);
+  const totalFlatFields = flatGroups.reduce((sum, g) => sum + g.schema.fields.length, 0);
   const hasFilters = activeSection === "activity"
     ? !!(activityFilterTypeId || activityFilterDimId || activityFilterDvId)
     : !!(participantFilterTypeId || participantFilterDimId || participantFilterDvId);
@@ -551,9 +455,9 @@ export default function MetaFieldsPage() {
                 }`}
               >
                 {et.name}
-                {(allSchemas[`entity:${et.id}`]?.length || 0) > 0 && (
+                {countFieldsForScope({ type: "entity", entity_type_id: et.id }) > 0 && (
                   <span className="ml-1 text-xs text-gray-400">
-                    ({allSchemas[`entity:${et.id}`]!.length})
+                    ({countFieldsForScope({ type: "entity", entity_type_id: et.id })})
                   </span>
                 )}
               </button>
@@ -574,9 +478,9 @@ export default function MetaFieldsPage() {
                 }`}
               >
                 {d.name}
-                {(allSchemas[`dimension:${d.id}`]?.length || 0) > 0 && (
+                {countFieldsForScope({ type: "dimension", dimension_id: d.id }) > 0 && (
                   <span className="ml-1 text-xs text-gray-400">
-                    ({allSchemas[`dimension:${d.id}`]!.length})
+                    ({countFieldsForScope({ type: "dimension", dimension_id: d.id })})
                   </span>
                 )}
               </button>
@@ -599,9 +503,9 @@ export default function MetaFieldsPage() {
                 }`}
               >
                 {item.label}
-                {(allSchemas[item.key]?.length || 0) > 0 && (
+                {countFieldsForScope({ type: item.key }) > 0 && (
                   <span className="ml-1 text-xs text-gray-400">
-                    ({allSchemas[item.key]!.length})
+                    ({countFieldsForScope({ type: item.key })})
                   </span>
                 )}
               </button>
@@ -764,8 +668,8 @@ export default function MetaFieldsPage() {
         )}
       </div>
 
-      {/* Fields table for entity/dimension/other (single-scope, unchanged) */}
-      {!isActivityOrParticipant && schemaKey && (
+      {/* Fields table for entity/dimension/other (single-scope) */}
+      {!isActivityOrParticipant && currentScope && (
         <>
           <div className="flex items-center justify-between mb-3">
             <p className="text-sm font-medium text-gray-700">
@@ -888,8 +792,8 @@ export default function MetaFieldsPage() {
               </TableHeader>
               <TableBody>
                 {flatGroups.map((group, gi) => (
-                  group.fields.map((field, index) => (
-                    <TableRow key={`${group.scopeKey}-${field.key}`} className={gi > 0 && index === 0 ? "border-t-4 border-t-gray-100" : ""}>
+                  group.schema.fields.map((field, index) => (
+                    <TableRow key={`${gi}-${field.key}`} className={gi > 0 && index === 0 ? "border-t-4 border-t-gray-100" : ""}>
                       <TableCell className="text-sm text-gray-500 align-top">
                         {index === 0 && (
                           <span className="font-medium text-gray-600">{group.scopeLabel}</span>
@@ -903,13 +807,13 @@ export default function MetaFieldsPage() {
                       <TableCell>
                         <div className="flex gap-1">
                           <button
-                            onClick={() => openEdit(index, group.scopeKey)}
+                            onClick={() => openEdit(index, group.schema)}
                             className="text-gray-400 hover:text-purple-600"
                           >
                             <Pencil className="h-4 w-4" />
                           </button>
                           <button
-                            onClick={() => handleDelete(index, group.scopeKey)}
+                            onClick={() => handleDelete(index, group.schema)}
                             className="text-gray-400 hover:text-red-500"
                           >
                             <Trash2 className="h-4 w-4" />

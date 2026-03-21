@@ -14,8 +14,9 @@ import {
   ActivityFormElement,
   Dimension,
   EntityType,
-  MetaFieldSchemas,
+  MetaFieldSchemaItem,
 } from "@/types";
+import { findSchema } from "@/utils/meta-fields";
 import { Can } from "@/components/Auth/Permissions";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
@@ -93,7 +94,7 @@ export default function FormBuilderPage() {
     queryFn: entityTypeApi.list,
   });
 
-  const { data: allSchemas = {} as MetaFieldSchemas } = useQuery<MetaFieldSchemas>({
+  const { data: allSchemas = [] } = useQuery<MetaFieldSchemaItem[]>({
     queryKey: ["meta-field-schemas"],
     queryFn: metaFieldSchemaApi.getAll,
   });
@@ -216,13 +217,9 @@ export default function FormBuilderPage() {
   const getParticipationMetaCount = (el: ActivityFormElement): number => {
     if (el.type !== "entity_type" || !el.ref_id) return 0;
     let count = 0;
-    // Check participant:entity:{id}
-    const baseKey = `participant:entity:${el.ref_id}`;
-    count += allSchemas[baseKey]?.length || 0;
-    // Check participant:entity:{id}:activity_type:{activityTypeId}
+    count += findSchema(allSchemas, { type: "participant", entity_type_id: el.ref_id })?.fields?.length || 0;
     if (selectedTypeId) {
-      const typeKey = `${baseKey}:activity_type:${selectedTypeId}`;
-      count += allSchemas[typeKey]?.length || 0;
+      count += findSchema(allSchemas, { type: "participant", entity_type_id: el.ref_id, activity_type_id: selectedTypeId })?.fields?.length || 0;
     }
     return count;
   };

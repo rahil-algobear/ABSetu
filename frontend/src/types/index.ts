@@ -212,10 +212,6 @@ export interface MetaFieldDefinition {
   default?: string | number | boolean | string[];
 }
 
-export type MetaEntityType = string; // dynamic key for meta field schemas: "entity:{key}" | "enrollment" | "activity" | etc.
-
-export type MetaFieldSchemas = Partial<Record<string, MetaFieldDefinition[]>>;
-
 export interface MetaFieldSchemaScope {
   type: string;
   entity_type_id?: string | null;
@@ -225,7 +221,6 @@ export interface MetaFieldSchemaScope {
 }
 
 export interface MetaFieldSchemaItem {
-  scope_key: string;
   scope: MetaFieldSchemaScope;
   fields: MetaFieldDefinition[];
 }
