@@ -70,3 +70,29 @@ export function formatDateTime(
     return "—";
   }
 }
+
+/**
+ * Smart formatter: shows date-only when value has no meaningful time,
+ * or full datetime when a specific time was provided.
+ *
+ * Date-only: "2026-03-22" or "2026-03-22T00:00:00+00:00" → "22-Mar-2026"
+ * With time: "2026-03-22T14:30:00+05:30" → "22-Mar-2026 at 2:30 PM"
+ */
+export function formatSmartDateTime(
+  value: string | null | undefined,
+): string {
+  if (value === null || value === undefined || value === "") return "—";
+
+  // Date-only string (no T) — display as date, no conversion
+  if (!value.includes("T")) {
+    return formatDate(value);
+  }
+
+  // Midnight UTC = came from a date-only input → show date only
+  if (value.match(/T00:00:00([Zz]|\+00:?00)$/)) {
+    return formatDate(value.split("T")[0]);
+  }
+
+  // Has a real time component — show full datetime
+  return formatDateTime(value);
+}
