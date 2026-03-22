@@ -49,7 +49,8 @@ const ELEMENT_TYPES = [
 
 const DEFAULT_ELEMENT_LABELS: Record<string, string> = {
   title: "Title",
-  start_date: "Date",
+  start_date: "Start Date",
+  end_date: "End Date",
   notes: "Notes",
 };
 

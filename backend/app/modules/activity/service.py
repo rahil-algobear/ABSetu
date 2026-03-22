@@ -367,7 +367,7 @@ class ActivityFormService:
             "type": "default",
             "ref_id": "start_date",
             "sort_order": 1,
-            "display_type": "date_range",
+            "display_type": "date",
             "visible": True,
             "required": True,
             "stage": "create",
@@ -375,8 +375,18 @@ class ActivityFormService:
         },
         {
             "type": "default",
-            "ref_id": "notes",
+            "ref_id": "end_date",
             "sort_order": 2,
+            "display_type": "date",
+            "visible": True,
+            "required": False,
+            "stage": "create",
+            "removable": False,
+        },
+        {
+            "type": "default",
+            "ref_id": "notes",
+            "sort_order": 3,
             "display_type": "textarea",
             "visible": True,
             "required": False,
@@ -414,6 +424,13 @@ class ActivityFormService:
         for el in elements:
             if el.get("type") == "default" and el.get("ref_id") in default_ref_ids:
                 el["removable"] = False
+            # Migrate old combined date_range to separate date elements
+            if (
+                el.get("type") == "default"
+                and el.get("ref_id") == "start_date"
+                and el.get("display_type") == "date_range"
+            ):
+                el["display_type"] = "date"
         return elements
 
     def get_by_type(self, activity_type_id: uuid.UUID, org_id: uuid.UUID) -> ActivityForm | None:

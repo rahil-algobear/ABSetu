@@ -369,31 +369,31 @@ export default function ActivityDetailPage() {
                 if (el.type === "default" && el.ref_id === "start_date") {
                   return (
                     <div key="edit-start_date">
-                      <div className="flex gap-2">
-                        <div className="flex-1">
-                          <label className="text-sm font-medium">
-                            Start Date{el.required && <span className="text-red-500 ml-0.5">*</span>}
-                          </label>
-                          <DateInput
-                            value={detailFormData.start_date}
-                            onChange={(e) => setDetailFormData({ ...detailFormData, start_date: e.target.value })}
-                            required={el.required}
-                            className="mt-1"
-                          />
-                        </div>
-                        <div className="flex-1">
-                          <label className="text-sm font-medium">
-                            End Date
-                          </label>
-                          <DateInput
-                            value={detailFormData.end_date}
-                            onChange={(e) => setDetailFormData({ ...detailFormData, end_date: e.target.value })}
-                            min={detailFormData.start_date}
-                            className="mt-1"
-                          />
-                        </div>
-                      </div>
-                      <p className="text-xs text-gray-400 mt-0.5">Leave end date empty for single-day activities</p>
+                      <label className="text-sm font-medium">
+                        Start Date{el.required && <span className="text-red-500 ml-0.5">*</span>}
+                      </label>
+                      <DateInput
+                        value={detailFormData.start_date}
+                        onChange={(e) => setDetailFormData({ ...detailFormData, start_date: e.target.value })}
+                        required={el.required}
+                        className="mt-1"
+                      />
+                    </div>
+                  );
+                }
+                if (el.type === "default" && el.ref_id === "end_date") {
+                  return (
+                    <div key="edit-end_date">
+                      <label className="text-sm font-medium">
+                        End Date{el.required && <span className="text-red-500 ml-0.5">*</span>}
+                      </label>
+                      <DateInput
+                        value={detailFormData.end_date}
+                        onChange={(e) => setDetailFormData({ ...detailFormData, end_date: e.target.value })}
+                        min={detailFormData.start_date}
+                        required={el.required}
+                        className="mt-1"
+                      />
                     </div>
                   );
                 }
@@ -473,18 +473,31 @@ export default function ActivityDetailPage() {
                   );
                 }
 
-                // Date
+                // Start Date
                 if (el.type === "default" && el.ref_id === "start_date") {
                   return (
                     <div key="start_date" className="flex items-center gap-2">
                       <Calendar className="h-4 w-4 text-gray-400 shrink-0" />
                       <div>
-                        <p className="text-xs text-gray-500">Date</p>
+                        <p className="text-xs text-gray-500">Start Date</p>
                         <p className="text-sm font-medium">
                           {formatDate(activity.start_date)}
-                          {activity.end_date && activity.end_date !== activity.start_date
-                            ? ` — ${formatDate(activity.end_date)}`
-                            : ""}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                }
+
+                // End Date
+                if (el.type === "default" && el.ref_id === "end_date") {
+                  if (!activity.end_date) return null;
+                  return (
+                    <div key="end_date" className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4 text-gray-400 shrink-0" />
+                      <div>
+                        <p className="text-xs text-gray-500">End Date</p>
+                        <p className="text-sm font-medium">
+                          {formatDate(activity.end_date)}
                         </p>
                       </div>
                     </div>

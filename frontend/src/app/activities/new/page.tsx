@@ -275,35 +275,35 @@ function NewActivityPageContent() {
         if (el.ref_id === "start_date") {
           return (
             <div key="default-start_date">
-              <div className="flex gap-2">
-                <div className="flex-1">
-                  <label className="text-sm font-medium">
-                    Start Date{el.required && <span className="text-red-500 ml-0.5">*</span>}
-                  </label>
-                  <DateInput
-                    value={formData.start_date}
-                    onChange={(e) =>
-                      setFormData({ ...formData, start_date: e.target.value })
-                    }
-                    required={el.required}
-                    className="mt-1"
-                  />
-                </div>
-                <div className="flex-1">
-                  <label className="text-sm font-medium">
-                    End Date
-                  </label>
-                  <DateInput
-                    value={formData.end_date}
-                    onChange={(e) =>
-                      setFormData({ ...formData, end_date: e.target.value })
-                    }
-                    min={formData.start_date}
-                    className="mt-1"
-                  />
-                </div>
-              </div>
-              <p className="text-xs text-gray-400 mt-0.5">Leave end date empty for single-day activities</p>
+              <label className="text-sm font-medium">
+                Start Date{el.required && <span className="text-red-500 ml-0.5">*</span>}
+              </label>
+              <DateInput
+                value={formData.start_date}
+                onChange={(e) =>
+                  setFormData({ ...formData, start_date: e.target.value })
+                }
+                required={el.required}
+                className="mt-1"
+              />
+            </div>
+          );
+        }
+        if (el.ref_id === "end_date") {
+          return (
+            <div key="default-end_date">
+              <label className="text-sm font-medium">
+                End Date{el.required && <span className="text-red-500 ml-0.5">*</span>}
+              </label>
+              <DateInput
+                value={formData.end_date}
+                onChange={(e) =>
+                  setFormData({ ...formData, end_date: e.target.value })
+                }
+                min={formData.start_date}
+                required={el.required}
+                className="mt-1"
+              />
             </div>
           );
         }
