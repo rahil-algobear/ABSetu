@@ -257,6 +257,7 @@ class ListConfigService:
                 filterable=False,
                 sortable=False,
                 meta_type=ftype,
+                filter_supported=True,
             ))
             order += 1
 
@@ -267,7 +268,7 @@ class ListConfigService:
         order += 1
 
         # Static: created_at
-        cols.append(self._col("static", "created_at", "Created", order, sortable=True, filterable=True))
+        cols.append(self._col("static", "created_at", "Created", order, sortable=True, filterable=True, filter_supported=True))
 
         return cols
 
@@ -282,9 +283,9 @@ class ListConfigService:
         cols: list[dict] = []
         order = 0
 
-        cols.append(self._col("static", "start_date", "Start Date", order, sortable=True, filterable=True))
+        cols.append(self._col("static", "start_date", "Start Date", order, sortable=True, filterable=True, filter_supported=True))
         order += 1
-        cols.append(self._col("static", "end_date", "End Date", order, sortable=True, filterable=True))
+        cols.append(self._col("static", "end_date", "End Date", order, sortable=True, filterable=True, filter_supported=True))
         order += 1
         cols.append(self._col("static", "title", "Title", order, sortable=True))
         order += 1
@@ -312,12 +313,13 @@ class ListConfigService:
                 filterable=False,
                 sortable=False,
                 meta_type=ftype,
+                filter_supported=True,
             ))
             order += 1
 
         cols.append(self._col("static", "participant_count", "Participants", order))
         order += 1
-        cols.append(self._col("static", "created_at", "Created", order, sortable=True))
+        cols.append(self._col("static", "created_at", "Created", order, sortable=True, filter_supported=True))
 
         return cols
 
@@ -344,6 +346,7 @@ class ListConfigService:
             col = self._col(
                 "dimension", f"dim:{dim.id}", dim.name, order,
                 visible=visible, filterable=True, sortable=False,
+                filter_supported=True,
             )
             col["dimension_key"] = dim.key
             cols.append(col)
@@ -360,6 +363,7 @@ class ListConfigService:
         filterable: bool = False,
         sortable: bool = False,
         meta_type: str | None = None,
+        filter_supported: bool = False,
     ) -> dict:
         col = {
             "source": source,
@@ -369,6 +373,7 @@ class ListConfigService:
             "filterable": filterable,
             "sortable": sortable,
             "sort_order": sort_order,
+            "filter_supported": filter_supported,
         }
         if meta_type:
             col["meta_type"] = meta_type
@@ -378,7 +383,7 @@ class ListConfigService:
 
     # Properties that are structural (not user-configurable) and should
     # always be synced from the current defaults, even on saved configs.
-    _STRUCTURAL_PROPS = {"source", "meta_type", "dimension_key"}
+    _STRUCTURAL_PROPS = {"source", "meta_type", "dimension_key", "filter_supported"}
 
     @classmethod
     def _merge_with_current(cls, saved: list[dict], defaults: list[dict]) -> list[dict]:

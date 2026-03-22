@@ -241,6 +241,7 @@ export interface ListColumnConfig {
   sort_order: number;
   meta_type?: MetaFieldType;
   dimension_key?: string;
+  filter_supported?: boolean;
 }
 
 // --- Roles & Permissions ---
