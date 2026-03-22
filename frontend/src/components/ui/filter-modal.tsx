@@ -16,12 +16,10 @@ export interface FilterOption {
 export interface FilterDefinition {
   key: string;
   label: string;
-  type: "select" | "range" | "date_range" | "boolean" | "text";
+  type: "select" | "range" | "date_range" | "datetime_range" | "boolean" | "text";
   options?: FilterOption[];
   min?: number;
   max?: number;
-  /** Allow time selection on date_range filters. Defaults to false. */
-  allowTime?: boolean;
 }
 
 interface FilterModalProps {
@@ -102,7 +100,7 @@ export function FilterModal({
       if (!val || (Array.isArray(val) && val.length === 0)) continue;
 
       let displayValue = "";
-      if (def.type === "date_range" && typeof val === "string") {
+      if ((def.type === "date_range" || def.type === "datetime_range") && typeof val === "string") {
         const [start, end] = val.split("|");
         if (start && end) displayValue = `${start} to ${end}`;
         else if (start) displayValue = `from ${start}`;
@@ -226,7 +224,7 @@ export function FilterModal({
                 </div>
               )}
 
-              {def.type === "date_range" && (
+              {(def.type === "date_range" || def.type === "datetime_range") && (
                 <div className="flex gap-2 items-center">
                   <DateTimeInput
                     value={
@@ -235,7 +233,7 @@ export function FilterModal({
                         : "") || ""
                     }
                     onChange={(val) => handleDateChange(def.key, "start", val)}
-                    allowTime={def.allowTime ?? false}
+                    allowTime={def.type === "datetime_range"}
                   />
                   <span className="text-gray-400">to</span>
                   <DateTimeInput
@@ -245,7 +243,7 @@ export function FilterModal({
                         : "") || ""
                     }
                     onChange={(val) => handleDateChange(def.key, "end", val)}
-                    allowTime={def.allowTime ?? false}
+                    allowTime={def.type === "datetime_range"}
                   />
                 </div>
               )}

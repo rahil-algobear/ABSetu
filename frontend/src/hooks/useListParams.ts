@@ -223,7 +223,7 @@ export function useListParams(
       const value = values.length === 1 ? values[0] : values;
 
       let displayValue = values.join(", ");
-      if (def?.type === "date_range" && typeof value === "string") {
+      if ((def?.type === "date_range" || def?.type === "datetime_range") && typeof value === "string") {
         const [start, end] = value.split("|");
         if (start && end) displayValue = `${start} to ${end}`;
         else if (start) displayValue = `from ${start}`;
@@ -398,7 +398,7 @@ export function useListParams(
     const filtersDict: Record<string, unknown> = {};
     for (const f of activeFilters) {
       const def = options.filterDefinitions?.find((d) => d.key === f.key);
-      if (def?.type === "date_range" && typeof f.value === "string") {
+      if ((def?.type === "date_range" || def?.type === "datetime_range") && typeof f.value === "string") {
         const parts = f.value.split("|");
         const start = parts[0] && parts[0] !== "undefined" ? parts[0] : undefined;
         const end = parts[1] && parts[1] !== "undefined" ? parts[1] : undefined;

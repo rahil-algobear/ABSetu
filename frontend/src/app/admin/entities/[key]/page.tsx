@@ -69,7 +69,6 @@ function EntityTypeEntitiesContent() {
       options: f.options,
       min: f.min,
       max: f.max,
-      allowTime: f.allowTime,
     }));
   }, [filterData]);
 

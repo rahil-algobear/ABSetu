@@ -53,7 +53,7 @@ function FilterChips({
     const def = filterDefinitions.find((d) => d.key === f.key);
     const label = f.label || def?.label || f.key;
 
-    if (def?.type === "date_range" && typeof f.value === "string") {
+    if ((def?.type === "date_range" || def?.type === "datetime_range") && typeof f.value === "string") {
       chips.push({
         key: f.key,
         value: f.value,

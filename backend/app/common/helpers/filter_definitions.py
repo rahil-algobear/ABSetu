@@ -135,10 +135,10 @@ def build_meta_field_filters(
             filter_def["options"] = [{"value": o, "label": o} for o in field["options"]]
         elif ftype == "number":
             filter_def["type"] = "range"
-        elif ftype in ("date", "datetime"):
+        elif ftype == "date":
             filter_def["type"] = "date_range"
-            if ftype == "datetime":
-                filter_def["allowTime"] = True
+        elif ftype == "datetime":
+            filter_def["type"] = "datetime_range"
         elif ftype == "boolean":
             filter_def["type"] = "boolean"
         else:
@@ -321,7 +321,7 @@ def build_list_filter_response(
                 {
                     "key": df["key"],
                     "label": df["label"],
-                    "type": "date_range",
+                    "type": df.get("type", "date_range"),
                 }
             )
 

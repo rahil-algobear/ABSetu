@@ -74,7 +74,6 @@ function ActivityTypeListContent() {
       options: f.options,
       min: f.min,
       max: f.max,
-      allowTime: f.allowTime || f.key === "start_date" || f.key === "end_date",
     }));
   }, [filterData]);
 
