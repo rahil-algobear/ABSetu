@@ -140,8 +140,9 @@ export const dimensionApi = {
     return response.data;
   },
   // Dimension values
-  listValues: async (dimensionId: string): Promise<DimensionValue[]> => {
-    const response = await authAxios.get<DimensionValue[]>(`/dimensions/${dimensionId}/values`);
+  listValues: async (dimensionId: string, includeAll?: boolean): Promise<DimensionValue[]> => {
+    const params = includeAll ? { include_all: true } : {};
+    const response = await authAxios.get<DimensionValue[]>(`/dimensions/${dimensionId}/values`, { params });
     return response.data;
   },
   createValue: async (dimensionId: string, data: { name: string; sort_order?: number; meta?: Record<string, unknown> }): Promise<DimensionValue> => {

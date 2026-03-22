@@ -128,13 +128,18 @@ def delete_dimension(
 )
 def list_dimension_values(
     dimension_id: uuid.UUID,
+    include_all: bool = Query(False),
     current_user: User = Depends(get_current_user),
     accessible_dv_ids: list[uuid.UUID] | None = Depends(
         get_accessible_dimension_value_ids
     ),
     db: Session = Depends(get_db),
 ):
-    """List values for a dimension, scoped by user's dimension access."""
+    """List values for a dimension, scoped by user's dimension access.
+
+    Pass include_all=true to return all values regardless of user access
+    (e.g. for the dimension matrix context view).
+    """
     # Verify dimension belongs to org
     dim_service = DimensionService(db)
     dim_service.get_by_id(dimension_id, current_user.organization_id)
@@ -145,7 +150,8 @@ def list_dimension_values(
     # Per-dimension access scoping: if user has restrictions for THIS
     # dimension, only return values they have access to. If they have
     # no restrictions for this dimension, return all values.
-    if accessible_dv_ids is not None:
+    # Skip scoping when include_all is requested (read-only context view).
+    if not include_all and accessible_dv_ids is not None:
         accessible_set = set(accessible_dv_ids)
         # Check if user has any restrictions for this specific dimension
         restricted_for_dim = any(
