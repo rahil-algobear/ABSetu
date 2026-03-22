@@ -89,9 +89,12 @@ export function DateTimeInput({
     }
     if (showTime) {
       onChange(formatISO(date));
-    } else {
-      // No time selected — send midnight in user's local timezone
+    } else if (allowTime) {
+      // Datetime field but user hasn't toggled time on — send midnight in local tz
       onChange(formatISO(startOfDay(date)));
+    } else {
+      // Pure date field (allowTime=false) — send date-only string
+      onChange(format(date, "yyyy-MM-dd"));
     }
   };
 
