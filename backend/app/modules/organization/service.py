@@ -208,11 +208,6 @@ class MetaFieldSchemaService:
             return self.get_schema_by_scope(org_id, scope_key)
 
 
-# Types that cannot be sorted/filtered meaningfully
-_UNSORTABLE_META_TYPES = {"multiselect", "boolean"}
-_UNFILTERABLE_META_TYPES: set[str] = set()  # all types can be filtered
-
-
 class ListConfigService:
     """Manage per-type list page column configuration."""
 
@@ -288,8 +283,8 @@ class ListConfigService:
             ftype = f.get("type", "text")
             cols.append(self._col(
                 "meta", f"meta:{f['key']}", f.get("label", f["key"]), order,
-                filterable=ftype not in _UNFILTERABLE_META_TYPES,
-                sortable=ftype not in _UNSORTABLE_META_TYPES,
+                filterable=False,
+                sortable=False,
                 meta_type=ftype,
             ))
             order += 1
@@ -343,8 +338,8 @@ class ListConfigService:
             ftype = f.get("type", "text")
             cols.append(self._col(
                 "meta", f"meta:{f['key']}", f.get("label", f["key"]), order,
-                filterable=ftype not in _UNFILTERABLE_META_TYPES,
-                sortable=ftype not in _UNSORTABLE_META_TYPES,
+                filterable=False,
+                sortable=False,
                 meta_type=ftype,
             ))
             order += 1
