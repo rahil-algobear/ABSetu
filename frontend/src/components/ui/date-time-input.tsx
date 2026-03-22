@@ -3,7 +3,7 @@
 import { useState, forwardRef } from "react";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
-import { parseISO, format, isToday } from "date-fns";
+import { parseISO, format, isToday, formatISO } from "date-fns";
 import { Clock, Calendar } from "lucide-react";
 import { cn } from "@/utils/cn";
 
@@ -88,7 +88,8 @@ export function DateTimeInput({
       return;
     }
     if (showTime) {
-      onChange(format(date, "yyyy-MM-dd'T'HH:mm:ss"));
+      // Include timezone offset so the backend compares in the user's timezone
+      onChange(formatISO(date));
     } else {
       onChange(format(date, "yyyy-MM-dd"));
     }
@@ -100,7 +101,7 @@ export function DateTimeInput({
     if (selected) {
       if (next) {
         // Switching to datetime — keep current date, add current time component
-        onChange(format(selected, "yyyy-MM-dd'T'HH:mm:ss"));
+        onChange(formatISO(selected));
       } else {
         // Switching to date-only — strip time
         onChange(format(selected, "yyyy-MM-dd"));
