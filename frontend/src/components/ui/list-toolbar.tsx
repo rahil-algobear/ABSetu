@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { ReactNode, useState } from "react";
 import { Search, SlidersHorizontal, X } from "lucide-react";
 import { Input } from "./input";
 import { Button } from "./button";
 import { FilterModal, FilterDefinition } from "./filter-modal";
 import { FilterValue } from "@/hooks/useListParams";
+import { formatDate } from "@/utils/date";
 
 interface ListToolbarProps {
   search: string;
@@ -15,6 +16,25 @@ interface ListToolbarProps {
   onFiltersChange: (filters: FilterValue[]) => void;
   onRemoveFilter: (key: string, value?: string) => void;
   searchPlaceholder?: string;
+}
+
+const DATE_CHIP_FORMAT = "d MMM yyyy";
+
+function DateChipValue({ raw }: { raw: string }) {
+  const [start, end] = raw.split(":");
+  const fmtStart = start ? formatDate(start, DATE_CHIP_FORMAT) : "";
+  const fmtEnd = end ? formatDate(end, DATE_CHIP_FORMAT) : "";
+
+  if (fmtStart && fmtEnd && fmtStart !== "—" && fmtEnd !== "—") {
+    return <>from <span className="text-orange-600 font-medium">{fmtStart}</span> until <span className="text-orange-600 font-medium">{fmtEnd}</span></>;
+  }
+  if (fmtStart && fmtStart !== "—") {
+    return <>from <span className="text-orange-600 font-medium">{fmtStart}</span></>;
+  }
+  if (fmtEnd && fmtEnd !== "—") {
+    return <>until <span className="text-orange-600 font-medium">{fmtEnd}</span></>;
+  }
+  return <>{raw}</>;
 }
 
 /** Explode multi-value filters into individual chips */
@@ -28,12 +48,20 @@ function FilterChips({
   onRemoveFilter: (key: string, value?: string) => void;
 }) {
   // Build individual chips — one per selected value
-  const chips: { key: string; value: string; label: string; valueLabel: string }[] = [];
+  const chips: { key: string; value: string; label: string; valueLabel: string; renderValue?: ReactNode }[] = [];
   for (const f of activeFilters) {
     const def = filterDefinitions.find((d) => d.key === f.key);
     const label = f.label || def?.label || f.key;
 
-    if (def?.type === "select" && def.options) {
+    if (def?.type === "date_range" && typeof f.value === "string") {
+      chips.push({
+        key: f.key,
+        value: f.value,
+        label,
+        valueLabel: f.displayValue,
+        renderValue: <DateChipValue raw={f.value} />,
+      });
+    } else if (def?.type === "select" && def.options) {
       // Explode: one chip per value
       const vals = Array.isArray(f.value) ? f.value : [f.value];
       for (const v of vals) {
@@ -41,7 +69,7 @@ function FilterChips({
         chips.push({ key: f.key, value: v, label, valueLabel });
       }
     } else {
-      // Single chip for non-select types (date_range, range, boolean, text)
+      // Single chip for non-select types (range, boolean, text)
       chips.push({
         key: f.key,
         value: typeof f.value === "string" ? f.value : f.value.join(", "),
@@ -63,7 +91,7 @@ function FilterChips({
           <span className="px-2 py-1.5 bg-blue-600 rounded-l-md text-white font-medium text-xs">
             {chip.label}
           </span>
-          <span className="px-2 py-1 text-sm">{chip.valueLabel}</span>
+          <span className="px-2 py-1 text-sm">{chip.renderValue ?? chip.valueLabel}</span>
           <button
             type="button"
             onClick={() => onRemoveFilter(chip.key, chip.value)}
