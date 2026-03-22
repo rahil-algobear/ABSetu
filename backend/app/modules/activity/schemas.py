@@ -5,7 +5,7 @@ Activity, ActivityType, ActivityParticipant schemas
 import datetime
 from typing import Any, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.common.schemas.base_response import BaseResponseSchema
 
@@ -88,12 +88,15 @@ class ActivityUpdate(BaseModel):
     meta: dict[str, Any] | None = None
 
 
+_ACTIVITY_DATETIME_ISO_FIELDS = frozenset({"start_date", "end_date"})
+
+
 class ActivityResponse(BaseResponseSchema):
     organization_id: str
     activity_type_id: str | None = None
     title: str | None = None
-    start_date: float
-    end_date: float | None = None
+    start_date: str
+    end_date: str | None = None
     notes: str | None = None
     created_by: str | None = None
     created_at: float | None = None
@@ -101,6 +104,35 @@ class ActivityResponse(BaseResponseSchema):
     activity_type_name: str | None = None
     dimensions: list[DimensionInfo] = []
     participant_count: int = 0
+
+    @model_validator(mode="before")
+    @classmethod
+    def _dates_to_iso(cls, data: Any) -> Any:
+        """Convert start_date/end_date to ISO strings before the base
+        validator would turn them into Unix timestamps."""
+        from datetime import date as _date
+
+        def _to_iso(v: Any) -> Any:
+            if isinstance(v, datetime.datetime):
+                return v.isoformat()
+            if isinstance(v, _date):
+                return v.isoformat()
+            return v
+
+        if isinstance(data, dict):
+            for f in _ACTIVITY_DATETIME_ISO_FIELDS:
+                if f in data:
+                    data[f] = _to_iso(data[f])
+        elif hasattr(data, "__dict__"):
+            out: dict[str, Any] = {}
+            for name in cls.model_fields:
+                val = getattr(data, name, None)
+                if name in _ACTIVITY_DATETIME_ISO_FIELDS:
+                    out[name] = _to_iso(val)
+                else:
+                    out[name] = val
+            return out
+        return data
 
 
 # --- Activity Participant ---

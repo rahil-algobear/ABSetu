@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DateTimeInput } from "@/components/ui/date-time-input";
-import { toISOValue } from "@/utils/date";
 import { Dialog } from "@/components/ui/dialog";
 import { DynamicMetaForm } from "@/components/DynamicMetaForm";
 import { Plus, Search, X } from "lucide-react";
@@ -376,7 +375,7 @@ function MetaFieldCell({
   if (field.type === "date" || field.type === "datetime") {
     return (
       <DateTimeInput
-        value={toISOValue(value as string | number | null) || ""}
+        value={(value as string) || ""}
         onChange={(val) => onChange(val)}
         required={field.required}
         allowTime={field.type === "datetime"}

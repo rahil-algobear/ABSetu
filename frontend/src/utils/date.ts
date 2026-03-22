@@ -1,4 +1,4 @@
-import { format, formatISO, parseISO, startOfDay, isEqual } from "date-fns";
+import { format, parseISO, startOfDay, isEqual } from "date-fns";
 
 export const DATE_FORMATS = {
   /** 20/03/2026 */
@@ -66,27 +66,4 @@ export function formatDateTime(
     return format(date, DATE_FORMATS.DISPLAY);
   }
   return format(date, DATE_FORMATS.DATETIME);
-}
-
-/**
- * Convert any date value (timestamp, ISO string, Date) to an ISO string
- * for use in form inputs (DateTimeInput).
- *
- * Returns "" for null/undefined/invalid.
- */
-export function toISOValue(
-  value: string | number | Date | null | undefined,
-): string {
-  if (value === null || value === undefined || value === "") return "";
-  if (typeof value === "string") return value; // already ISO
-
-  let date: Date;
-  if (typeof value === "number") {
-    date = new Date(value > 1e12 ? value : value * 1000);
-  } else {
-    date = value;
-  }
-
-  if (isNaN(date.getTime())) return "";
-  return formatISO(date);
 }

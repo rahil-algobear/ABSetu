@@ -33,7 +33,7 @@ import { PageContent } from "@/components/ui/page-content";
 import { PageHeader } from "@/components/ui/page-header";
 import { Trash2, Pencil, Calendar, FileText, Users, Type } from "lucide-react";
 import toast from "react-hot-toast";
-import { formatDateTime, toISOValue } from "@/utils/date";
+import { formatDateTime } from "@/utils/date";
 import { DateTimeInput } from "@/components/ui/date-time-input";
 
 export default function ActivityDetailPage() {
@@ -186,8 +186,8 @@ export default function ActivityDetailPage() {
     if (!activity) return;
     setDetailFormData({
       title: activity.title || "",
-      start_date: toISOValue(activity.start_date),
-      end_date: toISOValue(activity.end_date),
+      start_date: activity.start_date,
+      end_date: activity.end_date || "",
       notes: activity.notes || "",
     });
     setDetailMetaValues(activity.meta || {});

@@ -14,7 +14,6 @@ from app.common.dependencies import (
     require_permissions,
 )
 from app.common.exceptions import ValidationError
-from app.common.helpers.meta_serializer import serialize_meta
 from app.common.schemas.base_response import PaginatedResponse
 from app.common.schemas.list_params import ListParams
 from app.core.database import get_db
@@ -189,7 +188,7 @@ def _build_activity_response(a, form=None) -> dict:
         end_date=a.end_date,
         notes=a.notes,
         created_by=str(a.created_by) if a.created_by else None,
-        meta=serialize_meta(a.meta),
+        meta=a.meta,
         activity_type_name=activity_type_name,
         dimensions=dim_infos,
     ).dump()
@@ -483,7 +482,7 @@ def get_participants(
             participant_id=str(p.participant_id),
             section_key=p.section_key,
             status=p.status,
-            meta=serialize_meta(p.meta),
+            meta=p.meta,
             participant_name=name,
         )
         results.append(resp.dump())
@@ -563,7 +562,7 @@ def save_participants(
             participant_id=str(p.participant_id),
             section_key=p.section_key,
             status=p.status,
-            meta=serialize_meta(p.meta),
+            meta=p.meta,
         ).dump()
         for p in participants
     ]
