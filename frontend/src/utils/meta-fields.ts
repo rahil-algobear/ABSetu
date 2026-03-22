@@ -50,6 +50,9 @@ export function collectActivityFields(
 ): MetaFieldDefinition[] {
   const fields: MetaFieldDefinition[] = [];
 
+  // Base scope: all activities (no activity_type, no dimension_value)
+  fields.push(...getFieldsForScope(schemas, { type: "activity" }));
+
   if (activityTypeId) {
     fields.push(...getFieldsForScope(schemas, { type: "activity", activity_type_id: activityTypeId }));
   }
