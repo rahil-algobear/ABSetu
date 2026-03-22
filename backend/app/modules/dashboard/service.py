@@ -45,24 +45,17 @@ class DashboardService:
         query: Query,
         restricted_dims: dict[uuid.UUID, list[uuid.UUID]],
     ) -> Query:
-        """Apply per-dimension user-access scoping to an Activity query."""
+        """Apply per-dimension user-access scoping to an Activity query.
+
+        Only activities with at least one allowed dimension value are included.
+        Activities without any mapping for a restricted dimension are excluded.
+        """
         for dim_id, allowed_ids in restricted_dims.items():
-            dim_values_subq = (
-                self.db.query(DimensionValue.id)
-                .filter(DimensionValue.dimension_id == dim_id)
-                .subquery()
-            )
             query = query.filter(
-                or_(
-                    ~exists()
-                    .where(ActivityDimension.activity_id == Activity.id)
-                    .where(ActivityDimension.dimension_value_id.in_(dim_values_subq))
-                    .correlate(Activity),
-                    exists()
-                    .where(ActivityDimension.activity_id == Activity.id)
-                    .where(ActivityDimension.dimension_value_id.in_(allowed_ids))
-                    .correlate(Activity),
-                )
+                exists()
+                .where(ActivityDimension.activity_id == Activity.id)
+                .where(ActivityDimension.dimension_value_id.in_(allowed_ids))
+                .correlate(Activity),
             )
         return query
 

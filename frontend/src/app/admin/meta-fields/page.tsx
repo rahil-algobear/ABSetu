@@ -172,6 +172,18 @@ export default function MetaFieldsPage() {
     }
   }, [entityTypesList]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Build a display label from activity type + dimension value IDs
+  const buildScopeLabel = (atId: string, dvId: string, fallback: string): string => {
+    const labels: string[] = [];
+    if (atId) labels.push(activityTypes.find((a) => a.id === atId)?.name || atId);
+    if (dvId) {
+      const dv = allDimensionValues.find((d) => d.id === dvId);
+      const dim = dv ? dimensions.find((d) => d.id === dv.dimension_id) : null;
+      labels.push(dim ? `${dim.name}: ${dv!.name}` : dv?.name || dvId);
+    }
+    return labels.length > 0 ? labels.join(" + ") : fallback;
+  };
+
   // --- Flat table groups for Activity tab ---
   const activityGroups = useMemo((): ScopeGroup[] => {
     const groups: ScopeGroup[] = [];
@@ -231,18 +243,6 @@ export default function MetaFieldsPage() {
     });
     return groups;
   }, [allSchemas, participantEntityId, participantFilterTypeId, participantFilterDimId, participantFilterDvId, activityTypes, allDimensionValues, dimensions]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Build a display label from activity type + dimension value IDs
-  const buildScopeLabel = (atId: string, dvId: string, fallback: string): string => {
-    const labels: string[] = [];
-    if (atId) labels.push(activityTypes.find((a) => a.id === atId)?.name || atId);
-    if (dvId) {
-      const dv = allDimensionValues.find((d) => d.id === dvId);
-      const dim = dv ? dimensions.find((d) => d.id === dv.dimension_id) : null;
-      labels.push(dim ? `${dim.name}: ${dv!.name}` : dv?.name || dvId);
-    }
-    return labels.length > 0 ? labels.join(" + ") : fallback;
-  };
 
   // Participant entity pill field counts
   const participantEntityCounts = useMemo(() => {
