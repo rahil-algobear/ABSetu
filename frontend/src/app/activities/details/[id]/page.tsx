@@ -33,7 +33,7 @@ import { PageContent } from "@/components/ui/page-content";
 import { PageHeader } from "@/components/ui/page-header";
 import { Trash2, Pencil, Calendar, FileText, Users, Type } from "lucide-react";
 import toast from "react-hot-toast";
-import { formatSmartDateTime } from "@/utils/date";
+import { formatDateTime } from "@/utils/date";
 import { DateTimeInput } from "@/components/ui/date-time-input";
 
 export default function ActivityDetailPage() {
@@ -481,7 +481,7 @@ export default function ActivityDetailPage() {
                       <div>
                         <p className="text-xs text-gray-500">Start Date</p>
                         <p className="text-sm font-medium">
-                          {formatSmartDateTime(activity.start_date)}
+                          {formatDateTime(activity.start_date)}
                         </p>
                       </div>
                     </div>
@@ -497,7 +497,7 @@ export default function ActivityDetailPage() {
                       <div>
                         <p className="text-xs text-gray-500">End Date</p>
                         <p className="text-sm font-medium">
-                          {formatSmartDateTime(activity.end_date)}
+                          {formatDateTime(activity.end_date)}
                         </p>
                       </div>
                     </div>

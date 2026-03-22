@@ -29,7 +29,7 @@ import { PageLayout } from "@/components/ui/page-layout";
 import { PageContent } from "@/components/ui/page-content";
 import { Plus } from "lucide-react";
 import Link from "next/link";
-import { formatDate, formatDateTime, formatSmartDateTime, DATE_FORMATS } from "@/utils/date";
+import { formatDate, formatDateTime, DATE_FORMATS } from "@/utils/date";
 
 /** Simple English pluralizer for display names */
 function pluralize(word: string): string {
@@ -115,9 +115,9 @@ function ActivityTypeListContent() {
     if (col.source === "static") {
       switch (col.key) {
         case "start_date":
-          return formatSmartDateTime(activity.start_date);
+          return formatDateTime(activity.start_date);
         case "end_date":
-          return formatSmartDateTime(activity.end_date);
+          return formatDateTime(activity.end_date);
         case "title":
           return (
             <Link

@@ -3,23 +3,9 @@ Activity, ActivityType, ActivityParticipant schemas
 """
 
 import datetime
-from typing import Annotated, Any, Optional
+from typing import Any, Optional
 
-from pydantic import BaseModel, BeforeValidator, Field
-
-
-def _coerce_date_to_datetime(v: Any) -> Any:
-    """Accept date-only strings (e.g. '2026-03-22') as midnight UTC datetimes."""
-    if isinstance(v, str) and len(v) == 10 and "T" not in v:
-        try:
-            datetime.date.fromisoformat(v)
-            return v + "T00:00:00+00:00"
-        except ValueError:
-            pass
-    return v
-
-
-FlexibleDatetime = Annotated[datetime.datetime, BeforeValidator(_coerce_date_to_datetime)]
+from pydantic import BaseModel, Field
 
 from app.common.schemas.base_response import BaseResponseSchema
 
@@ -88,16 +74,16 @@ class ActivityCreate(BaseModel):
     activity_type_id: str | None = None
     dimension_value_ids: list[str] = []
     title: str | None = None
-    start_date: FlexibleDatetime
-    end_date: FlexibleDatetime | None = None
+    start_date: datetime.datetime
+    end_date: datetime.datetime | None = None
     notes: str | None = None
     meta: dict[str, Any] | None = None
 
 
 class ActivityUpdate(BaseModel):
     title: str | None = None
-    start_date: Optional[FlexibleDatetime] = None
-    end_date: Optional[FlexibleDatetime] = None
+    start_date: Optional[datetime.datetime] = None
+    end_date: Optional[datetime.datetime] = None
     notes: str | None = None
     meta: dict[str, Any] | None = None
 

@@ -3,7 +3,7 @@
 import { useState, forwardRef } from "react";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
-import { parseISO, format, isToday, formatISO } from "date-fns";
+import { parseISO, format, isToday, formatISO, startOfDay } from "date-fns";
 import { Clock, Calendar } from "lucide-react";
 import { cn } from "@/utils/cn";
 
@@ -72,8 +72,10 @@ export function DateTimeInput({
   disabled,
   allowTime = true,
 }: DateTimeInputProps) {
-  // If the value contains "T", it has a time component — show time toggle on.
-  const hasTimeInValue = allowTime && value.includes("T");
+  // Show time toggle if value has a non-midnight time component.
+  // Midnight is ambiguous (could be date-only or explicit midnight), but
+  // defaulting to off is correct most of the time — user can toggle on if needed.
+  const hasTimeInValue = allowTime && value.includes("T") && !value.includes("T00:00:00");
   const [showTime, setShowTime] = useState(hasTimeInValue);
 
   const selected = parseValue(value);
@@ -86,10 +88,10 @@ export function DateTimeInput({
       return;
     }
     if (showTime) {
-      // Include timezone offset so the backend compares in the user's timezone
       onChange(formatISO(date));
     } else {
-      onChange(format(date, "yyyy-MM-dd"));
+      // No time selected — send midnight in user's local timezone
+      onChange(formatISO(startOfDay(date)));
     }
   };
 
@@ -101,8 +103,8 @@ export function DateTimeInput({
         // Switching to datetime — keep current date, add current time component
         onChange(formatISO(selected));
       } else {
-        // Switching to date-only — strip time
-        onChange(format(selected, "yyyy-MM-dd"));
+        // Switching to date-only — send midnight in user's local timezone
+        onChange(formatISO(startOfDay(selected)));
       }
     }
   };
