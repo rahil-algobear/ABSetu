@@ -135,8 +135,10 @@ def build_meta_field_filters(
             filter_def["options"] = [{"value": o, "label": o} for o in field["options"]]
         elif ftype == "number":
             filter_def["type"] = "range"
-        elif ftype == "date":
+        elif ftype in ("date", "datetime"):
             filter_def["type"] = "date_range"
+            if ftype == "datetime":
+                filter_def["allowTime"] = True
         elif ftype == "boolean":
             filter_def["type"] = "boolean"
         else:
@@ -183,7 +185,7 @@ def build_meta_field_filter_config(
                 "meta_key": field["key"],
                 "meta_column": meta_column,
             }
-        elif ftype == "date":
+        elif ftype in ("date", "datetime"):
             config[meta_key] = {
                 "type": "meta_date_range",
                 "meta_key": field["key"],
