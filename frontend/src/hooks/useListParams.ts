@@ -220,11 +220,21 @@ export function useListParams(
 
     return Array.from(filterMap.entries()).map(([key, values]) => {
       const def = options.filterDefinitions?.find((d) => d.key === key);
+      const value = values.length === 1 ? values[0] : values;
+
+      let displayValue = values.join(", ");
+      if (def?.type === "date_range" && typeof value === "string") {
+        const [start, end] = value.split("|");
+        if (start && end) displayValue = `${start} to ${end}`;
+        else if (start) displayValue = `from ${start}`;
+        else if (end) displayValue = `until ${end}`;
+      }
+
       return {
         key,
         label: def?.label || key,
-        value: values.length === 1 ? values[0] : values,
-        displayValue: values.join(", "),
+        value,
+        displayValue,
       };
     });
   }, [searchParams, slugMappings, options.filterDefinitions, defsLoading]);
