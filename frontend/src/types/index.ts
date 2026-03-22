@@ -205,7 +205,7 @@ export interface ActivityParticipant {
 
 // --- Meta Field Definitions ---
 
-export type MetaFieldType = "text" | "number" | "date" | "select" | "multiselect" | "boolean";
+export type MetaFieldType = "text" | "number" | "date" | "datetime" | "select" | "multiselect" | "boolean";
 
 export interface MetaFieldDefinition {
   key: string;

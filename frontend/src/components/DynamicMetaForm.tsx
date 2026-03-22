@@ -53,12 +53,12 @@ export function DynamicMetaForm({ fields, values, onChange }: DynamicMetaFormPro
             />
           )}
 
-          {field.type === "date" && (
+          {(field.type === "date" || field.type === "datetime") && (
             <DateTimeInput
               value={(getVal(field) as string) || ""}
               onChange={(val) => setValue(field.key, val)}
               required={field.required}
-              allowTime={false}
+              allowTime={field.type === "datetime"}
             />
           )}
 

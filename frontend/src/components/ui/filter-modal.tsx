@@ -78,18 +78,18 @@ export function FilterModal({
   const handleRangeChange = (key: string, field: "min" | "max", val: string) => {
     const current = localFilters[key];
     const rangeStr = typeof current === "string" ? current : "";
-    const [min, max] = rangeStr.split(":").map((s) => s || "");
-    const newRange = field === "min" ? `${val}:${max}` : `${min}:${val}`;
+    const [min, max] = rangeStr.split("|").map((s) => s || "");
+    const newRange = field === "min" ? `${val}|${max}` : `${min}|${val}`;
     setLocalFilters({ ...localFilters, [key]: newRange });
   };
 
   const handleDateChange = (key: string, field: "start" | "end", val: string) => {
     const current = localFilters[key];
     const dateStr = typeof current === "string" ? current : "";
-    const parts = dateStr.split(":");
+    const parts = dateStr.split("|");
     const start = parts[0] || "";
     const end = parts[1] || "";
-    const newDate = field === "start" ? `${val}:${end}` : `${start}:${val}`;
+    const newDate = field === "start" ? `${val}|${end}` : `${start}|${val}`;
     setLocalFilters({ ...localFilters, [key]: newDate });
   };
 
@@ -101,7 +101,7 @@ export function FilterModal({
 
       let displayValue = "";
       if (def.type === "date_range" && typeof val === "string") {
-        const [start, end] = val.split(":");
+        const [start, end] = val.split("|");
         if (start && end) displayValue = `${start} to ${end}`;
         else if (start) displayValue = `from ${start}`;
         else if (end) displayValue = `until ${end}`;
@@ -203,7 +203,7 @@ export function FilterModal({
                     placeholder="Min"
                     value={
                       (typeof localFilters[def.key] === "string"
-                        ? (localFilters[def.key] as string).split(":")[0]
+                        ? (localFilters[def.key] as string).split("|")[0]
                         : "") || ""
                     }
                     onChange={(e) => handleRangeChange(def.key, "min", e.target.value)}
@@ -215,7 +215,7 @@ export function FilterModal({
                     placeholder="Max"
                     value={
                       (typeof localFilters[def.key] === "string"
-                        ? (localFilters[def.key] as string).split(":")[1]
+                        ? (localFilters[def.key] as string).split("|")[1]
                         : "") || ""
                     }
                     onChange={(e) => handleRangeChange(def.key, "max", e.target.value)}
@@ -229,7 +229,7 @@ export function FilterModal({
                   <DateTimeInput
                     value={
                       (typeof localFilters[def.key] === "string"
-                        ? (localFilters[def.key] as string).split(":")[0]
+                        ? (localFilters[def.key] as string).split("|")[0]
                         : "") || ""
                     }
                     onChange={(val) => handleDateChange(def.key, "start", val)}
@@ -239,7 +239,7 @@ export function FilterModal({
                   <DateTimeInput
                     value={
                       (typeof localFilters[def.key] === "string"
-                        ? (localFilters[def.key] as string).split(":")[1]
+                        ? (localFilters[def.key] as string).split("|")[1]
                         : "") || ""
                     }
                     onChange={(val) => handleDateChange(def.key, "end", val)}

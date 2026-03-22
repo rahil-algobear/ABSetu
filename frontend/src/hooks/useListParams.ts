@@ -389,7 +389,7 @@ export function useListParams(
     for (const f of activeFilters) {
       const def = options.filterDefinitions?.find((d) => d.key === f.key);
       if (def?.type === "date_range" && typeof f.value === "string") {
-        const parts = f.value.split(":");
+        const parts = f.value.split("|");
         const start = parts[0] && parts[0] !== "undefined" ? parts[0] : undefined;
         const end = parts[1] && parts[1] !== "undefined" ? parts[1] : undefined;
         if (start || end) {

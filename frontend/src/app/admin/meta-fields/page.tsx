@@ -23,6 +23,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
+import { DateTimeInput } from "@/components/ui/date-time-input";
 import {
   Table,
   TableHeader,
@@ -41,6 +42,7 @@ const FIELD_TYPES: { value: MetaFieldType; label: string }[] = [
   { value: "text", label: "Text" },
   { value: "number", label: "Number" },
   { value: "date", label: "Date" },
+  { value: "datetime", label: "Date & Time" },
   { value: "select", label: "Dropdown" },
   { value: "multiselect", label: "Multi-select" },
   { value: "boolean", label: "Yes/No" },
@@ -1022,22 +1024,32 @@ export default function MetaFieldsPage() {
                 )}
               </div>
             ) : (
-              <Input
-                id="field-default"
-                type={fieldForm.type === "number" ? "number" : fieldForm.type === "date" ? "date" : "text"}
-                value={fieldForm.default != null ? String(fieldForm.default) : ""}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (!val) {
-                    setFieldForm({ ...fieldForm, default: undefined });
-                  } else if (fieldForm.type === "number") {
-                    setFieldForm({ ...fieldForm, default: Number(val) });
-                  } else {
-                    setFieldForm({ ...fieldForm, default: val });
-                  }
-                }}
-                placeholder={fieldForm.type === "date" ? "" : "Leave blank for no default"}
-              />
+              {fieldForm.type === "date" || fieldForm.type === "datetime" ? (
+                <DateTimeInput
+                  value={fieldForm.default != null ? String(fieldForm.default) : ""}
+                  onChange={(val) => {
+                    setFieldForm({ ...fieldForm, default: val || undefined });
+                  }}
+                  allowTime={fieldForm.type === "datetime"}
+                />
+              ) : (
+                <Input
+                  id="field-default"
+                  type={fieldForm.type === "number" ? "number" : "text"}
+                  value={fieldForm.default != null ? String(fieldForm.default) : ""}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (!val) {
+                      setFieldForm({ ...fieldForm, default: undefined });
+                    } else if (fieldForm.type === "number") {
+                      setFieldForm({ ...fieldForm, default: Number(val) });
+                    } else {
+                      setFieldForm({ ...fieldForm, default: val });
+                    }
+                  }}
+                  placeholder="Leave blank for no default"
+                />
+              )}
             )}
           </div>
           <div className="flex justify-end gap-2 pt-2">

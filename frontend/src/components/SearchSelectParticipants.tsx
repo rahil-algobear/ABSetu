@@ -372,13 +372,13 @@ function MetaFieldCell({
     );
   }
 
-  if (field.type === "date") {
+  if (field.type === "date" || field.type === "datetime") {
     return (
       <DateTimeInput
         value={(value as string) || ""}
         onChange={(val) => onChange(val)}
         required={field.required}
-        allowTime={false}
+        allowTime={field.type === "datetime"}
       />
     );
   }
