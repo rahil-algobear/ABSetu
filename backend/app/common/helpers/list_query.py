@@ -8,7 +8,7 @@ import uuid
 from datetime import date, datetime
 from typing import Any
 
-from sqlalchemy import String, and_, exists, func, or_
+from sqlalchemy import String, exists, func, or_
 from sqlalchemy.orm import Query
 
 
@@ -49,39 +49,36 @@ def apply_sort(
     return query.order_by(default_sort)
 
 
-def apply_filters(
-    query: Query,
+def parse_filters(
     filters_json: str | None,
     filter_config: dict[str, dict],
-    model: Any = None,
-) -> Query:
+) -> list[dict]:
     """
-    Apply filters to query based on a JSON-encoded filter string and config.
+    Parse and validate a raw filters JSON string against the filter config.
 
-    filters_json: JSON string e.g. '{"entity_type_id": "uuid-1", "dim:location": ["uuid-a"]}'
-    filter_config: maps filter keys to their type and column/behavior
-        {
-            "entity_type_id": {"type": "exact", "column": Entity.entity_type_id},
-            "dim:<dimension_id>": {"type": "dimension", "dimension_id": "<uuid>"},
-            "meta:<key>": {"type": "meta_select", "meta_key": "<key>", "model": Entity},
-            "created_at": {"type": "date_range", "column": Entity.created_at},
-        }
+    Returns a list of validated filter dicts, each with:
+        - key: the filter key
+        - type: filter type (exact, dimension, date_range, etc.)
+        - config: the matching filter_config entry
+        - value: the coerced/validated value (bad values are silently dropped)
 
-    For dimension filters, the caller must provide the EntityDimension (or equivalent)
-    model class in the config via "assoc_model" and "assoc_fk" keys.
+    This is the single entry point for filter parsing — validates types, coerces
+    UUIDs and dates, and rejects garbage before it reaches the database.
     """
     if not filters_json:
-        return query
+        return []
 
     try:
-        filters = json.loads(filters_json)
+        raw = json.loads(filters_json)
     except (json.JSONDecodeError, TypeError):
-        return query
+        return []
 
-    if not isinstance(filters, dict):
-        return query
+    if not isinstance(raw, dict):
+        return []
 
-    for key, value in filters.items():
+    parsed: list[dict] = []
+
+    for key, value in raw.items():
         if value is None or value == "" or value == []:
             continue
 
@@ -92,57 +89,112 @@ def apply_filters(
         filter_type = config["type"]
 
         if filter_type == "exact":
-            col = config["column"]
             if isinstance(value, list):
-                parsed = [uuid.UUID(v) if _is_uuid(v) else v for v in value]
-                query = query.filter(col.in_(parsed))
+                coerced = [uuid.UUID(v) if _is_uuid(v) else v for v in value]
             else:
-                parsed_val = uuid.UUID(value) if _is_uuid(value) else value
-                query = query.filter(col == parsed_val)
+                coerced = uuid.UUID(value) if _is_uuid(value) else value
+            parsed.append({"key": key, "type": filter_type, "config": config, "value": coerced})
 
         elif filter_type == "dimension":
-            # Filter by dimension value IDs through association table
-            assoc_fk = config["assoc_fk"]  # e.g. EntityDimension.entity_id
-            assoc_dv = config["assoc_dv"]  # e.g. EntityDimension.dimension_value_id
-            parent_pk = config["parent_pk"]  # e.g. Entity.id
-            dv_ids = [uuid.UUID(v) for v in (value if isinstance(value, list) else [value])]
+            raw_ids = value if isinstance(value, list) else [value]
+            try:
+                coerced = [uuid.UUID(v) for v in raw_ids]
+            except (ValueError, AttributeError):
+                continue
+            parsed.append({"key": key, "type": filter_type, "config": config, "value": coerced})
+
+        elif filter_type == "meta_select":
+            coerced = value if isinstance(value, list) else [value]
+            parsed.append({"key": key, "type": filter_type, "config": config, "value": coerced})
+
+        elif filter_type == "meta_range":
+            if not isinstance(value, dict):
+                continue
+            coerced = {}
+            if "min" in value and value["min"] is not None:
+                coerced["min"] = value["min"]
+            if "max" in value and value["max"] is not None:
+                coerced["max"] = value["max"]
+            if coerced:
+                parsed.append({"key": key, "type": filter_type, "config": config, "value": coerced})
+
+        elif filter_type == "date_range":
+            if not isinstance(value, dict):
+                continue
+            coerced = {}
+            start = _parse_date(value.get("start"))
+            end = _parse_date(value.get("end"))
+            if start:
+                coerced["start"] = start
+            if end:
+                coerced["end"] = end
+            if coerced:
+                parsed.append({"key": key, "type": filter_type, "config": config, "value": coerced})
+
+        elif filter_type == "boolean":
+            parsed.append({"key": key, "type": filter_type, "config": config, "value": value})
+
+    return parsed
+
+
+def apply_filters(
+    query: Query,
+    filters_json: str | None,
+    filter_config: dict[str, dict],
+    model: Any = None,
+) -> Query:
+    """
+    Parse filters JSON and apply them to a SQLAlchemy query.
+
+    Delegates to parse_filters() for validation/coercion, then applies
+    each validated filter to the query.
+    """
+    parsed = parse_filters(filters_json, filter_config)
+
+    for f in parsed:
+        config = f["config"]
+        value = f["value"]
+        filter_type = f["type"]
+
+        if filter_type == "exact":
+            col = config["column"]
+            if isinstance(value, list):
+                query = query.filter(col.in_(value))
+            else:
+                query = query.filter(col == value)
+
+        elif filter_type == "dimension":
+            assoc_fk = config["assoc_fk"]
+            assoc_dv = config["assoc_dv"]
+            parent_pk = config["parent_pk"]
             query = query.filter(
                 exists()
                 .where(assoc_fk == parent_pk)
-                .where(assoc_dv.in_(dv_ids))
+                .where(assoc_dv.in_(value))
             )
 
         elif filter_type == "meta_select":
-            # JSONB exact match: meta->>'key' IN (values)
-            meta_key = config["meta_key"]
-            meta_col = config["meta_column"]  # e.g. Entity.meta
-            values = value if isinstance(value, list) else [value]
-            query = query.filter(meta_col[meta_key].astext.in_(values))
+            meta_col = config["meta_column"]
+            query = query.filter(meta_col[config["meta_key"]].astext.in_(value))
 
         elif filter_type == "meta_range":
-            # JSONB numeric range: meta->>'key' BETWEEN min AND max
-            meta_key = config["meta_key"]
             meta_col = config["meta_column"]
-            cast_col = meta_col[meta_key].astext.cast(String)
-            if isinstance(value, dict):
-                if "min" in value and value["min"] is not None:
-                    query = query.filter(
-                        func.cast(meta_col[meta_key].astext, String) >= str(value["min"])
-                    )
-                if "max" in value and value["max"] is not None:
-                    query = query.filter(
-                        func.cast(meta_col[meta_key].astext, String) <= str(value["max"])
-                    )
+            meta_key = config["meta_key"]
+            if "min" in value:
+                query = query.filter(
+                    func.cast(meta_col[meta_key].astext, String) >= str(value["min"])
+                )
+            if "max" in value:
+                query = query.filter(
+                    func.cast(meta_col[meta_key].astext, String) <= str(value["max"])
+                )
 
         elif filter_type == "date_range":
             col = config["column"]
-            if isinstance(value, dict):
-                start = _parse_date(value.get("start"))
-                end = _parse_date(value.get("end"))
-                if start:
-                    query = query.filter(col >= start)
-                if end:
-                    query = query.filter(col <= end)
+            if "start" in value:
+                query = query.filter(col >= value["start"])
+            if "end" in value:
+                query = query.filter(col <= value["end"])
 
         elif filter_type == "boolean":
             meta_key = config.get("meta_key")

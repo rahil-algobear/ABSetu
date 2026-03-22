@@ -182,7 +182,14 @@ export function useListParams(
   // Parse current state from URL
   const search = searchParams.get("search") || "";
 
+  // Whether filter definitions are expected but still loading
+  const defsLoading = !!options.filterDefinitions && options.filterDefinitions.length === 0;
+
   const activeFilters = useMemo((): FilterValue[] => {
+    // Wait for filter definitions before parsing URL params — avoids sending
+    // slug keys to the API and rendering merged chips before we can resolve them.
+    if (defsLoading) return [];
+
     // Collect all values per filter key (supports repeated params)
     const filterMap = new Map<string, string[]>();
     const realKeySet = new Set(options.filterDefinitions?.map((d) => d.key) || []);
@@ -197,12 +204,9 @@ export function useListParams(
         realKey = urlKey;
       } else if (slugMappings?.keySlugToReal.has(urlKey)) {
         realKey = slugMappings.keySlugToReal.get(urlKey)!;
-      } else if (slugMappings) {
-        // Definitions loaded but no match — skip invalid param
-        return;
       } else {
-        // No definitions yet — use raw key
-        realKey = urlKey;
+        // No match — skip invalid param
+        return;
       }
 
       // Resolve value: slug → real when mapping available
@@ -223,7 +227,7 @@ export function useListParams(
         displayValue: values.join(", "),
       };
     });
-  }, [searchParams, slugMappings, options.filterDefinitions]);
+  }, [searchParams, slugMappings, options.filterDefinitions, defsLoading]);
 
   const sortBy = searchParams.get("sort_by") || defaultSortBy;
   const sortOrder = (searchParams.get("sort_order") || defaultSortOrder) as "asc" | "desc";
