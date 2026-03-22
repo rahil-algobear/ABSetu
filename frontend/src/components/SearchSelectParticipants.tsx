@@ -378,6 +378,7 @@ function MetaFieldCell({
         value={(value as string) || ""}
         onChange={(val) => onChange(val)}
         required={field.required}
+        allowTime={false}
       />
     );
   }

@@ -58,6 +58,7 @@ export function DynamicMetaForm({ fields, values, onChange }: DynamicMetaFormPro
               value={(getVal(field) as string) || ""}
               onChange={(val) => setValue(field.key, val)}
               required={field.required}
+              allowTime={false}
             />
           )}
 

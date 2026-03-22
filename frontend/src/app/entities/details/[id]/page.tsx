@@ -497,6 +497,7 @@ function EnrollmentForm({
             value={admissionDate}
             onChange={(val) => setAdmissionDate(val)}
             required
+            allowTime={false}
           />
         </div>
 
@@ -505,6 +506,7 @@ function EnrollmentForm({
           <DateTimeInput
             value={releaseDate}
             onChange={(val) => setReleaseDate(val)}
+            allowTime={false}
           />
         </div>
 

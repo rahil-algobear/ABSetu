@@ -16,6 +16,8 @@ interface DateTimeInputProps {
   max?: string;
   className?: string;
   disabled?: boolean;
+  /** Show the time toggle. Defaults to true. Set false for date-only fields. */
+  allowTime?: boolean;
 }
 
 /** Parse an ISO date/datetime string to a Date, or null if empty/invalid. */
@@ -68,10 +70,11 @@ export function DateTimeInput({
   max,
   className,
   disabled,
+  allowTime = true,
 }: DateTimeInputProps) {
   // Treat T00:00:00 (midnight) as date-only — backend returns this for dates without time
   const hasTimeInValue =
-    value.includes("T") && !value.endsWith("T00:00:00");
+    allowTime && value.includes("T") && !value.endsWith("T00:00:00");
   const [showTime, setShowTime] = useState(hasTimeInValue);
 
   const selected = parseValue(value);
@@ -126,20 +129,22 @@ export function DateTimeInput({
             showPopperArrow={false}
           />
         </div>
-        <button
-          type="button"
-          onClick={toggleTime}
-          disabled={disabled}
-          className={cn(
-            "p-1.5 rounded-md transition-colors shrink-0",
-            showTime
-              ? "text-purple-600 bg-purple-50 hover:bg-purple-100"
-              : "text-gray-400 hover:text-gray-600 hover:bg-gray-100"
-          )}
-          title={showTime ? "Remove time" : "Add time"}
-        >
-          <Clock className="h-4 w-4" />
-        </button>
+        {allowTime && (
+          <button
+            type="button"
+            onClick={toggleTime}
+            disabled={disabled}
+            className={cn(
+              "p-1.5 rounded-md transition-colors shrink-0",
+              showTime
+                ? "text-purple-600 bg-purple-50 hover:bg-purple-100"
+                : "text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+            )}
+            title={showTime ? "Remove time" : "Add time"}
+          >
+            <Clock className="h-4 w-4" />
+          </button>
+        )}
       </div>
       {selected && (
         <p className="text-xs text-gray-500 mt-1">
