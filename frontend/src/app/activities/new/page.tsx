@@ -38,7 +38,7 @@ import { usePermissions } from "@/components/Auth/Permissions";
 import { useDimensionAutoSelect } from "@/hooks/useDimensionAutoSelect";
 
 import toast from "react-hot-toast";
-import { DateInput } from "@/components/ui/date-input";
+import { DateTimeInput } from "@/components/ui/date-time-input";
 
 /**
  * Given a set of dimension value links and the currently selected dimension value IDs,
@@ -278,10 +278,10 @@ function NewActivityPageContent() {
               <label className="text-sm font-medium">
                 Start Date{el.required && <span className="text-red-500 ml-0.5">*</span>}
               </label>
-              <DateInput
+              <DateTimeInput
                 value={formData.start_date}
-                onChange={(e) =>
-                  setFormData({ ...formData, start_date: e.target.value })
+                onChange={(value) =>
+                  setFormData({ ...formData, start_date: value })
                 }
                 required={el.required}
                 className="mt-1"
@@ -295,10 +295,10 @@ function NewActivityPageContent() {
               <label className="text-sm font-medium">
                 End Date{el.required && <span className="text-red-500 ml-0.5">*</span>}
               </label>
-              <DateInput
+              <DateTimeInput
                 value={formData.end_date}
-                onChange={(e) =>
-                  setFormData({ ...formData, end_date: e.target.value })
+                onChange={(value) =>
+                  setFormData({ ...formData, end_date: value })
                 }
                 min={formData.start_date}
                 required={el.required}

@@ -33,8 +33,8 @@ import { PageContent } from "@/components/ui/page-content";
 import { PageHeader } from "@/components/ui/page-header";
 import { Trash2, Pencil, Calendar, FileText, Users, Type } from "lucide-react";
 import toast from "react-hot-toast";
-import { formatDate } from "@/utils/date";
-import { DateInput } from "@/components/ui/date-input";
+import { formatDateTime } from "@/utils/date";
+import { DateTimeInput } from "@/components/ui/date-time-input";
 
 export default function ActivityDetailPage() {
   const params = useParams();
@@ -372,9 +372,9 @@ export default function ActivityDetailPage() {
                       <label className="text-sm font-medium">
                         Start Date{el.required && <span className="text-red-500 ml-0.5">*</span>}
                       </label>
-                      <DateInput
+                      <DateTimeInput
                         value={detailFormData.start_date}
-                        onChange={(e) => setDetailFormData({ ...detailFormData, start_date: e.target.value })}
+                        onChange={(value) => setDetailFormData({ ...detailFormData, start_date: value })}
                         required={el.required}
                         className="mt-1"
                       />
@@ -387,9 +387,9 @@ export default function ActivityDetailPage() {
                       <label className="text-sm font-medium">
                         End Date{el.required && <span className="text-red-500 ml-0.5">*</span>}
                       </label>
-                      <DateInput
+                      <DateTimeInput
                         value={detailFormData.end_date}
-                        onChange={(e) => setDetailFormData({ ...detailFormData, end_date: e.target.value })}
+                        onChange={(value) => setDetailFormData({ ...detailFormData, end_date: value })}
                         min={detailFormData.start_date}
                         required={el.required}
                         className="mt-1"
@@ -481,7 +481,7 @@ export default function ActivityDetailPage() {
                       <div>
                         <p className="text-xs text-gray-500">Start Date</p>
                         <p className="text-sm font-medium">
-                          {formatDate(activity.start_date)}
+                          {formatDateTime(activity.start_date)}
                         </p>
                       </div>
                     </div>
@@ -497,7 +497,7 @@ export default function ActivityDetailPage() {
                       <div>
                         <p className="text-xs text-gray-500">End Date</p>
                         <p className="text-sm font-medium">
-                          {formatDate(activity.end_date)}
+                          {formatDateTime(activity.end_date)}
                         </p>
                       </div>
                     </div>

@@ -5,7 +5,7 @@ Activity, ActivityType, ActivityParticipant schemas
 import datetime
 from typing import Any, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.common.schemas.base_response import BaseResponseSchema
 
@@ -74,16 +74,16 @@ class ActivityCreate(BaseModel):
     activity_type_id: str | None = None
     dimension_value_ids: list[str] = []
     title: str | None = None
-    start_date: datetime.date
-    end_date: datetime.date | None = None
+    start_date: datetime.datetime
+    end_date: datetime.datetime | None = None
     notes: str | None = None
     meta: dict[str, Any] | None = None
 
 
 class ActivityUpdate(BaseModel):
     title: str | None = None
-    start_date: Optional[datetime.date] = None
-    end_date: Optional[datetime.date] = None
+    start_date: Optional[datetime.datetime] = None
+    end_date: Optional[datetime.datetime] = None
     notes: str | None = None
     meta: dict[str, Any] | None = None
 
@@ -92,8 +92,8 @@ class ActivityResponse(BaseResponseSchema):
     organization_id: str
     activity_type_id: str | None = None
     title: str | None = None
-    start_date: datetime.date
-    end_date: datetime.date | None = None
+    start_date: str
+    end_date: str | None = None
     notes: str | None = None
     created_by: str | None = None
     created_at: float | None = None
@@ -101,6 +101,39 @@ class ActivityResponse(BaseResponseSchema):
     activity_type_name: str | None = None
     dimensions: list[DimensionInfo] = []
     participant_count: int = 0
+
+    _DATETIME_ISO_FIELDS = {"start_date", "end_date"}
+
+    @model_validator(mode="before")
+    @classmethod
+    def _dates_to_iso(cls, data: Any) -> Any:
+        """Convert start_date/end_date to ISO strings before the base
+        validator would turn them into Unix timestamps."""
+        from datetime import date as _date
+
+        def _to_iso(v: Any) -> Any:
+            if isinstance(v, datetime.datetime):
+                return v.isoformat()
+            if isinstance(v, _date):
+                return v.isoformat()
+            return v
+
+        if isinstance(data, dict):
+            for f in cls._DATETIME_ISO_FIELDS:
+                if f in data:
+                    data[f] = _to_iso(data[f])
+        elif hasattr(data, "__dict__"):
+            # ORM model: convert to dict so we can override date fields
+            # before the parent validator converts all datetimes to timestamps.
+            out: dict[str, Any] = {}
+            for name in cls.model_fields:
+                val = getattr(data, name, None)
+                if name in cls._DATETIME_ISO_FIELDS:
+                    out[name] = _to_iso(val)
+                else:
+                    out[name] = val
+            return out
+        return data
 
 
 # --- Activity Participant ---

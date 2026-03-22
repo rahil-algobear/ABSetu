@@ -2,7 +2,7 @@
 Activity models: ActivityType, ActivityForm, Activity, ActivityParticipant
 """
 
-from sqlalchemy import Column, Date, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Column, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 
@@ -65,8 +65,8 @@ class Activity(BaseModel):
         index=True,
     )
     title = Column(Text, nullable=True)
-    start_date = Column(Date, nullable=False)
-    end_date = Column(Date, nullable=True)
+    start_date = Column(DateTime(timezone=True), nullable=False)
+    end_date = Column(DateTime(timezone=True), nullable=True)
     notes = Column(Text, nullable=True)
     created_by = Column(
         UUID(as_uuid=True),
