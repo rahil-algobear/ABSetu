@@ -194,8 +194,13 @@ def apply_filters(
             if "start" in value:
                 query = query.filter(col >= value["start"])
             if "end" in value:
-                # Use < next day so timestamp columns include the full end date
-                query = query.filter(col < value["end"] + timedelta(days=1))
+                end_val = value["end"]
+                if isinstance(end_val, datetime):
+                    # ISO timestamp (already includes time) — use <=
+                    query = query.filter(col <= end_val)
+                else:
+                    # Bare date — use < next day to include the full day
+                    query = query.filter(col < end_val + timedelta(days=1))
 
         elif filter_type == "boolean":
             meta_key = config.get("meta_key")
@@ -223,10 +228,24 @@ def paginate(query: Query, page: int, limit: int) -> tuple[list, int]:
     return items, total
 
 
-def _parse_date(value: Any) -> date | None:
-    """Parse a date string, returning None for missing or invalid values."""
+def _parse_date(value: Any) -> date | datetime | None:
+    """
+    Parse a date or datetime string, returning None for missing or invalid values.
+
+    Accepts:
+        - "2026-03-20" → date object (for Date columns)
+        - "2026-03-19T18:30:00.000Z" → timezone-aware datetime (for timestamptz columns)
+    """
     if not value or not isinstance(value, str):
         return None
+    # Try ISO datetime first (from frontend UTC conversion)
+    if "T" in value:
+        try:
+            dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            return dt
+        except ValueError:
+            return None
+    # Fall back to bare date
     try:
         return datetime.strptime(value, "%Y-%m-%d").date()
     except ValueError:

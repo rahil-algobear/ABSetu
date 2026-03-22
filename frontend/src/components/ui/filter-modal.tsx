@@ -20,6 +20,8 @@ export interface FilterDefinition {
   options?: FilterOption[];
   min?: number;
   max?: number;
+  /** True when the backend column is a timestamp (not a plain date) — affects timezone handling */
+  datetime?: boolean;
 }
 
 interface FilterModalProps {

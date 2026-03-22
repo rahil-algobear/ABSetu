@@ -315,7 +315,7 @@ def get_activity_filters(
         meta_scopes=meta_scopes,
         date_filters=[
             {"key": "start_date", "label": "Start Date"},
-            {"key": "created_at", "label": "Created Date"},
+            {"key": "created_at", "label": "Created Date", "datetime": True},
         ],
         default_sortable_keys=["title", "start_date", "end_date", "created_at"],
     )
