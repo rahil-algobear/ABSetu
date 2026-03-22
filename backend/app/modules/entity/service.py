@@ -239,8 +239,9 @@ class EntityService:
                 et.id for et in
                 self.db.query(EntityType).filter_by(organization_id=org_id).all()
             ]
+            scopes = [{"scope_type": "entity", "entity_type_id": et_id} for et_id in et_ids]
             filter_config.update(build_meta_field_filter_config(
-                self.db, org_id, [f"entity:{et_id}" for et_id in et_ids],
+                self.db, org_id, scopes,
                 Entity.meta, filterable_keys,
             ))
         query = apply_filters(query, params.filters, filter_config)

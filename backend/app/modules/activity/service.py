@@ -189,8 +189,11 @@ class ActivityService:
                 at.id for at in
                 self.db.query(ActivityType).filter_by(organization_id=org_id).all()
             ]
+            scopes = [{"scope_type": "activity"}] + [
+                {"scope_type": "activity", "activity_type_id": at_id} for at_id in at_ids
+            ]
             filter_config.update(build_meta_field_filter_config(
-                self.db, org_id, ["activity"] + [f"activity:activity_type:{at_id}" for at_id in at_ids],
+                self.db, org_id, scopes,
                 Activity.meta, filterable_keys,
             ))
         query = apply_filters(query, params.filters, filter_config)
