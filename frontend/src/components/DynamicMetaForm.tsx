@@ -4,7 +4,7 @@ import { MetaFieldDefinition } from "@/types";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { DateInput } from "@/components/ui/date-input";
+import { DateTimeInput } from "@/components/ui/date-time-input";
 
 interface DynamicMetaFormProps {
   fields: MetaFieldDefinition[];
@@ -54,9 +54,9 @@ export function DynamicMetaForm({ fields, values, onChange }: DynamicMetaFormPro
           )}
 
           {field.type === "date" && (
-            <DateInput
+            <DateTimeInput
               value={(getVal(field) as string) || ""}
-              onChange={(e) => setValue(field.key, e.target.value)}
+              onChange={(val) => setValue(field.key, val)}
               required={field.required}
             />
           )}

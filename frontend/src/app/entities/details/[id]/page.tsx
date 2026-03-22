@@ -37,7 +37,7 @@ import { Plus, Pencil, X, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import { formatDate } from "@/utils/date";
-import { DateInput } from "@/components/ui/date-input";
+import { DateTimeInput } from "@/components/ui/date-time-input";
 
 /**
  * Cascading dimension filter — reused from activities page pattern.
@@ -493,18 +493,18 @@ function EnrollmentForm({
 
         <div>
           <label className="text-sm font-medium">Admission Date</label>
-          <DateInput
+          <DateTimeInput
             value={admissionDate}
-            onChange={(e) => setAdmissionDate(e.target.value)}
+            onChange={(val) => setAdmissionDate(val)}
             required
           />
         </div>
 
         <div>
           <label className="text-sm font-medium">Release Date</label>
-          <DateInput
+          <DateTimeInput
             value={releaseDate}
-            onChange={(e) => setReleaseDate(e.target.value)}
+            onChange={(val) => setReleaseDate(val)}
           />
         </div>
 
