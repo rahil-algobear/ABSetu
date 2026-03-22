@@ -59,6 +59,7 @@ class EntityResponse(BaseResponseSchema):
     entity_type_id: str
     case_number: str | None = None
     name: str
+    created_at: float | None = None
     meta: dict[str, Any] | None = None
     entity_type_name: str | None = None
     entity_type_key: str | None = None

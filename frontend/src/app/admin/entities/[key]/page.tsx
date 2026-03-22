@@ -120,7 +120,7 @@ function EntityTypeEntitiesContent() {
         case "activity_count":
           return entity.activity_count;
         case "created_at":
-          return formatDate(entity.updated_at, DATE_FORMATS.DISPLAY);
+          return formatDate(entity.created_at, DATE_FORMATS.DISPLAY);
         default:
           return "—";
       }
@@ -130,6 +130,7 @@ function EntityTypeEntitiesContent() {
       const metaKey = col.key.replace(/^meta:/, "");
       const val = entity.meta?.[metaKey];
       if (val === undefined || val === null) return "—";
+      if (col.meta_type === "date" && typeof val === "string") return formatDate(val, DATE_FORMATS.DISPLAY);
       if (Array.isArray(val)) return val.join(", ");
       if (typeof val === "boolean") return val ? "Yes" : "No";
       return String(val);

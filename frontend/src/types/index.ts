@@ -135,6 +135,7 @@ export interface Entity {
   entity_type_key: string | null;
   entity_type_config: Record<string, unknown> | null;
   dimensions: DimensionInfo[];
+  created_at: number | null;
   updated_at: number | null;
   enrollment_count: number;
   activity_count: number;

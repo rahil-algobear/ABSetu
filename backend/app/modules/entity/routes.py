@@ -50,6 +50,7 @@ def _build_entity_response(e, enrollment_count: int = 0, activity_count: int = 0
             )
     return EntityResponse(
         id=str(e.id),
+        created_at=e.created_at,
         updated_at=e.updated_at,
         organization_id=str(e.organization_id),
         entity_type_id=str(e.entity_type_id),

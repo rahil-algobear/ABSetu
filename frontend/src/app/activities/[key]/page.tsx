@@ -146,6 +146,7 @@ function ActivityTypeListContent() {
       const metaKey = col.key.replace(/^meta:/, "");
       const val = activity.meta?.[metaKey];
       if (val === undefined || val === null) return "—";
+      if (col.meta_type === "date" && typeof val === "string") return formatDate(val, DATE_FORMATS.DISPLAY);
       if (Array.isArray(val)) return val.join(", ");
       if (typeof val === "boolean") return val ? "Yes" : "No";
       return String(val);
