@@ -145,15 +145,16 @@ def parse_filters(
                 parsed.append({"key": key, "type": filter_type, "config": config, "value": coerced})
 
         elif filter_type == "meta_date_range":
-            # Meta JSONB date fields — keep as strings for text comparison
+            # Meta JSONB date fields — keep as strings for text comparison.
+            # Accept both YYYY-MM-DD and full ISO 8601 datetime strings.
             if not isinstance(value, dict):
                 continue
             coerced = {}
             start = value.get("start")
             end = value.get("end")
-            if start and isinstance(start, str) and _parse_date(start):
+            if start and isinstance(start, str) and _validate_date_or_datetime(start):
                 coerced["start"] = start
-            if end and isinstance(end, str) and _parse_date(end):
+            if end and isinstance(end, str) and _validate_date_or_datetime(end):
                 coerced["end"] = end
             if coerced:
                 parsed.append({"key": key, "type": filter_type, "config": config, "value": coerced})
@@ -232,14 +233,16 @@ def apply_filters(
                 query = query.filter(col <= value["end"])
 
         elif filter_type == "meta_date_range":
-            # JSONB date strings — lexicographic comparison on ISO dates
+            # JSONB date strings — lexicographic comparison on ISO dates.
+            # Normalize filter values: strip timezone offsets so they match
+            # stored formats (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS).
             meta_col = config["meta_column"]
             meta_key = config["meta_key"]
             text_col = meta_col[meta_key].astext
             if "start" in value:
-                query = query.filter(text_col >= value["start"])
+                query = query.filter(text_col >= _strip_tz_offset(value["start"]))
             if "end" in value:
-                query = query.filter(text_col <= value["end"])
+                query = query.filter(text_col <= _strip_tz_offset(value["end"]))
 
         elif filter_type == "boolean":
             meta_key = config.get("meta_key")
@@ -301,6 +304,32 @@ def _parse_datetime(value: Any) -> datetime | None:
     if d:
         return datetime(d.year, d.month, d.day, tzinfo=timezone.utc)
     return None
+
+
+def _strip_tz_offset(value: str) -> str:
+    """Strip timezone offset from an ISO string for lexicographic comparison.
+
+    "2026-03-22T07:15:00+05:30" → "2026-03-22T07:15:00"
+    "2026-03-22" → "2026-03-22" (unchanged)
+    """
+    # Remove Z suffix
+    if value.endswith("Z"):
+        return value[:-1]
+    # Remove +HH:MM or -HH:MM suffix
+    if len(value) > 6 and value[-6] in ("+", "-") and value[-3] == ":":
+        return value[:-6]
+    return value
+
+
+def _validate_date_or_datetime(value: str) -> bool:
+    """Check if a string is a valid YYYY-MM-DD or ISO 8601 datetime."""
+    if _parse_date(value):
+        return True
+    try:
+        datetime.fromisoformat(value)
+        return True
+    except ValueError:
+        return False
 
 
 def _is_uuid(value: str) -> bool:
