@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { DateTimeInput } from "@/components/ui/date-time-input";
+import { formatDateTime } from "@/utils/date";
 
 interface DynamicMetaFormProps {
   fields: MetaFieldDefinition[];
@@ -145,9 +146,11 @@ export function MetaFieldDisplay({
                   ? val
                     ? "Yes"
                     : "No"
-                  : Array.isArray(val)
-                    ? val.join(", ")
-                    : String(val)}
+                  : (field.type === "date" || field.type === "datetime") && typeof val === "string"
+                    ? formatDateTime(val)
+                    : Array.isArray(val)
+                      ? val.join(", ")
+                      : String(val)}
             </dd>
           </div>
         );

@@ -31,7 +31,7 @@ import { PageContent } from "@/components/ui/page-content";
 import { Plus, Pencil } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
-import { formatDate, DATE_FORMATS } from "@/utils/date";
+import { formatDate, formatDateTime, DATE_FORMATS } from "@/utils/date";
 
 function EntityTypeEntitiesContent() {
   const { key: entityTypeKey } = useParams<{ key: string }>();
@@ -130,7 +130,7 @@ function EntityTypeEntitiesContent() {
       const metaKey = col.key.replace(/^meta:/, "");
       const val = entity.meta?.[metaKey];
       if (val === undefined || val === null) return "—";
-      if (col.meta_type === "date" && typeof val === "string") return formatDate(val, DATE_FORMATS.DISPLAY);
+      if (col.meta_type === "date" && typeof val === "string") return formatDateTime(val);
       if (Array.isArray(val)) return val.join(", ");
       if (typeof val === "boolean") return val ? "Yes" : "No";
       return String(val);
