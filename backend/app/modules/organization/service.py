@@ -383,7 +383,7 @@ class ListConfigService:
 
     # Properties that are structural (not user-configurable) and should
     # always be synced from the current defaults, even on saved configs.
-    _STRUCTURAL_PROPS = {"source", "meta_type", "dimension_key", "filter_supported"}
+    _STRUCTURAL_PROPS = {"source", "label", "meta_type", "dimension_key", "filter_supported"}
 
     @classmethod
     def _merge_with_current(cls, saved: list[dict], defaults: list[dict]) -> list[dict]:
