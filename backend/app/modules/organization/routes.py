@@ -172,9 +172,10 @@ def update_meta_field_schema_structured(
     """Update meta field schema using structured scope."""
     resolved = _resolve_scope(data.scope, current_user.organization_id, db)
     service = MetaFieldSchemaService(db)
+    fields_dicts = [f.model_dump(exclude_none=True) for f in data.fields]
     return service.update_schema(
         current_user.organization_id,
-        fields=data.fields,
+        fields=fields_dicts,
         **resolved,
     )
 

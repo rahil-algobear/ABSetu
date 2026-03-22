@@ -2,11 +2,36 @@
 Organization schemas
 """
 
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.common.schemas.base_response import BaseResponseSchema
+
+
+# --- Field Definition ---
+
+FIELD_TYPES = Literal[
+    "text", "number", "date", "datetime", "select", "multiselect", "boolean"
+]
+
+
+class FieldDefinition(BaseModel):
+    """Typed definition for a single field in a meta field schema."""
+
+    key: str = Field(..., min_length=1)
+    label: str = Field(..., min_length=1)
+    type: FIELD_TYPES
+    required: bool = False
+    options: list[str] | None = None
+
+    @model_validator(mode="after")
+    def validate_options(self):
+        if self.type in ("select", "multiselect") and not self.options:
+            raise ValueError(f"options are required for {self.type} fields")
+        if self.type not in ("select", "multiselect") and self.options:
+            raise ValueError(f"options are not allowed for {self.type} fields")
+        return self
 
 
 class OrganizationCreate(BaseModel):
@@ -56,11 +81,11 @@ class MetaFieldScope(BaseModel):
 
 class MetaFieldSchemaUpdate(BaseModel):
     scope: MetaFieldScope
-    fields: list[dict[str, Any]]
+    fields: list[FieldDefinition]
 
 
 class MetaFieldSchemaResponse(BaseModel):
     """Response for a single meta field schema with structured scope."""
 
     scope: MetaFieldScope
-    fields: list[dict[str, Any]]
+    fields: list[FieldDefinition]
