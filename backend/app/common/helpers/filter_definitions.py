@@ -33,10 +33,7 @@ def build_dimension_filters(
     from app.modules.dimension.model import Dimension, DimensionValue
 
     dims = (
-        db.query(Dimension)
-        .filter_by(organization_id=org_id)
-        .order_by(Dimension.sort_order)
-        .all()
+        db.query(Dimension).filter_by(organization_id=org_id).order_by(Dimension.sort_order).all()
     )
 
     # Build per-dimension access sets if user has restrictions
@@ -69,12 +66,14 @@ def build_dimension_filters(
             values = [v for v in values if v.id in allowed]
 
         if values:
-            result.append({
-                "key": dim_key,
-                "label": dim.name,
-                "type": "select",
-                "options": [{"value": str(v.id), "label": v.name} for v in values],
-            })
+            result.append(
+                {
+                    "key": dim_key,
+                    "label": dim.name,
+                    "type": "select",
+                    "options": [{"value": str(v.id), "label": v.name} for v in values],
+                }
+            )
 
     return result
 
@@ -133,9 +132,7 @@ def build_meta_field_filters(
         }
         if ftype in ("select", "multiselect") and field.get("options"):
             filter_def["type"] = "select"
-            filter_def["options"] = [
-                {"value": o, "label": o} for o in field["options"]
-            ]
+            filter_def["options"] = [{"value": o, "label": o} for o in field["options"]]
         elif ftype == "number":
             filter_def["type"] = "range"
         elif ftype == "date":
@@ -226,3 +223,120 @@ def build_meta_field_sort_config(
             config[meta_key] = meta_column[field["key"]].astext
 
     return config
+
+
+def build_dimension_filter_config(
+    db: Session,
+    org_id: uuid.UUID,
+    assoc_fk: Any,
+    assoc_dv: Any,
+    parent_pk: Any,
+) -> dict[str, dict]:
+    """
+    Build apply_filters-compatible dimension config from org's dimensions.
+
+    Shared by EntityService and ActivityService — only the association
+    model columns differ between callers.
+    """
+    from app.modules.dimension.model import Dimension
+
+    dims = db.query(Dimension).filter_by(organization_id=org_id).all()
+    config: dict[str, dict] = {}
+    for dim in dims:
+        config[f"dim:{dim.id}"] = {
+            "type": "dimension",
+            "assoc_fk": assoc_fk,
+            "assoc_dv": assoc_dv,
+            "parent_pk": parent_pk,
+        }
+    return config
+
+
+def build_list_filter_response(
+    db: Session,
+    org_id: uuid.UUID,
+    accessible_dv_ids: list[uuid.UUID] | None,
+    *,
+    type_filter: dict | None = None,
+    type_id: str | None = None,
+    scope_prefix: str,
+    meta_scopes: list[MetaFieldScope],
+    date_filters: list[dict],
+    default_sortable_keys: list[str],
+) -> dict:
+    """
+    Build the complete /filters endpoint response.
+
+    Shared by entity and activity /filters routes. Handles:
+    - Type filter (entity_type or activity_type dropdown)
+    - List config loading (columns, filterable/sortable keys)
+    - Dimension filters (scoped by user access + list config)
+    - Meta field filters (scoped by list config)
+    - Date filters (scoped by list config)
+    - Column ordering by list config sort_order
+
+    Args:
+        type_filter: Optional pre-built type filter dict
+            e.g. {"key": "entity_type_id", "label": "Entity Type", "options": [...]}
+        type_id: Selected type ID for list config scoping (None = all types)
+        scope_prefix: "entity" or "activity" — used for list config scope key
+        meta_scopes: Scopes for meta field schema lookup
+        date_filters: Static date filter definitions
+            e.g. [{"key": "created_at", "label": "Created Date"}]
+        default_sortable_keys: Default sortable keys when no list config exists
+    """
+    from app.modules.organization.service import ListConfigService
+
+    filters: list[dict] = []
+    if type_filter:
+        filters.append(type_filter)
+
+    # Load list config for the selected type
+    columns: list[dict] = []
+    filterable_keys: set[str] | None = None
+    sortable_keys = list(default_sortable_keys)
+
+    if type_id:
+        scope = f"{scope_prefix}:{type_id}"
+        columns = ListConfigService(db).get_config(org_id, scope)
+        filterable_keys = {c["key"] for c in columns if c.get("filterable")}
+        sortable_keys = [c["key"] for c in columns if c.get("sortable")]
+
+    # Build field-level filters
+    field_filters: list[dict] = []
+
+    # Dimension filters (scoped by user access + list config)
+    field_filters.extend(build_dimension_filters(db, org_id, accessible_dv_ids, filterable_keys))
+
+    # Meta field filters (scoped by list config)
+    field_filters.extend(build_meta_field_filters(db, org_id, meta_scopes, filterable_keys))
+
+    # Date filters (only if list config allows or no config)
+    for df in date_filters:
+        if filterable_keys is None or df["key"] in filterable_keys:
+            field_filters.append(
+                {
+                    "key": df["key"],
+                    "label": df["label"],
+                    "type": "date_range",
+                }
+            )
+
+    # Sort field filters to match list config column order
+    if columns:
+        order_map = {c["key"]: c.get("sort_order", 0) for c in columns}
+        field_filters.sort(key=lambda f: order_map.get(f["key"], 9999))
+
+    filters.extend(field_filters)
+
+    # Visible columns sorted by sort_order
+    visible_columns = sorted(
+        [c for c in columns if c.get("visible")],
+        key=lambda c: c.get("sort_order", 0),
+    )
+
+    return {
+        "filters": filters,
+        "sortable_keys": sortable_keys,
+        "columns": visible_columns,
+    }

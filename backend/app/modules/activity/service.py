@@ -4,10 +4,15 @@ Activity, ActivityType, ActivityParticipant, ActivityForm services
 
 import uuid
 
-from sqlalchemy import exists, func
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.common.exceptions import NotFoundError, ValidationError
+from app.common.helpers.dimension_scoping import (
+    apply_dimension_access_scoping,
+    group_dvs_by_dimension,
+)
+from app.common.helpers.filter_definitions import build_dimension_filter_config
 from app.common.helpers.list_query import apply_filters, apply_search, apply_sort, paginate
 from app.common.helpers.slugify import slugify
 from app.common.schemas.list_params import ListParams
@@ -84,30 +89,24 @@ class ActivityService:
             .scalar_subquery()
         )
 
-        query = self.db.query(Activity, participant_count).filter_by(
-            organization_id=org_id
-        )
+        query = self.db.query(Activity, participant_count).filter_by(organization_id=org_id)
 
         if accessible_dv_ids:
-            dv_dim_rows = (
-                self.db.query(DimensionValue.id, DimensionValue.dimension_id)
-                .filter(DimensionValue.id.in_(accessible_dv_ids))
-                .all()
+            restricted_dims = group_dvs_by_dimension(self.db, accessible_dv_ids)
+            query = apply_dimension_access_scoping(
+                query,
+                self.db,
+                restricted_dims,
+                assoc_fk=ActivityDimension.activity_id,
+                assoc_dv=ActivityDimension.dimension_value_id,
+                parent_pk=Activity.id,
             )
-            restricted_dims: dict[uuid.UUID, list[uuid.UUID]] = {}
-            for dv_id, dim_id in dv_dim_rows:
-                restricted_dims.setdefault(dim_id, []).append(dv_id)
-
-            for dim_id, allowed_ids in restricted_dims.items():
-                query = query.filter(
-                    exists()
-                    .where(ActivityDimension.activity_id == Activity.id)
-                    .where(ActivityDimension.dimension_value_id.in_(allowed_ids))
-                )
 
         return query
 
-    def get_sort_config(self, org_id: uuid.UUID | None = None, sortable_keys: set[str] | None = None) -> dict:
+    def get_sort_config(
+        self, org_id: uuid.UUID | None = None, sortable_keys: set[str] | None = None
+    ) -> dict:
         """Sort keys available for activity list, optionally including meta fields from list config."""
         config = {
             "title": Activity.title,
@@ -119,16 +118,23 @@ class ActivityService:
             meta_sort_keys = {k for k in sortable_keys if k.startswith("meta:")}
             if meta_sort_keys:
                 from app.common.helpers.filter_definitions import build_meta_field_sort_config
+
                 at_ids = [
-                    at.id for at in
-                    self.db.query(ActivityType).filter_by(organization_id=org_id).all()
+                    at.id
+                    for at in self.db.query(ActivityType).filter_by(organization_id=org_id).all()
                 ]
                 scopes = [{"scope_type": "activity"}] + [
                     {"scope_type": "activity", "activity_type_id": at_id} for at_id in at_ids
                 ]
-                config.update(build_meta_field_sort_config(
-                    self.db, org_id, scopes, Activity.meta, meta_sort_keys,
-                ))
+                config.update(
+                    build_meta_field_sort_config(
+                        self.db,
+                        org_id,
+                        scopes,
+                        Activity.meta,
+                        meta_sort_keys,
+                    )
+                )
         return config
 
     @staticmethod
@@ -142,23 +148,13 @@ class ActivityService:
 
     def get_dimension_filter_config(self, org_id: uuid.UUID) -> dict:
         """Build dimension filter config dynamically from org's dimensions."""
-        from app.modules.dimension.model import Dimension
-
-        dims = (
-            self.db.query(Dimension)
-            .filter_by(organization_id=org_id)
-            .all()
+        return build_dimension_filter_config(
+            self.db,
+            org_id,
+            assoc_fk=ActivityDimension.activity_id,
+            assoc_dv=ActivityDimension.dimension_value_id,
+            parent_pk=Activity.id,
         )
-        config = {}
-        for dim in dims:
-            config[f"dim:{dim.id}"] = {
-                "type": "dimension",
-                "assoc_model": ActivityDimension,
-                "assoc_fk": ActivityDimension.activity_id,
-                "assoc_dv": ActivityDimension.dimension_value_id,
-                "parent_pk": Activity.id,
-            }
-        return config
 
     def list_by_org_paginated(
         self,
@@ -185,23 +181,31 @@ class ActivityService:
         filter_config.update(self.get_dimension_filter_config(org_id))
         if filterable_keys:
             from app.common.helpers.filter_definitions import build_meta_field_filter_config
+
             at_ids = [
-                at.id for at in
-                self.db.query(ActivityType).filter_by(organization_id=org_id).all()
+                at.id for at in self.db.query(ActivityType).filter_by(organization_id=org_id).all()
             ]
             scopes = [{"scope_type": "activity"}] + [
                 {"scope_type": "activity", "activity_type_id": at_id} for at_id in at_ids
             ]
-            filter_config.update(build_meta_field_filter_config(
-                self.db, org_id, scopes,
-                Activity.meta, filterable_keys,
-            ))
+            filter_config.update(
+                build_meta_field_filter_config(
+                    self.db,
+                    org_id,
+                    scopes,
+                    Activity.meta,
+                    filterable_keys,
+                )
+            )
         query = apply_filters(query, params.filters, filter_config)
 
         # Sort (includes meta fields from list config)
         query = apply_sort(
-            query, params.sort_by, params.sort_order,
-            self.get_sort_config(org_id, sortable_keys), Activity.start_date.desc(),
+            query,
+            params.sort_by,
+            params.sort_order,
+            self.get_sort_config(org_id, sortable_keys),
+            Activity.start_date.desc(),
         )
 
         # Paginate

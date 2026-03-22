@@ -175,14 +175,19 @@ def list_entities(
         merged_filters = json.dumps(f)
 
     params = ListParams(
-        page=page, limit=limit, search=search,
-        sort_by=sort_by, sort_order=sort_order, filters=merged_filters,
+        page=page,
+        limit=limit,
+        search=search,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        filters=merged_filters,
     )
 
     # Load list config for meta field filter/sort support
     list_columns = None
     if entity_type_id:
         from app.modules.organization.service import ListConfigService
+
         list_columns = ListConfigService(db).get_config(
             current_user.organization_id, f"entity:{entity_type_id}"
         )
@@ -208,80 +213,39 @@ def get_entity_filters(
     db: Session = Depends(get_db),
 ):
     """Return available filter definitions, sortable keys, and visible columns for entity list."""
-    from app.common.helpers.filter_definitions import (
-        build_dimension_filters,
-        build_meta_field_filters,
-    )
-    from app.modules.organization.service import ListConfigService
+    from app.common.helpers.filter_definitions import build_list_filter_response
 
     org_id = current_user.organization_id
-    filters = []
 
-    # Entity type filter
+    # Build type filter
     et_service = EntityTypeService(db)
     entity_types = et_service.list_by_org(org_id)
+    type_filter = None
     if entity_types:
-        filters.append({
+        type_filter = {
             "key": "entity_type_id",
             "label": "Entity Type",
             "type": "select",
             "options": [{"value": str(et.id), "label": et.name} for et in entity_types],
-        })
-
-    # Get list config for this entity type (if specified)
-    list_config_service = ListConfigService(db)
-    columns: list[dict] = []
-    filterable_keys: set[str] | None = None
-    sortable_keys: list[str] = ["name", "case_number", "created_at"]  # static defaults
-
-    if entity_type_id:
-        scope = f"entity:{entity_type_id}"
-        columns = list_config_service.get_config(org_id, scope)
-        filterable_keys = {
-            c["key"] for c in columns if c.get("filterable")
         }
-        sortable_keys = [c["key"] for c in columns if c.get("sortable")]
 
-    # Build field-level filters (will be sorted by list config order)
-    field_filters: list[dict] = []
-
-    # Dimension filters (scoped by user access + list config)
-    field_filters.extend(build_dimension_filters(db, org_id, accessible_dv_ids, filterable_keys))
-
-    # Meta field filters (scoped by list config)
+    # Build meta scopes
     if entity_type_id:
-        scopes = [{"scope_type": "entity", "entity_type_id": entity_type_id}]
+        meta_scopes = [{"scope_type": "entity", "entity_type_id": entity_type_id}]
     else:
-        scopes = [{"scope_type": "entity", "entity_type_id": et.id} for et in entity_types]
-    field_filters.extend(build_meta_field_filters(db, org_id, scopes, filterable_keys))
+        meta_scopes = [{"scope_type": "entity", "entity_type_id": et.id} for et in entity_types]
 
-    # Date filter for created_at (only if list config allows or no config)
-    if filterable_keys is None or "created_at" in filterable_keys:
-        field_filters.append({
-            "key": "created_at",
-            "label": "Created Date",
-            "type": "date_range",
-        })
-
-    # Sort field filters to match list config column order
-    # (dimensions aren't in entity list config so they keep natural order)
-    if columns:
-        order_map = {c["key"]: c.get("sort_order", 0) for c in columns}
-        field_filters.sort(key=lambda f: order_map.get(f["key"], 9999))
-
-    filters.extend(field_filters)
-
-    # Visible columns sorted by sort_order
-    visible_columns = sorted(
-        [c for c in columns if c.get("visible")],
-        key=lambda c: c.get("sort_order", 0),
+    return build_list_filter_response(
+        db,
+        org_id,
+        accessible_dv_ids,
+        type_filter=type_filter,
+        type_id=entity_type_id,
+        scope_prefix="entity",
+        meta_scopes=meta_scopes,
+        date_filters=[{"key": "created_at", "label": "Created Date"}],
+        default_sortable_keys=["name", "case_number", "created_at"],
     )
-
-    return {
-        "filters": filters,
-        "sortable_keys": sortable_keys,
-        "columns": visible_columns,
-    }
 
 
 @entity_router.get(

@@ -233,14 +233,19 @@ def list_activities(
         merged_filters = json.dumps(f)
 
     params = ListParams(
-        page=page, limit=limit, search=search,
-        sort_by=sort_by, sort_order=sort_order, filters=merged_filters,
+        page=page,
+        limit=limit,
+        search=search,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        filters=merged_filters,
     )
 
     # Load list config for meta field filter/sort support
     list_columns = None
     if activity_type_id:
         from app.modules.organization.service import ListConfigService
+
         list_columns = ListConfigService(db).get_config(
             current_user.organization_id, f"activity:{activity_type_id}"
         )
@@ -259,7 +264,8 @@ def list_activities(
     data = []
     for activity, participant_count in rows:
         resp = _build_activity_response(
-            activity, forms.get(str(activity.activity_type_id)) if activity.activity_type_id else None
+            activity,
+            forms.get(str(activity.activity_type_id)) if activity.activity_type_id else None,
         )
         resp["participant_count"] = participant_count or 0
         data.append(resp)
@@ -275,86 +281,45 @@ def get_activity_filters(
     db: Session = Depends(get_db),
 ):
     """Return available filter definitions, sortable keys, and visible columns for activity list."""
-    from app.common.helpers.filter_definitions import (
-        build_dimension_filters,
-        build_meta_field_filters,
-    )
-    from app.modules.organization.service import ListConfigService
+    from app.common.helpers.filter_definitions import build_list_filter_response
 
     org_id = current_user.organization_id
-    filters = []
 
-    # Activity type filter
+    # Build type filter
     at_service = ActivityTypeService(db)
     activity_types = at_service.list_by_org(org_id)
+    type_filter = None
     if activity_types:
-        filters.append({
+        type_filter = {
             "key": "activity_type_id",
             "label": "Activity Type",
             "type": "select",
             "options": [{"value": str(at.id), "label": at.name} for at in activity_types],
-        })
-
-    # Get list config for this activity type (if specified)
-    list_config_service = ListConfigService(db)
-    columns: list[dict] = []
-    filterable_keys: set[str] | None = None
-    sortable_keys: list[str] = ["title", "start_date", "end_date", "created_at"]  # static defaults
-
-    if activity_type_id:
-        scope = f"activity:{activity_type_id}"
-        columns = list_config_service.get_config(org_id, scope)
-        filterable_keys = {
-            c["key"] for c in columns if c.get("filterable")
         }
-        sortable_keys = [c["key"] for c in columns if c.get("sortable")]
 
-    # Build field-level filters (will be sorted by list config order)
-    field_filters: list[dict] = []
-
-    # Dimension filters (scoped by user access + list config)
-    field_filters.extend(build_dimension_filters(db, org_id, accessible_dv_ids, filterable_keys))
-
-    # Meta field filters (scoped by list config)
-    scopes = [{"scope_type": "activity"}]
+    # Build meta scopes
+    meta_scopes = [{"scope_type": "activity"}]
     if activity_type_id:
-        scopes.append({"scope_type": "activity", "activity_type_id": activity_type_id})
+        meta_scopes.append({"scope_type": "activity", "activity_type_id": activity_type_id})
     else:
-        scopes.extend({"scope_type": "activity", "activity_type_id": at.id} for at in activity_types)
-    field_filters.extend(build_meta_field_filters(db, org_id, scopes, filterable_keys))
+        meta_scopes.extend(
+            {"scope_type": "activity", "activity_type_id": at.id} for at in activity_types
+        )
 
-    # Date filters (only if list config allows or no config)
-    if filterable_keys is None or "start_date" in filterable_keys:
-        field_filters.append({
-            "key": "start_date",
-            "label": "Start Date",
-            "type": "date_range",
-        })
-    if filterable_keys is None or "created_at" in filterable_keys:
-        field_filters.append({
-            "key": "created_at",
-            "label": "Created Date",
-            "type": "date_range",
-        })
-
-    # Sort field filters to match list config column order
-    if columns:
-        order_map = {c["key"]: c.get("sort_order", 0) for c in columns}
-        field_filters.sort(key=lambda f: order_map.get(f["key"], 9999))
-
-    filters.extend(field_filters)
-
-    # Visible columns sorted by sort_order
-    visible_columns = sorted(
-        [c for c in columns if c.get("visible")],
-        key=lambda c: c.get("sort_order", 0),
+    return build_list_filter_response(
+        db,
+        org_id,
+        accessible_dv_ids,
+        type_filter=type_filter,
+        type_id=activity_type_id,
+        scope_prefix="activity",
+        meta_scopes=meta_scopes,
+        date_filters=[
+            {"key": "start_date", "label": "Start Date"},
+            {"key": "created_at", "label": "Created Date"},
+        ],
+        default_sortable_keys=["title", "start_date", "end_date", "created_at"],
     )
-
-    return {
-        "filters": filters,
-        "sortable_keys": sortable_keys,
-        "columns": visible_columns,
-    }
 
 
 @activity_router.get(

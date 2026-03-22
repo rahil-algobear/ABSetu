@@ -5,16 +5,21 @@ Entity and EntityType services
 import uuid
 from datetime import datetime
 
-from sqlalchemy import exists, func, or_
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.common.exceptions import NotFoundError, ValidationError
+from app.common.helpers.dimension_scoping import (
+    apply_dimension_access_scoping,
+    group_dvs_by_dimension,
+)
+from app.common.helpers.filter_definitions import build_dimension_filter_config
 from app.common.helpers.list_query import apply_filters, apply_search, apply_sort, paginate
 from app.common.helpers.slugify import slugify
 from app.common.schemas.list_params import ListParams
 from app.modules.activity.model import ActivityParticipant
 from app.modules.beneficiary.model import Enrollment
-from app.modules.dimension.model import DimensionValue, EntityDimension
+from app.modules.dimension.model import EntityDimension
 from app.modules.entity.model import Entity, EntityType
 from app.modules.organization.model import Organization
 
@@ -119,35 +124,22 @@ class EntityService:
         )
 
         if accessible_dv_ids:
-            dv_dim_rows = (
-                self.db.query(DimensionValue.id, DimensionValue.dimension_id)
-                .filter(DimensionValue.id.in_(accessible_dv_ids))
-                .all()
+            restricted_dims = group_dvs_by_dimension(self.db, accessible_dv_ids)
+            query = apply_dimension_access_scoping(
+                query,
+                self.db,
+                restricted_dims,
+                assoc_fk=EntityDimension.entity_id,
+                assoc_dv=EntityDimension.dimension_value_id,
+                parent_pk=Entity.id,
+                include_untagged=True,
             )
-            restricted_dims: dict[uuid.UUID, list[uuid.UUID]] = {}
-            for dv_id, dim_id in dv_dim_rows:
-                restricted_dims.setdefault(dim_id, []).append(dv_id)
-
-            for dim_id, allowed_ids in restricted_dims.items():
-                dim_values_subq = (
-                    self.db.query(DimensionValue.id)
-                    .filter(DimensionValue.dimension_id == dim_id)
-                    .subquery()
-                )
-                query = query.filter(
-                    or_(
-                        ~exists()
-                        .where(EntityDimension.entity_id == Entity.id)
-                        .where(EntityDimension.dimension_value_id.in_(dim_values_subq)),
-                        exists()
-                        .where(EntityDimension.entity_id == Entity.id)
-                        .where(EntityDimension.dimension_value_id.in_(allowed_ids)),
-                    )
-                )
 
         return query
 
-    def get_sort_config(self, org_id: uuid.UUID | None = None, sortable_keys: set[str] | None = None) -> dict:
+    def get_sort_config(
+        self, org_id: uuid.UUID | None = None, sortable_keys: set[str] | None = None
+    ) -> dict:
         """Sort keys available for entity list, optionally including meta fields from list config."""
         config = {
             "name": Entity.name,
@@ -158,14 +150,21 @@ class EntityService:
             meta_sort_keys = {k for k in sortable_keys if k.startswith("meta:")}
             if meta_sort_keys:
                 from app.common.helpers.filter_definitions import build_meta_field_sort_config
+
                 et_ids = [
-                    et.id for et in
-                    self.db.query(EntityType).filter_by(organization_id=org_id).all()
+                    et.id
+                    for et in self.db.query(EntityType).filter_by(organization_id=org_id).all()
                 ]
                 scopes = [{"scope_type": "entity", "entity_type_id": et_id} for et_id in et_ids]
-                config.update(build_meta_field_sort_config(
-                    self.db, org_id, scopes, Entity.meta, meta_sort_keys,
-                ))
+                config.update(
+                    build_meta_field_sort_config(
+                        self.db,
+                        org_id,
+                        scopes,
+                        Entity.meta,
+                        meta_sort_keys,
+                    )
+                )
         return config
 
     @staticmethod
@@ -178,23 +177,13 @@ class EntityService:
 
     def get_dimension_filter_config(self, org_id: uuid.UUID) -> dict:
         """Build dimension filter config dynamically from org's dimensions."""
-        from app.modules.dimension.model import Dimension
-
-        dims = (
-            self.db.query(Dimension)
-            .filter_by(organization_id=org_id)
-            .all()
+        return build_dimension_filter_config(
+            self.db,
+            org_id,
+            assoc_fk=EntityDimension.entity_id,
+            assoc_dv=EntityDimension.dimension_value_id,
+            parent_pk=Entity.id,
         )
-        config = {}
-        for dim in dims:
-            config[f"dim:{dim.id}"] = {
-                "type": "dimension",
-                "assoc_model": EntityDimension,
-                "assoc_fk": EntityDimension.entity_id,
-                "assoc_dv": EntityDimension.dimension_value_id,
-                "parent_pk": Entity.id,
-            }
-        return config
 
     def list_by_org(
         self,
@@ -235,21 +224,29 @@ class EntityService:
         filter_config.update(self.get_dimension_filter_config(org_id))
         if filterable_keys:
             from app.common.helpers.filter_definitions import build_meta_field_filter_config
+
             et_ids = [
-                et.id for et in
-                self.db.query(EntityType).filter_by(organization_id=org_id).all()
+                et.id for et in self.db.query(EntityType).filter_by(organization_id=org_id).all()
             ]
             scopes = [{"scope_type": "entity", "entity_type_id": et_id} for et_id in et_ids]
-            filter_config.update(build_meta_field_filter_config(
-                self.db, org_id, scopes,
-                Entity.meta, filterable_keys,
-            ))
+            filter_config.update(
+                build_meta_field_filter_config(
+                    self.db,
+                    org_id,
+                    scopes,
+                    Entity.meta,
+                    filterable_keys,
+                )
+            )
         query = apply_filters(query, params.filters, filter_config)
 
         # Sort (includes meta fields from list config)
         query = apply_sort(
-            query, params.sort_by, params.sort_order,
-            self.get_sort_config(org_id, sortable_keys), Entity.created_at.desc(),
+            query,
+            params.sort_by,
+            params.sort_order,
+            self.get_sort_config(org_id, sortable_keys),
+            Entity.created_at.desc(),
         )
 
         # Paginate
