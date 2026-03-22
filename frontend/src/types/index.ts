@@ -42,7 +42,7 @@ export interface UserProfileResponse {
   country_code: string;
   mobile_number: string;
   is_verified: boolean;
-  updated_at: number | null;
+  updated_at: string | null;
   organization_id: string | null;
   role_id: string | null;
   role_name: string | null;
@@ -63,7 +63,7 @@ export interface Organization {
   case_number_format: string;
   logo_url: string | null;
   meta: Record<string, unknown> | null;
-  updated_at: number | null;
+  updated_at: string | null;
 }
 
 // --- Dimensions ---
@@ -74,7 +74,7 @@ export interface Dimension {
   name: string;
   key: string;
   sort_order: number;
-  updated_at: number | null;
+  updated_at: string | null;
 }
 
 export interface DimensionValue {
@@ -87,7 +87,7 @@ export interface DimensionValue {
   meta: Record<string, unknown> | null;
   dimension_name: string | null;
   dimension_key: string | null;
-  updated_at: number | null;
+  updated_at: string | null;
 }
 
 export interface DimensionValueLink {
@@ -101,7 +101,7 @@ export interface DimensionValueLink {
   value_2_name: string | null;
   value_2_code: string | null;
   value_2_dimension_key: string | null;
-  updated_at: number | null;
+  updated_at: string | null;
 }
 
 // --- Entity Types & Entities ---
@@ -113,7 +113,7 @@ export interface EntityType {
   key: string;
   config: Record<string, unknown> | null;
   sort_order: number;
-  updated_at: number | null;
+  updated_at: string | null;
 }
 
 export interface DimensionInfo {
@@ -135,8 +135,8 @@ export interface Entity {
   entity_type_key: string | null;
   entity_type_config: Record<string, unknown> | null;
   dimensions: DimensionInfo[];
-  created_at: number | null;
-  updated_at: number | null;
+  created_at: string | null;
+  updated_at: string | null;
   enrollment_count: number;
   activity_count: number;
 }
@@ -149,7 +149,7 @@ export interface ActivityType {
   name: string;
   key: string;
   sort_order: number;
-  updated_at: number | null;
+  updated_at: string | null;
 }
 
 // --- Activity Form (Form Builder) ---
@@ -171,7 +171,7 @@ export interface ActivityForm {
   organization_id?: string;
   activity_type_id: string;
   elements: ActivityFormElement[];
-  updated_at?: number | null;
+  updated_at?: string | null;
 }
 
 export interface Activity {
@@ -187,8 +187,8 @@ export interface Activity {
   activity_type_name: string | null;
   dimensions: DimensionInfo[];
   participant_count: number;
-  created_at: number | null;
-  updated_at: number | null;
+  created_at: string | null;
+  updated_at: string | null;
 }
 
 export interface ActivityParticipant {
@@ -200,7 +200,7 @@ export interface ActivityParticipant {
   status: string | null;
   meta: Record<string, unknown> | null;
   participant_name: string | null;
-  updated_at: number | null;
+  updated_at: string | null;
 }
 
 // --- Meta Field Definitions ---
@@ -250,7 +250,7 @@ export interface Permission {
   id: string;
   key: string;
   description: string | null;
-  updated_at: number | null;
+  updated_at: string | null;
 }
 
 export interface Role {
@@ -261,7 +261,7 @@ export interface Role {
   is_system: boolean;
   permissions: Permission[];
   user_count: number;
-  updated_at: number | null;
+  updated_at: string | null;
 }
 
 export interface UserListItem {
@@ -274,7 +274,7 @@ export interface UserListItem {
   role_id: string | null;
   role_name: string | null;
   dimension_value_ids: string[];
-  updated_at: number | null;
+  updated_at: string | null;
 }
 
 export interface UserAccess {
@@ -332,5 +332,5 @@ export interface Enrollment {
   meta: Record<string, unknown> | null;
   entity_name: string | null;
   dimensions: DimensionInfo[];
-  updated_at: number | null;
+  updated_at: string | null;
 }

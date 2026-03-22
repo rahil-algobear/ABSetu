@@ -1,4 +1,5 @@
-import { format, parseISO, startOfDay, isEqual } from "date-fns";
+import { format, parseISO } from "date-fns";
+import { toZonedTime } from "date-fns-tz";
 
 export const DATE_FORMATS = {
   /** 20/03/2026 */
@@ -12,58 +13,59 @@ export const DATE_FORMATS = {
 } as const;
 
 /**
- * Format a date value for display.
- *
- * Accepts ISO date strings ("2026-03-20"), Date objects, or Unix timestamps
- * (seconds or milliseconds). Returns "—" for null/undefined.
- *
- * Default format is DISPLAY (dd-MMM-yyyy → "20-Mar-2026").
- * Pass any date-fns format string to override.
+ * Get the browser's IANA timezone (e.g. "Asia/Kolkata", "America/New_York").
  */
-export function formatDate(
-  value: string | Date | number | null | undefined,
-  fmt: string = DATE_FORMATS.DISPLAY
-): string {
-  if (value === null || value === undefined || value === "") return "—";
-
-  let date: Date;
-  if (typeof value === "string") {
-    date = parseISO(value);
-  } else if (typeof value === "number") {
-    // Auto-detect seconds vs milliseconds
-    date = new Date(value > 1e12 ? value : value * 1000);
-  } else {
-    date = value;
-  }
-
-  if (isNaN(date.getTime())) return "—";
-
-  return format(date, fmt);
+export function getBrowserTimezone(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone;
 }
 
 /**
- * Smart date/datetime formatter.
- * Shows "20-Mar-2026" for date-only values, "20-Mar-2026 at 2:30 PM" when time is present.
+ * Get today's date as YYYY-MM-DD in the browser's local timezone.
+ * Avoids the UTC midnight bug with toISOString().split("T")[0].
  */
-export function formatDateTime(
-  value: string | Date | number | null | undefined,
+export function getToday(): string {
+  const now = new Date();
+  const zoned = toZonedTime(now, getBrowserTimezone());
+  return format(zoned, DATE_FORMATS.ISO);
+}
+
+/**
+ * Format a date-only value (YYYY-MM-DD string) for display.
+ * No timezone conversion — date-only values are timezone-agnostic.
+ * Returns "—" for null/undefined/empty.
+ */
+export function formatDate(
+  value: string | null | undefined,
+  fmt: string = DATE_FORMATS.DISPLAY,
 ): string {
   if (value === null || value === undefined || value === "") return "—";
 
-  let date: Date;
-  if (typeof value === "string") {
-    date = parseISO(value);
-  } else if (typeof value === "number") {
-    date = new Date(value > 1e12 ? value : value * 1000);
-  } else {
-    date = value;
+  try {
+    const date = parseISO(value);
+    if (isNaN(date.getTime())) return "—";
+    return format(date, fmt);
+  } catch {
+    return "—";
   }
+}
 
-  if (isNaN(date.getTime())) return "—";
+/**
+ * Format a datetime value (ISO 8601 string) for display.
+ * Converts from UTC to the browser's local timezone.
+ * Returns "—" for null/undefined/empty.
+ */
+export function formatDateTime(
+  value: string | null | undefined,
+  fmt: string = DATE_FORMATS.DATETIME,
+): string {
+  if (value === null || value === undefined || value === "") return "—";
 
-  // If the time is midnight, treat as date-only
-  if (isEqual(date, startOfDay(date))) {
-    return format(date, DATE_FORMATS.DISPLAY);
+  try {
+    const date = parseISO(value);
+    if (isNaN(date.getTime())) return "—";
+    const zoned = toZonedTime(date, getBrowserTimezone());
+    return format(zoned, fmt);
+  } catch {
+    return "—";
   }
-  return format(date, DATE_FORMATS.DATETIME);
 }

@@ -131,6 +131,19 @@ def parse_filters(
             if coerced:
                 parsed.append({"key": key, "type": filter_type, "config": config, "value": coerced})
 
+        elif filter_type == "datetime_range":
+            if not isinstance(value, dict):
+                continue
+            coerced = {}
+            start = _parse_datetime(value.get("start"))
+            end = _parse_datetime(value.get("end"))
+            if start:
+                coerced["start"] = start
+            if end:
+                coerced["end"] = end
+            if coerced:
+                parsed.append({"key": key, "type": filter_type, "config": config, "value": coerced})
+
         elif filter_type == "meta_date_range":
             # Meta JSONB date fields — keep as strings for text comparison
             if not isinstance(value, dict):
@@ -211,6 +224,13 @@ def apply_filters(
                 # Use < next day so timestamp columns include the full end date
                 query = query.filter(col < value["end"] + timedelta(days=1))
 
+        elif filter_type == "datetime_range":
+            col = config["column"]
+            if "start" in value:
+                query = query.filter(col >= value["start"])
+            if "end" in value:
+                query = query.filter(col <= value["end"])
+
         elif filter_type == "meta_date_range":
             # JSONB date strings — lexicographic comparison on ISO dates
             meta_col = config["meta_column"]
@@ -255,6 +275,32 @@ def _parse_date(value: Any) -> date | None:
         return datetime.strptime(value, "%Y-%m-%d").date()
     except ValueError:
         return None
+
+
+def _parse_datetime(value: Any) -> datetime | None:
+    """Parse an ISO 8601 datetime string, falling back to date-only.
+
+    Returns a timezone-aware datetime (UTC) or None for invalid values.
+    """
+    if not value or not isinstance(value, str):
+        return None
+    from datetime import timezone
+
+    # Try full ISO 8601 first (e.g. "2026-03-22T14:30:00" or "2026-03-22T14:30:00+05:30")
+    try:
+        dt = datetime.fromisoformat(value)
+        # If naive, assume UTC
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except ValueError:
+        pass
+
+    # Fall back to date-only → start of day UTC
+    d = _parse_date(value)
+    if d:
+        return datetime(d.year, d.month, d.day, tzinfo=timezone.utc)
+    return None
 
 
 def _is_uuid(value: str) -> bool:

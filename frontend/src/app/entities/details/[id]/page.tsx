@@ -36,7 +36,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Plus, Pencil, X, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
-import { formatDate } from "@/utils/date";
+import { formatDate, getToday } from "@/utils/date";
 import { DateTimeInput } from "@/components/ui/date-time-input";
 
 /**
@@ -363,7 +363,7 @@ function EnrollmentForm({
 
   // Initialize form data from enrollment if editing
   const [admissionDate, setAdmissionDate] = useState(
-    enrollment?.admission_date || new Date().toISOString().split("T")[0]
+    enrollment?.admission_date || getToday()
   );
   const [releaseDate, setReleaseDate] = useState(enrollment?.release_date || "");
   const [dimensionValueIds, setDimensionValueIds] = useState<string[]>(

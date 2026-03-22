@@ -2,6 +2,7 @@
 
 import { Suspense, useState, useMemo, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
+import { getToday } from "@/utils/date";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   activityApi,
@@ -120,7 +121,7 @@ function NewActivityPageContent() {
 
   const [formData, setFormData] = useState({
     title: "",
-    start_date: new Date().toISOString().split("T")[0],
+    start_date: getToday(),
     end_date: "" as string,
     notes: "",
     dimension_value_ids: [] as string[],
