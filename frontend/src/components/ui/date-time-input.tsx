@@ -40,7 +40,7 @@ const CustomInput = forwardRef<
     onClick={onClick}
     disabled={disabled}
     className={cn(
-      "flex items-center gap-2 w-full rounded-md border border-input bg-background px-3 py-2 text-sm",
+      "flex items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm",
       "ring-offset-background placeholder:text-muted-foreground",
       "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
       "disabled:cursor-not-allowed disabled:opacity-50",
@@ -107,7 +107,7 @@ export function DateTimeInput({
   return (
     <div className={className}>
       <div className="flex gap-2 items-center">
-        <div className="flex-1">
+        <div>
           <DatePicker
             selected={selected}
             onChange={handleChange}
