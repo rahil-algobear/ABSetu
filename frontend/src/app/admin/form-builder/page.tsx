@@ -32,7 +32,6 @@ import {
   Eye,
   EyeOff,
   Asterisk,
-  Save,
   Layers,
   Users,
   SlidersHorizontal,
@@ -240,20 +239,6 @@ export default function FormBuilderPage() {
       <PageHeader
         title="Form Builder"
         description="Configure what form elements appear when recording an activity. Choose an activity type and add the elements you want."
-        actions={
-          <Can permission="activity_type:manage">
-            {isDirty && (
-              <Button
-                size="sm"
-                onClick={() => saveMutation.mutate()}
-                disabled={saveMutation.isPending}
-              >
-                <Save className="h-4 w-4 mr-1" />
-                Save
-              </Button>
-            )}
-          </Can>
-        }
       />
       <PageContent>
       {/* Activity Type selector */}
@@ -560,6 +545,17 @@ export default function FormBuilderPage() {
           )}
         </>
       )}
+
+      <Can permission="activity_type:manage">
+        <div className="flex justify-end mt-4">
+          <Button
+            onClick={() => saveMutation.mutate()}
+            disabled={!isDirty || saveMutation.isPending}
+          >
+            {saveMutation.isPending ? "Saving..." : "Save Changes"}
+          </Button>
+        </div>
+      </Can>
 
       {/* Add Element Modal */}
       <Dialog
