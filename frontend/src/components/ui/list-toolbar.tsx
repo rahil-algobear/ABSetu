@@ -26,13 +26,13 @@ function DateChipValue({ raw }: { raw: string }) {
   const fmtEnd = end ? formatDate(end, DATE_CHIP_FORMAT) : "";
 
   if (fmtStart && fmtEnd && fmtStart !== "—" && fmtEnd !== "—") {
-    return <>from <span className="text-orange-600 font-medium">{fmtStart}</span> until <span className="text-orange-600 font-medium">{fmtEnd}</span></>;
+    return <>from <span className="text-blue-600 font-medium">{fmtStart}</span> until <span className="text-blue-600 font-medium">{fmtEnd}</span></>;
   }
   if (fmtStart && fmtStart !== "—") {
-    return <>from <span className="text-orange-600 font-medium">{fmtStart}</span></>;
+    return <>from <span className="text-blue-600 font-medium">{fmtStart}</span></>;
   }
   if (fmtEnd && fmtEnd !== "—") {
-    return <>until <span className="text-orange-600 font-medium">{fmtEnd}</span></>;
+    return <>until <span className="text-blue-600 font-medium">{fmtEnd}</span></>;
   }
   return <>{raw}</>;
 }
