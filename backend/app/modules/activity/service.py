@@ -123,9 +123,11 @@ class ActivityService:
                     at.id for at in
                     self.db.query(ActivityType).filter_by(organization_id=org_id).all()
                 ]
-                scope_keys = ["activity"] + [f"activity:activity_type:{at_id}" for at_id in at_ids]
+                scopes = [{"scope_type": "activity"}] + [
+                    {"scope_type": "activity", "activity_type_id": at_id} for at_id in at_ids
+                ]
                 config.update(build_meta_field_sort_config(
-                    self.db, org_id, scope_keys, Activity.meta, meta_sort_keys,
+                    self.db, org_id, scopes, Activity.meta, meta_sort_keys,
                 ))
         return config
 

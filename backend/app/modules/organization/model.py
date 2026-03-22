@@ -65,9 +65,6 @@ class MetaFieldSchema(BaseModel):
     )
     fields = Column(JSONB, nullable=False, default=list)
 
-    # Keep scope_key as a read-only computed convenience (not stored).
-    # The canonical identity is (org_id, scope_type, entity_type_id, activity_type_id, dimension_value_id, dimension_id).
-
     organization = relationship("Organization", back_populates="meta_field_schemas")
 
     __table_args__ = (
@@ -83,34 +80,6 @@ class MetaFieldSchema(BaseModel):
             unique=True,
         ),
     )
-
-    @property
-    def scope_key(self) -> str:
-        """Build a legacy-compatible scope_key string from structured columns."""
-        if self.scope_type == "entity":
-            return f"entity:{self.entity_type_id}"
-        if self.scope_type == "dimension":
-            return f"dimension:{self.dimension_id}"
-        if self.scope_type in ("enrollment", "beneficiary", "facilitator"):
-            return self.scope_type
-        if self.scope_type == "activity":
-            key = "activity"
-            if self.activity_type_id:
-                key += f":activity_type:{self.activity_type_id}"
-            if self.dimension_value_id:
-                key += f":dimension_value:{self.dimension_value_id}"
-            return key
-        if self.scope_type == "participation":
-            return "participation"
-        if self.scope_type == "participant":
-            et_id = "user" if str(self.entity_type_id) == USER_ENTITY_SENTINEL else str(self.entity_type_id)
-            key = f"participant:entity:{et_id}"
-            if self.activity_type_id:
-                key += f":activity_type:{self.activity_type_id}"
-            if self.dimension_value_id:
-                key += f":dimension_value:{self.dimension_value_id}"
-            return key
-        return self.scope_type
 
 
 class ListConfig(BaseModel):

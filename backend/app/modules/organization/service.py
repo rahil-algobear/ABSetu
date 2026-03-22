@@ -84,13 +84,8 @@ class MetaFieldSchemaService:
         )
         return row.fields if row else []
 
-    def get_all_schemas(self, org_id: uuid.UUID) -> dict[str, list[dict]]:
-        """Get all schemas for an org, keyed by scope_key string for backward compat."""
-        rows = self.db.query(MetaFieldSchema).filter_by(organization_id=org_id).all()
-        return {row.scope_key: row.fields for row in rows}
-
-    def get_all_schemas_structured(self, org_id: uuid.UUID) -> list[MetaFieldSchema]:
-        """Get all schema rows for an org (structured, for new consumers)."""
+    def get_all_schemas(self, org_id: uuid.UUID) -> list[MetaFieldSchema]:
+        """Get all schema rows for an org."""
         return self.db.query(MetaFieldSchema).filter_by(organization_id=org_id).all()
 
     def update_schema(
@@ -182,30 +177,6 @@ class MetaFieldSchemaService:
                 )
 
         return fields
-
-    def get_schema(self, org_id: uuid.UUID, scope_key: str) -> list[dict]:
-        """Backward-compatible lookup by legacy scope_key string.
-
-        Parses the scope_key into structured FK columns and delegates to
-        get_schema_by_scope.  Supports the formats used by ListConfigService:
-        - "entity:{type_id}"
-        - "activity"
-        - "activity:activity_type:{type_id}"
-        """
-        if scope_key.startswith("entity:"):
-            return self.get_schema_by_scope(
-                org_id, "entity",
-                entity_type_id=uuid.UUID(scope_key.split(":", 1)[1]),
-            )
-        elif scope_key == "activity":
-            return self.get_schema_by_scope(org_id, "activity")
-        elif scope_key.startswith("activity:activity_type:"):
-            return self.get_schema_by_scope(
-                org_id, "activity",
-                activity_type_id=uuid.UUID(scope_key.split(":")[-1]),
-            )
-        else:
-            return self.get_schema_by_scope(org_id, scope_key)
 
 
 class ListConfigService:

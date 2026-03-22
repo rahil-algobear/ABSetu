@@ -154,24 +154,9 @@ def get_all_meta_field_schemas(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Get all meta field schemas for the organization.
-
-    Returns a dict keyed by scope_key for backward compatibility.
-    """
+    """Get all meta field schemas for the organization."""
     service = MetaFieldSchemaService(db)
-    return service.get_all_schemas(current_user.organization_id)
-
-
-@router.get(
-    "/meta-field-schemas/structured",
-)
-def get_all_meta_field_schemas_structured(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Get all meta field schemas with structured scope data."""
-    service = MetaFieldSchemaService(db)
-    rows = service.get_all_schemas_structured(current_user.organization_id)
+    rows = service.get_all_schemas(current_user.organization_id)
     return [_schema_to_response(row) for row in rows]
 
 

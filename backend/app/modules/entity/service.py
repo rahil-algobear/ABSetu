@@ -162,9 +162,9 @@ class EntityService:
                     et.id for et in
                     self.db.query(EntityType).filter_by(organization_id=org_id).all()
                 ]
-                scope_keys = [f"entity:{et_id}" for et_id in et_ids]
+                scopes = [{"scope_type": "entity", "entity_type_id": et_id} for et_id in et_ids]
                 config.update(build_meta_field_sort_config(
-                    self.db, org_id, scope_keys, Entity.meta, meta_sort_keys,
+                    self.db, org_id, scopes, Entity.meta, meta_sort_keys,
                 ))
         return config
 

@@ -316,10 +316,12 @@ def get_activity_filters(
     field_filters.extend(build_dimension_filters(db, org_id, accessible_dv_ids, filterable_keys))
 
     # Meta field filters (scoped by list config)
-    scope_keys = ["activity"] + [f"activity:activity_type:{at.id}" for at in activity_types]
+    scopes = [{"scope_type": "activity"}]
     if activity_type_id:
-        scope_keys = ["activity", f"activity:activity_type:{activity_type_id}"]
-    field_filters.extend(build_meta_field_filters(db, org_id, scope_keys, filterable_keys))
+        scopes.append({"scope_type": "activity", "activity_type_id": activity_type_id})
+    else:
+        scopes.extend({"scope_type": "activity", "activity_type_id": at.id} for at in activity_types)
+    field_filters.extend(build_meta_field_filters(db, org_id, scopes, filterable_keys))
 
     # Date filters (only if list config allows or no config)
     if filterable_keys is None or "start_date" in filterable_keys:

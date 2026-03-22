@@ -104,7 +104,7 @@ export interface MetaFieldScope {
 
 export const metaFieldSchemaApi = {
   getAll: async (): Promise<MetaFieldSchemaItem[]> => {
-    const response = await authAxios.get<MetaFieldSchemaItem[]>('/organization/meta-field-schemas/structured');
+    const response = await authAxios.get<MetaFieldSchemaItem[]>('/organization/meta-field-schemas');
     return response.data;
   },
   update: async (scope: MetaFieldScope, fields: MetaFieldDefinition[]): Promise<MetaFieldDefinition[]> => {

@@ -4,10 +4,18 @@ Each function returns a list of dicts ready for the frontend or config for the b
 """
 
 import uuid
-from typing import Any
+from typing import Any, TypedDict
 
 from sqlalchemy import Numeric
 from sqlalchemy.orm import Session
+
+
+class MetaFieldScope(TypedDict, total=False):
+    scope_type: str
+    entity_type_id: uuid.UUID | None
+    activity_type_id: uuid.UUID | None
+    dimension_value_id: uuid.UUID | None
+    dimension_id: uuid.UUID | None
 
 
 def build_dimension_filters(
@@ -71,54 +79,72 @@ def build_dimension_filters(
     return result
 
 
+def _collect_fields(
+    db: Session,
+    org_id: uuid.UUID,
+    scopes: list[MetaFieldScope],
+) -> list[tuple[str, dict]]:
+    """Collect meta field definitions from multiple scopes, deduplicating by key."""
+    from app.modules.organization.service import MetaFieldSchemaService
+
+    meta_service = MetaFieldSchemaService(db)
+    seen_keys: set[str] = set()
+    result: list[tuple[str, dict]] = []
+
+    for scope in scopes:
+        fields = meta_service.get_schema_by_scope(
+            org_id,
+            scope_type=scope["scope_type"],
+            entity_type_id=scope.get("entity_type_id"),
+            activity_type_id=scope.get("activity_type_id"),
+            dimension_value_id=scope.get("dimension_value_id"),
+            dimension_id=scope.get("dimension_id"),
+        )
+        for field in fields:
+            meta_key = f"meta:{field['key']}"
+            if meta_key not in seen_keys:
+                seen_keys.add(meta_key)
+                result.append((meta_key, field))
+
+    return result
+
+
 def build_meta_field_filters(
     db: Session,
     org_id: uuid.UUID,
-    scope_keys: list[str],
+    scopes: list[MetaFieldScope],
     allowed_keys: set[str] | None = None,
 ) -> list[dict]:
     """
-    Build meta field filter definitions for given scope keys.
+    Build meta field filter definitions for given scopes.
 
     If allowed_keys is provided, only include meta fields whose key (meta:{key})
     is in the set (i.e. marked filterable in list config).
     """
-    from app.modules.organization.service import MetaFieldSchemaService
-
-    meta_service = MetaFieldSchemaService(db)
     result = []
-    seen_keys: set[str] = set()
+    for meta_key, field in _collect_fields(db, org_id, scopes):
+        if allowed_keys is not None and meta_key not in allowed_keys:
+            continue
 
-    for scope_key in scope_keys:
-        fields = meta_service.get_schema(org_id, scope_key)
-        for field in fields:
-            meta_key = f"meta:{field['key']}"
-            if meta_key in seen_keys:
-                continue
-            seen_keys.add(meta_key)
-
-            if allowed_keys is not None and meta_key not in allowed_keys:
-                continue
-
-            ftype = field.get("type", "text")
-            filter_def: dict = {
-                "key": meta_key,
-                "label": field.get("label", field["key"]),
-            }
-            if ftype in ("select", "multiselect") and field.get("options"):
-                filter_def["type"] = "select"
-                filter_def["options"] = [
-                    {"value": o, "label": o} for o in field["options"]
-                ]
-            elif ftype == "number":
-                filter_def["type"] = "range"
-            elif ftype == "date":
-                filter_def["type"] = "date_range"
-            elif ftype == "boolean":
-                filter_def["type"] = "boolean"
-            else:
-                filter_def["type"] = "text"
-            result.append(filter_def)
+        ftype = field.get("type", "text")
+        filter_def: dict = {
+            "key": meta_key,
+            "label": field.get("label", field["key"]),
+        }
+        if ftype in ("select", "multiselect") and field.get("options"):
+            filter_def["type"] = "select"
+            filter_def["options"] = [
+                {"value": o, "label": o} for o in field["options"]
+            ]
+        elif ftype == "number":
+            filter_def["type"] = "range"
+        elif ftype == "date":
+            filter_def["type"] = "date_range"
+        elif ftype == "boolean":
+            filter_def["type"] = "boolean"
+        else:
+            filter_def["type"] = "text"
+        result.append(filter_def)
 
     return result
 
@@ -126,7 +152,7 @@ def build_meta_field_filters(
 def build_meta_field_filter_config(
     db: Session,
     org_id: uuid.UUID,
-    scope_keys: list[str],
+    scopes: list[MetaFieldScope],
     meta_column: Any,
     allowed_keys: set[str] | None = None,
 ) -> dict[str, dict]:
@@ -135,50 +161,42 @@ def build_meta_field_filter_config(
 
     If allowed_keys provided, only include those meta field keys.
     """
-    from app.modules.organization.service import MetaFieldSchemaService
-
-    meta_service = MetaFieldSchemaService(db)
     config: dict[str, dict] = {}
 
-    for scope_key in scope_keys:
-        fields = meta_service.get_schema(org_id, scope_key)
-        for field in fields:
-            key = f"meta:{field['key']}"
-            if key in config:
-                continue
-            if allowed_keys is not None and key not in allowed_keys:
-                continue
+    for meta_key, field in _collect_fields(db, org_id, scopes):
+        if allowed_keys is not None and meta_key not in allowed_keys:
+            continue
 
-            ftype = field.get("type", "text")
-            if ftype in ("select", "multiselect"):
-                config[key] = {
-                    "type": "meta_select",
-                    "meta_key": field["key"],
-                    "meta_column": meta_column,
-                }
-            elif ftype == "number":
-                config[key] = {
-                    "type": "meta_range",
-                    "meta_key": field["key"],
-                    "meta_column": meta_column,
-                }
-            elif ftype == "boolean":
-                config[key] = {
-                    "type": "boolean",
-                    "meta_key": field["key"],
-                    "meta_column": meta_column,
-                }
-            elif ftype == "date":
-                config[key] = {
-                    "type": "date_range",
-                    "column": meta_column[field["key"]].astext,
-                }
-            else:
-                config[key] = {
-                    "type": "meta_select",
-                    "meta_key": field["key"],
-                    "meta_column": meta_column,
-                }
+        ftype = field.get("type", "text")
+        if ftype in ("select", "multiselect"):
+            config[meta_key] = {
+                "type": "meta_select",
+                "meta_key": field["key"],
+                "meta_column": meta_column,
+            }
+        elif ftype == "number":
+            config[meta_key] = {
+                "type": "meta_range",
+                "meta_key": field["key"],
+                "meta_column": meta_column,
+            }
+        elif ftype == "boolean":
+            config[meta_key] = {
+                "type": "boolean",
+                "meta_key": field["key"],
+                "meta_column": meta_column,
+            }
+        elif ftype == "date":
+            config[meta_key] = {
+                "type": "date_range",
+                "column": meta_column[field["key"]].astext,
+            }
+        else:
+            config[meta_key] = {
+                "type": "meta_select",
+                "meta_key": field["key"],
+                "meta_column": meta_column,
+            }
 
     return config
 
@@ -186,7 +204,7 @@ def build_meta_field_filter_config(
 def build_meta_field_sort_config(
     db: Session,
     org_id: uuid.UUID,
-    scope_keys: list[str],
+    scopes: list[MetaFieldScope],
     meta_column: Any,
     allowed_keys: set[str] | None = None,
 ) -> dict[str, Any]:
@@ -195,24 +213,16 @@ def build_meta_field_sort_config(
 
     If allowed_keys provided, only include those meta field keys.
     """
-    from app.modules.organization.service import MetaFieldSchemaService
-
-    meta_service = MetaFieldSchemaService(db)
     config: dict[str, Any] = {}
 
-    for scope_key in scope_keys:
-        fields = meta_service.get_schema(org_id, scope_key)
-        for field in fields:
-            key = f"meta:{field['key']}"
-            if key in config:
-                continue
-            if allowed_keys is not None and key not in allowed_keys:
-                continue
+    for meta_key, field in _collect_fields(db, org_id, scopes):
+        if allowed_keys is not None and meta_key not in allowed_keys:
+            continue
 
-            ftype = field.get("type", "text")
-            if ftype == "number":
-                config[key] = meta_column[field["key"]].astext.cast(Numeric)
-            else:
-                config[key] = meta_column[field["key"]].astext
+        ftype = field.get("type", "text")
+        if ftype == "number":
+            config[meta_key] = meta_column[field["key"]].astext.cast(Numeric)
+        else:
+            config[meta_key] = meta_column[field["key"]].astext
 
     return config

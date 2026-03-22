@@ -249,10 +249,11 @@ def get_entity_filters(
     field_filters.extend(build_dimension_filters(db, org_id, accessible_dv_ids, filterable_keys))
 
     # Meta field filters (scoped by list config)
-    scope_keys = [f"entity:{et.id}" for et in entity_types]
     if entity_type_id:
-        scope_keys = [f"entity:{entity_type_id}"]
-    field_filters.extend(build_meta_field_filters(db, org_id, scope_keys, filterable_keys))
+        scopes = [{"scope_type": "entity", "entity_type_id": entity_type_id}]
+    else:
+        scopes = [{"scope_type": "entity", "entity_type_id": et.id} for et in entity_types]
+    field_filters.extend(build_meta_field_filters(db, org_id, scopes, filterable_keys))
 
     # Date filter for created_at (only if list config allows or no config)
     if filterable_keys is None or "created_at" in filterable_keys:
