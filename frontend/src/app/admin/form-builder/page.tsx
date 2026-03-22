@@ -29,21 +29,20 @@ import {
   ChevronDown,
   Plus,
   Trash2,
-  Eye,
-  EyeOff,
   Asterisk,
   Layers,
   Users,
   SlidersHorizontal,
   Calendar,
   Type,
+  FileText,
 } from "lucide-react";
 import toast from "react-hot-toast";
 
 const ELEMENT_TYPES = [
   { value: "dimension", label: "Dimension", icon: Layers },
-  { value: "entity_type", label: "Entity Type / Users", icon: Users },
-  { value: "activity_meta", label: "Activity Meta", icon: SlidersHorizontal },
+  { value: "participant_list", label: "Entity Type / Users", icon: Users },
+  { value: "field", label: "Custom Field", icon: FileText },
 ];
 
 const DEFAULT_ELEMENT_LABELS: Record<string, string> = {
@@ -53,19 +52,18 @@ const DEFAULT_ELEMENT_LABELS: Record<string, string> = {
   notes: "Notes",
 };
 
+const SYSTEM_FIELD_KEYS = ["title", "start_date", "end_date", "notes"];
+
 const DISPLAY_TYPES: Record<string, { value: string; label: string }[]> = {
   dimension: [
     { value: "dropdown", label: "Dropdown" },
     { value: "radio", label: "Radio buttons" },
     { value: "multiselect", label: "Multi-select" },
   ],
-  entity_type: [
+  participant_list: [
     { value: "checklist", label: "Checklist (attendance)" },
     { value: "search_select", label: "Search & select" },
     { value: "multi_select", label: "Multi-select" },
-  ],
-  activity_meta: [
-    { value: "form", label: "Form fields" },
   ],
 };
 
@@ -131,14 +129,36 @@ export default function FormBuilderPage() {
     onError: () => toast.error("Failed to save form"),
   });
 
+  // Available custom meta fields for "field" type
+  const activityMetaFields = useMemo(() => {
+    // Collect activity-scoped meta fields from schemas
+    const fields: { key: string; label: string }[] = [];
+    const seenKeys = new Set<string>();
+    for (const schema of allSchemas) {
+      if (schema.scope.type !== "activity") continue;
+      for (const f of schema.fields) {
+        if (SYSTEM_FIELD_KEYS.includes(f.key)) continue;
+        if (seenKeys.has(f.key)) continue;
+        seenKeys.add(f.key);
+        fields.push({ key: f.key, label: f.label });
+      }
+    }
+    return fields;
+  }, [allSchemas]);
+
   // Element helpers
   const updateElement = (index: number, updates: Partial<ActivityFormElement>) => {
     setElements(elements.map((el, i) => (i === index ? { ...el, ...updates } : el)));
     setIsDirty(true);
   };
 
+  const isSystemField = (refKey?: string | null): boolean => {
+    return !!refKey && SYSTEM_FIELD_KEYS.includes(refKey);
+  };
+
   const removeElement = (index: number) => {
-    if (elements[index]?.removable === false) return;
+    const el = elements[index];
+    if (el?.type === "field" && isSystemField(el.ref_key)) return;
     setElements(elements.filter((_, i) => i !== index));
     setIsDirty(true);
   };
@@ -155,22 +175,38 @@ export default function FormBuilderPage() {
   };
 
   const handleAddElement = () => {
-    const needsRef = addType === "dimension" || addType === "entity_type";
+    const needsRef = addType === "dimension" || addType === "participant_list" || addType === "field";
     if (needsRef && !addRefId) {
       toast.error("Please select a reference");
       return;
     }
 
-    const newElement: ActivityFormElement = {
-      type: addType as ActivityFormElement["type"],
-      ref_id: needsRef ? addRefId : null,
-      sort_order: elements.length,
-      display_type: addDisplayType,
-      visible: true,
-      required: false,
-      stage: "create",
-      removable: true,
-    };
+    let newElement: ActivityFormElement;
+
+    if (addType === "dimension") {
+      newElement = {
+        type: "dimension",
+        dimension_id: addRefId,
+        sort_order: elements.length,
+        display_type: addDisplayType,
+        required: false,
+      };
+    } else if (addType === "participant_list") {
+      newElement = {
+        type: "participant_list",
+        entity_type_id: addRefId,
+        sort_order: elements.length,
+        display_type: addDisplayType,
+        required: false,
+      };
+    } else {
+      // field
+      newElement = {
+        type: "field",
+        ref_key: addRefId,
+        sort_order: elements.length,
+      };
+    }
 
     setElements([...elements, newElement]);
     setIsDirty(true);
@@ -189,47 +225,49 @@ export default function FormBuilderPage() {
   // Resolve element label
   const getElementLabel = (el: ActivityFormElement): string => {
     switch (el.type) {
-      case "default":
-        return DEFAULT_ELEMENT_LABELS[el.ref_id || ""] || "Default Field";
+      case "field":
+        return DEFAULT_ELEMENT_LABELS[el.ref_key || ""] || el.ref_key || "Field";
       case "dimension": {
-        const dim = dimensions.find((d) => d.id === el.ref_id);
+        const dim = dimensions.find((d) => d.id === el.dimension_id);
         return dim ? dim.name : "Dimension";
       }
-      case "entity_type": {
-        if (el.ref_id === "user") return "Users (staff)";
-        const et = entityTypes.find((t) => t.id === el.ref_id);
+      case "participant_list": {
+        if (el.entity_type_id === "user") return "Users (staff)";
+        const et = entityTypes.find((t) => t.id === el.entity_type_id);
         return et?.name || "Entity Type";
       }
-      case "activity_meta":
-        return "Activity Meta Fields";
       default:
         return el.type;
     }
   };
 
-  const getElementIcon = (type: string, refId?: string | null) => {
-    if (type === "default" && refId === "title") return Type;
-    if (type === "default") return Calendar;
+  const getElementIcon = (type: string, refKey?: string | null) => {
+    if (type === "field" && refKey === "title") return Type;
+    if (type === "field") return Calendar;
     const def = ELEMENT_TYPES.find((t) => t.value === type);
     return def?.icon || SlidersHorizontal;
   };
 
   // Check for participation meta fields for an entity type
   const getParticipationMetaCount = (el: ActivityFormElement): number => {
-    if (el.type !== "entity_type" || !el.ref_id) return 0;
+    if (el.type !== "participant_list" || !el.entity_type_id) return 0;
     let count = 0;
-    count += findSchema(allSchemas, { type: "participant", entity_type_id: el.ref_id })?.fields?.length || 0;
+    count += findSchema(allSchemas, { type: "participant", entity_type_id: el.entity_type_id })?.fields?.length || 0;
     if (selectedTypeId) {
-      count += findSchema(allSchemas, { type: "participant", entity_type_id: el.ref_id, activity_type_id: selectedTypeId })?.fields?.length || 0;
+      count += findSchema(allSchemas, { type: "participant", entity_type_id: el.entity_type_id, activity_type_id: selectedTypeId })?.fields?.length || 0;
     }
     return count;
   };
 
   // Check if element already exists
   const isElementAdded = (type: string, refId?: string): boolean => {
-    return elements.some(
-      (el) => el.type === type && (type === "activity_meta" || el.ref_id === refId)
-    );
+    return elements.some((el) => {
+      if (el.type !== type) return false;
+      if (type === "dimension") return el.dimension_id === refId;
+      if (type === "participant_list") return el.entity_type_id === refId;
+      if (type === "field") return el.ref_key === refId;
+      return false;
+    });
   };
 
   const selectedType = activityTypes.find((c) => c.id === selectedTypeId);
@@ -288,19 +326,20 @@ export default function FormBuilderPage() {
           ) : (
             <div className="space-y-2">
               {elements.map((el, idx) => {
-                const Icon = getElementIcon(el.type, el.ref_id);
+                const Icon = getElementIcon(el.type, el.type === "field" ? el.ref_key : undefined);
                 const metaCount = getParticipationMetaCount(el);
-                const isDefault = el.type === "default";
-                const isRemovable = el.removable !== false;
-                const isTitleEl = el.type === "default" && el.ref_id === "title";
+                const isDefault = el.type === "field" && isSystemField(el.ref_key);
+                const isRemovable = !isDefault;
+                const isStructural = el.type === "dimension" || el.type === "participant_list";
+                const isTitleEl = el.type === "field" && el.ref_key === "title";
                 const titleConfig = isTitleEl ? (el.config || { mode: "free_text" }) : null;
                 const titleMode = titleConfig?.mode as string || "free_text";
                 return (
-                  <div key={`${el.type}-${el.ref_id}-${idx}`}>
+                  <div key={`${el.type}-${el.ref_key || el.dimension_id || el.entity_type_id}-${idx}`}>
                     <div
-                      className={`border rounded-lg p-3 flex items-center gap-3 ${
-                        el.visible ? "bg-white" : "bg-gray-50 opacity-60"
-                      } ${isDefault ? "border-purple-200" : ""} ${isTitleEl && titleConfig ? "rounded-b-none" : ""}`}
+                      className={`border rounded-lg p-3 flex items-center gap-3 bg-white ${
+                        isDefault ? "border-purple-200" : ""
+                      } ${isTitleEl && titleConfig ? "rounded-b-none" : ""}`}
                     >
                       {/* Reorder */}
                       <div className="flex flex-col -space-y-1">
@@ -330,7 +369,7 @@ export default function FormBuilderPage() {
                             {getElementLabel(el)}
                             {isDefault && (
                               <span className="ml-1.5 text-[10px] font-medium text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded">
-                                Default
+                                System
                               </span>
                             )}
                             {isTitleEl && (
@@ -340,8 +379,12 @@ export default function FormBuilderPage() {
                             )}
                           </p>
                           <p className="text-xs text-gray-400">
-                            {isDefault ? "Default field" : (ELEMENT_TYPES.find((t) => t.value === el.type)?.label || el.type)}
-                            {!isDefault && (
+                            {isDefault
+                              ? "System field"
+                              : el.type === "field"
+                                ? "Custom field"
+                                : (ELEMENT_TYPES.find((t) => t.value === el.type)?.label || el.type)}
+                            {isStructural && (
                               <>
                                 {" \u00b7 "}
                                 {DISPLAY_TYPES[el.type]?.find((d) => d.value === el.display_type)?.label || el.display_type}
@@ -350,6 +393,11 @@ export default function FormBuilderPage() {
                             {el.required && (
                               <span className="ml-1 text-red-500">
                                 {" \u00b7 "}required
+                              </span>
+                            )}
+                            {!isDefault && el.type === "field" && (
+                              <span className="ml-1 text-gray-400">
+                                {" \u00b7 "}configured in Form Fields
                               </span>
                             )}
                             {metaCount > 0 && (
@@ -361,54 +409,33 @@ export default function FormBuilderPage() {
                         </div>
                       </div>
 
-                      {/* Stage toggle: show during creation */}
-                      <label
-                        className="flex items-center gap-1 text-xs text-gray-500 whitespace-nowrap cursor-pointer"
-                        title={el.stage === "create" ? "Shown during creation" : "Shown only when editing"}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={el.stage === "create"}
-                          onChange={(e) => updateElement(idx, { stage: e.target.checked ? "create" : "record" })}
-                          className="rounded"
-                        />
-                        On create
-                      </label>
+                      {/* Controls only for structural elements (dimension, participant_list) */}
+                      {isStructural && (
+                        <>
+                          {/* Display type selector */}
+                          <select
+                            className="border rounded-md px-2 py-1 text-xs"
+                            value={el.display_type || ""}
+                            onChange={(e) => updateElement(idx, { display_type: e.target.value })}
+                          >
+                            {(DISPLAY_TYPES[el.type] || []).map((d) => (
+                              <option key={d.value} value={d.value}>{d.label}</option>
+                            ))}
+                          </select>
 
-                      {/* Display type selector (not for default elements) */}
-                      {!isDefault && (
-                        <select
-                          className="border rounded-md px-2 py-1 text-xs"
-                          value={el.display_type}
-                          onChange={(e) => updateElement(idx, { display_type: e.target.value })}
-                        >
-                          {(DISPLAY_TYPES[el.type] || []).map((d) => (
-                            <option key={d.value} value={d.value}>{d.label}</option>
-                          ))}
-                        </select>
+                          {/* Required toggle */}
+                          <button
+                            type="button"
+                            onClick={() => updateElement(idx, { required: !el.required })}
+                            className={el.required ? "text-red-500 hover:text-red-700" : "text-gray-300 hover:text-red-500"}
+                            title={el.required ? "Required (click to make optional)" : "Optional (click to make required)"}
+                          >
+                            <Asterisk className="h-4 w-4" />
+                          </button>
+                        </>
                       )}
 
-                      {/* Required toggle */}
-                      <button
-                        type="button"
-                        onClick={() => updateElement(idx, { required: !el.required })}
-                        className={el.required ? "text-red-500 hover:text-red-700" : "text-gray-300 hover:text-red-500"}
-                        title={el.required ? "Required (click to make optional)" : "Optional (click to make required)"}
-                      >
-                        <Asterisk className="h-4 w-4" />
-                      </button>
-
-                      {/* Visibility toggle */}
-                      <button
-                        type="button"
-                        onClick={() => updateElement(idx, { visible: !el.visible })}
-                        className="text-gray-400 hover:text-purple-600"
-                        title={el.visible ? "Hide" : "Show"}
-                      >
-                        {el.visible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-                      </button>
-
-                      {/* Remove (disabled for default elements) */}
+                      {/* Remove (disabled for system field elements) */}
                       <Can permission="activity_type:manage">
                         <button
                           type="button"
@@ -418,7 +445,7 @@ export default function FormBuilderPage() {
                             ? "text-gray-400 hover:text-red-500"
                             : "text-gray-200 cursor-not-allowed"
                           }
-                          title={isRemovable ? "Remove" : "Default fields cannot be removed"}
+                          title={isRemovable ? "Remove" : "System fields cannot be removed"}
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
@@ -536,7 +563,7 @@ export default function FormBuilderPage() {
           )}
 
           {/* Participation meta hint */}
-          {elements.some((el) => el.type === "entity_type") && (
+          {elements.some((el) => el.type === "participant_list") && (
             <p className="text-xs text-gray-400 mt-4">
               To configure participation meta fields (attendance status, scores, etc.) for each entity type,
               go to <a href="/admin/meta-fields" className="text-purple-600 underline">Form Fields</a> and
@@ -569,14 +596,10 @@ export default function FormBuilderPage() {
             <Label className="text-sm mb-2 block">Element Type</Label>
             <div className="grid grid-cols-2 gap-2">
               {ELEMENT_TYPES.map((et) => {
-                const disabled =
-                  et.value === "activity_meta" &&
-                  isElementAdded(et.value);
                 return (
                   <button
                     key={et.value}
                     type="button"
-                    disabled={disabled}
                     onClick={() => {
                       setAddType(et.value);
                       setAddRefId("");
@@ -585,21 +608,18 @@ export default function FormBuilderPage() {
                     className={`flex items-center gap-2 p-3 rounded-lg border text-sm text-left transition-colors ${
                       addType === et.value
                         ? "border-purple-300 bg-purple-50 text-purple-700"
-                        : disabled
-                          ? "border-gray-100 bg-gray-50 text-gray-300 cursor-not-allowed"
-                          : "border-gray-200 hover:border-gray-300"
+                        : "border-gray-200 hover:border-gray-300"
                     }`}
                   >
                     <et.icon className="h-4 w-4 shrink-0" />
                     {et.label}
-                    {disabled && <span className="text-xs ml-auto">(added)</span>}
                   </button>
                 );
               })}
             </div>
           </div>
 
-          {/* Reference selector for dimension / entity_type */}
+          {/* Reference selector for dimension */}
           {addType === "dimension" && (
             <div>
               <Label className="text-sm mb-1 block">Dimension</Label>
@@ -620,7 +640,8 @@ export default function FormBuilderPage() {
             </div>
           )}
 
-          {addType === "entity_type" && (
+          {/* Reference selector for participant_list */}
+          {addType === "participant_list" && (
             <div>
               <Label className="text-sm mb-1 block">Entity Type</Label>
               <select
@@ -629,11 +650,11 @@ export default function FormBuilderPage() {
                 onChange={(e) => setAddRefId(e.target.value)}
               >
                 <option value="">Select...</option>
-                {!isElementAdded("entity_type", "user") && (
+                {!isElementAdded("participant_list", "user") && (
                   <option value="user">Users (staff/facilitators)</option>
                 )}
                 {entityTypes
-                  .filter((et) => !isElementAdded("entity_type", et.id))
+                  .filter((et) => !isElementAdded("participant_list", et.id))
                   .map((et) => (
                     <option key={et.id} value={et.id}>
                       {et.name}
@@ -643,19 +664,48 @@ export default function FormBuilderPage() {
             </div>
           )}
 
-          {/* Display type */}
-          <div>
-            <Label className="text-sm mb-1 block">Display Type</Label>
-            <select
-              className="w-full border rounded-md p-2 text-sm"
-              value={addDisplayType}
-              onChange={(e) => setAddDisplayType(e.target.value)}
-            >
-              {(DISPLAY_TYPES[addType] || []).map((d) => (
-                <option key={d.value} value={d.value}>{d.label}</option>
-              ))}
-            </select>
-          </div>
+          {/* Reference selector for field (custom meta fields) */}
+          {addType === "field" && (
+            <div>
+              <Label className="text-sm mb-1 block">Custom Meta Field</Label>
+              <select
+                className="w-full border rounded-md p-2 text-sm"
+                value={addRefId}
+                onChange={(e) => setAddRefId(e.target.value)}
+              >
+                <option value="">Select a field...</option>
+                {activityMetaFields
+                  .filter((f) => !isElementAdded("field", f.key))
+                  .map((f) => (
+                    <option key={f.key} value={f.key}>
+                      {f.label} ({f.key})
+                    </option>
+                  ))}
+              </select>
+              {activityMetaFields.length === 0 && (
+                <p className="text-xs text-gray-400 mt-1">
+                  No custom activity meta fields defined yet. Define them in{" "}
+                  <a href="/admin/meta-fields" className="text-purple-600 underline">Form Fields</a>.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Display type (only for structural elements) */}
+          {(addType === "dimension" || addType === "participant_list") && (
+            <div>
+              <Label className="text-sm mb-1 block">Display Type</Label>
+              <select
+                className="w-full border rounded-md p-2 text-sm"
+                value={addDisplayType}
+                onChange={(e) => setAddDisplayType(e.target.value)}
+              >
+                {(DISPLAY_TYPES[addType] || []).map((d) => (
+                  <option key={d.value} value={d.value}>{d.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={() => setAddModalOpen(false)}>

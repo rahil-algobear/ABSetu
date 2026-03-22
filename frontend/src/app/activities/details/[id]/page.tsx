@@ -90,30 +90,46 @@ export default function ActivityDetailPage() {
     enabled: !!activityTypeId,
   });
 
-  // Get entity_type elements from form config (these are participant sections)
+  // Build a map of field key → MetaFieldDefinition for looking up labels, required, visible
+  const fieldDefMap = useMemo(() => {
+    const dvIds = (activity?.dimensions || []).map((d) => d.value_id);
+    const allFields = collectActivityFields(allMetaSchemas, activityTypeId || null, dvIds);
+    const map: Record<string, MetaFieldDefinition> = {};
+    for (const f of allFields) map[f.key] = f;
+    return map;
+  }, [activityTypeId, activity, allMetaSchemas]);
+
+  // Get participant_list elements from form config (these are participant sections)
   const entityTypeElements: ActivityFormElement[] = useMemo(() => {
     if (!formConfig?.elements?.length) return [];
     return formConfig.elements
-      .filter((el) => el.type === "entity_type" && el.visible)
+      .filter((el) => el.type === "participant_list")
       .sort((a, b) => a.sort_order - b.sort_order);
   }, [formConfig]);
 
-  // Visible non-participant elements (default + activity_meta + dimension) for the detail/edit view
+  // Non-participant elements (field + dimension) for the detail/edit view
   const detailElements: ActivityFormElement[] = useMemo(() => {
     if (!formConfig?.elements?.length) return [];
     return formConfig.elements
-      .filter((el) => el.visible && (el.type === "default" || el.type === "activity_meta" || el.type === "dimension"))
+      .filter((el) => {
+        if (el.type === "field") {
+          // For field elements, check visibility from FieldDefinition
+          const def = el.ref_key ? fieldDefMap[el.ref_key] : undefined;
+          return def ? def.visible !== false : true;
+        }
+        return el.type === "dimension";
+      })
       .sort((a, b) => a.sort_order - b.sort_order);
-  }, [formConfig]);
+  }, [formConfig, fieldDefMap]);
 
   // Entity type source IDs from form elements
   const entitySourceIds = useMemo(() => {
     return entityTypeElements
-      .filter((el) => el.ref_id && el.ref_id !== "user")
-      .map((el) => el.ref_id!);
+      .filter((el) => el.entity_type_id && el.entity_type_id !== "user")
+      .map((el) => el.entity_type_id!);
   }, [entityTypeElements]);
 
-  const hasUserSection = entityTypeElements.some((el) => el.ref_id === "user");
+  const hasUserSection = entityTypeElements.some((el) => el.entity_type_id === "user");
 
   // Load entities for each entity type
   const { data: entitiesByType = {} } = useQuery({
@@ -137,14 +153,14 @@ export default function ActivityDetailPage() {
 
   // Get participation meta fields for an entity type element
   const getParticipationMetaFields = (el: ActivityFormElement): MetaFieldDefinition[] => {
-    if (!el.ref_id) return [];
+    if (!el.entity_type_id) return [];
     const dvIds = (activity?.dimensions || []).map((d) => d.value_id);
-    return collectParticipantFields(allMetaSchemas, el.ref_id, activityTypeId || null, dvIds);
+    return collectParticipantFields(allMetaSchemas, el.entity_type_id, activityTypeId || null, dvIds);
   };
 
-  // Use ref_id as section_key for participant records
+  // Use entity_type_id as section_key for participant records
   const getSectionKey = (el: ActivityFormElement): string => {
-    return el.ref_id || el.type;
+    return el.entity_type_id || el.type;
   };
 
   const saveMutation = useMutation({
@@ -290,15 +306,17 @@ export default function ActivityDetailPage() {
 
   // Get label for an entity type element
   const getElementLabel = (el: ActivityFormElement): string => {
-    if (el.ref_id === "user") return "Users (staff)";
-    const et = entityTypes.find((t) => t.id === el.ref_id);
+    if (el.entity_type_id === "user") return "Users (staff)";
+    const et = entityTypes.find((t) => t.id === el.entity_type_id);
     return et?.name || "Participants";
   };
 
   // Activity meta fields: base + activity type + dimension values + type×dimension_value combos
+  // Filter out system fields since those are rendered separately via form elements
   const activityTypeFields = useMemo((): MetaFieldDefinition[] => {
     const dvIds = (activity?.dimensions || []).map((d) => d.value_id);
-    return collectActivityFields(allMetaSchemas, activityTypeId || null, dvIds);
+    const all = collectActivityFields(allMetaSchemas, activityTypeId || null, dvIds);
+    return all.filter((f) => !f.system);
   }, [activityTypeId, activity, allMetaSchemas]);
 
   if (isLoading) return <PageLayout><PageContent><p>Loading...</p></PageContent></PageLayout>;
@@ -346,85 +364,92 @@ export default function ActivityDetailPage() {
           {editingDetails ? (
             <form onSubmit={(e) => { e.preventDefault(); handleDetailSave(); }} className="space-y-3">
               {detailElements.map((el) => {
-                if (el.type === "default" && el.ref_id === "title") {
+                if (el.type === "field" && el.ref_key === "title") {
                   const titleConfig = el.config || { mode: "free_text" };
                   const titleMode = (titleConfig.mode as string) || "free_text";
                   // Generated titles are resolved server-side — nothing to edit
                   if (titleMode === "generated") return null;
+                  const fieldDef = fieldDefMap["title"];
+                  const isRequired = fieldDef?.required ?? false;
                   return (
                     <div key="edit-title">
                       <label className="text-sm font-medium">
-                        Title{el.required && <span className="text-red-500 ml-0.5">*</span>}
+                        Title{isRequired && <span className="text-red-500 ml-0.5">*</span>}
                       </label>
                       <Input
                         placeholder="Activity title..."
                         value={detailFormData.title}
                         onChange={(e) => setDetailFormData({ ...detailFormData, title: e.target.value })}
-                        required={el.required}
+                        required={isRequired}
                         className="mt-1"
                       />
                     </div>
                   );
                 }
-                if (el.type === "default" && el.ref_id === "start_date") {
+                if (el.type === "field" && el.ref_key === "start_date") {
+                  const fieldDef = fieldDefMap["start_date"];
+                  const isRequired = fieldDef?.required ?? false;
                   return (
                     <div key="edit-start_date">
                       <label className="text-sm font-medium">
-                        Start Date{el.required && <span className="text-red-500 ml-0.5">*</span>}
+                        Start Date{isRequired && <span className="text-red-500 ml-0.5">*</span>}
                       </label>
                       <DateTimeInput
                         value={detailFormData.start_date}
                         onChange={(value) => setDetailFormData({ ...detailFormData, start_date: value })}
-                        required={el.required}
+                        required={isRequired}
                         className="mt-1"
                       />
                     </div>
                   );
                 }
-                if (el.type === "default" && el.ref_id === "end_date") {
+                if (el.type === "field" && el.ref_key === "end_date") {
+                  const fieldDef = fieldDefMap["end_date"];
+                  const isRequired = fieldDef?.required ?? false;
                   return (
                     <div key="edit-end_date">
                       <label className="text-sm font-medium">
-                        End Date{el.required && <span className="text-red-500 ml-0.5">*</span>}
+                        End Date{isRequired && <span className="text-red-500 ml-0.5">*</span>}
                       </label>
                       <DateTimeInput
                         value={detailFormData.end_date}
                         onChange={(value) => setDetailFormData({ ...detailFormData, end_date: value })}
                         min={detailFormData.start_date}
-                        required={el.required}
+                        required={isRequired}
                         className="mt-1"
                       />
                     </div>
                   );
                 }
-                if (el.type === "default" && el.ref_id === "notes") {
+                if (el.type === "field" && el.ref_key === "notes") {
+                  const fieldDef = fieldDefMap["notes"];
+                  const isRequired = fieldDef?.required ?? false;
                   return (
                     <div key="edit-notes">
                       <label className="text-sm font-medium">
-                        Notes{el.required && <span className="text-red-500 ml-0.5">*</span>}
+                        Notes{isRequired && <span className="text-red-500 ml-0.5">*</span>}
                       </label>
                       <Input
                         placeholder="Notes..."
                         value={detailFormData.notes}
                         onChange={(e) => setDetailFormData({ ...detailFormData, notes: e.target.value })}
-                        required={el.required}
-                      />
-                    </div>
-                  );
-                }
-                if (el.type === "activity_meta") {
-                  return (
-                    <div key="edit-activity_meta">
-                      <DynamicMetaForm
-                        fields={activityTypeFields}
-                        values={detailMetaValues}
-                        onChange={setDetailMetaValues}
+                        required={isRequired}
                       />
                     </div>
                   );
                 }
                 return null;
               })}
+              {/* Auto-render custom (non-system) meta fields */}
+              {activityTypeFields.length > 0 && (
+                <div key="edit-activity_meta">
+                  <DynamicMetaForm
+                    fields={activityTypeFields}
+                    values={detailMetaValues}
+                    onChange={setDetailMetaValues}
+                  />
+                </div>
+              )}
               <div className="flex gap-2 pt-2">
                 <Button type="submit" disabled={updateDetailsMutation.isPending}>
                   Save
@@ -438,7 +463,7 @@ export default function ActivityDetailPage() {
             <div className="space-y-3">
               {detailElements.map((el) => {
                 // Title element
-                if (el.type === "default" && el.ref_id === "title") {
+                if (el.type === "field" && el.ref_key === "title") {
                   return (
                     <div key="title" className="flex items-center gap-2">
                       <Type className="h-4 w-4 text-gray-400 shrink-0" />
@@ -456,14 +481,14 @@ export default function ActivityDetailPage() {
 
                 // Dimension elements
                 if (el.type === "dimension") {
-                  // Map form element ref_id (dimension UUID) to the dimension's key
-                  const dimDef = dimensions.find((d) => d.id === el.ref_id);
+                  // Map form element dimension_id (dimension UUID) to the dimension's key
+                  const dimDef = dimensions.find((d) => d.id === el.dimension_id);
                   const dimInfo = dimDef
                     ? activity.dimensions.find((d) => d.dimension_key === dimDef.key)
                     : undefined;
                   return (
-                    <div key={`dim-${el.ref_id}`}>
-                      <p className="text-xs text-gray-500">{dimInfo?.dimension_name || dimDef?.name || el.ref_id}</p>
+                    <div key={`dim-${el.dimension_id}`}>
+                      <p className="text-xs text-gray-500">{dimInfo?.dimension_name || dimDef?.name || el.dimension_id}</p>
                       {dimInfo ? (
                         <p className="text-sm font-medium">{dimInfo.value_name}</p>
                       ) : (
@@ -474,7 +499,7 @@ export default function ActivityDetailPage() {
                 }
 
                 // Start Date
-                if (el.type === "default" && el.ref_id === "start_date") {
+                if (el.type === "field" && el.ref_key === "start_date") {
                   return (
                     <div key="start_date" className="flex items-center gap-2">
                       <Calendar className="h-4 w-4 text-gray-400 shrink-0" />
@@ -489,7 +514,7 @@ export default function ActivityDetailPage() {
                 }
 
                 // End Date
-                if (el.type === "default" && el.ref_id === "end_date") {
+                if (el.type === "field" && el.ref_key === "end_date") {
                   if (!activity.end_date) return null;
                   return (
                     <div key="end_date" className="flex items-center gap-2">
@@ -505,7 +530,7 @@ export default function ActivityDetailPage() {
                 }
 
                 // Notes
-                if (el.type === "default" && el.ref_id === "notes") {
+                if (el.type === "field" && el.ref_key === "notes") {
                   return (
                     <div key="notes" className="flex items-start gap-2">
                       <FileText className="h-4 w-4 text-gray-400 shrink-0 mt-0.5" />
@@ -521,22 +546,19 @@ export default function ActivityDetailPage() {
                   );
                 }
 
-                // Activity meta fields
-                if (el.type === "activity_meta" && activityTypeFields.length > 0) {
-                  return (
-                    <div key="activity_meta">
-                      <hr className="border-gray-100 mb-3" />
-                      <MetaFieldDisplay
-                        fields={activityTypeFields}
-                        values={activity.meta}
-                        showEmpty
-                      />
-                    </div>
-                  );
-                }
-
                 return null;
               })}
+              {/* Auto-render custom (non-system) meta fields */}
+              {activityTypeFields.length > 0 && (
+                <div key="activity_meta">
+                  <hr className="border-gray-100 mb-3" />
+                  <MetaFieldDisplay
+                    fields={activityTypeFields}
+                    values={activity.meta}
+                    showEmpty
+                  />
+                </div>
+              )}
             </div>
           )}
         </CardContent>
@@ -564,10 +586,10 @@ export default function ActivityDetailPage() {
               <form onSubmit={(e) => { e.preventDefault(); handleSave(); }}>
                 {entityTypeElements.map((el) => {
                   const sectionKey = getSectionKey(el);
-                  const isUserSource = el.ref_id === "user";
+                  const isUserSource = el.entity_type_id === "user";
                   const options = isUserSource
                     ? users.map((u) => ({ id: u.id, name: `${u.first_name} ${u.last_name}` }))
-                    : (entitiesByType[el.ref_id || ""] || []);
+                    : (entitiesByType[el.entity_type_id || ""] || []);
                   const sectionState = participantState[sectionKey] || [];
                   const participantType = isUserSource ? "user" : "entity";
                   const metaFields = getParticipationMetaFields(el);
@@ -598,7 +620,7 @@ export default function ActivityDetailPage() {
                           statuses={statuses}
                           defaultStatus={defaultStatus}
                           metaFields={metaFields}
-                          entityTypeId={isUserSource ? null : (el.ref_id || null)}
+                          entityTypeId={isUserSource ? null : (el.entity_type_id || null)}
                           entityTypeName={getElementLabel(el)}
                         />
                       ) : (

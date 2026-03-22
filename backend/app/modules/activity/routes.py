@@ -132,8 +132,11 @@ def _resolve_generated_title(activity, form) -> str | None:
     """Compose a generated title from dimension values based on form config."""
     if not form or not form.elements:
         return None
+    # Support both old format (type=default, ref_id=title) and new (type=field, ref_key=title)
     title_el = next(
-        (el for el in form.elements if el.get("type") == "default" and el.get("ref_id") == "title"),
+        (el for el in form.elements
+         if (el.get("type") == "default" and el.get("ref_id") == "title")
+         or (el.get("type") == "field" and el.get("ref_key") == "title")),
         None,
     )
     if not title_el:
@@ -377,6 +380,8 @@ def create_activity(
         form_service = ActivityFormService(db)
         form = form_service.get_by_type(uuid.UUID(activity_type_id), current_user.organization_id)
         if form and form.elements:
+            elements = ActivityFormService._ensure_defaults(list(form.elements))
+
             # Resolve which dimension IDs are covered by the submitted values
             submitted_dim_ids = set()
             if data.dimension_value_ids:
@@ -387,14 +392,14 @@ def create_activity(
                 )
                 submitted_dim_ids = {str(row[0]) for row in dvs}
 
-            for el in form.elements:
-                if not el.get("required") or not el.get("visible", True):
+            for el in elements:
+                if not el.get("required"):
                     continue
                 el_type = el.get("type")
                 if el_type == "dimension":
-                    ref_id = el.get("ref_id")
-                    if ref_id and ref_id not in submitted_dim_ids:
-                        dim = db.query(Dimension).filter_by(id=ref_id).first()
+                    dim_id = el.get("dimension_id") or el.get("ref_id")
+                    if dim_id and dim_id not in submitted_dim_ids:
+                        dim = db.query(Dimension).filter_by(id=dim_id).first()
                         dim_name = dim.name if dim else "Dimension"
                         raise ValidationError(f"{dim_name} is required")
 
@@ -501,21 +506,25 @@ def save_participants(
     db: Session = Depends(get_db),
 ):
 
-    # Validate required entity_type sections from form builder config
+    # Validate required participant_list sections from form builder config
     if activity.activity_type_id:
         form_service = ActivityFormService(db)
         form = form_service.get_by_type(activity.activity_type_id, current_user.organization_id)
         if form and form.elements:
+            elements = ActivityFormService._ensure_defaults(list(form.elements))
             submitted_sections = {r.section_key for r in data.records}
-            for el in form.elements:
-                if (
-                    el.get("type") == "entity_type"
-                    and el.get("required")
-                    and el.get("visible", True)
-                ):
-                    section_key = el.get("ref_id") or el.get("type")
+            for el in elements:
+                el_type = el.get("type")
+                is_participant = el_type in ("participant_list", "entity_type")
+                if is_participant and el.get("required"):
+                    # Support both old and new format
+                    section_key = (
+                        el.get("entity_type_id")
+                        or el.get("ref_id")
+                        or el_type
+                    )
                     if section_key not in submitted_sections:
-                        ref_id = el.get("ref_id")
+                        ref_id = el.get("entity_type_id") or el.get("ref_id")
                         if ref_id == "user":
                             label = "Users (staff)"
                         else:
@@ -589,7 +598,7 @@ def get_activity_form(
             "activity_type_id": str(activity_type_id),
             "elements": list(ActivityFormService.DEFAULT_ELEMENTS),
         }
-    # Ensure new default elements are present in existing forms
+    # Ensure defaults are present and old format is migrated
     patched_elements = ActivityFormService._ensure_defaults(list(form.elements))
     resp = ActivityFormResponse.dump_from_model(form)
     resp["elements"] = patched_elements

@@ -155,15 +155,14 @@ export interface ActivityType {
 // --- Activity Form (Form Builder) ---
 
 export interface ActivityFormElement {
-  type: "default" | "dimension" | "entity_type" | "activity_meta";
-  ref_id: string | null; // dimension_id, entity_type_id, "user", or default field name ("start_date", "notes")
+  type: "field" | "dimension" | "participant_list";
+  ref_key?: string | null; // for type="field" → field key (system or custom)
+  dimension_id?: string | null; // for type="dimension"
+  entity_type_id?: string | null; // for type="participant_list"
   sort_order: number;
-  display_type: string; // "dropdown", "checklist", "radio", "search_select", "date_range", "textarea"
-  visible: boolean;
-  required: boolean;
-  stage: "create" | "record"; // "create" = shown on create form, "record" = shown only on edit
-  removable: boolean;
-  config?: Record<string, unknown>;
+  display_type?: string | null; // for dimensions/participant_lists only
+  required?: boolean; // for dimensions/participant_lists only
+  config?: Record<string, unknown>; // for title generation config
 }
 
 export interface ActivityForm {
@@ -207,13 +206,22 @@ export interface ActivityParticipant {
 
 export type MetaFieldType = "text" | "number" | "date" | "datetime" | "select" | "multiselect" | "boolean";
 
+export type MetaFieldDisplayType = "input" | "dropdown" | "radio" | "checklist" | "textarea" | "date" | "datetime";
+export type MetaFieldStage = "create" | "record" | "both";
+
 export interface MetaFieldDefinition {
   key: string;
   label: string;
   type: MetaFieldType;
+  system?: boolean;
   required?: boolean;
   options?: string[]; // for select/multiselect
   default?: string | number | boolean | string[];
+
+  // Form presentation
+  display_type?: MetaFieldDisplayType | null;
+  stage?: MetaFieldStage;
+  visible?: boolean;
 }
 
 export interface MetaFieldSchemaScope {

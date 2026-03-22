@@ -15,6 +15,12 @@ FIELD_TYPES = Literal[
     "text", "number", "date", "datetime", "select", "multiselect", "boolean"
 ]
 
+DISPLAY_TYPES = Literal[
+    "input", "dropdown", "radio", "checklist", "textarea", "date", "datetime"
+]
+
+STAGE_TYPES = Literal["create", "record", "both"]
+
 
 class FieldDefinition(BaseModel):
     """Typed definition for a single field in a meta field schema."""
@@ -22,8 +28,14 @@ class FieldDefinition(BaseModel):
     key: str = Field(..., min_length=1)
     label: str = Field(..., min_length=1)
     type: FIELD_TYPES
+    system: bool = False
     required: bool = False
     options: list[str] | None = None
+
+    # Form presentation
+    display_type: DISPLAY_TYPES | None = None
+    stage: STAGE_TYPES = "both"
+    visible: bool = True
 
     @model_validator(mode="after")
     def validate_options(self):

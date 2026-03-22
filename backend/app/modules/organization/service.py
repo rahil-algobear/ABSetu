@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.common.exceptions import NotFoundError, ValidationError
 from app.modules.organization.model import ListConfig, MetaFieldSchema, USER_ENTITY_SENTINEL
 from app.modules.organization.model import Organization
+from app.modules.organization.system_fields import get_system_fields, merge_system_fields
 
 
 class OrganizationService:
@@ -69,7 +70,7 @@ class MetaFieldSchemaService:
         dimension_value_id: uuid.UUID | None = None,
         dimension_id: uuid.UUID | None = None,
     ) -> list[dict]:
-        """Get fields for a specific scope."""
+        """Get fields for a specific scope, with system fields merged."""
         row = (
             self.db.query(MetaFieldSchema)
             .filter_by(
@@ -82,11 +83,97 @@ class MetaFieldSchemaService:
             )
             .first()
         )
-        return row.fields if row else []
+        db_fields = row.fields if row else []
+
+        # System fields only apply to base scope (no dimension/activity sub-scoping)
+        is_base_scope = (
+            not activity_type_id
+            and not dimension_value_id
+            and not dimension_id
+        )
+        # For entity scope: base = entity_type_id set, no other sub-scoping
+        # For activity scope: base = no activity_type_id, no dimension_value_id
+        if is_base_scope and scope_type in ("entity", "activity"):
+            return merge_system_fields(scope_type, db_fields)
+
+        return db_fields
 
     def get_all_schemas(self, org_id: uuid.UUID) -> list[MetaFieldSchema]:
         """Get all schema rows for an org."""
         return self.db.query(MetaFieldSchema).filter_by(organization_id=org_id).all()
+
+    def get_all_schemas_with_system_fields(self, org_id: uuid.UUID) -> list[dict]:
+        """Get all schema rows as dicts, with system fields merged into base scopes.
+
+        Returns a list of dicts matching MetaFieldSchemaResponse format.
+        """
+        rows = self.get_all_schemas(org_id)
+
+        # Track which base scopes we've seen (for injecting system field scopes)
+        seen_base_scopes: set[str] = set()
+        results = []
+
+        for row in rows:
+            scope_type = row.scope_type
+            is_base = (
+                not row.activity_type_id
+                and not row.dimension_value_id
+                and not row.dimension_id
+            )
+
+            if is_base and scope_type in ("entity", "activity"):
+                # Merge system fields into this row's fields
+                merged = merge_system_fields(scope_type, row.fields)
+                seen_base_scopes.add(f"{scope_type}:{row.entity_type_id or ''}")
+                results.append({
+                    "row": row,
+                    "fields": merged,
+                })
+            else:
+                results.append({
+                    "row": row,
+                    "fields": row.fields,
+                })
+
+        # Inject system-field-only scopes that have no DB row yet
+        # For "activity" scope: always inject if no base activity row exists
+        if "activity:" not in seen_base_scopes:
+            system = get_system_fields("activity")
+            if system:
+                results.append({
+                    "row": None,
+                    "scope_type": "activity",
+                    "entity_type_id": None,
+                    "activity_type_id": None,
+                    "dimension_value_id": None,
+                    "dimension_id": None,
+                    "fields": system,
+                })
+
+        # For "entity" scope: inject for each entity type that has no DB row
+        from app.modules.entity.model import EntityType
+
+        entity_types = (
+            self.db.query(EntityType)
+            .filter_by(organization_id=org_id)
+            .all()
+        )
+        for et in entity_types:
+            scope_key = f"entity:{et.id}"
+            if scope_key not in seen_base_scopes:
+                system = get_system_fields("entity")
+                if system:
+                    results.append({
+                        "row": None,
+                        "scope_type": "entity",
+                        "entity_type_id": et.id,
+                        "activity_type_id": None,
+                        "dimension_value_id": None,
+                        "dimension_id": None,
+                        "fields": system,
+                    })
+
+        return results
 
     def update_schema(
         self,
@@ -98,7 +185,69 @@ class MetaFieldSchemaService:
         dimension_value_id: uuid.UUID | None = None,
         dimension_id: uuid.UUID | None = None,
     ) -> list[dict]:
-        """Create or update a meta field schema by structured scope."""
+        """Create or update a meta field schema by structured scope.
+
+        System fields cannot be deleted or have their key/type changed.
+        Only overridable properties (label, required, display_type, stage,
+        visible) are stored for system fields.
+        """
+        from app.modules.organization.system_fields import (
+            SYSTEM_FIELD_IMMUTABLE_PROPS,
+            SYSTEM_FIELD_OVERRIDABLE_PROPS,
+        )
+
+        # Check if this is a base scope that has system fields
+        is_base_scope = (
+            not activity_type_id
+            and not dimension_value_id
+            and not dimension_id
+        )
+        system_defaults = get_system_fields(scope_type) if is_base_scope else []
+        system_keys = {f["key"] for f in system_defaults}
+        system_by_key = {f["key"]: f for f in system_defaults}
+
+        if system_keys:
+            # Validate: system fields cannot be deleted
+            submitted_keys = {f["key"] for f in fields if f.get("system")}
+            missing = system_keys - submitted_keys
+            if missing:
+                raise ValidationError(
+                    f"System fields cannot be deleted: {', '.join(missing)}"
+                )
+
+            # Validate: system field immutable props cannot change
+            for f in fields:
+                if not f.get("system"):
+                    continue
+                default = system_by_key.get(f["key"])
+                if not default:
+                    raise ValidationError(
+                        f"Unknown system field: {f['key']}"
+                    )
+                for prop in SYSTEM_FIELD_IMMUTABLE_PROPS:
+                    if prop in f and f[prop] != default[prop]:
+                        raise ValidationError(
+                            f"Cannot change '{prop}' of system field '{f['key']}'"
+                        )
+
+        # For storage: only keep override properties for system fields
+        # (the defaults are injected at read time)
+        fields_to_store = []
+        for f in fields:
+            if f.get("system") and f["key"] in system_by_key:
+                default = system_by_key[f["key"]]
+                override = {"key": f["key"], "system": True}
+                has_override = False
+                for prop in SYSTEM_FIELD_OVERRIDABLE_PROPS:
+                    if prop in f and f[prop] != default.get(prop):
+                        override[prop] = f[prop]
+                        has_override = True
+                if has_override:
+                    fields_to_store.append(override)
+                # If no overrides, don't store — defaults will be used
+            else:
+                fields_to_store.append(f)
+
         row = (
             self.db.query(MetaFieldSchema)
             .filter_by(
@@ -112,7 +261,7 @@ class MetaFieldSchemaService:
             .first()
         )
         if row:
-            row.fields = fields
+            row.fields = fields_to_store
         else:
             row = MetaFieldSchema(
                 organization_id=org_id,
@@ -121,7 +270,7 @@ class MetaFieldSchemaService:
                 activity_type_id=activity_type_id,
                 dimension_value_id=dimension_value_id,
                 dimension_id=dimension_id,
-                fields=fields,
+                fields=fields_to_store,
             )
             self.db.add(row)
         self.db.commit()

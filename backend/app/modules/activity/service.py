@@ -354,47 +354,31 @@ class ActivityParticipantService:
 
 
 class ActivityFormService:
+    # Default system field elements in the new simplified format.
+    # These are always present and cannot be removed.
+    SYSTEM_FIELD_KEYS = ["title", "start_date", "end_date", "notes"]
+
     DEFAULT_ELEMENTS = [
         {
-            "type": "default",
-            "ref_id": "title",
+            "type": "field",
+            "ref_key": "title",
             "sort_order": 0,
-            "display_type": "text",
-            "visible": True,
-            "required": False,
-            "stage": "create",
-            "removable": False,
             "config": {"mode": "free_text"},
         },
         {
-            "type": "default",
-            "ref_id": "start_date",
+            "type": "field",
+            "ref_key": "start_date",
             "sort_order": 1,
-            "display_type": "date",
-            "visible": True,
-            "required": True,
-            "stage": "create",
-            "removable": False,
         },
         {
-            "type": "default",
-            "ref_id": "end_date",
+            "type": "field",
+            "ref_key": "end_date",
             "sort_order": 2,
-            "display_type": "date",
-            "visible": True,
-            "required": False,
-            "stage": "create",
-            "removable": False,
         },
         {
-            "type": "default",
-            "ref_id": "notes",
+            "type": "field",
+            "ref_key": "notes",
             "sort_order": 3,
-            "display_type": "textarea",
-            "visible": True,
-            "required": False,
-            "stage": "record",
-            "removable": False,
         },
     ]
 
@@ -402,19 +386,77 @@ class ActivityFormService:
         self.db = db
 
     @staticmethod
+    def _migrate_element(el: dict) -> dict:
+        """Migrate a single element from old format to new format.
+
+        Old format: type=default/dimension/entity_type/activity_meta, ref_id=...
+        New format: type=field/dimension/participant_list, ref_key/dimension_id/entity_type_id=...
+        """
+        old_type = el.get("type")
+
+        # Already in new format
+        if old_type in ("field", "participant_list"):
+            return el
+
+        if old_type == "default":
+            # default → field
+            return {
+                "type": "field",
+                "ref_key": el.get("ref_id"),
+                "sort_order": el.get("sort_order", 0),
+                "config": el.get("config"),
+            }
+        elif old_type == "dimension":
+            return {
+                "type": "dimension",
+                "dimension_id": el.get("ref_id"),
+                "sort_order": el.get("sort_order", 0),
+                "display_type": el.get("display_type", "dropdown"),
+                "required": el.get("required", False),
+            }
+        elif old_type == "entity_type":
+            return {
+                "type": "participant_list",
+                "entity_type_id": el.get("ref_id"),
+                "sort_order": el.get("sort_order", 0),
+                "display_type": el.get("display_type", "checklist"),
+                "required": el.get("required", False),
+                "config": el.get("config"),
+            }
+        elif old_type == "activity_meta":
+            # activity_meta elements are no longer needed — meta fields are
+            # now included as individual "field" elements via FieldDefinition.
+            # Skip them during migration.
+            return None
+        else:
+            return el
+
+    @staticmethod
+    def _migrate_elements(elements: list[dict]) -> list[dict]:
+        """Migrate all elements from old format to new format."""
+        migrated = []
+        for el in elements:
+            result = ActivityFormService._migrate_element(el)
+            if result is not None:
+                migrated.append(result)
+        return migrated
+
+    @staticmethod
     def _ensure_defaults(elements: list[dict]) -> list[dict]:
-        """Ensure default elements are present. Preserve user config if they exist."""
-        default_ref_ids = {el["ref_id"] for el in ActivityFormService.DEFAULT_ELEMENTS}
-        existing_defaults = {
-            el["ref_id"]
+        """Ensure system field elements are present."""
+        # First migrate any old-format elements
+        elements = ActivityFormService._migrate_elements(elements)
+
+        existing_keys = {
+            el.get("ref_key")
             for el in elements
-            if el.get("type") == "default" and el.get("ref_id") in default_ref_ids
+            if el.get("type") == "field" and el.get("ref_key")
         }
-        # Add missing defaults at the beginning, shift existing elements down
+        # Add missing system field defaults
         missing = [
             {**el}
             for el in ActivityFormService.DEFAULT_ELEMENTS
-            if el["ref_id"] not in existing_defaults
+            if el["ref_key"] not in existing_keys
         ]
         if missing:
             offset = len(missing)
@@ -423,17 +465,6 @@ class ActivityFormService:
             for i, m in enumerate(missing):
                 m["sort_order"] = i
             elements = missing + elements
-        # Ensure default elements are never removable
-        for el in elements:
-            if el.get("type") == "default" and el.get("ref_id") in default_ref_ids:
-                el["removable"] = False
-            # Migrate old combined date_range to separate date elements
-            if (
-                el.get("type") == "default"
-                and el.get("ref_id") == "start_date"
-                and el.get("display_type") == "date_range"
-            ):
-                el["display_type"] = "date"
         return elements
 
     def get_by_type(self, activity_type_id: uuid.UUID, org_id: uuid.UUID) -> ActivityForm | None:

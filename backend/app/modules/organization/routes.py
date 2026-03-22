@@ -154,10 +154,49 @@ def get_all_meta_field_schemas(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Get all meta field schemas for the organization."""
+    """Get all meta field schemas for the organization, with system fields merged."""
     service = MetaFieldSchemaService(db)
-    rows = service.get_all_schemas(current_user.organization_id)
-    return [_schema_to_response(row) for row in rows]
+    entries = service.get_all_schemas_with_system_fields(current_user.organization_id)
+    results = []
+    for entry in entries:
+        row = entry.get("row")
+        if row:
+            resp = _schema_to_response(row)
+            resp["fields"] = entry["fields"]
+        else:
+            # Synthetic entry for system-field-only scopes (no DB row)
+            et_id = entry.get("entity_type_id")
+            et_id_str = None
+            if et_id:
+                et_id_str = (
+                    "user"
+                    if str(et_id) == USER_ENTITY_SENTINEL
+                    else str(et_id)
+                )
+            resp = MetaFieldSchemaResponse(
+                scope=MetaFieldScope(
+                    type=entry["scope_type"],
+                    entity_type_id=et_id_str,
+                    activity_type_id=(
+                        str(entry["activity_type_id"])
+                        if entry.get("activity_type_id")
+                        else None
+                    ),
+                    dimension_id=(
+                        str(entry["dimension_id"])
+                        if entry.get("dimension_id")
+                        else None
+                    ),
+                    dimension_value_id=(
+                        str(entry["dimension_value_id"])
+                        if entry.get("dimension_value_id")
+                        else None
+                    ),
+                ),
+                fields=entry["fields"],
+            ).model_dump()
+        results.append(resp)
+    return results
 
 
 @router.put(

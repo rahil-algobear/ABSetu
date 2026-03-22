@@ -13,6 +13,8 @@ import {
   MetaFieldDefinition,
   MetaFieldSchemaItem,
   MetaFieldType,
+  MetaFieldStage,
+  MetaFieldDisplayType,
   Dimension,
   DimensionValue,
   ActivityType,
@@ -54,6 +56,8 @@ const emptyField: MetaFieldDefinition = {
   type: "text",
   required: false,
   options: [],
+  visible: true,
+  stage: "both",
 };
 
 type SectionKind = "entity" | "dimension" | "other" | "activity" | "participant";
@@ -382,6 +386,7 @@ export default function MetaFieldsPage() {
   const handleDelete = (index: number, schema?: MetaFieldSchemaItem) => {
     const target = schema || (currentScope ? findMatchingSchema(currentScope) : undefined);
     if (!target) return;
+    if (target.fields[index]?.system) { toast.error("System fields cannot be deleted"); return; }
     if (!confirm(`Delete field "${target.fields[index]?.label}"?`)) return;
     const updated = target.fields.filter((_, i) => i !== index);
     saveFields(target.scope, updated);
@@ -710,7 +715,14 @@ export default function MetaFieldsPage() {
                     <TableCell>
                       <GripVertical className="h-4 w-4 text-gray-300" />
                     </TableCell>
-                    <TableCell className="font-medium">{field.label}</TableCell>
+                    <TableCell className="font-medium">
+                      {field.label}
+                      {field.system && (
+                        <span className="ml-1.5 text-[10px] font-medium text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">
+                          System
+                        </span>
+                      )}
+                    </TableCell>
                     <TableCell>
                       {FIELD_TYPES.find((ft) => ft.value === field.type)?.label || field.type}
                     </TableCell>
@@ -732,9 +744,11 @@ export default function MetaFieldsPage() {
                         <button onClick={() => openEdit(index)} className="text-gray-400 hover:text-purple-600">
                           <Pencil className="h-4 w-4" />
                         </button>
-                        <button onClick={() => handleDelete(index)} className="text-gray-400 hover:text-red-500">
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                        {!field.system && (
+                          <button onClick={() => handleDelete(index)} className="text-gray-400 hover:text-red-500">
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -807,7 +821,14 @@ export default function MetaFieldsPage() {
                           <span className="font-medium text-gray-600">{group.scopeLabel}</span>
                         )}
                       </TableCell>
-                      <TableCell className="font-medium">{field.label}</TableCell>
+                      <TableCell className="font-medium">
+                        {field.label}
+                        {field.system && (
+                          <span className="ml-1.5 text-[10px] font-medium text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">
+                            System
+                          </span>
+                        )}
+                      </TableCell>
                       <TableCell>
                         {FIELD_TYPES.find((ft) => ft.value === field.type)?.label || field.type}
                       </TableCell>
@@ -820,12 +841,14 @@ export default function MetaFieldsPage() {
                           >
                             <Pencil className="h-4 w-4" />
                           </button>
-                          <button
-                            onClick={() => handleDelete(index, group.schema)}
-                            className="text-gray-400 hover:text-red-500"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
+                          {!field.system && (
+                            <button
+                              onClick={() => handleDelete(index, group.schema)}
+                              className="text-gray-400 hover:text-red-500"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -941,13 +964,17 @@ export default function MetaFieldsPage() {
             />
           </div>
           {editingIndex !== null && (
-            <p className="text-xs text-gray-400 font-mono">Key: {fieldForm.key}</p>
+            <p className="text-xs text-gray-400 font-mono">
+              Key: {fieldForm.key}
+              {fieldForm.system && <span className="ml-2 text-blue-500">(system field)</span>}
+            </p>
           )}
           <div>
             <Label htmlFor="field-type">Type</Label>
             <select
               id="field-type"
-              className="w-full border rounded-md p-2 text-sm"
+              disabled={fieldForm.system}
+              className={`w-full border rounded-md p-2 text-sm ${fieldForm.system ? 'opacity-60 cursor-not-allowed bg-gray-50' : ''}`}
               value={fieldForm.type}
               onChange={(e) => setFieldForm({ ...fieldForm, type: e.target.value as MetaFieldType })}
             >
@@ -963,6 +990,49 @@ export default function MetaFieldsPage() {
             />
             <Label>Required</Label>
           </div>
+          <div className="flex items-center gap-2">
+            <Switch
+              checked={fieldForm.visible !== false}
+              onCheckedChange={(checked) => setFieldForm({ ...fieldForm, visible: checked })}
+              disabled={fieldForm.system}
+            />
+            <Label>Visible on forms</Label>
+          </div>
+          {fieldForm.visible !== false && (
+            <div>
+              <Label htmlFor="field-stage">Show on</Label>
+              <select
+                id="field-stage"
+                className="w-full border rounded-md p-2 text-sm"
+                value={fieldForm.stage || "both"}
+                onChange={(e) => setFieldForm({ ...fieldForm, stage: e.target.value as MetaFieldStage })}
+              >
+                <option value="both">Both create and edit</option>
+                <option value="create">Create only</option>
+                <option value="record">Edit only</option>
+              </select>
+            </div>
+          )}
+          {(fieldForm.type === "text" || fieldForm.type === "select" || fieldForm.type === "multiselect") && (
+            <div>
+              <Label htmlFor="field-display-type">
+                Display as <span className="text-gray-400 text-xs font-normal">(optional)</span>
+              </Label>
+              <select
+                id="field-display-type"
+                className="w-full border rounded-md p-2 text-sm"
+                value={fieldForm.display_type || ""}
+                onChange={(e) => setFieldForm({ ...fieldForm, display_type: (e.target.value || undefined) as MetaFieldDisplayType | undefined })}
+              >
+                <option value="">Auto</option>
+                <option value="input">Text input</option>
+                <option value="textarea">Textarea</option>
+                <option value="dropdown">Dropdown</option>
+                <option value="radio">Radio buttons</option>
+                <option value="checklist">Checklist</option>
+              </select>
+            </div>
+          )}
           {showOptions && (
             <div>
               <Label htmlFor="field-options">

@@ -137,24 +137,52 @@ function NewActivityPageContent() {
     enabled: !!selectedTypeId,
   });
 
+  // Build field definition lookup from meta schemas (includes system fields)
+  const allActivityFields = useMemo((): MetaFieldDefinition[] => {
+    return collectActivityFields(allMetaSchemas, selectedTypeId || null, formData.dimension_value_ids);
+  }, [selectedTypeId, formData.dimension_value_ids, allMetaSchemas]);
+
+  const fieldDefMap = useMemo(() => {
+    const map: Record<string, MetaFieldDefinition> = {};
+    for (const f of allActivityFields) {
+      map[f.key] = f;
+    }
+    return map;
+  }, [allActivityFields]);
+
+  // Custom (non-system) meta fields for DynamicMetaForm
+  const customMetaFields = useMemo(() => {
+    return allActivityFields.filter((f) => !f.system);
+  }, [allActivityFields]);
+
   const formElements: ActivityFormElement[] = useMemo(() => {
     if (!formConfig?.elements?.length) return [];
     return [...formConfig.elements]
-      .filter((el) => el.visible && el.stage === "create")
+      .filter((el) => {
+        if (el.type === "field") {
+          const def = fieldDefMap[el.ref_key || ""];
+          if (!def) return true; // unknown field, show anyway
+          if (def.visible === false) return false;
+          if (def.stage && def.stage !== "both" && def.stage !== "create") return false;
+          return true;
+        }
+        // Structural elements always shown
+        return true;
+      })
       .sort((a, b) => a.sort_order - b.sort_order);
-  }, [formConfig]);
+  }, [formConfig, fieldDefMap]);
 
   const createEntityElements: ActivityFormElement[] = useMemo(() => {
-    return formElements.filter((el) => el.type === "entity_type");
+    return formElements.filter((el) => el.type === "participant_list");
   }, [formElements]);
 
   const createEntitySourceIds = useMemo(() => {
     return createEntityElements
-      .filter((el) => el.ref_id && el.ref_id !== "user")
-      .map((el) => el.ref_id!);
+      .filter((el) => el.entity_type_id && el.entity_type_id !== "user")
+      .map((el) => el.entity_type_id!);
   }, [createEntityElements]);
 
-  const hasCreateUserSection = createEntityElements.some((el) => el.ref_id === "user");
+  const hasCreateUserSection = createEntityElements.some((el) => el.entity_type_id === "user");
 
   const { data: createEntitiesByType = {} } = useQuery({
     queryKey: ["entities-for-create", createEntitySourceIds.join(",")],
@@ -175,10 +203,6 @@ function NewActivityPageContent() {
     enabled: hasCreateUserSection,
   });
 
-  const activityMetaFields = useMemo((): MetaFieldDefinition[] => {
-    return collectActivityFields(allMetaSchemas, selectedTypeId || null, formData.dimension_value_ids);
-  }, [selectedTypeId, formData.dimension_value_ids, allMetaSchemas]);
-
   const selectedByDim = useMemo(() => {
     const map: Record<string, string> = {};
     for (const dim of dimensions) {
@@ -198,8 +222,8 @@ function NewActivityPageContent() {
   // Dimension form element IDs (only dimensions in the form, in order)
   const formDimensions = useMemo(() => {
     return formElements
-      .filter((el) => el.type === "dimension" && el.ref_id)
-      .map((el) => ({ id: el.ref_id! }));
+      .filter((el) => el.type === "dimension" && el.dimension_id)
+      .map((el) => ({ id: el.dimension_id! }));
   }, [formElements]);
 
   const handleAutoSelect = useCallback(
@@ -223,7 +247,7 @@ function NewActivityPageContent() {
       const activity = await activityApi.create(payload);
       const allRecords: { participant_type: string; participant_id: string; section_key: string; status?: string; meta?: Record<string, unknown> }[] = [];
       for (const el of createEntityElements) {
-        const sectionKey = el.ref_id || el.type;
+        const sectionKey = el.entity_type_id || el.type;
         const sectionState = participantState[sectionKey] || [];
         for (const p of sectionState) {
           allRecords.push({
@@ -248,79 +272,110 @@ function NewActivityPageContent() {
     onError: () => toast.error(`Failed to create ${typeName.toLowerCase()}`),
   });
 
+  // Collect custom field keys in the layout to avoid duplicating them
+  const layoutCustomFieldKeys = useMemo(() => {
+    return new Set(
+      formElements
+        .filter((el) => el.type === "field" && el.ref_key && !fieldDefMap[el.ref_key]?.system)
+        .map((el) => el.ref_key!)
+    );
+  }, [formElements, fieldDefMap]);
+
+  // Custom meta fields NOT in the layout (auto-appended)
+  const autoAppendFields = useMemo(() => {
+    return customMetaFields.filter(
+      (f) => !layoutCustomFieldKeys.has(f.key) && f.visible !== false
+        && (!f.stage || f.stage === "both" || f.stage === "create")
+    );
+  }, [customMetaFields, layoutCustomFieldKeys]);
+
   const renderElement = (el: ActivityFormElement) => {
     switch (el.type) {
-      case "default": {
-        if (el.ref_id === "title") {
-          const titleConfig = el.config || { mode: "free_text" };
-          const titleMode = (titleConfig.mode as string) || "free_text";
-          if (titleMode === "generated") return null;
+      case "field": {
+        const key = el.ref_key;
+        if (!key) return null;
+        const def = fieldDefMap[key];
+        const label = def?.label || key;
+        const isRequired = def?.required || false;
 
-          return (
-            <div key="default-title">
-              <label className="text-sm font-medium">
-                Title{el.required && <span className="text-red-500 ml-0.5">*</span>}
-              </label>
-              <Input
-                placeholder="Activity title..."
-                value={formData.title}
-                onChange={(e) =>
-                  setFormData({ ...formData, title: e.target.value })
-                }
-                required={el.required}
-                className="mt-1"
-              />
-            </div>
-          );
+        // System fields: render hardcoded inputs
+        if (def?.system) {
+          if (key === "title") {
+            const titleConfig = el.config || { mode: "free_text" };
+            const titleMode = (titleConfig.mode as string) || "free_text";
+            if (titleMode === "generated") return null;
+            return (
+              <div key="field-title">
+                <label className="text-sm font-medium">
+                  {label}{isRequired && <span className="text-red-500 ml-0.5">*</span>}
+                </label>
+                <Input
+                  placeholder="Activity title..."
+                  value={formData.title}
+                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  required={isRequired}
+                  className="mt-1"
+                />
+              </div>
+            );
+          }
+          if (key === "start_date") {
+            return (
+              <div key="field-start_date">
+                <label className="text-sm font-medium">
+                  {label}{isRequired && <span className="text-red-500 ml-0.5">*</span>}
+                </label>
+                <DateTimeInput
+                  value={formData.start_date}
+                  onChange={(value) => setFormData({ ...formData, start_date: value })}
+                  required={isRequired}
+                  className="mt-1"
+                />
+              </div>
+            );
+          }
+          if (key === "end_date") {
+            return (
+              <div key="field-end_date">
+                <label className="text-sm font-medium">
+                  {label}{isRequired && <span className="text-red-500 ml-0.5">*</span>}
+                </label>
+                <DateTimeInput
+                  value={formData.end_date}
+                  onChange={(value) => setFormData({ ...formData, end_date: value })}
+                  min={formData.start_date}
+                  required={isRequired}
+                  className="mt-1"
+                />
+              </div>
+            );
+          }
+          if (key === "notes") {
+            return (
+              <div key="field-notes">
+                <label className="text-sm font-medium">
+                  {label}{isRequired && <span className="text-red-500 ml-0.5">*</span>}
+                </label>
+                <Input
+                  placeholder="Optional notes..."
+                  value={formData.notes}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  required={isRequired}
+                />
+              </div>
+            );
+          }
+          return null;
         }
-        if (el.ref_id === "start_date") {
+
+        // Custom meta field in layout: render inline via DynamicMetaForm
+        if (def) {
           return (
-            <div key="default-start_date">
-              <label className="text-sm font-medium">
-                Start Date{el.required && <span className="text-red-500 ml-0.5">*</span>}
-              </label>
-              <DateTimeInput
-                value={formData.start_date}
-                onChange={(value) =>
-                  setFormData({ ...formData, start_date: value })
-                }
-                required={el.required}
-                className="mt-1"
-              />
-            </div>
-          );
-        }
-        if (el.ref_id === "end_date") {
-          return (
-            <div key="default-end_date">
-              <label className="text-sm font-medium">
-                End Date{el.required && <span className="text-red-500 ml-0.5">*</span>}
-              </label>
-              <DateTimeInput
-                value={formData.end_date}
-                onChange={(value) =>
-                  setFormData({ ...formData, end_date: value })
-                }
-                min={formData.start_date}
-                required={el.required}
-                className="mt-1"
-              />
-            </div>
-          );
-        }
-        if (el.ref_id === "notes") {
-          return (
-            <div key="default-notes">
-              <label className="text-sm font-medium">
-                Notes{el.required && <span className="text-red-500 ml-0.5">*</span>}
-              </label>
-              <Input
-                placeholder="Optional notes..."
-                value={formData.notes}
-                onChange={(e) =>
-                  setFormData({ ...formData, notes: e.target.value })
-                }
-                required={el.required}
+            <div key={`field-${key}`}>
+              <DynamicMetaForm
+                fields={[def]}
+                values={metaValues}
+                onChange={setMetaValues}
               />
             </div>
           );
@@ -329,7 +384,8 @@ function NewActivityPageContent() {
       }
 
       case "dimension": {
-        const dim = dimensions.find((d) => d.id === el.ref_id);
+        const dimId = el.dimension_id;
+        const dim = dimensions.find((d) => d.id === dimId);
         if (!dim) return null;
         const dimValues = allDimensionValues.filter(
           (dv) => dv.dimension_id === dim.id
@@ -379,12 +435,13 @@ function NewActivityPageContent() {
         );
       }
 
-      case "entity_type": {
-        const isUserSource = el.ref_id === "user";
-        const sectionKey = el.ref_id || el.type;
+      case "participant_list": {
+        const etId = el.entity_type_id;
+        const isUserSource = etId === "user";
+        const sectionKey = etId || el.type;
         const options = isUserSource
           ? createUsers.map((u) => ({ id: u.id, name: `${u.first_name} ${u.last_name}` }))
-          : (createEntitiesByType[el.ref_id || ""] || []);
+          : (createEntitiesByType[etId || ""] || []);
         const participantType = isUserSource ? "user" : "entity";
         const sectionState = participantState[sectionKey] || [];
         const captureStatus = el.config?.capture_status as boolean || false;
@@ -392,10 +449,10 @@ function NewActivityPageContent() {
         const defaultStatus = (el.config?.default_status as string) || statuses[0];
         const etLabel = isUserSource
           ? "Users (staff)"
-          : entityTypes.find((t) => t.id === el.ref_id)?.name || "Participants";
+          : entityTypes.find((t) => t.id === etId)?.name || "Participants";
 
         return (
-          <div key={`entity-${sectionKey}`}>
+          <div key={`participant-${sectionKey}`}>
             <h3 className="text-sm font-semibold mb-2">
               {etLabel}
               {el.required && <span className="text-red-500 ml-0.5">*</span>}
@@ -412,24 +469,12 @@ function NewActivityPageContent() {
               statuses={statuses}
               defaultStatus={defaultStatus}
               metaFields={[]}
-              entityTypeId={isUserSource ? null : (el.ref_id || null)}
+              entityTypeId={isUserSource ? null : (etId || null)}
               entityTypeName={etLabel}
             />
           </div>
         );
       }
-
-      case "activity_meta":
-        if (activityMetaFields.length === 0) return null;
-        return (
-          <div key="activity_meta">
-            <DynamicMetaForm
-              fields={activityMetaFields}
-              values={metaValues}
-              onChange={setMetaValues}
-            />
-          </div>
-        );
 
       default:
         return null;
@@ -458,14 +503,25 @@ function NewActivityPageContent() {
                 notes: formData.notes || undefined,
                 dimension_value_ids: formData.dimension_value_ids,
                 activity_type_id: selectedTypeId || undefined,
-                ...(activityMetaFields.length > 0 ? { meta: metaValues } : {}),
+                ...(customMetaFields.length > 0 ? { meta: metaValues } : {}),
               };
               createMutation.mutate(payload);
             }}
             className="space-y-3"
           >
             {hasFormConfig
-              ? formElements.map(renderElement)
+              ? (
+                <>
+                  {formElements.map(renderElement)}
+                  {autoAppendFields.length > 0 && (
+                    <DynamicMetaForm
+                      fields={autoAppendFields}
+                      values={metaValues}
+                      onChange={setMetaValues}
+                    />
+                  )}
+                </>
+              )
               : (
                 <p className="text-sm text-gray-500">
                   The form for this activity type has not been configured yet. Please ask your admin to set it up in the Form Builder under Admin settings.
