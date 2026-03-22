@@ -143,6 +143,7 @@ class ActivityService:
         return {
             "activity_type_id": {"type": "exact", "column": Activity.activity_type_id},
             "start_date": {"type": "date_range", "column": Activity.start_date},
+            "end_date": {"type": "date_range", "column": Activity.end_date},
             "created_at": {"type": "date_range", "column": Activity.created_at},
         }
 
