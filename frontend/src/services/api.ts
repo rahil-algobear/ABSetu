@@ -12,6 +12,7 @@ import {
   Enrollment,
   Entity,
   EntityType,
+  ListColumnConfig,
   LoginResponse,
   MetaFieldDefinition,
   MetaFieldSchemaItem,
@@ -227,6 +228,12 @@ export interface EntityFilterDefinition {
   max?: number;
 }
 
+export interface FilterResponse {
+  filters: EntityFilterDefinition[];
+  sortable_keys: string[];
+  columns: ListColumnConfig[];
+}
+
 export const entityApi = {
   list: async (entityTypeId?: string): Promise<Entity[]> => {
     const params = entityTypeId ? `?entity_type_id=${entityTypeId}` : '';
@@ -238,8 +245,9 @@ export const entityApi = {
     const response = await authAxios.get<PaginatedResponse<Entity>>('/entities/', { params });
     return response.data;
   },
-  getFilters: async (): Promise<{ filters: EntityFilterDefinition[] }> => {
-    const response = await authAxios.get<{ filters: EntityFilterDefinition[] }>('/entities/filters');
+  getFilters: async (entityTypeId?: string): Promise<FilterResponse> => {
+    const params = entityTypeId ? { entity_type_id: entityTypeId } : {};
+    const response = await authAxios.get<FilterResponse>('/entities/filters', { params });
     return response.data;
   },
   get: async (id: string): Promise<Entity> => {
@@ -304,10 +312,24 @@ export const activityFormApi = {
 
 // --- Activities ---
 
+export interface ActivityListParams {
+  search?: string;
+  filters?: string;
+  sort_by?: string;
+  sort_order?: string;
+  page?: number;
+  limit?: number;
+  activity_type_id?: string;
+}
+
 export const activityApi = {
-  list: async (activityTypeId?: string): Promise<Activity[]> => {
+  listPaginated: async (params: ActivityListParams): Promise<PaginatedResponse<Activity>> => {
+    const response = await authAxios.get<PaginatedResponse<Activity>>('/activities/', { params });
+    return response.data;
+  },
+  getFilters: async (activityTypeId?: string): Promise<FilterResponse> => {
     const params = activityTypeId ? { activity_type_id: activityTypeId } : {};
-    const response = await authAxios.get<Activity[]>('/activities/', { params });
+    const response = await authAxios.get<FilterResponse>('/activities/filters', { params });
     return response.data;
   },
   listByEntity: async (entityId: string): Promise<Activity[]> => {
@@ -432,6 +454,19 @@ export const dashboardApi = {
     }
     const qs = params.toString();
     const response = await authAxios.get<DashboardStats>(`/dashboard/stats${qs ? `?${qs}` : ''}`);
+    return response.data;
+  },
+};
+
+// --- List Config ---
+
+export const listConfigApi = {
+  get: async (scope: string): Promise<ListColumnConfig[]> => {
+    const response = await authAxios.get<ListColumnConfig[]>(`/organization/list-config/${scope}`);
+    return response.data;
+  },
+  update: async (scope: string, columns: ListColumnConfig[]): Promise<ListColumnConfig[]> => {
+    const response = await authAxios.put<ListColumnConfig[]>(`/organization/list-config/${scope}`, columns);
     return response.data;
   },
 };

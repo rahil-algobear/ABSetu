@@ -2,11 +2,12 @@
 
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useMemo, useCallback, useRef, useEffect, useState } from "react";
+import type { FilterDefinition } from "@/components/ui/filter-modal";
 
 export interface FilterValue {
-  key: string; // e.g. "entity_type_id", "dim:uuid", "meta:age"
+  key: string; // real key e.g. "entity_type_id", "dim:uuid", "meta:age"
   label: string; // display label for the filter
-  value: string | string[]; // selected value(s)
+  value: string | string[]; // selected value(s) — real values (UUIDs etc.)
   displayValue: string; // human-readable value for chip display
 }
 
@@ -14,6 +15,8 @@ interface UseListParamsOptions {
   defaultSortBy?: string;
   defaultSortOrder?: "asc" | "desc";
   defaultLimit?: number;
+  /** When provided, URL params use human-readable slugs instead of raw keys/UUIDs */
+  filterDefinitions?: FilterDefinition[];
 }
 
 interface UseListParamsReturn {
@@ -24,7 +27,7 @@ interface UseListParamsReturn {
   // Filters
   activeFilters: FilterValue[];
   setActiveFilters: (filters: FilterValue[]) => void;
-  removeFilter: (key: string) => void;
+  removeFilter: (key: string, value?: string) => void;
 
   // Sort
   sortBy: string | null;
@@ -48,10 +51,53 @@ interface UseListParamsReturn {
   };
 }
 
+// --- Slug utilities ---
+
+function slugify(str: string): string {
+  return str
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+interface SlugMappings {
+  keySlugToReal: Map<string, string>;
+  keyRealToSlug: Map<string, string>;
+  valueSlugToReal: Map<string, Map<string, string>>;
+  valueRealToSlug: Map<string, Map<string, string>>;
+}
+
+function buildSlugMappings(defs: FilterDefinition[]): SlugMappings {
+  const keySlugToReal = new Map<string, string>();
+  const keyRealToSlug = new Map<string, string>();
+  const valueSlugToReal = new Map<string, Map<string, string>>();
+  const valueRealToSlug = new Map<string, Map<string, string>>();
+
+  for (const def of defs) {
+    const ks = slugify(def.label);
+    keySlugToReal.set(ks, def.key);
+    keyRealToSlug.set(def.key, ks);
+
+    if (def.options) {
+      const vsToR = new Map<string, string>();
+      const vrToS = new Map<string, string>();
+      for (const opt of def.options) {
+        const vs = slugify(opt.label);
+        vsToR.set(vs, opt.value);
+        vrToS.set(opt.value, vs);
+      }
+      valueSlugToReal.set(def.key, vsToR);
+      valueRealToSlug.set(def.key, vrToS);
+    }
+  }
+
+  return { keySlugToReal, keyRealToSlug, valueSlugToReal, valueRealToSlug };
+}
+
 /**
  * URL param ordering:
  * 1. search
- * 2. filter_* params
+ * 2. filter_* params (slugified when mappings available)
  * 3. sort_by, sort_order
  * 4. page, show
  */
@@ -66,6 +112,7 @@ function buildOrderedUrl(
     show?: number;
   },
   defaults: { sortOrder: string; limit: number },
+  slugMappings: SlugMappings | null,
 ): string {
   const sp = new URLSearchParams();
 
@@ -74,10 +121,15 @@ function buildOrderedUrl(
     sp.set("search", params.search);
   }
 
-  // 2. Filters
+  // 2. Filters — use slugs for readable URLs
   for (const f of params.filters) {
-    const val = Array.isArray(f.value) ? f.value.join(",") : f.value;
-    sp.set(`filter_${f.key}`, val);
+    const keySlug = slugMappings?.keyRealToSlug.get(f.key) || f.key;
+    const valMap = slugMappings?.valueRealToSlug.get(f.key);
+    const vals = Array.isArray(f.value) ? f.value : [f.value];
+    for (const v of vals) {
+      const valSlug = valMap?.get(v) || v;
+      sp.append(`filter_${keySlug}`, valSlug);
+    }
   }
 
   // 3. Sort (omit defaults)
@@ -121,24 +173,57 @@ export function useListParams(
     setLocalSearch(searchParams.get("search") || "");
   }, [searchParams]);
 
+  // Build slug mappings from filter definitions
+  const slugMappings = useMemo((): SlugMappings | null => {
+    if (!options.filterDefinitions?.length) return null;
+    return buildSlugMappings(options.filterDefinitions);
+  }, [options.filterDefinitions]);
+
   // Parse current state from URL
   const search = searchParams.get("search") || "";
 
   const activeFilters = useMemo((): FilterValue[] => {
-    const filters: FilterValue[] = [];
-    searchParams.forEach((value, key) => {
-      if (key.startsWith("filter_")) {
-        const filterKey = key.slice(7); // Remove "filter_" prefix
-        filters.push({
-          key: filterKey,
-          label: filterKey, // Will be enriched by the page component
-          value: value.includes(",") ? value.split(",") : value,
-          displayValue: value,
-        });
+    // Collect all values per filter key (supports repeated params)
+    const filterMap = new Map<string, string[]>();
+    const realKeySet = new Set(options.filterDefinitions?.map((d) => d.key) || []);
+
+    searchParams.forEach((rawValue, paramKey) => {
+      if (!paramKey.startsWith("filter_")) return;
+      const urlKey = paramKey.slice(7);
+
+      // Resolve key: direct match on real key first, then slug match
+      let realKey: string;
+      if (realKeySet.has(urlKey)) {
+        realKey = urlKey;
+      } else if (slugMappings?.keySlugToReal.has(urlKey)) {
+        realKey = slugMappings.keySlugToReal.get(urlKey)!;
+      } else if (slugMappings) {
+        // Definitions loaded but no match — skip invalid param
+        return;
+      } else {
+        // No definitions yet — use raw key
+        realKey = urlKey;
       }
+
+      // Resolve value: slug → real when mapping available
+      const valMap = slugMappings?.valueSlugToReal.get(realKey);
+      const realValue = valMap?.get(rawValue) || rawValue;
+
+      const arr = filterMap.get(realKey) || [];
+      arr.push(realValue);
+      filterMap.set(realKey, arr);
     });
-    return filters;
-  }, [searchParams]);
+
+    return Array.from(filterMap.entries()).map(([key, values]) => {
+      const def = options.filterDefinitions?.find((d) => d.key === key);
+      return {
+        key,
+        label: def?.label || key,
+        value: values.length === 1 ? values[0] : values,
+        displayValue: values.join(", "),
+      };
+    });
+  }, [searchParams, slugMappings, options.filterDefinitions]);
 
   const sortBy = searchParams.get("sort_by") || defaultSortBy;
   const sortOrder = (searchParams.get("sort_order") || defaultSortOrder) as "asc" | "desc";
@@ -174,11 +259,12 @@ export function useListParams(
             show: limit,
           },
           { sortOrder: defaultSortOrder, limit: defaultLimit },
+          slugMappings,
         );
         navigate(url);
       }, 500);
     },
-    [pathname, activeFilters, sortBy, sortOrder, limit, defaultSortOrder, defaultLimit, navigate],
+    [pathname, activeFilters, sortBy, sortOrder, limit, defaultSortOrder, defaultLimit, navigate, slugMappings],
   );
 
   // Clean up debounce timer
@@ -203,15 +289,30 @@ export function useListParams(
           show: limit,
         },
         { sortOrder: defaultSortOrder, limit: defaultLimit },
+        slugMappings,
       );
       navigate(url);
     },
-    [pathname, search, sortBy, sortOrder, limit, defaultSortOrder, defaultLimit, navigate],
+    [pathname, search, sortBy, sortOrder, limit, defaultSortOrder, defaultLimit, navigate, slugMappings],
   );
 
   const removeFilter = useCallback(
-    (key: string) => {
-      const updated = activeFilters.filter((f) => f.key !== key);
+    (key: string, value?: string) => {
+      if (!value) {
+        // Remove entire filter
+        const updated = activeFilters.filter((f) => f.key !== key);
+        setActiveFilters(updated);
+        return;
+      }
+      // Remove specific value from a multi-value filter
+      const updated = activeFilters
+        .map((f) => {
+          if (f.key !== key) return f;
+          const vals = Array.isArray(f.value) ? f.value.filter((v) => v !== value) : [];
+          if (vals.length === 0) return null;
+          return { ...f, value: vals.length === 1 ? vals[0] : vals };
+        })
+        .filter(Boolean) as FilterValue[];
       setActiveFilters(updated);
     },
     [activeFilters, setActiveFilters],
@@ -230,10 +331,11 @@ export function useListParams(
           show: limit,
         },
         { sortOrder: defaultSortOrder, limit: defaultLimit },
+        slugMappings,
       );
       navigate(url);
     },
-    [pathname, search, activeFilters, page, limit, defaultSortOrder, defaultLimit, navigate],
+    [pathname, search, activeFilters, page, limit, defaultSortOrder, defaultLimit, navigate, slugMappings],
   );
 
   const setPage = useCallback(
@@ -249,10 +351,11 @@ export function useListParams(
           show: limit,
         },
         { sortOrder: defaultSortOrder, limit: defaultLimit },
+        slugMappings,
       );
       navigate(url);
     },
-    [pathname, search, activeFilters, sortBy, sortOrder, limit, defaultSortOrder, defaultLimit, navigate],
+    [pathname, search, activeFilters, sortBy, sortOrder, limit, defaultSortOrder, defaultLimit, navigate, slugMappings],
   );
 
   const setLimit = useCallback(
@@ -268,15 +371,16 @@ export function useListParams(
           show: newLimit,
         },
         { sortOrder: defaultSortOrder, limit: defaultLimit },
+        slugMappings,
       );
       navigate(url);
     },
-    [pathname, search, activeFilters, sortBy, sortOrder, defaultSortOrder, defaultLimit, navigate],
+    [pathname, search, activeFilters, sortBy, sortOrder, defaultSortOrder, defaultLimit, navigate, slugMappings],
   );
 
   // Build API params — serialized for query key and API call
   const apiParams = useMemo(() => {
-    // Convert activeFilters to JSON dict for backend
+    // Convert activeFilters to JSON dict for backend (always uses real keys/values)
     const filtersDict: Record<string, string | string[]> = {};
     for (const f of activeFilters) {
       filtersDict[f.key] = f.value;

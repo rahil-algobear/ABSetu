@@ -19,6 +19,7 @@ import {
 import { findSchema } from "@/utils/meta-fields";
 import { Can } from "@/components/Auth/Permissions";
 import { PageHeader } from "@/components/ui/page-header";
+import { PageContent } from "@/components/ui/page-content";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Dialog } from "@/components/ui/dialog";
@@ -253,7 +254,7 @@ export default function FormBuilderPage() {
           </Can>
         }
       />
-
+      <PageContent>
       {/* Activity Type selector */}
       <div className="mb-6">
         <Label className="text-sm mb-1 block">Activity Type</Label>
@@ -669,6 +670,7 @@ export default function FormBuilderPage() {
           </div>
         </div>
       </Dialog>
+      </PageContent>
     </>
   );
 }

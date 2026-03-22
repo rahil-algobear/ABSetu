@@ -47,6 +47,7 @@ export interface UserProfileResponse {
   role_id: string | null;
   role_name: string | null;
   permissions: string[];
+  dimension_value_ids: string[];
 }
 
 export interface ApiError extends Error {
@@ -184,6 +185,7 @@ export interface Activity {
   meta: Record<string, unknown> | null;
   activity_type_name: string | null;
   dimensions: DimensionInfo[];
+  participant_count: number;
   updated_at: number | null;
 }
 
@@ -223,6 +225,20 @@ export interface MetaFieldSchemaScope {
 export interface MetaFieldSchemaItem {
   scope: MetaFieldSchemaScope;
   fields: MetaFieldDefinition[];
+}
+
+// --- List Configuration ---
+
+export interface ListColumnConfig {
+  source: "static" | "dimension" | "meta";
+  key: string;
+  label: string;
+  visible: boolean;
+  filterable: boolean;
+  sortable: boolean;
+  sort_order: number;
+  meta_type?: MetaFieldType;
+  dimension_key?: string;
 }
 
 // --- Roles & Permissions ---

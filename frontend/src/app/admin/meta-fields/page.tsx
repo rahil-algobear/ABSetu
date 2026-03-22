@@ -32,6 +32,7 @@ import {
   TableCell,
 } from "@/components/ui/page-table";
 import { PageHeader } from "@/components/ui/page-header";
+import { PageContent } from "@/components/ui/page-content";
 import { Plus, Pencil, Trash2, GripVertical } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -422,7 +423,7 @@ export default function MetaFieldsPage() {
         title="Form Fields"
         description="Define form fields for entities, dimensions, activities, and participants. Fields appear in create/edit forms and are stored as metadata."
       />
-
+      <PageContent>
       {/* Section selector */}
       <div className="flex gap-2 mb-3 overflow-x-auto pb-1">
         {sections.map((s) => (
@@ -686,7 +687,8 @@ export default function MetaFieldsPage() {
               No form fields defined yet.
             </p>
           ) : (
-            <Table>
+            <div className="bg-white shadow-sm border rounded-lg overflow-hidden">
+            <Table stickyRows={1} className="max-h-[calc(100vh-400px)] lg:max-h-[calc(100vh-300px)]">
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-8">{""}</TableHead>
@@ -695,7 +697,7 @@ export default function MetaFieldsPage() {
                   <TableHead>Required</TableHead>
                   <TableHead>Default</TableHead>
                   <TableHead>Options</TableHead>
-                  <TableHead className="w-20">Actions</TableHead>
+                  <TableHead className="w-20 text-center">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -722,7 +724,7 @@ export default function MetaFieldsPage() {
                       {field.options?.length ? field.options.join(", ") : "\u2014"}
                     </TableCell>
                     <TableCell>
-                      <div className="flex gap-1">
+                      <div className="flex items-center justify-center gap-2">
                         <button onClick={() => openEdit(index)} className="text-gray-400 hover:text-purple-600">
                           <Pencil className="h-4 w-4" />
                         </button>
@@ -735,6 +737,7 @@ export default function MetaFieldsPage() {
                 ))}
               </TableBody>
             </Table>
+            </div>
           )}
         </>
       )}
@@ -780,14 +783,15 @@ export default function MetaFieldsPage() {
               )}
             </div>
           ) : (
-            <Table>
+            <div className="bg-white shadow-sm border rounded-lg overflow-hidden">
+            <Table stickyRows={1} className="max-h-[calc(100vh-400px)] lg:max-h-[calc(100vh-300px)]">
               <TableHeader>
                 <TableRow>
                   <TableHead>Scope</TableHead>
                   <TableHead>Label</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Required</TableHead>
-                  <TableHead className="w-20">Actions</TableHead>
+                  <TableHead className="w-20 text-center">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -805,7 +809,7 @@ export default function MetaFieldsPage() {
                       </TableCell>
                       <TableCell>{field.required ? "Yes" : "No"}</TableCell>
                       <TableCell>
-                        <div className="flex gap-1">
+                        <div className="flex items-center justify-center gap-2">
                           <button
                             onClick={() => openEdit(index, group.schema)}
                             className="text-gray-400 hover:text-purple-600"
@@ -825,6 +829,7 @@ export default function MetaFieldsPage() {
                 ))}
               </TableBody>
             </Table>
+            </div>
           )}
         </>
       )}
@@ -1041,6 +1046,7 @@ export default function MetaFieldsPage() {
           </div>
         </form>
       </Dialog>
+      </PageContent>
     </>
   );
 }

@@ -18,6 +18,7 @@ import {
   TableCell,
 } from "@/components/ui/page-table";
 import { PageHeader } from "@/components/ui/page-header";
+import { PageContent } from "@/components/ui/page-content";
 import { Plus, Pencil, Trash2, Shield, Check } from "lucide-react";
 import toast from "react-hot-toast";
 // Group permission keys by area for better UX
@@ -182,19 +183,20 @@ export default function RolesPage() {
           </Can>
         }
       />
-
+      <PageContent>
       {isLoading ? (
         <p className="text-gray-500 text-sm">Loading...</p>
       ) : roles.length === 0 ? (
         <p className="text-gray-500 text-sm">No roles yet.</p>
       ) : (
-        <Table>
+        <div className="bg-white shadow-sm border rounded-lg overflow-hidden">
+        <Table stickyRows={1} className="max-h-[calc(100vh-400px)] lg:max-h-[calc(100vh-300px)]">
           <TableHeader>
             <TableRow>
               <TableHead>Name</TableHead>
               <TableHead>Permissions</TableHead>
               <TableHead>Users</TableHead>
-              <TableHead className="w-20">Actions</TableHead>
+              <TableHead className="w-20 text-center">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -230,7 +232,7 @@ export default function RolesPage() {
                 <TableCell>
                   <Can permission="role:manage">
                     {!role.is_system && (
-                      <div className="flex gap-1">
+                      <div className="flex items-center justify-center gap-2">
                         <button
                           onClick={() => openEdit(role)}
                           className="text-gray-400 hover:text-purple-600"
@@ -258,6 +260,7 @@ export default function RolesPage() {
             ))}
           </TableBody>
         </Table>
+        </div>
       )}
 
       <Dialog
@@ -353,6 +356,7 @@ export default function RolesPage() {
           </div>
         </form>
       </Dialog>
+      </PageContent>
     </>
   );
 }

@@ -22,6 +22,7 @@ import {
   TableCell,
 } from "@/components/ui/page-table";
 import { PageHeader } from "@/components/ui/page-header";
+import { PageContent } from "@/components/ui/page-content";
 import { Plus, Pencil, Phone, Shield, Trash2 } from "lucide-react";
 
 import toast from "react-hot-toast";
@@ -332,13 +333,14 @@ export default function UsersPage() {
           </Can>
         }
       />
-
+      <PageContent>
       {isLoading ? (
         <p className="text-gray-500 text-sm">Loading...</p>
       ) : users.length === 0 ? (
         <p className="text-gray-500 text-sm">No users yet.</p>
       ) : (
-        <Table>
+        <div className="bg-white shadow-sm border rounded-lg overflow-hidden">
+        <Table stickyRows={1} className="max-h-[calc(100vh-400px)] lg:max-h-[calc(100vh-300px)]">
           <TableHeader>
             <TableRow>
               <TableHead>Name</TableHead>
@@ -347,7 +349,7 @@ export default function UsersPage() {
               {dimensions.map((dim) => (
                 <TableHead key={dim.id}>{dim.name}</TableHead>
               ))}
-              <TableHead className="w-24">Actions</TableHead>
+              <TableHead className="w-24 text-center">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -395,7 +397,7 @@ export default function UsersPage() {
                 })}
                 <TableCell>
                   <Can permission="user:manage">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center justify-center gap-2">
                       <button
                         onClick={() => openEdit(user)}
                         className="text-gray-400 hover:text-purple-600"
@@ -427,6 +429,7 @@ export default function UsersPage() {
             ))}
           </TableBody>
         </Table>
+        </div>
       )}
 
       {/* Add User Modal */}
@@ -623,6 +626,7 @@ export default function UsersPage() {
           </form>
         )}
       </Dialog>
+      </PageContent>
     </>
   );
 }

@@ -147,20 +147,33 @@ class EntityService:
 
         return query
 
-    @staticmethod
-    def get_sort_config() -> dict:
-        """Sort keys available for entity list."""
-        return {
+    def get_sort_config(self, org_id: uuid.UUID | None = None, sortable_keys: set[str] | None = None) -> dict:
+        """Sort keys available for entity list, optionally including meta fields from list config."""
+        config = {
             "name": Entity.name,
             "case_number": Entity.case_number,
             "created_at": Entity.created_at,
         }
+        if org_id and sortable_keys:
+            meta_sort_keys = {k for k in sortable_keys if k.startswith("meta:")}
+            if meta_sort_keys:
+                from app.common.helpers.filter_definitions import build_meta_field_sort_config
+                et_ids = [
+                    et.id for et in
+                    self.db.query(EntityType).filter_by(organization_id=org_id).all()
+                ]
+                scope_keys = [f"entity:{et_id}" for et_id in et_ids]
+                config.update(build_meta_field_sort_config(
+                    self.db, org_id, scope_keys, Entity.meta, meta_sort_keys,
+                ))
+        return config
 
     @staticmethod
     def get_filter_config() -> dict:
         """Filter config for entity list."""
         return {
             "entity_type_id": {"type": "exact", "column": Entity.entity_type_id},
+            "created_at": {"type": "date_range", "column": Entity.created_at},
         }
 
     def get_dimension_filter_config(self, org_id: uuid.UUID) -> dict:
@@ -202,6 +215,7 @@ class EntityService:
         org_id: uuid.UUID,
         params: ListParams,
         accessible_dv_ids: list[uuid.UUID] | None = None,
+        list_columns: list[dict] | None = None,
     ) -> tuple[list[tuple], int]:
         """Paginated list with search, filter, sort support."""
         query = self._build_base_query(org_id, accessible_dv_ids)
@@ -209,15 +223,32 @@ class EntityService:
         # Search
         query = apply_search(query, params.search, [Entity.name, Entity.case_number])
 
-        # Filters (static + dimension)
+        # Build filter/sort keys from list config
+        filterable_keys = None
+        sortable_keys = None
+        if list_columns:
+            filterable_keys = {c["key"] for c in list_columns if c.get("filterable")}
+            sortable_keys = {c["key"] for c in list_columns if c.get("sortable")}
+
+        # Filters (static + dimension + meta from list config)
         filter_config = self.get_filter_config()
         filter_config.update(self.get_dimension_filter_config(org_id))
+        if filterable_keys:
+            from app.common.helpers.filter_definitions import build_meta_field_filter_config
+            et_ids = [
+                et.id for et in
+                self.db.query(EntityType).filter_by(organization_id=org_id).all()
+            ]
+            filter_config.update(build_meta_field_filter_config(
+                self.db, org_id, [f"entity:{et_id}" for et_id in et_ids],
+                Entity.meta, filterable_keys,
+            ))
         query = apply_filters(query, params.filters, filter_config)
 
-        # Sort
+        # Sort (includes meta fields from list config)
         query = apply_sort(
             query, params.sort_by, params.sort_order,
-            self.get_sort_config(), Entity.created_at.desc(),
+            self.get_sort_config(org_id, sortable_keys), Entity.created_at.desc(),
         )
 
         # Paginate

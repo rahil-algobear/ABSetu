@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { dimensionApi, metaFieldSchemaApi } from "@/services/api";
 import { Dimension, DimensionValue, MetaFieldDefinition } from "@/types";
-import { Can } from "@/components/Auth/Permissions";
+import { Can, usePermissions } from "@/components/Auth/Permissions";
 import { DimensionMatrixDialog } from "@/components/DimensionMatrixDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,12 +21,15 @@ import {
 } from "@/components/ui/page-table";
 import { DynamicMetaForm } from "@/components/DynamicMetaForm";
 import { PageHeader } from "@/components/ui/page-header";
+import { PageContent } from "@/components/ui/page-content";
 import { Plus, Pencil, Trash2, LayoutGrid } from "lucide-react";
 import toast from "react-hot-toast";
 
 export default function DimensionValuesPage() {
   const params = useParams();
   const dimensionKey = params.key as string;
+  const { can } = usePermissions();
+  const canManage = can("dimension:manage");
   const queryClient = useQueryClient();
   const [matrixOpen, setMatrixOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
@@ -139,20 +142,21 @@ export default function DimensionValuesPage() {
           </div>
         }
       />
-
+      <PageContent>
       {isLoading ? (
         <p className="text-gray-500 text-sm">Loading...</p>
       ) : values.length === 0 ? (
         <p className="text-gray-500 text-sm">No values yet.</p>
       ) : (
-        <Table>
+        <div className="bg-white shadow-sm border rounded-lg overflow-hidden">
+        <Table stickyRows={1} className="max-h-[calc(100vh-400px)] lg:max-h-[calc(100vh-300px)]">
           <TableHeader>
             <TableRow>
               <TableHead>Name</TableHead>
               {metaFields.map((f) => (
                 <TableHead key={f.key}>{f.label}</TableHead>
               ))}
-              <TableHead className="w-20">Actions</TableHead>
+              {canManage && <TableHead className="w-20 text-center">Actions</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -166,9 +170,9 @@ export default function DimensionValuesPage() {
                       : "—"}
                   </TableCell>
                 ))}
-                <TableCell>
-                  <Can permission="dimension:manage">
-                    <div className="flex gap-1">
+                {canManage && (
+                  <TableCell>
+                    <div className="flex items-center justify-center gap-2">
                       <button
                         onClick={() => openEdit(v)}
                         className="text-gray-400 hover:text-purple-600"
@@ -185,12 +189,13 @@ export default function DimensionValuesPage() {
                         <Trash2 className="h-4 w-4" />
                       </button>
                     </div>
-                  </Can>
-                </TableCell>
+                  </TableCell>
+                )}
               </TableRow>
             ))}
           </TableBody>
         </Table>
+        </div>
       )}
 
       <Dialog
@@ -230,6 +235,7 @@ export default function DimensionValuesPage() {
         onClose={() => setMatrixOpen(false)}
         defaultRowDimKey={dimensionKey}
       />
+      </PageContent>
     </>
   );
 }

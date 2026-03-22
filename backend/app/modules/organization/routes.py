@@ -19,6 +19,7 @@ from app.modules.organization.schemas import (
     OrganizationUpdate,
 )
 from app.modules.organization.service import (
+    ListConfigService,
     MetaFieldSchemaService,
     OrganizationService,
 )
@@ -148,7 +149,6 @@ def _schema_to_response(row) -> dict:
 
 @router.get(
     "/meta-field-schemas",
-    dependencies=[Depends(require_permissions("org:settings"))],
 )
 def get_all_meta_field_schemas(
     current_user: User = Depends(get_current_user),
@@ -193,3 +193,32 @@ def update_meta_field_schema_structured(
         fields=data.fields,
         **resolved,
     )
+
+
+# --- List Config ---
+
+
+@router.get("/list-config/{scope:path}")
+def get_list_config(
+    scope: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get list column config for a scope (auto-generates defaults if none saved)."""
+    service = ListConfigService(db)
+    return service.get_config(current_user.organization_id, scope)
+
+
+@router.put(
+    "/list-config/{scope:path}",
+    dependencies=[Depends(require_permissions("org:settings"))],
+)
+def update_list_config(
+    scope: str,
+    columns: list[dict],
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Update list column config for a scope."""
+    service = ListConfigService(db)
+    return service.update_config(current_user.organization_id, scope, columns)

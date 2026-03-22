@@ -2,7 +2,7 @@
 Organization models
 """
 
-from sqlalchemy import Column, ForeignKey, Index, String, VARCHAR, text
+from sqlalchemy import Column, ForeignKey, Index, String, UniqueConstraint, VARCHAR, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 
@@ -111,3 +111,22 @@ class MetaFieldSchema(BaseModel):
                 key += f":dimension_value:{self.dimension_value_id}"
             return key
         return self.scope_type
+
+
+class ListConfig(BaseModel):
+    __tablename__ = "list_configs"
+
+    organization_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    scope = Column(String, nullable=False)  # "entity:{type_id}" or "activity:{type_id}"
+    columns = Column(JSONB, nullable=False, default=list)
+
+    organization = relationship("Organization")
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", "scope", name="uq_list_config_org_scope"),
+    )

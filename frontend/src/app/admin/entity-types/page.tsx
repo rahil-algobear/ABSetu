@@ -18,6 +18,7 @@ import {
   TableCell,
 } from "@/components/ui/page-table";
 import { PageHeader } from "@/components/ui/page-header";
+import { PageContent } from "@/components/ui/page-content";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -113,19 +114,20 @@ export default function EntityTypesPage() {
           </Can>
         }
       />
-
+      <PageContent>
       {isLoading ? (
         <p className="text-gray-500 text-sm">Loading...</p>
       ) : entityTypes.length === 0 ? (
         <p className="text-gray-500 text-sm">No entity types yet.</p>
       ) : (
-        <Table>
+        <div className="bg-white shadow-sm border rounded-lg overflow-hidden">
+        <Table stickyRows={1} className="max-h-[calc(100vh-400px)] lg:max-h-[calc(100vh-300px)]">
           <TableHeader>
             <TableRow>
               <TableHead>Name</TableHead>
               <TableHead>Case Numbers</TableHead>
               <TableHead>Enrollable</TableHead>
-              <TableHead className="w-20">Actions</TableHead>
+              <TableHead className="w-20 text-center">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -138,7 +140,7 @@ export default function EntityTypesPage() {
                   <TableCell>{config.can_enroll ? "Yes" : "No"}</TableCell>
                   <TableCell>
                     <Can permission="entity_type:manage">
-                      <div className="flex gap-1">
+                      <div className="flex items-center justify-center gap-2">
                         <button
                           onClick={() => openEdit(et)}
                           className="text-gray-400 hover:text-purple-600"
@@ -162,6 +164,7 @@ export default function EntityTypesPage() {
             })}
           </TableBody>
         </Table>
+        </div>
       )}
 
       <Dialog
@@ -205,6 +208,7 @@ export default function EntityTypesPage() {
           </div>
         </form>
       </Dialog>
+      </PageContent>
     </>
   );
 }

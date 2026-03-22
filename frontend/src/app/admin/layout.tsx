@@ -8,6 +8,7 @@ import { dimensionApi, entityTypeApi } from "@/services/api";
 import {
   Layers,
   ClipboardList,
+  Columns,
   UserCheck,
   Users,
   Shield,
@@ -66,6 +67,7 @@ export default function AdminLayout({
     { href: "/admin/entity-types", label: "Entity Types", icon: UserCheck, permission: "entity_type:manage" },
     { href: "/admin/activity-types", label: "Activity Types", icon: ClipboardList, permission: "activity_type:manage" },
     { href: "/admin/form-builder", label: "Form Builder", icon: LayoutTemplate, permission: "activity_type:manage" },
+    { href: "/admin/list-settings", label: "List Settings", icon: Columns, permission: "org:settings" },
   ];
 
   const allTabs = [...mastersTabs, ...adminTabs];
@@ -75,9 +77,9 @@ export default function AdminLayout({
   const hasAccess = !currentTab || can(currentTab.permission);
 
   return (
-    <PageLayout className="p-4">
+    <PageLayout>
       {!loading && !hasAccess ? (
-        <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+        <div className="flex flex-col items-center justify-center py-16 px-4 sm:px-6 text-gray-400">
           <ShieldAlert className="h-12 w-12 mb-3" />
           <p className="text-lg font-medium text-gray-600">Access Denied</p>
           <p className="text-sm mt-1">You don&apos;t have permission to view this page.</p>

@@ -25,6 +25,7 @@ import {
 import { Can } from "@/components/Auth/Permissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageLayout } from "@/components/ui/page-layout";
+import { PageContent } from "@/components/ui/page-content";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,6 +34,8 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Plus, Pencil, X, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
+import { formatDate } from "@/utils/date";
+import { DateInput } from "@/components/ui/date-input";
 
 /**
  * Cascading dimension filter — reused from activities page pattern.
@@ -115,13 +118,14 @@ export default function EntityDetailPage() {
 
   const canEnroll = entity?.entity_type_config?.can_enroll !== false;
 
-  if (isLoading) return <PageLayout className="p-4"><p>Loading...</p></PageLayout>;
-  if (!entity) return <PageLayout className="p-4"><p>Not found</p></PageLayout>;
+  if (isLoading) return <PageLayout><PageContent><p>Loading...</p></PageContent></PageLayout>;
+  if (!entity) return <PageLayout><PageContent><p>Not found</p></PageContent></PageLayout>;
 
   return (
-    <PageLayout className="p-4">
+    <PageLayout>
       <PageHeader title={entity.name} />
-      <div className="flex gap-1 items-center mb-2 -mt-2">
+      <PageContent>
+      <div className="flex gap-1 items-center mb-2">
         {entity.case_number && (
           <span className="text-gray-500">{entity.case_number}</span>
         )}
@@ -215,8 +219,8 @@ export default function EntityDetailPage() {
                             ))}
                           </div>
                           <p className="text-xs text-gray-500">
-                            {e.admission_date}
-                            {e.release_date ? ` to ${e.release_date}` : ""}
+                            {formatDate(e.admission_date)}
+                            {e.release_date ? ` to ${formatDate(e.release_date)}` : ""}
                           </p>
                         </div>
                         <div className="flex items-center gap-2">
@@ -272,7 +276,7 @@ export default function EntityDetailPage() {
                 {filteredActivities.map((a) => (
                   <Link
                     key={a.id}
-                    href={`/activities/${a.id}`}
+                    href={`/activities/details/${a.id}`}
                     className="flex items-center justify-between p-2 border rounded hover:bg-gray-50 transition-colors"
                   >
                     <div className="min-w-0">
@@ -280,8 +284,8 @@ export default function EntityDetailPage() {
                         {a.title || (a.dimensions?.length > 0 ? a.dimensions[0].value_name : a.activity_type_name || "Activity")}
                       </div>
                       <div className="text-xs text-gray-500 mt-0.5">
-                        {a.start_date}
-                        {a.end_date && a.end_date !== a.start_date && ` – ${a.end_date}`}
+                        {formatDate(a.start_date)}
+                        {a.end_date && a.end_date !== a.start_date && ` – ${formatDate(a.end_date)}`}
                       </div>
                       {a.dimensions?.length > 0 && (
                         <div className="flex gap-1 mt-1 flex-wrap">
@@ -304,6 +308,7 @@ export default function EntityDetailPage() {
           </CardContent>
         </Card>
       </Can>
+      </PageContent>
     </PageLayout>
   );
 }
@@ -483,8 +488,7 @@ function EnrollmentForm({
 
         <div>
           <label className="text-sm font-medium">Admission Date</label>
-          <Input
-            type="date"
+          <DateInput
             value={admissionDate}
             onChange={(e) => setAdmissionDate(e.target.value)}
             required
@@ -493,8 +497,7 @@ function EnrollmentForm({
 
         <div>
           <label className="text-sm font-medium">Release Date</label>
-          <Input
-            type="date"
+          <DateInput
             value={releaseDate}
             onChange={(e) => setReleaseDate(e.target.value)}
           />

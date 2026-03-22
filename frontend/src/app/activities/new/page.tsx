@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState, useMemo, useEffect } from "react";
+import { Suspense, useState, useMemo, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -30,22 +30,16 @@ import { Can } from "@/components/Auth/Permissions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-
-import {
-  Table,
-  TableHeader,
-  TableBody,
-  TableRow,
-  TableHead,
-  TableCell,
-} from "@/components/ui/page-table";
 import { DynamicMetaForm } from "@/components/DynamicMetaForm";
 import { SearchSelectParticipants } from "@/components/SearchSelectParticipants";
 import { PageLayout } from "@/components/ui/page-layout";
+import { PageContent } from "@/components/ui/page-content";
 import { PageHeader } from "@/components/ui/page-header";
-import { Plus } from "lucide-react";
+import { usePermissions } from "@/components/Auth/Permissions";
+import { useDimensionAutoSelect } from "@/hooks/useDimensionAutoSelect";
 
 import toast from "react-hot-toast";
+import { DateInput } from "@/components/ui/date-input";
 
 /**
  * Given a set of dimension value links and the currently selected dimension value IDs,
@@ -78,27 +72,21 @@ function getFilteredValues(
   );
 }
 
-function ActivitiesPageContent() {
-  const [showCreate, setShowCreate] = useState(false);
+function NewActivityPageContent() {
   const queryClient = useQueryClient();
   const router = useRouter();
   const searchParams = useSearchParams();
   const typeKey = searchParams.get("type");
+  const { dimensionValueIds: userDimensionValueIds } = usePermissions();
 
   const { data: activityTypes = [] } = useQuery({
     queryKey: ["activity-types"],
     queryFn: activityTypeApi.list,
   });
 
-  // Determine activity type from URL param
   const activityType = activityTypes.find((c) => c.key === typeKey);
   const selectedTypeId = activityType?.id || "";
   const typeName = activityType?.name || "Activity";
-
-  const { data: activities = [], isLoading } = useQuery({
-    queryKey: ["activities", selectedTypeId],
-    queryFn: () => activityApi.list(selectedTypeId || undefined),
-  });
 
   const { data: dimensions = [] } = useQuery<Dimension[]>({
     queryKey: ["dimensions"],
@@ -143,14 +131,12 @@ function ActivitiesPageContent() {
     Record<string, { participant_id: string; participant_type: string; status?: string; meta?: Record<string, unknown> }[]>
   >({});
 
-  // Load form builder config for the activity type
   const { data: formConfig } = useQuery<ActivityForm>({
     queryKey: ["activity-form", selectedTypeId],
     queryFn: () => activityFormApi.get(selectedTypeId),
     enabled: !!selectedTypeId,
   });
 
-  // Sorted visible elements from form config — on create page, only show "create" stage elements
   const formElements: ActivityFormElement[] = useMemo(() => {
     if (!formConfig?.elements?.length) return [];
     return [...formConfig.elements]
@@ -158,7 +144,6 @@ function ActivitiesPageContent() {
       .sort((a, b) => a.sort_order - b.sort_order);
   }, [formConfig]);
 
-  // Entity type elements that are in "create" stage (participant capture at creation)
   const createEntityElements: ActivityFormElement[] = useMemo(() => {
     return formElements.filter((el) => el.type === "entity_type");
   }, [formElements]);
@@ -190,12 +175,10 @@ function ActivitiesPageContent() {
     enabled: hasCreateUserSection,
   });
 
-  // Derive meta fields: activity type + dimension values + type×dimension_value combos
   const activityMetaFields = useMemo((): MetaFieldDefinition[] => {
     return collectActivityFields(allMetaSchemas, selectedTypeId || null, formData.dimension_value_ids);
   }, [selectedTypeId, formData.dimension_value_ids, allMetaSchemas]);
 
-  // Track selection per dimension for cascading logic
   const selectedByDim = useMemo(() => {
     const map: Record<string, string> = {};
     for (const dim of dimensions) {
@@ -212,10 +195,32 @@ function ActivitiesPageContent() {
     return map;
   }, [dimensions, allDimensionValues, formData.dimension_value_ids]);
 
+  // Dimension form element IDs (only dimensions in the form, in order)
+  const formDimensions = useMemo(() => {
+    return formElements
+      .filter((el) => el.type === "dimension" && el.ref_id)
+      .map((el) => ({ id: el.ref_id! }));
+  }, [formElements]);
+
+  const handleAutoSelect = useCallback(
+    (dvIds: string[]) => {
+      setFormData((prev) => ({ ...prev, dimension_value_ids: dvIds }));
+    },
+    [],
+  );
+
+  useDimensionAutoSelect({
+    dimensions: formDimensions,
+    allDimensionValues,
+    dimensionValueLinks,
+    userDimensionValueIds,
+    currentSelections: formData.dimension_value_ids,
+    onAutoSelect: handleAutoSelect,
+  });
+
   const createMutation = useMutation({
     mutationFn: async (payload: Parameters<typeof activityApi.create>[0]) => {
       const activity = await activityApi.create(payload);
-      // Save participants if any were selected during creation
       const allRecords: { participant_type: string; participant_id: string; section_key: string; status?: string; meta?: Record<string, unknown> }[] = [];
       for (const el of createEntityElements) {
         const sectionKey = el.ref_id || el.type;
@@ -237,30 +242,18 @@ function ActivitiesPageContent() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["activities"] });
-      setShowCreate(false);
-      setFormData({
-        title: "",
-        start_date: new Date().toISOString().split("T")[0],
-        end_date: "",
-        notes: "",
-        dimension_value_ids: [],
-      });
-      setMetaValues({});
-      setParticipantState({});
       toast.success(`${typeName} created`);
+      router.push(`/activities/${typeKey}`);
     },
     onError: () => toast.error(`Failed to create ${typeName.toLowerCase()}`),
   });
 
-  // Render a single form element based on its type
   const renderElement = (el: ActivityFormElement) => {
     switch (el.type) {
       case "default": {
         if (el.ref_id === "title") {
           const titleConfig = el.config || { mode: "free_text" };
           const titleMode = (titleConfig.mode as string) || "free_text";
-
-          // Generated titles are resolved server-side — nothing to show on create
           if (titleMode === "generated") return null;
 
           return (
@@ -283,27 +276,33 @@ function ActivitiesPageContent() {
         if (el.ref_id === "start_date") {
           return (
             <div key="default-start_date">
-              <label className="text-sm font-medium">
-                Date{el.required && <span className="text-red-500 ml-0.5">*</span>}
-              </label>
-              <div className="flex gap-2 mt-1">
-                <Input
-                  type="date"
-                  value={formData.start_date}
-                  onChange={(e) =>
-                    setFormData({ ...formData, start_date: e.target.value })
-                  }
-                  required={el.required}
-                />
-                <Input
-                  type="date"
-                  value={formData.end_date}
-                  onChange={(e) =>
-                    setFormData({ ...formData, end_date: e.target.value })
-                  }
-                  placeholder="End date (optional)"
-                  min={formData.start_date}
-                />
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <label className="text-sm font-medium">
+                    Start Date{el.required && <span className="text-red-500 ml-0.5">*</span>}
+                  </label>
+                  <DateInput
+                    value={formData.start_date}
+                    onChange={(e) =>
+                      setFormData({ ...formData, start_date: e.target.value })
+                    }
+                    required={el.required}
+                    className="mt-1"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="text-sm font-medium">
+                    End Date
+                  </label>
+                  <DateInput
+                    value={formData.end_date}
+                    onChange={(e) =>
+                      setFormData({ ...formData, end_date: e.target.value })
+                    }
+                    min={formData.start_date}
+                    className="mt-1"
+                  />
+                </div>
               </div>
               <p className="text-xs text-gray-400 mt-0.5">Leave end date empty for single-day activities</p>
             </div>
@@ -437,146 +436,69 @@ function ActivitiesPageContent() {
     }
   };
 
-  // Use form builder elements if available
   const hasFormConfig = formElements.length > 0;
 
-  const getActivityTitle = (a: typeof activities[0]) => {
-    if (a.title) return a.title;
-    if (a.dimensions.length > 0) return a.dimensions[0].value_name;
-    return typeName;
-  };
-
-  // Derive unique dimension columns from all loaded activities
-  const dimensionColumns = useMemo(() => {
-    const seen = new Map<string, string>();
-    for (const a of activities) {
-      for (const dim of a.dimensions) {
-        if (!seen.has(dim.dimension_key)) {
-          seen.set(dim.dimension_key, dim.dimension_name);
-        }
-      }
-    }
-    return Array.from(seen.entries()).map(([key, name]) => ({ key, name }));
-  }, [activities]);
-
   return (
-    <PageLayout className="p-4">
-      <PageHeader
-        title={`${typeName}s`}
-        actions={
-          <Can permission="activity:create">
-            <Button size="sm" onClick={() => setShowCreate(true)}>
-              <Plus className="h-4 w-4 mr-1" />
-              New {typeName}
-            </Button>
-          </Can>
-        }
-      />
+    <PageLayout>
+      <PageHeader title={`New ${typeName}`} />
 
-      {showCreate && (
-        <Card className="mb-4">
-          <CardHeader>
-            <CardTitle className="text-lg">Create {typeName}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                const payload = {
-                  title: formData.title || undefined,
-                  start_date: formData.start_date,
-                  end_date: formData.end_date || undefined,
-                  notes: formData.notes || undefined,
-                  dimension_value_ids: formData.dimension_value_ids,
-                  activity_type_id: selectedTypeId || undefined,
-                  ...(activityMetaFields.length > 0 ? { meta: metaValues } : {}),
-                };
-                createMutation.mutate(payload);
-              }}
-              className="space-y-3"
-            >
-              {hasFormConfig
-                ? formElements.map(renderElement)
-                : (
-                  <p className="text-sm text-gray-500">
-                    The form for this activity type has not been configured yet. Please ask your admin to set it up in the Form Builder under Admin settings.
-                  </p>
-                )
-              }
+      <PageContent>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Create {typeName}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const payload = {
+                title: formData.title || undefined,
+                start_date: formData.start_date,
+                end_date: formData.end_date || undefined,
+                notes: formData.notes || undefined,
+                dimension_value_ids: formData.dimension_value_ids,
+                activity_type_id: selectedTypeId || undefined,
+                ...(activityMetaFields.length > 0 ? { meta: metaValues } : {}),
+              };
+              createMutation.mutate(payload);
+            }}
+            className="space-y-3"
+          >
+            {hasFormConfig
+              ? formElements.map(renderElement)
+              : (
+                <p className="text-sm text-gray-500">
+                  The form for this activity type has not been configured yet. Please ask your admin to set it up in the Form Builder under Admin settings.
+                </p>
+              )
+            }
 
-              <div className="flex gap-2">
-                {hasFormConfig && (
-                  <Button type="submit" disabled={createMutation.isPending}>
-                    Create
-                  </Button>
-                )}
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setShowCreate(false)}
-                >
-                  Cancel
+            <div className="flex gap-2">
+              {hasFormConfig && (
+                <Button type="submit" disabled={createMutation.isPending}>
+                  Create
                 </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-      )}
-
-      {isLoading ? (
-        <p className="text-gray-500">Loading...</p>
-      ) : activities.length === 0 ? (
-        <p className="text-gray-500">No {typeName.toLowerCase()}s yet.</p>
-      ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-28">Start Date</TableHead>
-              <TableHead className="w-28">End Date</TableHead>
-              <TableHead>Title</TableHead>
-              {dimensionColumns.map((dc) => (
-                <TableHead key={dc.key}>{dc.name}</TableHead>
-              ))}
-              {!activityType && <TableHead>Type</TableHead>}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {activities.map((a) => (
-              <TableRow
-                key={a.id}
-                onClick={() => router.push(`/activities/${a.id}`)}
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => router.push(`/activities/${typeKey}`)}
               >
-                <TableCell>{a.start_date}</TableCell>
-                <TableCell>{a.end_date || "—"}</TableCell>
-                <TableCell className="font-medium">
-                  {getActivityTitle(a)}
-                </TableCell>
-                {dimensionColumns.map((dc) => {
-                  const dim = a.dimensions.find((d) => d.dimension_key === dc.key);
-                  return (
-                    <TableCell key={dc.key}>
-                      {dim ? dim.value_name : "—"}
-                    </TableCell>
-                  );
-                })}
-                {!activityType && (
-                  <TableCell className="text-gray-500">
-                    {a.activity_type_name}
-                  </TableCell>
-                )}
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      )}
+                Cancel
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+      </PageContent>
     </PageLayout>
   );
 }
 
-export default function ActivitiesPage() {
+export default function NewActivityPage() {
   return (
-    <Suspense fallback={<PageLayout className="p-4"><p className="text-gray-500">Loading...</p></PageLayout>}>
-      <ActivitiesPageContent />
+    <Suspense fallback={<PageLayout><PageContent><p className="text-gray-500">Loading...</p></PageContent></PageLayout>}>
+      <NewActivityPageContent />
     </Suspense>
   );
 }
