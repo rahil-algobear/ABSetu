@@ -287,6 +287,8 @@ export default function MetaFieldsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["meta-field-schemas"] });
+      queryClient.invalidateQueries({ queryKey: ["entity-filters"] });
+      queryClient.invalidateQueries({ queryKey: ["activity-filters"] });
       toast.success("Form fields updated");
     },
     onError: () => toast.error("Failed to update"),
