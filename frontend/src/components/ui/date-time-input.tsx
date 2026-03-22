@@ -72,10 +72,8 @@ export function DateTimeInput({
   disabled,
   allowTime = true,
 }: DateTimeInputProps) {
-  // Treat T00:00:00 (midnight) as date-only — backend may return this for dates without time,
-  // possibly with a timezone suffix (e.g. T00:00:00+00:00 or T00:00:00Z).
-  const hasTimeInValue =
-    allowTime && value.includes("T") && !/T00:00:00([Z+\-].*)?$/.test(value);
+  // If the value contains "T", it has a time component — show time toggle on.
+  const hasTimeInValue = allowTime && value.includes("T");
   const [showTime, setShowTime] = useState(hasTimeInValue);
 
   const selected = parseValue(value);
