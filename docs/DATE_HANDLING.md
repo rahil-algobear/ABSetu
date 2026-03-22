@@ -71,17 +71,99 @@ If the frontend sends a datetime without an offset, the backend should treat it 
 | DateTime fields | `dd-MMM-yyyy 'at' h:mm a` | `22-Mar-2026 at 2:30 PM` |
 | Timestamps (`created_at`, `updated_at`) | `dd-MMM-yyyy` or with time if relevant | `22-Mar-2026` |
 
-### Date vs DateTime — Explicit Typing
+### Date vs DateTime — Explicit Typing via Built-in Field Config
 
 The distinction between "date-only" and "datetime" values should be explicit, not inferred from midnight detection.
 
 **Current (fragile):** `formatDateTime()` uses regex to check if time is `T00:00:00` and hides the time component.
 
-**Target:** The caller knows whether the field is a date or datetime and calls the appropriate formatter:
-- `formatDate(value)` — for `Date` fields, expects `YYYY-MM-DD`, displays `dd-MMM-yyyy`
-- `formatDateTime(value)` — for `DateTime` fields, expects ISO 8601, converts to browser timezone and displays `dd-MMM-yyyy 'at' h:mm a`
+**Target:** The field's configured type determines how it is rendered. The caller knows whether the field is a date or datetime and calls the appropriate formatter:
+- `formatDate(value)` — for `date` type fields, expects `YYYY-MM-DD`, displays `dd-MMM-yyyy`
+- `formatDateTime(value)` — for `datetime` type fields, expects ISO 8601, converts to browser timezone and displays `dd-MMM-yyyy 'at' h:mm a`
 
 No midnight sniffing needed.
+
+## Built-in Field Configuration
+
+### Problem
+
+Activity `start_date` and `end_date` are stored as `DateTime(timezone=True)` in the database, but some orgs only care about the date (and don't want to see `00:00` displayed). The type distinction (`date` vs `datetime`) should be org-configurable, not inferred from the value.
+
+### Approach: Show Built-in Fields in the Form Fields Admin UI
+
+The **Form Fields** admin page (`/admin/meta-fields`) already lets orgs define custom meta fields with types (`text`, `date`, `datetime`, etc.) across scoped tabs (Entity types, Dimensions, Activity fields, Participant fields).
+
+**Extend this UI to also show built-in (static) fields as non-deletable system rows in each tab.** This provides a single, consistent place to configure all fields — both custom and built-in.
+
+### What it looks like
+
+On the **Activity fields** tab:
+
+| SCOPE | LABEL | TYPE | REQUIRED | ACTIONS |
+|---|---|---|---|---|
+| *All activities* | Start Date *(built-in)* | `Date ▼` | Yes | (edit label/type only) |
+| *All activities* | End Date *(built-in)* | `Date ▼` | No | (edit label/type only) |
+| *All activities* | Title *(built-in)* | Text | Yes | (edit label only) |
+| *All activities* | Notes *(built-in)* | Text | No | (edit label only) |
+| All activities | Test All Activity Field | Text | Yes | edit / delete |
+| Intervention: LSE | Test Field for LSE | Text | No | edit / delete |
+
+Similarly, all other tabs (Entity types, Dimensions, Participant fields) show their respective built-in fields.
+
+### Built-in field capabilities
+
+**Now:**
+- `start_date` / `end_date`: configurable **type** (`date` or `datetime`)
+- All built-in fields: configurable **display label** (e.g., rename "Start Date" to "Session Date")
+- Non-deletable, non-reorderable (always appear at the top)
+
+**Future (no new infrastructure needed):**
+- **Reordering** — drag built-in fields among meta fields to control form/list order
+- **Visibility** — hide built-in fields the org doesn't use (e.g., `end_date`, `notes`)
+- **Required toggle** — make optional built-in fields required per org
+
+### Backend storage
+
+Add a `field_overrides` JSONB column on the scope-appropriate model (e.g., `ActivityType` or via `MetaFieldSchema` with a `scope_type` like `"builtin"`):
+
+```json
+{
+  "start_date": { "type": "datetime", "label": "Session Date" },
+  "end_date": { "type": "date", "label": "End Date" }
+}
+```
+
+Defaults (if no override exists):
+- `start_date`: `{ "type": "date", "label": "Start Date" }`
+- `end_date`: `{ "type": "date", "label": "End Date" }`
+- `title`: `{ "type": "text", "label": "Title" }`
+- `notes`: `{ "type": "text", "label": "Notes" }`
+
+### How it drives rendering
+
+**Forms:** When rendering the activity create/edit form:
+- Read the field override config for the activity type
+- `type: "date"` → `<DateTimeInput allowTime={false} />`
+- `type: "datetime"` → `<DateTimeInput allowTime={true} />`
+
+**List/table display:** When rendering activity columns:
+- Read the field override config
+- `type: "date"` → `formatDate(value)` → `"22-Mar-2026"`
+- `type: "datetime"` → `formatDateTime(value)` → `"22-Mar-2026 at 2:30 PM"`
+
+**Column headers:** Use the configured `label` instead of hardcoded strings.
+
+### Consistency across all tabs
+
+All Form Fields tabs should show their built-in fields:
+
+| Tab | Built-in Fields |
+|---|---|
+| **Entity types** | Name, and any other static fields per entity type |
+| **Dimensions** | Name, and any other static fields per dimension |
+| **Activity fields** | Title, Start Date, End Date, Notes |
+| **Participant fields** | Any static participant fields |
+| **Other** | Any static fields for other scopes |
 
 ### "Today" Helper
 
@@ -134,23 +216,46 @@ Frontend displays meta dates using the same `formatDate()` / `formatDateTime()` 
 
 ## Implementation Checklist
 
-### Backend
+### Phase 1: Standardize API Response Format
 
+**Backend:**
 - [ ] **`BaseResponseSchema`**: Remove Unix timestamp conversion from `_coerce_uuids_and_timestamps`. Let `datetime` objects serialize as ISO 8601 strings.
 - [ ] **`BaseResponseSchema`**: Include `created_at` in default response fields.
 - [ ] **Activity schemas**: Remove the custom `_dates_to_iso` validator (no longer needed once base uses ISO).
 - [ ] **Pydantic model config**: Add `json_encoders` or use Pydantic v2's serialization to ensure `datetime` → ISO 8601 string and `date` → `YYYY-MM-DD`.
-- [ ] **`list_query.py`**: Add `_parse_datetime()` helper for `datetime_range` filters.
-- [ ] **Meta field validation**: Ensure `datetime` meta values are normalized to UTC on write.
 
-### Frontend
+**Frontend:**
+- [ ] **`src/types/index.ts`**: Change `updated_at: number | null` to `updated_at: string | null` across all entity types. Same for `created_at`.
+
+### Phase 2: Frontend Timezone-Aware Display
 
 - [ ] **Install `date-fns-tz`**.
 - [ ] **`src/utils/date.ts`**: Refactor `formatDate()` — remove Unix timestamp detection, expect ISO strings only.
 - [ ] **`src/utils/date.ts`**: Refactor `formatDateTime()` — remove midnight regex hack, convert UTC to browser timezone using `date-fns-tz`.
 - [ ] **`src/utils/date.ts`**: Add `getToday()` timezone-aware helper.
 - [ ] **`src/utils/date.ts`**: Add `getBrowserTimezone()` helper wrapping `Intl.DateTimeFormat().resolvedOptions().timeZone`.
-- [ ] **`src/types/index.ts`**: Change `updated_at: number | null` to `updated_at: string | null` across all entity types. Same for `created_at`.
-- [ ] **All components rendering dates**: Audit calls to `formatDate()` / `formatDateTime()` to use the correct one based on field type (date vs datetime).
 - [ ] **Form defaults**: Replace `new Date().toISOString().split("T")[0]` with `getToday()`.
+- [ ] **All components rendering dates**: Audit calls to `formatDate()` / `formatDateTime()` to use the correct one based on field type (date vs datetime).
+
+### Phase 3: Improve Date Filtering
+
+**Backend:**
+- [ ] **`list_query.py`**: Add `_parse_datetime()` helper for `datetime_range` filters.
+- [ ] **Meta field validation**: Ensure `datetime` meta values are normalized to UTC on write.
+
+**Frontend:**
 - [ ] **Filter modal**: Ensure `datetime_range` filters can send full ISO 8601 values.
+
+### Phase 4: Built-in Field Configuration
+
+**Backend:**
+- [ ] Add `field_overrides` JSONB storage (column on relevant model or via `MetaFieldSchema` with a builtin scope).
+- [ ] API endpoint to read/update built-in field overrides.
+- [ ] Define defaults for each scope's built-in fields (Activity: title, start_date, end_date, notes; etc.).
+
+**Frontend:**
+- [ ] Show built-in fields as non-deletable rows in each Form Fields tab (Entity types, Dimensions, Activity fields, Participant fields).
+- [ ] Allow editing `type` (date/datetime) on date built-in fields and `label` on all built-in fields.
+- [ ] Read field overrides when rendering activity forms — use configured type to set `allowTime` on `DateTimeInput`.
+- [ ] Read field overrides when rendering activity list/detail views — use configured type to pick `formatDate()` vs `formatDateTime()`.
+- [ ] Use configured `label` for column headers and form labels instead of hardcoded strings.
