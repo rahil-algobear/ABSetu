@@ -21,7 +21,7 @@ interface ListToolbarProps {
 const DATE_CHIP_FORMAT = "d MMM yyyy";
 
 function DateChipValue({ raw }: { raw: string }) {
-  const [start, end] = raw.split(":");
+  const [start, end] = raw.split("|");
   const fmtStart = start ? formatDate(start, DATE_CHIP_FORMAT) : "";
   const fmtEnd = end ? formatDate(end, DATE_CHIP_FORMAT) : "";
 
