@@ -149,7 +149,7 @@ export default function ListSettingsPage() {
   const canToggleFilterable = (col: ListColumnConfig) => {
     // Only static fields with backend filter support can be toggled
     if (col.source === "static") {
-      const filterableStatic = new Set(["created_at", "start_date"]);
+      const filterableStatic = new Set(["created_at", "start_date", "end_date"]);
       return filterableStatic.has(col.key);
     }
     return true;
