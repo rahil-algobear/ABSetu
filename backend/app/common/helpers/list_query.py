@@ -5,6 +5,7 @@ All functions take a SQLAlchemy query and return a modified query — they compo
 
 import json
 import uuid
+from datetime import date, datetime
 from typing import Any
 
 from sqlalchemy import String, and_, exists, func, or_
@@ -136,10 +137,12 @@ def apply_filters(
         elif filter_type == "date_range":
             col = config["column"]
             if isinstance(value, dict):
-                if "start" in value and value["start"]:
-                    query = query.filter(col >= value["start"])
-                if "end" in value and value["end"]:
-                    query = query.filter(col <= value["end"])
+                start = _parse_date(value.get("start"))
+                end = _parse_date(value.get("end"))
+                if start:
+                    query = query.filter(col >= start)
+                if end:
+                    query = query.filter(col <= end)
 
         elif filter_type == "boolean":
             meta_key = config.get("meta_key")
@@ -165,6 +168,16 @@ def paginate(query: Query, page: int, limit: int) -> tuple[list, int]:
     skip = (safe_page - 1) * limit
     items = query.offset(skip).limit(limit).all()
     return items, total
+
+
+def _parse_date(value: Any) -> date | None:
+    """Parse a date string, returning None for missing or invalid values."""
+    if not value or not isinstance(value, str):
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    except ValueError:
+        return None
 
 
 def _is_uuid(value: str) -> bool:
