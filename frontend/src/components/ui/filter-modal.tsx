@@ -86,7 +86,9 @@ export function FilterModal({
   const handleDateChange = (key: string, field: "start" | "end", val: string) => {
     const current = localFilters[key];
     const dateStr = typeof current === "string" ? current : "";
-    const [start, end] = dateStr.split(":").map((s) => s || "");
+    const parts = dateStr.split(":");
+    const start = parts[0] || "";
+    const end = parts[1] || "";
     const newDate = field === "start" ? `${val}:${end}` : `${start}:${val}`;
     setLocalFilters({ ...localFilters, [key]: newDate });
   };
@@ -98,7 +100,12 @@ export function FilterModal({
       if (!val || (Array.isArray(val) && val.length === 0)) continue;
 
       let displayValue = "";
-      if (def.type === "select" && def.options) {
+      if (def.type === "date_range" && typeof val === "string") {
+        const [start, end] = val.split(":");
+        if (start && end) displayValue = `${start} to ${end}`;
+        else if (start) displayValue = `from ${start}`;
+        else if (end) displayValue = `until ${end}`;
+      } else if (def.type === "select" && def.options) {
         const vals = Array.isArray(val) ? val : [val];
         displayValue = vals
           .map((v) => def.options!.find((o) => o.value === v)?.label || v)
