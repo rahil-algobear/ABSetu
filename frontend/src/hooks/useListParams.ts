@@ -381,9 +381,15 @@ export function useListParams(
   // Build API params — serialized for query key and API call
   const apiParams = useMemo(() => {
     // Convert activeFilters to JSON dict for backend (always uses real keys/values)
-    const filtersDict: Record<string, string | string[]> = {};
+    const filtersDict: Record<string, unknown> = {};
     for (const f of activeFilters) {
-      filtersDict[f.key] = f.value;
+      const def = options.filterDefinitions?.find((d) => d.key === f.key);
+      if (def?.type === "date_range" && typeof f.value === "string") {
+        const [start, end] = f.value.split(":");
+        filtersDict[f.key] = { start: start || undefined, end: end || undefined };
+      } else {
+        filtersDict[f.key] = f.value;
+      }
     }
     const hasFilters = Object.keys(filtersDict).length > 0;
 
@@ -395,7 +401,7 @@ export function useListParams(
       page,
       limit,
     };
-  }, [search, activeFilters, sortBy, sortOrder, page, limit]);
+  }, [search, activeFilters, sortBy, sortOrder, page, limit, options.filterDefinitions]);
 
   return {
     search: localSearch,
