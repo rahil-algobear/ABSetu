@@ -131,6 +131,20 @@ def parse_filters(
             if coerced:
                 parsed.append({"key": key, "type": filter_type, "config": config, "value": coerced})
 
+        elif filter_type == "meta_date_range":
+            # Meta JSONB date fields — keep as strings for text comparison
+            if not isinstance(value, dict):
+                continue
+            coerced = {}
+            start = value.get("start")
+            end = value.get("end")
+            if start and isinstance(start, str) and _parse_date(start):
+                coerced["start"] = start
+            if end and isinstance(end, str) and _parse_date(end):
+                coerced["end"] = end
+            if coerced:
+                parsed.append({"key": key, "type": filter_type, "config": config, "value": coerced})
+
         elif filter_type == "boolean":
             parsed.append({"key": key, "type": filter_type, "config": config, "value": value})
 
@@ -196,6 +210,16 @@ def apply_filters(
             if "end" in value:
                 # Use < next day so timestamp columns include the full end date
                 query = query.filter(col < value["end"] + timedelta(days=1))
+
+        elif filter_type == "meta_date_range":
+            # JSONB date strings — lexicographic comparison on ISO dates
+            meta_col = config["meta_column"]
+            meta_key = config["meta_key"]
+            text_col = meta_col[meta_key].astext
+            if "start" in value:
+                query = query.filter(text_col >= value["start"])
+            if "end" in value:
+                query = query.filter(text_col <= value["end"])
 
         elif filter_type == "boolean":
             meta_key = config.get("meta_key")

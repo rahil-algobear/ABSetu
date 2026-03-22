@@ -185,8 +185,9 @@ def build_meta_field_filter_config(
             }
         elif ftype == "date":
             config[meta_key] = {
-                "type": "date_range",
-                "column": meta_column[field["key"]].astext,
+                "type": "meta_date_range",
+                "meta_key": field["key"],
+                "meta_column": meta_column,
             }
         else:
             config[meta_key] = {
