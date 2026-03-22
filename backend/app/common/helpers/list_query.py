@@ -240,9 +240,9 @@ def apply_filters(
             meta_key = config["meta_key"]
             text_col = meta_col[meta_key].astext
             if "start" in value:
-                query = query.filter(text_col >= _strip_tz_offset(value["start"]))
+                query = query.filter(text_col >= _normalize_to_utc_str(value["start"]))
             if "end" in value:
-                query = query.filter(text_col <= _strip_tz_offset(value["end"]))
+                query = query.filter(text_col <= _normalize_to_utc_str(value["end"]))
 
         elif filter_type == "boolean":
             meta_key = config.get("meta_key")
@@ -306,19 +306,24 @@ def _parse_datetime(value: Any) -> datetime | None:
     return None
 
 
-def _strip_tz_offset(value: str) -> str:
-    """Strip timezone offset from an ISO string for lexicographic comparison.
+def _normalize_to_utc_str(value: str) -> str:
+    """Convert an ISO datetime string to UTC without offset for lexicographic comparison.
 
-    "2026-03-22T07:15:00+05:30" → "2026-03-22T07:15:00"
+    "2026-03-22T07:15:00+05:30" → "2026-03-22T01:45:00"
     "2026-03-22" → "2026-03-22" (unchanged)
+
+    Matches the storage format produced by normalize_meta_datetimes().
     """
-    # Remove Z suffix
-    if value.endswith("Z"):
-        return value[:-1]
-    # Remove +HH:MM or -HH:MM suffix
-    if len(value) > 6 and value[-6] in ("+", "-") and value[-3] == ":":
-        return value[:-6]
-    return value
+    if "T" not in value:
+        return value
+    try:
+        dt = datetime.fromisoformat(value)
+        if dt.tzinfo is not None:
+            from datetime import timezone
+            dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+        return dt.isoformat()
+    except (ValueError, TypeError):
+        return value
 
 
 def _validate_date_or_datetime(value: str) -> bool:

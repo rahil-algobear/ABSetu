@@ -8,6 +8,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.common.exceptions import NotFoundError, ValidationError
+from app.common.helpers.meta_normalize import normalize_meta_datetimes
 from app.common.helpers.dimension_scoping import (
     apply_dimension_access_scoping,
     group_dvs_by_dimension,
@@ -259,7 +260,7 @@ class ActivityService:
             start_date=data["start_date"],
             end_date=data.get("end_date"),
             notes=data.get("notes"),
-            meta=data.get("meta"),
+            meta=normalize_meta_datetimes(data.get("meta")),
             created_by=user_id,
         )
         self.db.add(activity)
@@ -275,6 +276,8 @@ class ActivityService:
 
     def update(self, activity_id: uuid.UUID, data: dict) -> Activity:
         activity = self.get_by_id(activity_id)
+        if "meta" in data and data["meta"] is not None:
+            data["meta"] = normalize_meta_datetimes(data["meta"])
         for key, value in data.items():
             if value is not None:
                 setattr(activity, key, value)

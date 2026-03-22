@@ -7,6 +7,7 @@ import uuid
 from sqlalchemy.orm import Session
 
 from app.common.exceptions import NotFoundError, ValidationError
+from app.common.helpers.meta_normalize import normalize_meta_datetimes
 from app.modules.beneficiary.model import Enrollment
 from app.modules.dimension.model import EnrollmentDimension
 from app.modules.entity.model import Entity
@@ -62,7 +63,7 @@ class EnrollmentService:
             entity_id=entity.id,
             admission_date=data["admission_date"],
             release_date=data.get("release_date"),
-            meta=data.get("meta"),
+            meta=normalize_meta_datetimes(data.get("meta")),
         )
         self.db.add(enrollment)
         self.db.flush()
@@ -83,6 +84,8 @@ class EnrollmentService:
         if not enrollment:
             raise NotFoundError("Enrollment not found")
 
+        if "meta" in data and data["meta"] is not None:
+            data["meta"] = normalize_meta_datetimes(data["meta"])
         for key, value in data.items():
             if value is not None:
                 setattr(enrollment, key, value)

@@ -8,6 +8,8 @@ from datetime import datetime
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.common.helpers.meta_normalize import normalize_meta_datetimes
+
 from app.common.exceptions import NotFoundError, ValidationError
 from app.common.helpers.dimension_scoping import (
     apply_dimension_access_scoping,
@@ -289,7 +291,7 @@ class EntityService:
             entity_type_id=entity_type.id,
             case_number=case_number,
             name=data["name"],
-            meta=data.get("meta"),
+            meta=normalize_meta_datetimes(data.get("meta")),
         )
         self.db.add(entity)
         self.db.flush()
@@ -307,6 +309,8 @@ class EntityService:
 
     def update(self, entity_id: uuid.UUID, org_id: uuid.UUID, data: dict) -> Entity:
         entity = self.get_by_id(entity_id, org_id)
+        if "meta" in data and data["meta"] is not None:
+            data["meta"] = normalize_meta_datetimes(data["meta"])
         for key, value in data.items():
             if value is not None:
                 setattr(entity, key, value)

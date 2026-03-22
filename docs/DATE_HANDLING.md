@@ -207,10 +207,21 @@ Date range filters sent to the API:
 
 Meta fields stored in JSONB columns:
 
-| Meta field type | Stored format | Notes |
-|---|---|---|
-| `date` | `YYYY-MM-DD` | Timezone-agnostic, lexicographic sort works |
-| `datetime` | ISO 8601 UTC (`2026-03-22T14:30:00+00:00`) | Must normalize to UTC on write for correct sorting |
+| Meta field type | Stored format | Example | Notes |
+|---|---|---|---|
+| `date` | `YYYY-MM-DD` | `"2026-03-22"` | Timezone-agnostic, lexicographic sort works |
+| `datetime` | UTC without offset | `"2026-03-22T11:30:00"` | Normalized to UTC on write via `normalize_meta_datetimes()` |
+
+### Write normalization
+
+All services (entity, activity, enrollment) call `normalize_meta_datetimes()` before saving meta to JSONB. This converts timezone-aware datetime strings to UTC without offset:
+- `"2026-03-22T17:00:00+05:30"` → `"2026-03-22T11:30:00"` (converted to UTC, offset stripped)
+- `"2026-03-22T17:00:00"` → `"2026-03-22T17:00:00"` (naive, assumed UTC, unchanged)
+- `"2026-03-22"` → `"2026-03-22"` (date-only, unchanged)
+
+### Filter normalization
+
+When filtering meta date/datetime fields, filter values are also converted to UTC without offset via `_normalize_to_utc_str()` before lexicographic comparison against stored values. This ensures the comparison is correct regardless of the user's timezone.
 
 Frontend displays meta dates using the same `formatDate()` / `formatDateTime()` helpers.
 
