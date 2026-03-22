@@ -154,7 +154,6 @@ def list_entities(
     sort_by: str | None = Query(None),
     sort_order: str = Query("desc", pattern="^(asc|desc)$"),
     filters: str | None = Query(None),
-    # Legacy param — still supported, but prefer filters JSON
     entity_type_id: uuid.UUID | None = Query(None),
     current_user: User = Depends(get_current_user),
     accessible_dv_ids: list[uuid.UUID] | None = Depends(get_accessible_dimension_value_ids),
@@ -164,7 +163,7 @@ def list_entities(
 
     service = EntityService(db)
 
-    # Merge legacy entity_type_id param into filters if provided
+    # Merge entity_type_id into filters JSON so apply_filters handles it uniformly
     merged_filters = filters
     if entity_type_id:
         try:

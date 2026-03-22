@@ -212,7 +212,6 @@ def list_activities(
     sort_by: str | None = Query(None),
     sort_order: str = Query("desc", pattern="^(asc|desc)$"),
     filters: str | None = Query(None),
-    # Legacy param — still supported, but prefer filters JSON
     activity_type_id: uuid.UUID | None = Query(None),
     current_user: User = Depends(get_current_user),
     accessible_dv_ids: list[uuid.UUID] | None = Depends(get_accessible_dimension_value_ids),
@@ -222,7 +221,7 @@ def list_activities(
 
     service = ActivityService(db)
 
-    # Merge legacy activity_type_id param into filters if provided
+    # Merge activity_type_id into filters JSON so apply_filters handles it uniformly
     merged_filters = filters
     if activity_type_id:
         try:

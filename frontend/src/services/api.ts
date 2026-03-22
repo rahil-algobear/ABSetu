@@ -237,7 +237,6 @@ export interface FilterResponse {
 export const entityApi = {
   list: async (entityTypeId?: string): Promise<Entity[]> => {
     const params = entityTypeId ? `?entity_type_id=${entityTypeId}` : '';
-    // Legacy: returns PaginatedResponse now, extract data for backward compat
     const response = await authAxios.get<PaginatedResponse<Entity>>(`/entities/${params}`);
     return response.data.data;
   },

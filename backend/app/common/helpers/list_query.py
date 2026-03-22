@@ -101,7 +101,6 @@ def apply_filters(
 
         elif filter_type == "dimension":
             # Filter by dimension value IDs through association table
-            assoc_model = config["assoc_model"]
             assoc_fk = config["assoc_fk"]  # e.g. EntityDimension.entity_id
             assoc_dv = config["assoc_dv"]  # e.g. EntityDimension.dimension_value_id
             parent_pk = config["parent_pk"]  # e.g. Entity.id
