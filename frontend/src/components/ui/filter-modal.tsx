@@ -20,6 +20,8 @@ export interface FilterDefinition {
   options?: FilterOption[];
   min?: number;
   max?: number;
+  /** Allow time selection on date_range filters. Defaults to false. */
+  allowTime?: boolean;
 }
 
 interface FilterModalProps {
@@ -233,7 +235,7 @@ export function FilterModal({
                         : "") || ""
                     }
                     onChange={(val) => handleDateChange(def.key, "start", val)}
-                    allowTime={false}
+                    allowTime={def.allowTime ?? false}
                   />
                   <span className="text-gray-400">to</span>
                   <DateTimeInput
@@ -243,7 +245,7 @@ export function FilterModal({
                         : "") || ""
                     }
                     onChange={(val) => handleDateChange(def.key, "end", val)}
-                    allowTime={false}
+                    allowTime={def.allowTime ?? false}
                   />
                 </div>
               )}
