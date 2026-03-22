@@ -245,9 +245,8 @@ def get_entity_filters(
     # Build field-level filters (will be sorted by list config order)
     field_filters: list[dict] = []
 
-    # Dimension filters (scoped by user access only — not by list config,
-    # since entity list config doesn't include dimension columns)
-    field_filters.extend(build_dimension_filters(db, org_id, accessible_dv_ids))
+    # Dimension filters (scoped by user access + list config)
+    field_filters.extend(build_dimension_filters(db, org_id, accessible_dv_ids, filterable_keys))
 
     # Meta field filters (scoped by list config)
     scope_keys = [f"entity:{et.id}" for et in entity_types]
