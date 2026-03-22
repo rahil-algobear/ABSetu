@@ -4,7 +4,8 @@ import { Suspense, useState, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { entityApi, entityTypeApi, metaFieldSchemaApi } from "@/services/api";
-import { Entity, ListColumnConfig, MetaFieldDefinition } from "@/types";
+import { Entity, ListColumnConfig, MetaFieldDefinition, MetaFieldSchemaItem } from "@/types";
+import { getFieldsForScope } from "@/utils/meta-fields";
 import { Can } from "@/components/Auth/Permissions";
 import { useListParams } from "@/hooks/useListParams";
 import type { FilterDefinition } from "@/components/ui/filter-modal";
@@ -195,12 +196,14 @@ function EntityTypeEntitiesContent() {
   };
 
   // Meta fields for create/edit form
-  const metaSchemaKey = entityType ? `entity:${entityType.id}` : "";
-  const { data: metaFields = [] } = useQuery<MetaFieldDefinition[]>({
-    queryKey: ["meta-field-schemas", metaSchemaKey],
-    queryFn: () => metaFieldSchemaApi.get(metaSchemaKey),
-    enabled: !!entityType,
+  const { data: allSchemas = [] } = useQuery<MetaFieldSchemaItem[]>({
+    queryKey: ["meta-field-schemas"],
+    queryFn: metaFieldSchemaApi.getAll,
   });
+  const metaFields = useMemo(
+    () => entityType ? getFieldsForScope(allSchemas, { type: "entity", entity_type_id: entityType.id }) : [],
+    [allSchemas, entityType],
+  );
 
   const typeName = entityType?.name || "Entity";
 

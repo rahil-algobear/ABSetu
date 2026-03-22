@@ -20,7 +20,9 @@ import {
   DimensionValueLink,
   Enrollment,
   MetaFieldDefinition,
+  MetaFieldSchemaItem,
 } from "@/types";
+import { getFieldsForScope } from "@/utils/meta-fields";
 
 import { Can } from "@/components/Auth/Permissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -85,15 +87,18 @@ export default function EntityDetailPage() {
     enabled: !!entity,
   });
 
-  const { data: metaFields = [] } = useQuery<MetaFieldDefinition[]>({
-    queryKey: ["meta-field-schemas", "entity"],
-    queryFn: () => metaFieldSchemaApi.get("entity"),
+  const { data: allSchemas = [] } = useQuery<MetaFieldSchemaItem[]>({
+    queryKey: ["meta-field-schemas"],
+    queryFn: metaFieldSchemaApi.getAll,
   });
-
-  const { data: enrollmentMetaFields = [] } = useQuery<MetaFieldDefinition[]>({
-    queryKey: ["meta-field-schemas", "enrollment"],
-    queryFn: () => metaFieldSchemaApi.get("enrollment"),
-  });
+  const metaFields = useMemo(
+    () => entity ? getFieldsForScope(allSchemas, { type: "entity", entity_type_id: entity.entity_type_id }) : [],
+    [allSchemas, entity],
+  );
+  const enrollmentMetaFields = useMemo(
+    () => getFieldsForScope(allSchemas, { type: "enrollment" }),
+    [allSchemas],
+  );
 
   const { data: activities = [] } = useQuery<Activity[]>({
     queryKey: ["activities-entity", id],

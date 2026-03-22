@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { dimensionApi, metaFieldSchemaApi } from "@/services/api";
-import { Dimension, DimensionValue, MetaFieldDefinition } from "@/types";
+import { Dimension, DimensionValue, MetaFieldDefinition, MetaFieldSchemaItem } from "@/types";
+import { getFieldsForScope } from "@/utils/meta-fields";
 import { Can, usePermissions } from "@/components/Auth/Permissions";
 import { DimensionMatrixDialog } from "@/components/DimensionMatrixDialog";
 import { Button } from "@/components/ui/button";
@@ -50,12 +51,14 @@ export default function DimensionValuesPage() {
     enabled: !!dimension,
   });
 
-  const metaSchemaKey = dimension ? `dimension:${dimension.id}` : "";
-  const { data: metaFields = [] } = useQuery<MetaFieldDefinition[]>({
-    queryKey: ["meta-field-schemas", metaSchemaKey],
-    queryFn: () => metaFieldSchemaApi.get(metaSchemaKey),
-    enabled: !!dimension,
+  const { data: allSchemas = [] } = useQuery<MetaFieldSchemaItem[]>({
+    queryKey: ["meta-field-schemas"],
+    queryFn: metaFieldSchemaApi.getAll,
   });
+  const metaFields = useMemo(
+    () => dimension ? getFieldsForScope(allSchemas, { type: "dimension", dimension_id: dimension.id }) : [],
+    [allSchemas, dimension],
+  );
 
   const createMutation = useMutation({
     mutationFn: (data: { name: string; meta?: Record<string, unknown> }) =>

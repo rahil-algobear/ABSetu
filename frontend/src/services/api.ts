@@ -107,10 +107,6 @@ export const metaFieldSchemaApi = {
     const response = await authAxios.get<MetaFieldSchemaItem[]>('/organization/meta-field-schemas/structured');
     return response.data;
   },
-  get: async (scopeKey: string): Promise<MetaFieldDefinition[]> => {
-    const response = await authAxios.get<Record<string, MetaFieldDefinition[]>>('/organization/meta-field-schemas');
-    return response.data[scopeKey] || [];
-  },
   update: async (scope: MetaFieldScope, fields: MetaFieldDefinition[]): Promise<MetaFieldDefinition[]> => {
     const response = await authAxios.put<MetaFieldDefinition[]>(
       '/organization/meta-field-schemas',

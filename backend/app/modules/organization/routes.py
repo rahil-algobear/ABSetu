@@ -164,7 +164,6 @@ def get_all_meta_field_schemas(
 
 @router.get(
     "/meta-field-schemas/structured",
-    dependencies=[Depends(require_permissions("org:settings"))],
 )
 def get_all_meta_field_schemas_structured(
     current_user: User = Depends(get_current_user),

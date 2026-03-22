@@ -3,7 +3,8 @@
 import { useState, useMemo } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { entityApi, metaFieldSchemaApi } from "@/services/api";
-import { MetaFieldDefinition } from "@/types";
+import { MetaFieldDefinition, MetaFieldSchemaItem } from "@/types";
+import { getFieldsForScope } from "@/utils/meta-fields";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -59,13 +60,15 @@ export function SearchSelectParticipants({
   const [newEntityMeta, setNewEntityMeta] = useState<Record<string, unknown>>({});
   const queryClient = useQueryClient();
 
-  // Entity-type-specific meta fields (matches admin entity page: entity:{typeId})
-  const entityMetaSchemaKey = entityTypeId ? `entity:${entityTypeId}` : "";
-  const { data: entityMetaFields = [] } = useQuery<MetaFieldDefinition[]>({
-    queryKey: ["meta-field-schemas", entityMetaSchemaKey],
-    queryFn: () => metaFieldSchemaApi.get(entityMetaSchemaKey),
-    enabled: !!entityTypeId,
+  // Entity-type-specific meta fields
+  const { data: allSchemas = [] } = useQuery<MetaFieldSchemaItem[]>({
+    queryKey: ["meta-field-schemas"],
+    queryFn: metaFieldSchemaApi.getAll,
   });
+  const entityMetaFields = useMemo(
+    () => entityTypeId ? getFieldsForScope(allSchemas, { type: "entity", entity_type_id: entityTypeId }) : [],
+    [allSchemas, entityTypeId],
+  );
 
   const createEntityMutation = useMutation({
     mutationFn: entityApi.create,
