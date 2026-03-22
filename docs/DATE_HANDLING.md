@@ -210,18 +210,18 @@ Meta fields stored in JSONB columns:
 | Meta field type | Stored format | Example | Notes |
 |---|---|---|---|
 | `date` | `YYYY-MM-DD` | `"2026-03-22"` | Timezone-agnostic, lexicographic sort works |
-| `datetime` | UTC without offset | `"2026-03-22T11:30:00"` | Normalized to UTC on write via `normalize_meta_datetimes()` |
+| `datetime` | UTC with offset | `"2026-03-22T11:30:00+00:00"` | Normalized to UTC on write via `normalize_meta_datetimes()` |
 
 ### Write normalization
 
-All services (entity, activity, enrollment) call `normalize_meta_datetimes()` before saving meta to JSONB. This converts timezone-aware datetime strings to UTC without offset:
-- `"2026-03-22T17:00:00+05:30"` → `"2026-03-22T11:30:00"` (converted to UTC, offset stripped)
-- `"2026-03-22T17:00:00"` → `"2026-03-22T17:00:00"` (naive, assumed UTC, unchanged)
+All services (entity, activity, enrollment) call `normalize_meta_datetimes()` before saving meta to JSONB. This converts all datetime strings to UTC with explicit `+00:00` offset so any client (web, mobile) knows the value is UTC:
+- `"2026-03-22T17:00:00+05:30"` → `"2026-03-22T11:30:00+00:00"` (converted to UTC)
+- `"2026-03-22T17:00:00"` → `"2026-03-22T17:00:00+00:00"` (naive, tagged as UTC)
 - `"2026-03-22"` → `"2026-03-22"` (date-only, unchanged)
 
 ### Filter normalization
 
-When filtering meta date/datetime fields, filter values are also converted to UTC without offset via `_normalize_to_utc_str()` before lexicographic comparison against stored values. This ensures the comparison is correct regardless of the user's timezone.
+When filtering meta date/datetime fields, filter values are also converted to UTC with `+00:00` via `_normalize_to_utc_str()` before lexicographic comparison against stored values. This ensures the comparison is correct regardless of the user's timezone.
 
 Frontend displays meta dates using the same `formatDate()` / `formatDateTime()` helpers.
 

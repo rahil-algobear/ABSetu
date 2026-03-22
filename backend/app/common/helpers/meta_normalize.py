@@ -16,9 +16,10 @@ from typing import Any
 def normalize_meta_datetimes(meta: dict[str, Any] | None) -> dict[str, Any] | None:
     """Normalize any ISO datetime strings in a meta dict to UTC.
 
-    Stored without offset for clean lexicographic comparison:
-    - "2026-03-22T17:00:00+05:30" → "2026-03-22T11:30:00"
-    - "2026-03-22T17:00:00" → "2026-03-22T17:00:00" (naive, unchanged)
+    All datetime values stored with +00:00 suffix so any client knows
+    they are UTC without guessing:
+    - "2026-03-22T17:00:00+05:30" → "2026-03-22T11:30:00+00:00"
+    - "2026-03-22T17:00:00" → "2026-03-22T17:00:00+00:00" (naive, tagged as UTC)
     - "2026-03-22" → "2026-03-22" (date-only, unchanged)
     - Non-string values are left untouched.
     """
@@ -35,16 +36,18 @@ def normalize_meta_datetimes(meta: dict[str, Any] | None) -> dict[str, Any] | No
 
 
 def _normalize_iso_datetime(value: str) -> str:
-    """Convert an ISO datetime string to UTC without offset suffix.
+    """Convert an ISO datetime string to UTC with +00:00 suffix.
 
     Returns the original string if not parseable.
     """
     try:
         dt = datetime.fromisoformat(value)
         if dt.tzinfo is not None:
-            # Convert to UTC, then strip tzinfo for offset-free string
-            dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
-        # Naive datetimes are left as-is (assumed UTC already)
+            # Convert to UTC
+            dt = dt.astimezone(timezone.utc)
+        else:
+            # Naive datetime — tag as UTC
+            dt = dt.replace(tzinfo=timezone.utc)
         return dt.isoformat()
     except (ValueError, TypeError):
         return value

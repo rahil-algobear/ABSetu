@@ -307,9 +307,9 @@ def _parse_datetime(value: Any) -> datetime | None:
 
 
 def _normalize_to_utc_str(value: str) -> str:
-    """Convert an ISO datetime string to UTC without offset for lexicographic comparison.
+    """Convert an ISO datetime string to UTC with +00:00 for lexicographic comparison.
 
-    "2026-03-22T07:15:00+05:30" → "2026-03-22T01:45:00"
+    "2026-03-22T07:15:00+05:30" → "2026-03-22T01:45:00+00:00"
     "2026-03-22" → "2026-03-22" (unchanged)
 
     Matches the storage format produced by normalize_meta_datetimes().
@@ -320,7 +320,10 @@ def _normalize_to_utc_str(value: str) -> str:
         dt = datetime.fromisoformat(value)
         if dt.tzinfo is not None:
             from datetime import timezone
-            dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+            dt = dt.astimezone(timezone.utc)
+        else:
+            from datetime import timezone
+            dt = dt.replace(tzinfo=timezone.utc)
         return dt.isoformat()
     except (ValueError, TypeError):
         return value
