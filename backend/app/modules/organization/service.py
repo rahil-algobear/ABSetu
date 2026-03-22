@@ -284,7 +284,7 @@ class ListConfigService:
 
         cols.append(self._col("static", "start_date", "Start Date", order, sortable=True, filterable=True))
         order += 1
-        cols.append(self._col("static", "end_date", "End Date", order, sortable=True))
+        cols.append(self._col("static", "end_date", "End Date", order, sortable=True, filterable=True))
         order += 1
         cols.append(self._col("static", "title", "Title", order, sortable=True))
         order += 1
