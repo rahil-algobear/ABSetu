@@ -88,6 +88,9 @@ class ActivityUpdate(BaseModel):
     meta: dict[str, Any] | None = None
 
 
+_ACTIVITY_DATETIME_ISO_FIELDS = frozenset({"start_date", "end_date"})
+
+
 class ActivityResponse(BaseResponseSchema):
     organization_id: str
     activity_type_id: str | None = None
@@ -101,8 +104,6 @@ class ActivityResponse(BaseResponseSchema):
     activity_type_name: str | None = None
     dimensions: list[DimensionInfo] = []
     participant_count: int = 0
-
-    _DATETIME_ISO_FIELDS = {"start_date", "end_date"}
 
     @model_validator(mode="before")
     @classmethod
@@ -119,7 +120,7 @@ class ActivityResponse(BaseResponseSchema):
             return v
 
         if isinstance(data, dict):
-            for f in cls._DATETIME_ISO_FIELDS:
+            for f in _ACTIVITY_DATETIME_ISO_FIELDS:
                 if f in data:
                     data[f] = _to_iso(data[f])
         elif hasattr(data, "__dict__"):
@@ -128,7 +129,7 @@ class ActivityResponse(BaseResponseSchema):
             out: dict[str, Any] = {}
             for name in cls.model_fields:
                 val = getattr(data, name, None)
-                if name in cls._DATETIME_ISO_FIELDS:
+                if name in _ACTIVITY_DATETIME_ISO_FIELDS:
                     out[name] = _to_iso(val)
                 else:
                     out[name] = val
