@@ -183,24 +183,137 @@ Stays as-is. It's a view-layer concern (which columns to show in list views) and
 
 **Decision:** Keep `meta` JSONB columns on `Entity`, `Activity`, `ActivityParticipant`, `Enrollment` tables. Do NOT create separate `entities_meta` / `activities_meta` tables.
 
-**Rationale:**
+#### EAV alternative considered
+
+An EAV (Entity-Attribute-Value) approach with separate tables was evaluated:
+
+```sql
+-- EAV schema (rejected)
+CREATE TABLE entities_meta (
+    id UUID PRIMARY KEY,
+    entity_id UUID REFERENCES entities(id),
+    field_key TEXT NOT NULL,
+    value_text TEXT,
+    value_numeric NUMERIC,
+    value_date TIMESTAMPTZ,
+    value_bool BOOLEAN
+);
+```
+
+**What EAV would improve:**
+- Native typed columns — `value_numeric >= 18` works without casting
+- Standard B-tree indexes on typed value columns work out of the box
+- Aggregation syntax is slightly simpler: `SELECT field_key, AVG(value_numeric) GROUP BY field_key`
+
+**Why EAV was rejected — list view cost is too high:**
+
+List views are the dominant access pattern (every page load). With EAV and N displayed meta fields, every list query needs either:
+
+- **N LEFT JOINs** (one per displayed field) — with 8 meta fields that's 8 extra JOINs on top of the existing 2 scalar subqueries + M dimension EXISTS clauses
+- **A pivot subquery** — `jsonb_object_agg(field_key, value)` reassembles the data back into JSON, negating the whole point
+
+Current entity list queries already have: `1 base query + 2 scalar subqueries + N dimension EXISTS clauses`. Adding 8 LEFT JOINs would make this significantly worse.
+
+**Infrastructure rewrite cost:** The entire filter/sort infrastructure would need rewriting:
+- `filter_definitions.py` — `build_meta_field_filter_config()`, `build_meta_field_sort_config()`
+- `list_query.py` — all meta_select, meta_range, meta_date_range handlers
+- `meta_normalize.py` — normalization logic
+- Entity, Activity, Enrollment services — all list queries
+
+#### Rationale for JSONB
+
 - **Read performance:** Single query, no JOIN. Every list view and detail page reads meta — it's not a rare access pattern.
-- **Write performance:** Single UPDATE vs two writes (or upsert + JOIN).
-- **Existing infrastructure:** Filter/sort infrastructure in `filter_definitions.py` and `list_query.py` already works with JSONB paths. Separate tables would require rewriting all of it.
+- **Write performance:** Single UPDATE vs N upserts.
+- **Existing infrastructure:** Filter/sort infrastructure in `filter_definitions.py` and `list_query.py` already works with JSONB paths.
 - **Scale fit:** Meta payloads are typically 200-500 bytes (a handful of fields). No TOAST overhead concern.
-- **EAV is worse:** With 10 custom fields and 1000 entities in a list, EAV pivots 10,000 rows into 1,000 objects. JSONB gives this for free.
+- **Reporting works fine:** JSONB aggregation queries are straightforward with proper casting (see below).
 
 **When separate tables would make sense (none apply here):**
 - Meta payloads regularly exceed 8KB
 - Meta is rarely read (not the case — rendered on every view)
 - Row-level audit trails needed on individual field changes
+- Need to query across field keys dynamically ("find all entities where *any* field contains X")
 
-**Recommended optimization:** Add GIN indexes on `meta` columns and consider expression indexes for frequently filtered/sorted fields.
+#### Required: Index strategy
 
+**Current state: No indexes exist on any meta columns.** This must be fixed.
+
+**GIN indexes** for containment queries (`@>` operator):
 ```sql
 CREATE INDEX ix_entities_meta_gin ON entities USING GIN (meta jsonb_path_ops);
 CREATE INDEX ix_activities_meta_gin ON activities USING GIN (meta jsonb_path_ops);
+CREATE INDEX ix_activity_participants_meta_gin ON activity_participants USING GIN (meta jsonb_path_ops);
+CREATE INDEX ix_enrollments_meta_gin ON enrollments USING GIN (meta jsonb_path_ops);
 ```
+
+**Expression indexes** for frequently filtered/sorted fields (added per-org as needed):
+```sql
+-- Text field used in filters
+CREATE INDEX ix_entities_meta_status ON entities ((meta->>'status'));
+
+-- Numeric field used in range filters or sorting
+CREATE INDEX ix_entities_meta_age ON entities ((CAST(meta->>'age' AS NUMERIC)));
+
+-- Date field used in range filters
+CREATE INDEX ix_activities_meta_followup ON activities ((CAST(meta->>'followup_date' AS TIMESTAMPTZ)));
+```
+
+**Dynamic expression index management:** Since each org defines different meta fields, expression indexes should be created/dropped via an admin action or background job when list config marks a field as `filterable` or `sortable`. This avoids index bloat while ensuring performance for active filter fields.
+
+#### Required: Fix numeric casting bug
+
+**Current bug in `list_query.py:213`:** Numeric range filters use string comparison:
+```python
+# BROKEN — "100" < "20" in string comparison
+query.filter(func.cast(meta_col[meta_key].astext, String) >= str(value["min"]))
+```
+
+**Fix:** Cast to `Numeric` for range comparisons:
+```python
+# CORRECT — proper numeric comparison
+from sqlalchemy import Numeric
+query.filter(func.cast(meta_col[meta_key].astext, Numeric) >= value["min"])
+```
+
+#### Reporting with JSONB
+
+JSONB supports all required reporting aggregations with proper casting:
+
+```sql
+-- Count by category (select fields)
+SELECT meta->>'status' AS status, COUNT(*)
+FROM entities
+WHERE organization_id = $1 AND entity_type_id = $2
+GROUP BY meta->>'status';
+
+-- Numeric aggregation
+SELECT AVG(CAST(meta->>'age' AS NUMERIC)),
+       MIN(CAST(meta->>'age' AS NUMERIC)),
+       MAX(CAST(meta->>'age' AS NUMERIC))
+FROM entities
+WHERE organization_id = $1;
+
+-- Timeline aggregation (activities over time by meta field value)
+SELECT TO_CHAR(start_date, 'YYYY-MM') AS month,
+       meta->>'category' AS category,
+       COUNT(*)
+FROM activities
+WHERE organization_id = $1
+GROUP BY month, meta->>'category'
+ORDER BY month;
+
+-- Cross-tabulation (meta field × dimension)
+SELECT dv.name AS programme,
+       meta->>'outcome' AS outcome,
+       COUNT(*)
+FROM entities e
+JOIN entity_dimensions ed ON ed.entity_id = e.id
+JOIN dimension_values dv ON dv.id = ed.dimension_value_id
+WHERE e.organization_id = $1
+GROUP BY dv.name, meta->>'outcome';
+```
+
+All of these perform well with expression indexes on the relevant `meta->>'field'` paths.
 
 ---
 
