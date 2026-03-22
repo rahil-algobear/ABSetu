@@ -5,7 +5,7 @@ All functions take a SQLAlchemy query and return a modified query — they compo
 
 import json
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import String, exists, func, or_
@@ -194,7 +194,8 @@ def apply_filters(
             if "start" in value:
                 query = query.filter(col >= value["start"])
             if "end" in value:
-                query = query.filter(col <= value["end"])
+                # Use < next day so timestamp columns include the full end date
+                query = query.filter(col < value["end"] + timedelta(days=1))
 
         elif filter_type == "boolean":
             meta_key = config.get("meta_key")
