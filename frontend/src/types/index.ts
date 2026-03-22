@@ -186,6 +186,7 @@ export interface Activity {
   activity_type_name: string | null;
   dimensions: DimensionInfo[];
   participant_count: number;
+  created_at: number | null;
   updated_at: number | null;
 }
 

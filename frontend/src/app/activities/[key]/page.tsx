@@ -131,7 +131,7 @@ function ActivityTypeListContent() {
         case "participant_count":
           return activity.participant_count;
         case "created_at":
-          return formatDate(activity.updated_at, DATE_FORMATS.DISPLAY);
+          return formatDate(activity.created_at, DATE_FORMATS.DISPLAY);
         default:
           return "—";
       }

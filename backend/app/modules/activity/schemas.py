@@ -96,6 +96,7 @@ class ActivityResponse(BaseResponseSchema):
     end_date: datetime.date | None = None
     notes: str | None = None
     created_by: str | None = None
+    created_at: float | None = None
     meta: dict[str, Any] | None = None
     activity_type_name: str | None = None
     dimensions: list[DimensionInfo] = []
