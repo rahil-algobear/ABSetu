@@ -6,7 +6,7 @@ import { Input } from "./input";
 import { Button } from "./button";
 import { FilterModal, FilterDefinition } from "./filter-modal";
 import { FilterValue } from "@/hooks/useListParams";
-import { formatDate } from "@/utils/date";
+import { formatDate, formatDateTime } from "@/utils/date";
 
 interface ListToolbarProps {
   search: string;
@@ -19,11 +19,20 @@ interface ListToolbarProps {
 }
 
 const DATE_CHIP_FORMAT = "d MMM yyyy";
+const DATETIME_CHIP_FORMAT = "d MMM yyyy h:mm a";
+
+/** Format a filter date value — includes time if the value has a time component. */
+function formatChipDate(value: string): string {
+  if (value.includes("T")) {
+    return formatDateTime(value, DATETIME_CHIP_FORMAT);
+  }
+  return formatDate(value, DATE_CHIP_FORMAT);
+}
 
 function DateChipValue({ raw }: { raw: string }) {
   const [start, end] = raw.split("|");
-  const fmtStart = start ? formatDate(start, DATE_CHIP_FORMAT) : "";
-  const fmtEnd = end ? formatDate(end, DATE_CHIP_FORMAT) : "";
+  const fmtStart = start ? formatChipDate(start) : "";
+  const fmtEnd = end ? formatChipDate(end) : "";
 
   if (fmtStart && fmtEnd && fmtStart !== "—" && fmtEnd !== "—") {
     return <>from <span className="text-blue-600 font-medium">{fmtStart}</span> until <span className="text-blue-600 font-medium">{fmtEnd}</span></>;
