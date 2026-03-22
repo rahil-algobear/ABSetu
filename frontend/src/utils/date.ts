@@ -52,6 +52,7 @@ export function formatDate(
 /**
  * Format a datetime value (ISO 8601 string) for display.
  * Converts from UTC to the browser's local timezone.
+ * Values without a timezone offset are treated as UTC.
  * Returns "—" for null/undefined/empty.
  */
 export function formatDateTime(
@@ -61,7 +62,12 @@ export function formatDateTime(
   if (value === null || value === undefined || value === "") return "—";
 
   try {
-    const date = parseISO(value);
+    // Treat offset-free datetime strings as UTC (meta fields are stored
+    // as UTC without offset after normalization).
+    const normalized = value.includes("T") && !value.endsWith("Z") && !/[+-]\d{2}:\d{2}$/.test(value)
+      ? value + "Z"
+      : value;
+    const date = parseISO(normalized);
     if (isNaN(date.getTime())) return "—";
     const zoned = toZonedTime(date, getBrowserTimezone());
     return format(zoned, fmt);
