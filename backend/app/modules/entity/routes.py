@@ -13,6 +13,7 @@ from app.common.dependencies import (
     get_current_user,
     require_permissions,
 )
+from app.common.helpers.meta_serializer import serialize_meta
 from app.common.schemas.base_response import PaginatedResponse
 from app.common.schemas.list_params import ListParams
 from app.core.database import get_db
@@ -56,7 +57,7 @@ def _build_entity_response(e, enrollment_count: int = 0, activity_count: int = 0
         entity_type_id=str(e.entity_type_id),
         case_number=e.case_number,
         name=e.name,
-        meta=e.meta,
+        meta=serialize_meta(e.meta),
         entity_type_name=e.entity_type.name if e.entity_type else None,
         entity_type_key=e.entity_type.key if e.entity_type else None,
         entity_type_config=e.entity_type.config if e.entity_type else None,

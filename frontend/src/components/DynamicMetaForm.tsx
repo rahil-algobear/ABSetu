@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { DateTimeInput } from "@/components/ui/date-time-input";
-import { formatDateTime } from "@/utils/date";
+import { formatDateTime, toISOValue } from "@/utils/date";
 
 interface DynamicMetaFormProps {
   fields: MetaFieldDefinition[];
@@ -56,7 +56,7 @@ export function DynamicMetaForm({ fields, values, onChange }: DynamicMetaFormPro
 
           {(field.type === "date" || field.type === "datetime") && (
             <DateTimeInput
-              value={(getVal(field) as string) || ""}
+              value={toISOValue(getVal(field) as string | number | null) || ""}
               onChange={(val) => setValue(field.key, val)}
               required={field.required}
               allowTime={field.type === "datetime"}
@@ -146,7 +146,7 @@ export function MetaFieldDisplay({
                   ? val
                     ? "Yes"
                     : "No"
-                  : (field.type === "date" || field.type === "datetime") && typeof val === "string"
+                  : (field.type === "date" || field.type === "datetime") && (typeof val === "string" || typeof val === "number")
                     ? formatDateTime(val)
                     : Array.isArray(val)
                       ? val.join(", ")

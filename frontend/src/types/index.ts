@@ -179,8 +179,8 @@ export interface Activity {
   organization_id: string;
   activity_type_id: string | null;
   title: string | null;
-  start_date: string;
-  end_date: string | null;
+  start_date: number;
+  end_date: number | null;
   notes: string | null;
   created_by: string | null;
   meta: Record<string, unknown> | null;
