@@ -25,7 +25,6 @@ import {
   MetaFieldSchemaItem,
 } from "@/types";
 import { collectActivityFields } from "@/utils/meta-fields";
-import { Can } from "@/components/Auth/Permissions";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
