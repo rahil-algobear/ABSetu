@@ -314,14 +314,13 @@ def build_list_filter_response(
     # Date filters (only if list config allows or no config)
     for df in date_filters:
         if filterable_keys is None or df["key"] in filterable_keys:
-            entry: dict = {
-                "key": df["key"],
-                "label": df["label"],
-                "type": "date_range",
-            }
-            if df.get("datetime"):
-                entry["datetime"] = True
-            field_filters.append(entry)
+            field_filters.append(
+                {
+                    "key": df["key"],
+                    "label": df["label"],
+                    "type": "date_range",
+                }
+            )
 
     # Sort field filters to match list config column order
     if columns:

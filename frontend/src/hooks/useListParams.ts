@@ -393,16 +393,13 @@ export function useListParams(
         const start = parts[0] && parts[0] !== "undefined" ? parts[0] : undefined;
         const end = parts[1] && parts[1] !== "undefined" ? parts[1] : undefined;
         if (start || end) {
-          if (def.datetime) {
-            // Timestamp column: convert local dates to UTC ISO bounds
-            filtersDict[f.key] = {
-              start: start ? new Date(`${start}T00:00:00`).toISOString() : undefined,
-              end: end ? new Date(`${end}T23:59:59.999`).toISOString() : undefined,
-            };
-          } else {
-            // Plain date column: send bare date strings
-            filtersDict[f.key] = { start, end };
-          }
+          // Send local date strings + timezone offset so backend can
+          // handle both Date and DateTime columns correctly
+          filtersDict[f.key] = {
+            start: start || undefined,
+            end: end || undefined,
+            tz_offset: new Date().getTimezoneOffset(),
+          };
         }
       } else {
         filtersDict[f.key] = f.value;

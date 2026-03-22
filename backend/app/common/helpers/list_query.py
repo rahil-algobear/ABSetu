@@ -5,7 +5,7 @@ All functions take a SQLAlchemy query and return a modified query — they compo
 
 import json
 import uuid
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import String, exists, func, or_
@@ -121,13 +121,31 @@ def parse_filters(
         elif filter_type == "date_range":
             if not isinstance(value, dict):
                 continue
-            coerced = {}
             start = _parse_date(value.get("start"))
             end = _parse_date(value.get("end"))
-            if start:
-                coerced["start"] = start
-            if end:
-                coerced["end"] = end
+            if not start and not end:
+                continue
+            col = config.get("column")
+            is_dt_col = col is not None and _is_datetime_column(col)
+            # For DateTime columns, convert local dates to UTC datetime bounds
+            # using the client's timezone offset
+            if is_dt_col and (isinstance(start, date) and not isinstance(start, datetime)
+                              or isinstance(end, date) and not isinstance(end, datetime)):
+                tz_offset_min = value.get("tz_offset", 0)  # minutes from UTC (e.g. -330 for IST)
+                offset = timedelta(minutes=tz_offset_min)
+                coerced = {}
+                if start:
+                    # Start of day in user's timezone, converted to UTC
+                    coerced["start"] = datetime(start.year, start.month, start.day, tzinfo=timezone.utc) + offset
+                if end:
+                    # End of day in user's timezone, converted to UTC
+                    coerced["end"] = datetime(end.year, end.month, end.day, 23, 59, 59, 999999, tzinfo=timezone.utc) + offset
+            else:
+                coerced = {}
+                if start:
+                    coerced["start"] = start
+                if end:
+                    coerced["end"] = end
             if coerced:
                 parsed.append({"key": key, "type": filter_type, "config": config, "value": coerced})
 
@@ -250,6 +268,16 @@ def _parse_date(value: Any) -> date | datetime | None:
         return datetime.strptime(value, "%Y-%m-%d").date()
     except ValueError:
         return None
+
+
+def _is_datetime_column(col: Any) -> bool:
+    """Check if a SQLAlchemy column is a DateTime (timestamp) vs Date."""
+    from sqlalchemy import DateTime
+
+    try:
+        return isinstance(col.property.columns[0].type, DateTime)
+    except (AttributeError, IndexError):
+        return False
 
 
 def _is_uuid(value: str) -> bool:

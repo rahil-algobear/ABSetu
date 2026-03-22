@@ -242,7 +242,7 @@ def get_entity_filters(
         type_id=entity_type_id,
         scope_prefix="entity",
         meta_scopes=meta_scopes,
-        date_filters=[{"key": "created_at", "label": "Created Date", "datetime": True}],
+        date_filters=[{"key": "created_at", "label": "Created Date"}],
         default_sortable_keys=["name", "case_number", "created_at"],
     )
 

@@ -179,6 +179,7 @@ def _build_activity_response(a, form=None) -> dict:
 
     return ActivityResponse(
         id=str(a.id),
+        created_at=a.created_at,
         updated_at=a.updated_at,
         organization_id=str(a.organization_id),
         activity_type_id=str(a.activity_type_id) if a.activity_type_id else None,
@@ -315,7 +316,7 @@ def get_activity_filters(
         meta_scopes=meta_scopes,
         date_filters=[
             {"key": "start_date", "label": "Start Date"},
-            {"key": "created_at", "label": "Created Date", "datetime": True},
+            {"key": "created_at", "label": "Created Date"},
         ],
         default_sortable_keys=["title", "start_date", "end_date", "created_at"],
     )
