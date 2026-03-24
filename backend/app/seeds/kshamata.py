@@ -413,6 +413,12 @@ PROGRAMME_INTERVENTIONS = {
 # ---------------------------------------------------------------------------
 BENEFICIARY_CUSTOM_FIELDS = [
     {
+        "key": "name",
+        "label": "Name",
+        "type": "text",
+        "required": True,
+    },
+    {
         "key": "nationality",
         "label": "Nationality",
         "type": "select",
@@ -457,10 +463,29 @@ BENEFICIARY_CUSTOM_FIELDS = [
 # ---------------------------------------------------------------------------
 FACILITATOR_CUSTOM_FIELDS = [
     {
+        "key": "name",
+        "label": "Name",
+        "type": "text",
+        "required": True,
+    },
+    {
         "key": "contact_number",
         "label": "Contact No.",
         "type": "text",
         "required": False,
+    },
+]
+
+
+# ---------------------------------------------------------------------------
+# Meta Field Schemas — custom fields for Sessions activity type
+# ---------------------------------------------------------------------------
+SESSION_CUSTOM_FIELDS = [
+    {
+        "key": "date",
+        "label": "Date",
+        "type": "date",
+        "required": True,
     },
 ]
 
@@ -741,6 +766,35 @@ def seed():
             db.add(sessions_type)
             db.flush()
         print(f"  Ensured activity type: {sessions_type.name}")
+
+        # 3b. Meta Field Schemas — Session activity type custom fields
+        mfs_s = (
+            db.query(MetaFieldSchema)
+            .filter_by(
+                organization_id=org.id,
+                scope_type="activity",
+                activity_type_id=sessions_type.id,
+            )
+            .first()
+        )
+        if not mfs_s:
+            mfs_s = MetaFieldSchema(
+                organization_id=org.id,
+                scope_type="activity",
+                activity_type_id=sessions_type.id,
+                fields=SESSION_CUSTOM_FIELDS,
+            )
+            db.add(mfs_s)
+            db.flush()
+            print(
+                f"  Created session meta field schema ({len(SESSION_CUSTOM_FIELDS)} fields)"
+            )
+        else:
+            mfs_s.fields = SESSION_CUSTOM_FIELDS
+            db.flush()
+            print(
+                f"  Updated session meta field schema ({len(SESSION_CUSTOM_FIELDS)} fields)"
+            )
 
         # 4. Dimensions (intervention is now a regular dimension, not system)
         programme_dim = _ensure_dimension(db, org, "programme", "Programme", 0)
