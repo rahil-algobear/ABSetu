@@ -313,13 +313,15 @@ export default function ActivityDetailPage() {
   }, [activityTypeFields]);
 
   // Field keys that are in the form builder layout (rendered inline)
+  // Use all form config elements (not just detailElements) to avoid duplicates
   const layoutCustomFieldKeys = useMemo(() => {
+    const elements = formConfig?.elements || [];
     return new Set(
-      detailElements
+      elements
         .filter((el) => el.type === "field" && el.ref_key)
         .map((el) => el.ref_key!)
     );
-  }, [detailElements]);
+  }, [formConfig]);
 
   // Custom meta fields NOT in the layout (auto-appended after form elements)
   // Show all visible fields — create-only ones will render as disabled via editDisabledKeys

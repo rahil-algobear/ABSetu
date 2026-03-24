@@ -278,13 +278,15 @@ function NewActivityPageContent() {
   });
 
   // Collect field keys in the layout to avoid duplicating them
+  // Use all form config elements (not just filtered formElements) to avoid duplicates
   const layoutCustomFieldKeys = useMemo(() => {
+    const elements = formConfig?.elements || [];
     return new Set(
-      formElements
+      elements
         .filter((el) => el.type === "field" && el.ref_key)
         .map((el) => el.ref_key!)
     );
-  }, [formElements]);
+  }, [formConfig]);
 
   // Custom meta fields NOT in the layout (auto-appended)
   // Show all visible fields — edit-only ones will render as disabled via createDisabledKeys
