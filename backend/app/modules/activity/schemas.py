@@ -2,8 +2,7 @@
 Activity, ActivityType, ActivityParticipant schemas
 """
 
-import datetime
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -84,20 +83,10 @@ class DimensionInfo(BaseModel):
 class ActivityCreate(BaseModel):
     activity_type_id: str | None = None
     dimension_value_ids: list[str] = []
-    # System fields accepted at top-level for backward compat; merged into meta by service
-    title: str | None = None
-    start_date: datetime.datetime | str | None = None
-    end_date: datetime.datetime | str | None = None
-    notes: str | None = None
     meta: dict[str, Any] | None = None
 
 
 class ActivityUpdate(BaseModel):
-    # System fields accepted at top-level for backward compat; merged into meta by service
-    title: str | None = None
-    start_date: Optional[datetime.datetime | str] = None
-    end_date: Optional[datetime.datetime | str] = None
-    notes: str | None = None
     meta: dict[str, Any] | None = None
 
 
@@ -105,7 +94,7 @@ class ActivityResponse(BaseResponseSchema):
     organization_id: str
     activity_type_id: str | None = None
     title: str | None = None
-    start_date: str
+    start_date: str | None = None
     end_date: str | None = None
     notes: str | None = None
     created_by: str | None = None

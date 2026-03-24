@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session
 from app.common.exceptions import NotFoundError, ValidationError
 from app.modules.organization.model import ListConfig, MetaFieldSchema, USER_ENTITY_SENTINEL
 from app.modules.organization.model import Organization
-from app.modules.organization.system_fields import get_system_fields, merge_system_fields
 
 
 class OrganizationService:
@@ -70,7 +69,7 @@ class MetaFieldSchemaService:
         dimension_value_id: uuid.UUID | None = None,
         dimension_id: uuid.UUID | None = None,
     ) -> list[dict]:
-        """Get fields for a specific scope, with system fields merged."""
+        """Get fields for a specific scope."""
         row = (
             self.db.query(MetaFieldSchema)
             .filter_by(
@@ -83,95 +82,16 @@ class MetaFieldSchemaService:
             )
             .first()
         )
-        db_fields = row.fields if row else []
-
-        # System fields only apply to base scope (no dimension/activity sub-scoping)
-        is_base_scope = not activity_type_id and not dimension_value_id and not dimension_id
-        # For entity scope: base = entity_type_id set, no other sub-scoping
-        # For activity scope: base = no activity_type_id, no dimension_value_id
-        if is_base_scope and scope_type in ("entity", "activity"):
-            return merge_system_fields(scope_type, db_fields)
-
-        return db_fields
+        return row.fields if row else []
 
     def get_all_schemas(self, org_id: uuid.UUID) -> list[MetaFieldSchema]:
         """Get all schema rows for an org."""
         return self.db.query(MetaFieldSchema).filter_by(organization_id=org_id).all()
 
-    def get_all_schemas_with_system_fields(self, org_id: uuid.UUID) -> list[dict]:
-        """Get all schema rows as dicts, with system fields merged into base scopes.
-
-        Returns a list of dicts matching MetaFieldSchemaResponse format.
-        """
+    def get_all_schemas_as_dicts(self, org_id: uuid.UUID) -> list[dict]:
+        """Get all schema rows as dicts for API response."""
         rows = self.get_all_schemas(org_id)
-
-        # Track which base scopes we've seen (for injecting system field scopes)
-        seen_base_scopes: set[str] = set()
-        results = []
-
-        for row in rows:
-            scope_type = row.scope_type
-            is_base = (
-                not row.activity_type_id and not row.dimension_value_id and not row.dimension_id
-            )
-
-            if is_base and scope_type in ("entity", "activity"):
-                # Merge system fields into this row's fields
-                merged = merge_system_fields(scope_type, row.fields)
-                seen_base_scopes.add(f"{scope_type}:{row.entity_type_id or ''}")
-                results.append(
-                    {
-                        "row": row,
-                        "fields": merged,
-                    }
-                )
-            else:
-                results.append(
-                    {
-                        "row": row,
-                        "fields": row.fields,
-                    }
-                )
-
-        # Inject system-field-only scopes that have no DB row yet
-        # For "activity" scope: always inject if no base activity row exists
-        if "activity:" not in seen_base_scopes:
-            system = get_system_fields("activity")
-            if system:
-                results.append(
-                    {
-                        "row": None,
-                        "scope_type": "activity",
-                        "entity_type_id": None,
-                        "activity_type_id": None,
-                        "dimension_value_id": None,
-                        "dimension_id": None,
-                        "fields": system,
-                    }
-                )
-
-        # For "entity" scope: inject for each entity type that has no DB row
-        from app.modules.entity.model import EntityType
-
-        entity_types = self.db.query(EntityType).filter_by(organization_id=org_id).all()
-        for et in entity_types:
-            scope_key = f"entity:{et.id}"
-            if scope_key not in seen_base_scopes:
-                system = get_system_fields("entity")
-                if system:
-                    results.append(
-                        {
-                            "row": None,
-                            "scope_type": "entity",
-                            "entity_type_id": et.id,
-                            "activity_type_id": None,
-                            "dimension_value_id": None,
-                            "dimension_id": None,
-                            "fields": system,
-                        }
-                    )
-
-        return results
+        return [{"row": row, "fields": row.fields} for row in rows]
 
     def update_schema(
         self,
