@@ -436,39 +436,31 @@ export default function MetaFieldsPage() {
     saveFields(target.scope, reordered);
   };
 
-  // Move a field up/down in the flat (cross-scope) table by swapping sort_order values
+  // Move a field up/down in the flat (cross-scope) table, then re-normalize
+  // all sort_order values so every field gets a unique sequential number.
   const moveFlatRow = (rowIndex: number, direction: "up" | "down") => {
-    const rows = activeSection === "activity" ? activityRows : participantRows;
+    const rows = [...(activeSection === "activity" ? activityRows : participantRows)];
     const targetRowIndex = direction === "up" ? rowIndex - 1 : rowIndex + 1;
     if (targetRowIndex < 0 || targetRowIndex >= rows.length) return;
 
-    const rowA = rows[rowIndex];
-    const rowB = rows[targetRowIndex];
-    const orderA = rowA.field.sort_order ?? 0;
-    const orderB = rowB.field.sort_order ?? 0;
+    // Swap the two rows in the array
+    [rows[rowIndex], rows[targetRowIndex]] = [rows[targetRowIndex], rows[rowIndex]];
 
-    // Swap sort_order values; if equal, nudge to ensure they actually swap
-    const newOrderA = orderA === orderB
-      ? (direction === "up" ? orderB - 1 : orderB + 1)
-      : orderB;
-    const newOrderB = orderA === orderB
-      ? orderA
-      : orderA;
+    // Re-assign sort_order = 0, 1, 2, ... across all rows
+    // Group updates by schema to batch saves
+    const schemaUpdates = new Map<MetaFieldSchemaItem, MetaFieldDefinition[]>();
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      if (!schemaUpdates.has(row.schema)) {
+        schemaUpdates.set(row.schema, [...row.schema.fields]);
+      }
+      const fields = schemaUpdates.get(row.schema)!;
+      fields[row.fieldIndex] = { ...fields[row.fieldIndex], sort_order: i };
+    }
 
-    // Update both schemas (may be the same schema or different)
-    const schemaAFields = [...rowA.schema.fields];
-    schemaAFields[rowA.fieldIndex] = { ...schemaAFields[rowA.fieldIndex], sort_order: newOrderA };
-
-    if (rowA.schema === rowB.schema) {
-      // Same schema — update both in one save
-      schemaAFields[rowB.fieldIndex] = { ...schemaAFields[rowB.fieldIndex], sort_order: newOrderB };
-      saveFields(rowA.schema.scope, schemaAFields);
-    } else {
-      // Different schemas — save both
-      const schemaBFields = [...rowB.schema.fields];
-      schemaBFields[rowB.fieldIndex] = { ...schemaBFields[rowB.fieldIndex], sort_order: newOrderB };
-      saveFields(rowA.schema.scope, schemaAFields);
-      saveFields(rowB.schema.scope, schemaBFields);
+    // Save all affected schemas
+    for (const [schema, fields] of schemaUpdates) {
+      saveFields(schema.scope, fields);
     }
   };
 
