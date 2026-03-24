@@ -424,6 +424,42 @@ export default function MetaFieldsPage() {
     saveFields(target.scope, updated);
   };
 
+  // Move a field up/down in the flat (cross-scope) table by swapping sort_order values
+  const moveFlatRow = (rowIndex: number, direction: "up" | "down") => {
+    const rows = activeSection === "activity" ? activityRows : participantRows;
+    const targetRowIndex = direction === "up" ? rowIndex - 1 : rowIndex + 1;
+    if (targetRowIndex < 0 || targetRowIndex >= rows.length) return;
+
+    const rowA = rows[rowIndex];
+    const rowB = rows[targetRowIndex];
+    const orderA = rowA.field.sort_order ?? 0;
+    const orderB = rowB.field.sort_order ?? 0;
+
+    // Swap sort_order values; if equal, nudge to ensure they actually swap
+    const newOrderA = orderA === orderB
+      ? (direction === "up" ? orderB - 1 : orderB + 1)
+      : orderB;
+    const newOrderB = orderA === orderB
+      ? orderA
+      : orderA;
+
+    // Update both schemas (may be the same schema or different)
+    const schemaAFields = [...rowA.schema.fields];
+    schemaAFields[rowA.fieldIndex] = { ...schemaAFields[rowA.fieldIndex], sort_order: newOrderA };
+
+    if (rowA.schema === rowB.schema) {
+      // Same schema — update both in one save
+      schemaAFields[rowB.fieldIndex] = { ...schemaAFields[rowB.fieldIndex], sort_order: newOrderB };
+      saveFields(rowA.schema.scope, schemaAFields);
+    } else {
+      // Different schemas — save both
+      const schemaBFields = [...rowB.schema.fields];
+      schemaBFields[rowB.fieldIndex] = { ...schemaBFields[rowB.fieldIndex], sort_order: newOrderB };
+      saveFields(rowA.schema.scope, schemaAFields);
+      saveFields(rowB.schema.scope, schemaBFields);
+    }
+  };
+
   const showOptions = fieldForm.type === "select" || fieldForm.type === "multiselect";
 
   // Build display label for field type
@@ -863,6 +899,7 @@ export default function MetaFieldsPage() {
             <Table stickyRows={1} className="max-h-[calc(100vh-400px)] lg:max-h-[calc(100vh-300px)]">
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-8">{""}</TableHead>
                   <TableHead>Scope</TableHead>
                   <TableHead>Label</TableHead>
                   <TableHead>Type</TableHead>
@@ -874,6 +911,24 @@ export default function MetaFieldsPage() {
               <TableBody>
                 {flatRows.map((row, ri) => (
                   <TableRow key={`${ri}-${row.field.key}`}>
+                    <TableCell>
+                      <div className="flex flex-col items-center">
+                        <button
+                          onClick={() => moveFlatRow(ri, "up")}
+                          disabled={ri === 0}
+                          className="text-gray-400 hover:text-purple-600 disabled:opacity-20 disabled:cursor-not-allowed"
+                        >
+                          <ChevronUp className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => moveFlatRow(ri, "down")}
+                          disabled={ri === flatRows.length - 1}
+                          className="text-gray-400 hover:text-purple-600 disabled:opacity-20 disabled:cursor-not-allowed"
+                        >
+                          <ChevronDown className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </TableCell>
                     <TableCell className="text-sm">
                       <span className="font-medium text-gray-600">{row.scopeLabel}</span>
                     </TableCell>
