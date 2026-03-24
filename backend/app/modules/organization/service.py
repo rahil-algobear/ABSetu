@@ -396,10 +396,12 @@ class ListConfigService:
             cols.append(self._col("static", "case_number", "Case No.", order, sortable=True))
             order += 1
 
-        # Meta fields
+        # Meta fields (skip system fields – already added as static columns above)
         meta_service = MetaFieldSchemaService(self.db)
         fields = meta_service.get_schema_by_scope(org_id, "entity", entity_type_id=type_id)
         for f in fields:
+            if f.get("system"):
+                continue
             ftype = f.get("type", "text")
             cols.append(self._col(
                 "meta", f"meta:{f['key']}", f.get("label", f["key"]), order,
@@ -456,6 +458,8 @@ class ListConfigService:
                 all_fields.append(f)
         fields = all_fields
         for f in fields:
+            if f.get("system"):
+                continue
             ftype = f.get("type", "text")
             cols.append(self._col(
                 "meta", f"meta:{f['key']}", f.get("label", f["key"]), order,

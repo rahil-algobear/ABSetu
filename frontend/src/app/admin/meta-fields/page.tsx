@@ -1017,8 +1017,8 @@ export default function MetaFieldsPage() {
             <Label htmlFor="field-type">Type</Label>
             <select
               id="field-type"
-              disabled={fieldForm.system}
-              className={`w-full border rounded-md p-2 text-sm ${fieldForm.system ? 'opacity-60 cursor-not-allowed bg-gray-50' : ''}`}
+              disabled={false}
+              className="w-full border rounded-md p-2 text-sm"
               value={fieldForm.type}
               onChange={(e) => setFieldForm({ ...fieldForm, type: e.target.value as MetaFieldType })}
             >
