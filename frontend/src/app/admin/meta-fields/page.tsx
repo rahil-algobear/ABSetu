@@ -392,16 +392,26 @@ export default function MetaFieldsPage() {
         ? editingSchema.scope
         : buildScopeFromModal();
       const existingFields = findMatchingSchema(scope)?.fields || [];
-      const updated = editingIndex !== null
-        ? existingFields.map((f, i) => (i === editingIndex ? field : f))
-        : [...existingFields, field];
-      saveFields(scope, updated);
+      if (editingIndex !== null) {
+        const updated = existingFields.map((f, i) => (i === editingIndex ? field : f));
+        saveFields(scope, updated);
+      } else {
+        // Auto-assign sort_order: max across all visible rows + 1
+        const rows = activeSection === "activity" ? activityRows : participantRows;
+        const maxOrder = rows.reduce((max, r) => Math.max(max, r.field.sort_order ?? 0), -1);
+        const newField = { ...field, sort_order: maxOrder + 1 };
+        saveFields(scope, [...existingFields, newField]);
+      }
     } else {
       if (!currentScope) return;
-      const updated = editingIndex !== null
-        ? fields.map((f, i) => (i === editingIndex ? field : f))
-        : [...fields, field];
-      saveFields(currentScope, updated);
+      if (editingIndex !== null) {
+        const updated = fields.map((f, i) => (i === editingIndex ? field : f));
+        saveFields(currentScope, updated);
+      } else {
+        // Auto-assign sort_order based on position
+        const newField = { ...field, sort_order: fields.length };
+        saveFields(currentScope, [...fields, newField]);
+      }
     }
     closeModal();
   };
@@ -421,7 +431,9 @@ export default function MetaFieldsPage() {
     if (targetIndex < 0 || targetIndex >= target.fields.length) return;
     const updated = [...target.fields];
     [updated[index], updated[targetIndex]] = [updated[targetIndex], updated[index]];
-    saveFields(target.scope, updated);
+    // Re-assign sort_order based on new array positions
+    const reordered = updated.map((f, i) => ({ ...f, sort_order: i }));
+    saveFields(target.scope, reordered);
   };
 
   // Move a field up/down in the flat (cross-scope) table by swapping sort_order values
