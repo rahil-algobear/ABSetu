@@ -356,9 +356,9 @@ export default function MetaFieldsPage() {
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    // On edit, keep existing key. On create, send a placeholder — the backend
-    // will auto-assign a unique key with a random suffix via _ensure_field_keys.
-    const key = editingIndex !== null ? fieldForm.key : fieldForm.label.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "") || "field";
+    // On edit, keep existing key. On create, omit key — the backend
+    // auto-assigns a unique key with a random suffix via _ensure_field_keys.
+    const key = editingIndex !== null ? fieldForm.key : "";
     const options =
       fieldForm.type === "select" || fieldForm.type === "multiselect"
         ? optionsText.split("\n").map((o) => o.trim()).filter(Boolean)
@@ -1086,22 +1086,6 @@ export default function MetaFieldsPage() {
               </select>
             </div>
 
-            <div>
-              <Label htmlFor="field-label">Label</Label>
-              <Input
-                id="field-label"
-                value={fieldForm.label}
-                onChange={(e) => setFieldForm({ ...fieldForm, label: e.target.value })}
-                placeholder="e.g. Nationality"
-                required
-              />
-            </div>
-            {editingIndex !== null && (
-              <p className="text-xs text-gray-400 font-mono">
-                Key: {fieldForm.key}
-              </p>
-            )}
-
             {/* Dimension picker for type=dimension */}
             {fieldForm.type === "dimension" && (
               <div>
@@ -1198,6 +1182,22 @@ export default function MetaFieldsPage() {
                   </div>
                 )}
               </>
+            )}
+
+            <div>
+              <Label htmlFor="field-label">Label</Label>
+              <Input
+                id="field-label"
+                value={fieldForm.label}
+                onChange={(e) => setFieldForm({ ...fieldForm, label: e.target.value })}
+                placeholder="e.g. Nationality"
+                required
+              />
+            </div>
+            {editingIndex !== null && (
+              <p className="text-xs text-gray-400 font-mono">
+                Key: {fieldForm.key}
+              </p>
             )}
 
             {/* Display type for text/select/multiselect */}
