@@ -1072,199 +1072,180 @@ export default function MetaFieldsPage() {
             </div>
           )}
 
-          {/* Field definition */}
-          <div>
-            <Label htmlFor="field-label">Label</Label>
-            <Input
-              id="field-label"
-              value={fieldForm.label}
-              onChange={(e) => setFieldForm({ ...fieldForm, label: e.target.value })}
-              placeholder="e.g. Nationality"
-              required
-            />
-          </div>
-          {editingIndex !== null && (
-            <p className="text-xs text-gray-400 font-mono">
-              Key: {fieldForm.key}
-            </p>
-          )}
-          <div>
-            <Label htmlFor="field-type">Type</Label>
-            <select
-              id="field-type"
-              disabled={false}
-              className="w-full border rounded-md p-2 text-sm"
-              value={fieldForm.type}
-              onChange={(e) => setFieldForm({ ...fieldForm, type: e.target.value as MetaFieldType })}
-            >
-              {availableFieldTypes.map((ft) => (
-                <option key={ft.value} value={ft.value}>{ft.label}</option>
-              ))}
-            </select>
-          </div>
-          {/* Dimension picker for type=dimension */}
-          {fieldForm.type === "dimension" && (
+          {/* --- Section 2: Field Details --- */}
+          <div className="space-y-3 pb-3 mb-3 border-b">
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Field Details</p>
+
             <div>
-              <Label htmlFor="field-dimension">Dimension</Label>
-              <select
-                id="field-dimension"
-                className="w-full border rounded-md p-2 text-sm"
-                value={fieldForm.dimension_id || ""}
-                onChange={(e) => {
-                  const dimId = e.target.value;
-                  const dim = dimensions.find((d) => d.id === dimId);
-                  setFieldForm({
-                    ...fieldForm,
-                    dimension_id: dimId || null,
-                    label: dim?.name || fieldForm.label,
-                  });
-                }}
+              <Label htmlFor="field-label">Label</Label>
+              <Input
+                id="field-label"
+                value={fieldForm.label}
+                onChange={(e) => setFieldForm({ ...fieldForm, label: e.target.value })}
+                placeholder="e.g. Nationality"
                 required
+              />
+            </div>
+            {editingIndex !== null && (
+              <p className="text-xs text-gray-400 font-mono">
+                Key: {fieldForm.key}
+              </p>
+            )}
+            <div>
+              <Label htmlFor="field-type">Type</Label>
+              <select
+                id="field-type"
+                className="w-full border rounded-md p-2 text-sm"
+                value={fieldForm.type}
+                onChange={(e) => setFieldForm({ ...fieldForm, type: e.target.value as MetaFieldType })}
               >
-                <option value="">Select dimension...</option>
-                {dimensions.map((d) => (
-                  <option key={d.id} value={d.id}>{d.name}</option>
+                {availableFieldTypes.map((ft) => (
+                  <option key={ft.value} value={ft.value}>{ft.label}</option>
                 ))}
               </select>
             </div>
-          )}
-          {/* Entity type picker for type=participant_list */}
-          {fieldForm.type === "participant_list" && (
-            <>
+
+            {/* Dimension picker for type=dimension */}
+            {fieldForm.type === "dimension" && (
               <div>
-                <Label htmlFor="field-entity-type">Entity Type / Source</Label>
+                <Label htmlFor="field-dimension">Dimension</Label>
                 <select
-                  id="field-entity-type"
+                  id="field-dimension"
                   className="w-full border rounded-md p-2 text-sm"
-                  value={fieldForm.entity_type_id || ""}
+                  value={fieldForm.dimension_id || ""}
                   onChange={(e) => {
-                    const etId = e.target.value;
-                    const et = entityTypesList.find((t) => t.id === etId);
+                    const dimId = e.target.value;
+                    const dim = dimensions.find((d) => d.id === dimId);
                     setFieldForm({
                       ...fieldForm,
-                      entity_type_id: etId || null,
-                      label: etId === "user" ? "Users (staff)" : et?.name || fieldForm.label,
+                      dimension_id: dimId || null,
+                      label: dim?.name || fieldForm.label,
                     });
                   }}
                   required
                 >
-                  <option value="">Select...</option>
-                  <option value="user">Users (staff)</option>
-                  {entityTypesList.map((et) => (
-                    <option key={et.id} value={et.id}>{et.name}</option>
+                  <option value="">Select dimension...</option>
+                  {dimensions.map((d) => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
                   ))}
                 </select>
               </div>
+            )}
+
+            {/* Entity type picker + participant-specific options for type=participant_list */}
+            {fieldForm.type === "participant_list" && (
+              <>
+                <div>
+                  <Label htmlFor="field-entity-type">Entity Type / Source</Label>
+                  <select
+                    id="field-entity-type"
+                    className="w-full border rounded-md p-2 text-sm"
+                    value={fieldForm.entity_type_id || ""}
+                    onChange={(e) => {
+                      const etId = e.target.value;
+                      const et = entityTypesList.find((t) => t.id === etId);
+                      setFieldForm({
+                        ...fieldForm,
+                        entity_type_id: etId || null,
+                        label: etId === "user" ? "Users (staff)" : et?.name || fieldForm.label,
+                      });
+                    }}
+                    required
+                  >
+                    <option value="">Select...</option>
+                    <option value="user">Users (staff)</option>
+                    {entityTypesList.map((et) => (
+                      <option key={et.id} value={et.id}>{et.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <Label htmlFor="field-display-type-pl">Display as</Label>
+                  <select
+                    id="field-display-type-pl"
+                    className="w-full border rounded-md p-2 text-sm"
+                    value={fieldForm.display_type || ""}
+                    onChange={(e) => setFieldForm({ ...fieldForm, display_type: (e.target.value || undefined) as MetaFieldDisplayType | undefined })}
+                  >
+                    <option value="">Checklist (default)</option>
+                    <option value="search_select">Search & select</option>
+                  </select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Switch
+                    checked={!!fieldForm.config?.capture_status}
+                    onCheckedChange={(checked) => setFieldForm({
+                      ...fieldForm,
+                      config: { ...fieldForm.config, capture_status: checked },
+                    })}
+                  />
+                  <Label>Capture attendance status</Label>
+                </div>
+                {fieldForm.config?.capture_status && (
+                  <div>
+                    <Label htmlFor="field-statuses">
+                      Status options <span className="text-gray-400 text-xs font-normal">(comma-separated)</span>
+                    </Label>
+                    <Input
+                      id="field-statuses"
+                      value={(fieldForm.config?.statuses as string[] || ["present", "absent"]).join(", ")}
+                      onChange={(e) => {
+                        const statuses = e.target.value.split(",").map((s) => s.trim()).filter(Boolean);
+                        setFieldForm({
+                          ...fieldForm,
+                          config: { ...fieldForm.config, statuses, default_status: statuses[0] || "present" },
+                        });
+                      }}
+                      placeholder="present, absent"
+                    />
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Display type for text/select/multiselect */}
+            {!isStructuralType && (fieldForm.type === "text" || fieldForm.type === "select" || fieldForm.type === "multiselect") && (
               <div>
-                <Label htmlFor="field-display-type-pl">Display as</Label>
+                <Label htmlFor="field-display-type">
+                  Display as <span className="text-gray-400 text-xs font-normal">(optional)</span>
+                </Label>
                 <select
-                  id="field-display-type-pl"
+                  id="field-display-type"
                   className="w-full border rounded-md p-2 text-sm"
                   value={fieldForm.display_type || ""}
                   onChange={(e) => setFieldForm({ ...fieldForm, display_type: (e.target.value || undefined) as MetaFieldDisplayType | undefined })}
                 >
-                  <option value="">Checklist (default)</option>
-                  <option value="search_select">Search & select</option>
+                  <option value="">Auto</option>
+                  <option value="input">Text input</option>
+                  <option value="textarea">Textarea</option>
+                  <option value="dropdown">Dropdown</option>
+                  <option value="radio">Radio buttons</option>
+                  <option value="checklist">Checklist</option>
                 </select>
               </div>
-              <div className="flex items-center gap-2">
-                <Switch
-                  checked={!!fieldForm.config?.capture_status}
-                  onCheckedChange={(checked) => setFieldForm({
-                    ...fieldForm,
-                    config: { ...fieldForm.config, capture_status: checked },
-                  })}
+            )}
+
+            {/* Options for select/multiselect */}
+            {showOptions && !isStructuralType && (
+              <div>
+                <Label htmlFor="field-options">
+                  Options <span className="text-gray-400 text-xs font-normal">(one per line)</span>
+                </Label>
+                <textarea
+                  id="field-options"
+                  className="w-full border rounded-md p-2 text-sm min-h-[80px]"
+                  value={optionsText}
+                  onChange={(e) => setOptionsText(e.target.value)}
+                  placeholder={"Option 1\nOption 2\nOption 3"}
                 />
-                <Label>Capture attendance status</Label>
               </div>
-              {fieldForm.config?.capture_status && (
-                <div>
-                  <Label htmlFor="field-statuses">
-                    Status options <span className="text-gray-400 text-xs font-normal">(comma-separated)</span>
-                  </Label>
-                  <Input
-                    id="field-statuses"
-                    value={(fieldForm.config?.statuses as string[] || ["present", "absent"]).join(", ")}
-                    onChange={(e) => {
-                      const statuses = e.target.value.split(",").map((s) => s.trim()).filter(Boolean);
-                      setFieldForm({
-                        ...fieldForm,
-                        config: { ...fieldForm.config, statuses, default_status: statuses[0] || "present" },
-                      });
-                    }}
-                    placeholder="present, absent"
-                  />
-                </div>
-              )}
-            </>
-          )}
-          <div className="flex items-center gap-2">
-            <Switch
-              checked={fieldForm.required || false}
-              onCheckedChange={(checked) => setFieldForm({ ...fieldForm, required: checked })}
-            />
-            <Label>Required</Label>
-          </div>
-          <div className="flex items-center gap-2">
-            <Switch
-              checked={fieldForm.visible !== false}
-              onCheckedChange={(checked) => setFieldForm({ ...fieldForm, visible: checked })}
-            />
-            <Label>Visible on forms</Label>
-          </div>
-          {fieldForm.visible !== false && (
-            <div>
-              <Label htmlFor="field-stage">Editable on</Label>
-              <select
-                id="field-stage"
-                className="w-full border rounded-md p-2 text-sm"
-                value={fieldForm.stage || "both"}
-                onChange={(e) => setFieldForm({ ...fieldForm, stage: e.target.value as MetaFieldStage })}
-              >
-                <option value="both">Both create and edit</option>
-                <option value="create">Create only</option>
-                <option value="record">Edit only</option>
-              </select>
-            </div>
-          )}
-          {!isStructuralType && (fieldForm.type === "text" || fieldForm.type === "select" || fieldForm.type === "multiselect") && (
-            <div>
-              <Label htmlFor="field-display-type">
-                Display as <span className="text-gray-400 text-xs font-normal">(optional)</span>
+            )}
+
+            {/* Default value */}
+            {!isStructuralType && (<div>
+              <Label htmlFor="field-default">
+                Default value <span className="text-gray-400 text-xs font-normal">(optional)</span>
               </Label>
-              <select
-                id="field-display-type"
-                className="w-full border rounded-md p-2 text-sm"
-                value={fieldForm.display_type || ""}
-                onChange={(e) => setFieldForm({ ...fieldForm, display_type: (e.target.value || undefined) as MetaFieldDisplayType | undefined })}
-              >
-                <option value="">Auto</option>
-                <option value="input">Text input</option>
-                <option value="textarea">Textarea</option>
-                <option value="dropdown">Dropdown</option>
-                <option value="radio">Radio buttons</option>
-                <option value="checklist">Checklist</option>
-              </select>
-            </div>
-          )}
-          {showOptions && !isStructuralType && (
-            <div>
-              <Label htmlFor="field-options">
-                Options <span className="text-gray-400 text-xs font-normal">(one per line)</span>
-              </Label>
-              <textarea
-                id="field-options"
-                className="w-full border rounded-md p-2 text-sm min-h-[80px]"
-                value={optionsText}
-                onChange={(e) => setOptionsText(e.target.value)}
-                placeholder={"Option 1\nOption 2\nOption 3"}
-              />
-            </div>
-          )}
-          {!isStructuralType && (<div>
-            <Label htmlFor="field-default">
-              Default value <span className="text-gray-400 text-xs font-normal">(optional)</span>
-            </Label>
             {fieldForm.type === "boolean" ? (
               <div className="flex items-center gap-2 mt-1">
                 <Switch
@@ -1336,6 +1317,43 @@ export default function MetaFieldsPage() {
               />
             )}
           </div>)}
+          </div>
+
+          {/* --- Section 3: Field Config --- */}
+          <div className="space-y-3">
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Field Config</p>
+
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={fieldForm.required || false}
+                onCheckedChange={(checked) => setFieldForm({ ...fieldForm, required: checked })}
+              />
+              <Label>Required</Label>
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={fieldForm.visible !== false}
+                onCheckedChange={(checked) => setFieldForm({ ...fieldForm, visible: checked })}
+              />
+              <Label>Visible on forms</Label>
+            </div>
+            {fieldForm.visible !== false && (
+              <div>
+                <Label htmlFor="field-stage">Editable on</Label>
+                <select
+                  id="field-stage"
+                  className="w-full border rounded-md p-2 text-sm"
+                  value={fieldForm.stage || "both"}
+                  onChange={(e) => setFieldForm({ ...fieldForm, stage: e.target.value as MetaFieldStage })}
+                >
+                  <option value="both">Both create and edit</option>
+                  <option value="create">Create only</option>
+                  <option value="record">Edit only</option>
+                </select>
+              </div>
+            )}
+          </div>
+
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={closeModal}>Cancel</Button>
             <Button type="submit">{editingIndex !== null ? "Save" : "Add"}</Button>
