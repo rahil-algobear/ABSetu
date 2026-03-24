@@ -94,10 +94,10 @@ export const organizationApi = {
 
 export interface MetaFieldScope {
   type: string; // "entity", "dimension", "enrollment", "activity", "participant"
-  entity_type_id?: string;
-  dimension_id?: string;
-  activity_type_id?: string;
-  dimension_value_id?: string;
+  entity_type_id?: string | null;
+  dimension_id?: string | null;
+  activity_type_id?: string | null;
+  dimension_value_id?: string | null;
 }
 
 export const metaFieldSchemaApi = {

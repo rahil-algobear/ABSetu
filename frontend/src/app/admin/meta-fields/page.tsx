@@ -40,7 +40,7 @@ import { Plus, Pencil, Trash2, ChevronUp, ChevronDown } from "lucide-react";
 import toast from "react-hot-toast";
 
 
-const FIELD_TYPES: { value: MetaFieldType; label: string }[] = [
+const FIELD_TYPES: { value: MetaFieldType; label: string; section?: SectionKind }[] = [
   { value: "text", label: "Text" },
   { value: "number", label: "Number" },
   { value: "date", label: "Date" },
@@ -48,6 +48,8 @@ const FIELD_TYPES: { value: MetaFieldType; label: string }[] = [
   { value: "select", label: "Dropdown" },
   { value: "multiselect", label: "Multi-select" },
   { value: "boolean", label: "Yes/No" },
+  { value: "dimension", label: "Dimension picker", section: "activity" },
+  { value: "participant_list", label: "Participant list", section: "activity" },
 ];
 
 const emptyField: MetaFieldDefinition = {
@@ -58,6 +60,10 @@ const emptyField: MetaFieldDefinition = {
   options: [],
   visible: true,
   stage: "both",
+  sort_order: 0,
+  dimension_id: null,
+  entity_type_id: null,
+  config: undefined,
 };
 
 type SectionKind = "entity" | "dimension" | "other" | "activity" | "participant";
@@ -326,7 +332,7 @@ export default function MetaFieldsPage() {
     if (!f) return;
     setEditingIndex(index);
     setEditingSchema(target!);
-    setFieldForm({ ...f });
+    setFieldForm({ ...emptyField, ...f });
     setOptionsText(f.options?.join("\n") || "");
 
     if (activeSection === "activity" || activeSection === "participant") {
@@ -350,9 +356,16 @@ export default function MetaFieldsPage() {
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    const key = editingIndex !== null
-      ? fieldForm.key
-      : fieldForm.label.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
+    let key: string;
+    if (editingIndex !== null) {
+      key = fieldForm.key;
+    } else if (fieldForm.type === "dimension" && fieldForm.dimension_id) {
+      key = `dim_${fieldForm.dimension_id}`;
+    } else if (fieldForm.type === "participant_list" && fieldForm.entity_type_id) {
+      key = `pl_${fieldForm.entity_type_id}`;
+    } else {
+      key = fieldForm.label.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
+    }
     const options =
       fieldForm.type === "select" || fieldForm.type === "multiselect"
         ? optionsText.split("\n").map((o) => o.trim()).filter(Boolean)
@@ -362,7 +375,17 @@ export default function MetaFieldsPage() {
       !(Array.isArray(fieldForm.default) && fieldForm.default.length === 0)
       ? fieldForm.default
       : undefined;
-    const field: MetaFieldDefinition = { ...fieldForm, key, options, default: defaultVal };
+    const field: MetaFieldDefinition = {
+      ...fieldForm,
+      key,
+      options,
+      default: defaultVal,
+      dimension_id: fieldForm.type === "dimension" ? fieldForm.dimension_id : undefined,
+      entity_type_id: fieldForm.type === "participant_list" ? fieldForm.entity_type_id : undefined,
+      config: (fieldForm.type === "participant_list" || fieldForm.type === "dimension" || fieldForm.config)
+        ? fieldForm.config
+        : undefined,
+    };
 
     if (activeSection === "activity" || activeSection === "participant") {
       const scope = editingIndex !== null && editingSchema
@@ -402,6 +425,24 @@ export default function MetaFieldsPage() {
   };
 
   const showOptions = fieldForm.type === "select" || fieldForm.type === "multiselect";
+
+  // Build display label for field type
+  const getTypeLabel = (field: MetaFieldDefinition): string => {
+    if (field.type === "dimension") {
+      const dim = dimensions.find((d) => d.id === field.dimension_id);
+      return dim ? `Dimension: ${dim.name}` : "Dimension";
+    }
+    if (field.type === "participant_list") {
+      if (field.entity_type_id === "user") return "Participants: Users (staff)";
+      const et = entityTypesList.find((t) => t.id === field.entity_type_id);
+      return et ? `Participants: ${et.name}` : "Participant list";
+    }
+    return FIELD_TYPES.find((ft) => ft.value === field.type)?.label || field.type;
+  };
+  const isStructuralType = fieldForm.type === "dimension" || fieldForm.type === "participant_list";
+  const availableFieldTypes = useMemo(() => {
+    return FIELD_TYPES.filter((ft) => !ft.section || ft.section === activeSection);
+  }, [activeSection]);
 
   // Selected label for entity/dimension/other header
   const selectedLabel = useMemo(() => {
@@ -743,7 +784,7 @@ export default function MetaFieldsPage() {
                       {field.label}
                     </TableCell>
                     <TableCell>
-                      {FIELD_TYPES.find((ft) => ft.value === field.type)?.label || field.type}
+                      {getTypeLabel(field)}
                     </TableCell>
                     <TableCell>{field.required ? "Yes" : "No"}</TableCell>
                     <TableCell className="text-sm text-gray-500">
@@ -861,7 +902,7 @@ export default function MetaFieldsPage() {
                         {field.label}
                       </TableCell>
                       <TableCell>
-                        {FIELD_TYPES.find((ft) => ft.value === field.type)?.label || field.type}
+                        {getTypeLabel(field)}
                       </TableCell>
                       <TableCell>{field.required ? "Yes" : "No"}</TableCell>
                       <TableCell>
@@ -1006,11 +1047,107 @@ export default function MetaFieldsPage() {
               value={fieldForm.type}
               onChange={(e) => setFieldForm({ ...fieldForm, type: e.target.value as MetaFieldType })}
             >
-              {FIELD_TYPES.map((ft) => (
+              {availableFieldTypes.map((ft) => (
                 <option key={ft.value} value={ft.value}>{ft.label}</option>
               ))}
             </select>
           </div>
+          {/* Dimension picker for type=dimension */}
+          {fieldForm.type === "dimension" && (
+            <div>
+              <Label htmlFor="field-dimension">Dimension</Label>
+              <select
+                id="field-dimension"
+                className="w-full border rounded-md p-2 text-sm"
+                value={fieldForm.dimension_id || ""}
+                onChange={(e) => {
+                  const dimId = e.target.value;
+                  const dim = dimensions.find((d) => d.id === dimId);
+                  setFieldForm({
+                    ...fieldForm,
+                    dimension_id: dimId || null,
+                    label: dim?.name || fieldForm.label,
+                  });
+                }}
+                required
+              >
+                <option value="">Select dimension...</option>
+                {dimensions.map((d) => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          {/* Entity type picker for type=participant_list */}
+          {fieldForm.type === "participant_list" && (
+            <>
+              <div>
+                <Label htmlFor="field-entity-type">Entity Type / Source</Label>
+                <select
+                  id="field-entity-type"
+                  className="w-full border rounded-md p-2 text-sm"
+                  value={fieldForm.entity_type_id || ""}
+                  onChange={(e) => {
+                    const etId = e.target.value;
+                    const et = entityTypesList.find((t) => t.id === etId);
+                    setFieldForm({
+                      ...fieldForm,
+                      entity_type_id: etId || null,
+                      label: etId === "user" ? "Users (staff)" : et?.name || fieldForm.label,
+                    });
+                  }}
+                  required
+                >
+                  <option value="">Select...</option>
+                  <option value="user">Users (staff)</option>
+                  {entityTypesList.map((et) => (
+                    <option key={et.id} value={et.id}>{et.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <Label htmlFor="field-display-type-pl">Display as</Label>
+                <select
+                  id="field-display-type-pl"
+                  className="w-full border rounded-md p-2 text-sm"
+                  value={fieldForm.display_type || ""}
+                  onChange={(e) => setFieldForm({ ...fieldForm, display_type: (e.target.value || undefined) as MetaFieldDisplayType | undefined })}
+                >
+                  <option value="">Checklist (default)</option>
+                  <option value="search_select">Search & select</option>
+                </select>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={!!fieldForm.config?.capture_status}
+                  onCheckedChange={(checked) => setFieldForm({
+                    ...fieldForm,
+                    config: { ...fieldForm.config, capture_status: checked },
+                  })}
+                />
+                <Label>Capture attendance status</Label>
+              </div>
+              {fieldForm.config?.capture_status && (
+                <div>
+                  <Label htmlFor="field-statuses">
+                    Status options <span className="text-gray-400 text-xs font-normal">(comma-separated)</span>
+                  </Label>
+                  <Input
+                    id="field-statuses"
+                    value={(fieldForm.config?.statuses as string[] || ["present", "absent"]).join(", ")}
+                    onChange={(e) => {
+                      const statuses = e.target.value.split(",").map((s) => s.trim()).filter(Boolean);
+                      setFieldForm({
+                        ...fieldForm,
+                        config: { ...fieldForm.config, statuses, default_status: statuses[0] || "present" },
+                      });
+                    }}
+                    placeholder="present, absent"
+                  />
+                </div>
+              )}
+            </>
+          )}
           <div className="flex items-center gap-2">
             <Switch
               checked={fieldForm.required || false}
@@ -1018,6 +1155,7 @@ export default function MetaFieldsPage() {
             />
             <Label>Required</Label>
           </div>
+          {!isStructuralType && (
           <div className="flex items-center gap-2">
             <Switch
               checked={fieldForm.visible !== false}
@@ -1025,7 +1163,8 @@ export default function MetaFieldsPage() {
             />
             <Label>Visible on forms</Label>
           </div>
-          {fieldForm.visible !== false && (
+          )}
+          {fieldForm.visible !== false && !isStructuralType && (
             <div>
               <Label htmlFor="field-stage">Editable on</Label>
               <select
@@ -1040,7 +1179,7 @@ export default function MetaFieldsPage() {
               </select>
             </div>
           )}
-          {(fieldForm.type === "text" || fieldForm.type === "select" || fieldForm.type === "multiselect") && (
+          {!isStructuralType && (fieldForm.type === "text" || fieldForm.type === "select" || fieldForm.type === "multiselect") && (
             <div>
               <Label htmlFor="field-display-type">
                 Display as <span className="text-gray-400 text-xs font-normal">(optional)</span>
@@ -1060,7 +1199,7 @@ export default function MetaFieldsPage() {
               </select>
             </div>
           )}
-          {showOptions && (
+          {showOptions && !isStructuralType && (
             <div>
               <Label htmlFor="field-options">
                 Options <span className="text-gray-400 text-xs font-normal">(one per line)</span>
@@ -1074,7 +1213,7 @@ export default function MetaFieldsPage() {
               />
             </div>
           )}
-          <div>
+          {!isStructuralType && (<div>
             <Label htmlFor="field-default">
               Default value <span className="text-gray-400 text-xs font-normal">(optional)</span>
             </Label>
@@ -1148,7 +1287,7 @@ export default function MetaFieldsPage() {
                 placeholder="Leave blank for no default"
               />
             )}
-          </div>
+          </div>)}
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={closeModal}>Cancel</Button>
             <Button type="submit">{editingIndex !== null ? "Save" : "Add"}</Button>
