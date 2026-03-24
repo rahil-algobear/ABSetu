@@ -25,19 +25,6 @@ from app.modules.dimension.model import EntityDimension
 from app.modules.entity.model import Entity, EntityType
 from app.modules.organization.model import Organization
 
-# System field keys that are accepted at top-level in requests and merged into meta
-ENTITY_SYSTEM_KEYS = ("name", "case_number")
-
-
-def _merge_system_fields_into_meta(data: dict, extra: dict | None = None) -> dict:
-    """Merge top-level system fields into the meta dict."""
-    meta = dict(data.get("meta") or {})
-    for key in ENTITY_SYSTEM_KEYS:
-        if key in data and data[key] is not None:
-            meta[key] = data[key]
-    if extra:
-        meta.update(extra)
-    return normalize_meta_datetimes(meta)
 
 
 class EntityTypeService:
@@ -302,14 +289,9 @@ class EntityService:
             raise ValidationError("Entity type not found in this organization")
 
         case_number = self._generate_case_number(org, entity_type)
-        extra = {}
+        meta = normalize_meta_datetimes(dict(data.get("meta") or {}))
         if case_number:
-            extra["case_number"] = case_number
-        # Ensure name defaults to empty string
-        if "name" not in data or data["name"] is None:
-            data["name"] = ""
-
-        meta = _merge_system_fields_into_meta(data, extra)
+            meta["case_number"] = case_number
 
         entity = Entity(
             organization_id=org_id,
@@ -337,11 +319,6 @@ class EntityService:
         existing_meta = dict(entity.meta or {})
         incoming_meta = data.get("meta") or {}
         existing_meta.update(incoming_meta)
-
-        # Merge top-level system fields into meta
-        for key in ENTITY_SYSTEM_KEYS:
-            if key in data and data[key] is not None:
-                existing_meta[key] = data[key]
 
         entity.meta = normalize_meta_datetimes(existing_meta)
         self.db.commit()

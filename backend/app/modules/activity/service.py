@@ -20,21 +20,6 @@ from app.common.schemas.list_params import ListParams
 from app.modules.activity.model import Activity, ActivityForm, ActivityParticipant, ActivityType
 from app.modules.dimension.model import ActivityDimension, DimensionValue
 
-# System field keys that are accepted at top-level in requests and merged into meta
-ACTIVITY_SYSTEM_KEYS = ("title", "start_date", "end_date", "notes")
-
-
-def _merge_system_fields_into_meta(data: dict) -> dict:
-    """Merge top-level system fields into the meta dict."""
-    meta = dict(data.get("meta") or {})
-    for key in ACTIVITY_SYSTEM_KEYS:
-        if key in data and data[key] is not None:
-            val = data[key]
-            # Convert datetime objects to ISO strings for JSONB storage
-            if hasattr(val, "isoformat"):
-                val = val.isoformat()
-            meta[key] = val
-    return normalize_meta_datetimes(meta)
 
 
 class ActivityTypeService:
@@ -277,7 +262,7 @@ class ActivityService:
             if not at:
                 raise ValidationError("Activity type not found in this organization")
 
-        meta = _merge_system_fields_into_meta(data)
+        meta = normalize_meta_datetimes(dict(data.get("meta") or {}))
 
         activity = Activity(
             organization_id=org_id,
@@ -303,14 +288,6 @@ class ActivityService:
         existing_meta = dict(activity.meta or {})
         incoming_meta = data.get("meta") or {}
         existing_meta.update(incoming_meta)
-
-        # Merge top-level system fields into meta
-        for key in ACTIVITY_SYSTEM_KEYS:
-            if key in data and data[key] is not None:
-                val = data[key]
-                if hasattr(val, "isoformat"):
-                    val = val.isoformat()
-                existing_meta[key] = val
 
         activity.meta = normalize_meta_datetimes(existing_meta)
         self.db.commit()
