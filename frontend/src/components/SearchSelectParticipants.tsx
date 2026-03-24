@@ -8,6 +8,7 @@ import { getFieldsForScope } from "@/utils/meta-fields";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { DateTimeInput } from "@/components/ui/date-time-input";
 import { Dialog } from "@/components/ui/dialog";
 import { DynamicMetaForm } from "@/components/DynamicMetaForm";
@@ -55,6 +56,7 @@ export function SearchSelectParticipants({
 }: SearchSelectParticipantsProps) {
   const [search, setSearch] = useState("");
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [newEntityName, setNewEntityName] = useState("");
   const [newEntityMeta, setNewEntityMeta] = useState<Record<string, unknown>>({});
   const queryClient = useQueryClient();
 
@@ -66,6 +68,14 @@ export function SearchSelectParticipants({
   const entityMetaFields = useMemo(
     () => entityTypeId ? getFieldsForScope(allSchemas, { type: "entity", entity_type_id: entityTypeId }) : [],
     [allSchemas, entityTypeId],
+  );
+
+  // The standalone Name input in the create dialog handles the "Name" meta field,
+  // so filter it out from DynamicMetaForm to avoid showing it twice.
+  const nameField = entityMetaFields.find((f) => f.label === "Name");
+  const nonNameFields = useMemo(
+    () => entityMetaFields.filter((f) => f.label !== "Name"),
+    [entityMetaFields],
   );
 
   const createEntityMutation = useMutation({
@@ -83,6 +93,7 @@ export function SearchSelectParticipants({
         },
       ]);
       setShowCreateDialog(false);
+      setNewEntityName("");
       setNewEntityMeta({});
       toast.success(`${entityTypeName} created and added`);
     },
@@ -171,8 +182,7 @@ export function SearchSelectParticipants({
                 <button
                   type="button"
                   onClick={() => {
-                    const nameF = entityMetaFields.find((f) => f.label === "Name");
-                    setNewEntityMeta(nameF ? { [nameF.key]: search } : {});
+                    setNewEntityName(search);
                     setShowCreateDialog(true);
                   }}
                   className="block mx-auto mt-1 text-blue-600 hover:underline text-xs"
@@ -276,16 +286,33 @@ export function SearchSelectParticipants({
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              const meta = Object.keys(newEntityMeta).length > 0 ? newEntityMeta : undefined;
-              createEntityMutation.mutate({
-                entity_type_id: entityTypeId,
-                meta,
-              });
+              if (newEntityName.trim()) {
+                const meta = { ...newEntityMeta };
+                // Store the name value in its meta field key
+                if (nameField) {
+                  meta[nameField.key] = newEntityName.trim();
+                }
+                createEntityMutation.mutate({
+                  entity_type_id: entityTypeId,
+                  meta,
+                });
+              }
             }}
             className="space-y-3"
           >
+            <div>
+              <Label htmlFor="new-entity-name">Name</Label>
+              <Input
+                id="new-entity-name"
+                placeholder={`${entityTypeName} name`}
+                value={newEntityName}
+                onChange={(e) => setNewEntityName(e.target.value)}
+                autoFocus
+                required
+              />
+            </div>
             <DynamicMetaForm
-              fields={entityMetaFields.filter((f) => f.visible !== false)}
+              fields={nonNameFields}
               values={newEntityMeta}
               onChange={setNewEntityMeta}
             />
