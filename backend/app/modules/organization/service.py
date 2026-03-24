@@ -382,18 +382,24 @@ class ListConfigService:
         cols: list[dict] = []
         order = 0
 
+        # Build a lookup for entity system field overrides (label)
+        meta_service = MetaFieldSchemaService(self.db)
+        sys_fields: dict[str, dict] = {}
+        for f in meta_service.get_schema_by_scope(org_id, "entity", entity_type_id=type_id):
+            if f.get("system"):
+                sys_fields[f["key"]] = f
+
         # Static: name
-        cols.append(self._col("static", "name", "Name", order, sortable=True))
+        cols.append(self._col("static", "name", sys_fields.get("name", {}).get("label", "Name"), order, sortable=True))
         order += 1
 
         # Static: case_number (if enabled)
         config = et.config or {}
         if config.get("case_number_enabled"):
-            cols.append(self._col("static", "case_number", "Case No.", order, sortable=True))
+            cols.append(self._col("static", "case_number", sys_fields.get("case_number", {}).get("label", "Case No."), order, sortable=True))
             order += 1
 
         # Meta fields (skip system fields – already added as static columns above)
-        meta_service = MetaFieldSchemaService(self.db)
         fields = meta_service.get_schema_by_scope(org_id, "entity", entity_type_id=type_id)
         for f in fields:
             if f.get("system"):
@@ -430,18 +436,30 @@ class ListConfigService:
         cols: list[dict] = []
         order = 0
 
-        cols.append(self._col("static", "start_date", "Start Date", order, sortable=True, filterable=True, filter_supported=True))
+        # Build a lookup for system field overrides (label, type)
+        meta_service = MetaFieldSchemaService(self.db)
+        sys_fields: dict[str, dict] = {}
+        for f in meta_service.get_schema_by_scope(org_id, "activity"):
+            if f.get("system"):
+                sys_fields[f["key"]] = f
+
+        def sys_label(key: str, default: str) -> str:
+            return sys_fields.get(key, {}).get("label", default)
+
+        def sys_type(key: str, default: str) -> str:
+            return sys_fields.get(key, {}).get("type", default)
+
+        cols.append(self._col("static", "start_date", sys_label("start_date", "Start Date"), order, sortable=True, filterable=True, filter_supported=True, meta_type=sys_type("start_date", "datetime")))
         order += 1
-        cols.append(self._col("static", "end_date", "End Date", order, sortable=True, filterable=True, filter_supported=True))
+        cols.append(self._col("static", "end_date", sys_label("end_date", "End Date"), order, sortable=True, filterable=True, filter_supported=True, meta_type=sys_type("end_date", "datetime")))
         order += 1
-        cols.append(self._col("static", "title", "Title", order, sortable=True))
+        cols.append(self._col("static", "title", sys_label("title", "Title"), order, sortable=True))
         order += 1
 
         # Dimensions (visible + filterable for activities)
         order = self._add_dimension_columns(cols, org_id, order, visible=True)
 
         # Meta fields (base "activity" scope + type-specific scope)
-        meta_service = MetaFieldSchemaService(self.db)
         seen_keys: set[str] = set()
         all_fields: list[dict] = []
         for f in meta_service.get_schema_by_scope(org_id, "activity"):

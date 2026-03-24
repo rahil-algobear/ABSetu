@@ -115,9 +115,13 @@ function ActivityTypeListContent() {
     if (col.source === "static") {
       switch (col.key) {
         case "start_date":
-          return formatDateTime(activity.start_date);
+          return col.meta_type === "datetime"
+            ? formatDateTime(activity.start_date)
+            : formatDate(activity.start_date);
         case "end_date":
-          return formatDateTime(activity.end_date);
+          return col.meta_type === "datetime"
+            ? formatDateTime(activity.end_date)
+            : formatDate(activity.end_date);
         case "title":
           return (
             <Link

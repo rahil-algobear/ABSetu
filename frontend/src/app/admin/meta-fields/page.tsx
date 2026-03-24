@@ -1038,7 +1038,6 @@ export default function MetaFieldsPage() {
             <Switch
               checked={fieldForm.visible !== false}
               onCheckedChange={(checked) => setFieldForm({ ...fieldForm, visible: checked })}
-              disabled={fieldForm.system}
             />
             <Label>Visible on forms</Label>
           </div>
