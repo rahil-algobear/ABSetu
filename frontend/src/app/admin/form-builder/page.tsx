@@ -425,6 +425,11 @@ export default function FormBuilderPage() {
                                 {" \u00b7 "}required
                               </span>
                             )}
+                            {isStructural && el.stage && el.stage !== "both" && (
+                              <span className="ml-1 text-blue-500">
+                                {" \u00b7 "}{el.stage === "create" ? "create only" : "edit only"}
+                              </span>
+                            )}
                             {!isDefault && el.type === "field" && (
                               <span className="ml-1 text-gray-400">
                                 {" \u00b7 "}configured in Form Fields
@@ -451,6 +456,17 @@ export default function FormBuilderPage() {
                             {(DISPLAY_TYPES[el.type] || []).map((d) => (
                               <option key={d.value} value={d.value}>{d.label}</option>
                             ))}
+                          </select>
+
+                          {/* Stage selector */}
+                          <select
+                            className="border rounded-md px-2 py-1 text-xs"
+                            value={el.stage || "both"}
+                            onChange={(e) => updateElement(idx, { stage: e.target.value as "create" | "record" | "both" })}
+                          >
+                            <option value="both">Always</option>
+                            <option value="create">Create only</option>
+                            <option value="record">Edit only</option>
                           </select>
 
                           {/* Required toggle */}

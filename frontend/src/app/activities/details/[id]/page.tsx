@@ -103,7 +103,8 @@ export default function ActivityDetailPage() {
   const entityTypeElements: ActivityFormElement[] = useMemo(() => {
     if (!formConfig?.elements?.length) return [];
     return formConfig.elements
-      .filter((el) => el.type === "participant_list")
+      .filter((el) => el.type === "participant_list"
+        && (!el.stage || el.stage === "both" || el.stage === "record"))
       .sort((a, b) => a.sort_order - b.sort_order);
   }, [formConfig]);
 
@@ -115,9 +116,17 @@ export default function ActivityDetailPage() {
         if (el.type === "field") {
           // For field elements, check visibility from FieldDefinition
           const def = el.ref_key ? fieldDefMap[el.ref_key] : undefined;
-          return def ? def.visible !== false : true;
+          if (def && def.visible === false) return false;
+          // Detail/edit is the "record" stage
+          if (def?.stage && def.stage !== "both" && def.stage !== "record") return false;
+          return true;
         }
-        return el.type === "dimension";
+        if (el.type === "dimension") {
+          // Respect stage on structural elements
+          if (el.stage && el.stage !== "both" && el.stage !== "record") return false;
+          return true;
+        }
+        return false;
       })
       .sort((a, b) => a.sort_order - b.sort_order);
   }, [formConfig, fieldDefMap]);

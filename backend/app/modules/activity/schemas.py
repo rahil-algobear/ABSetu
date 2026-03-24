@@ -51,6 +51,7 @@ class ActivityFormElement(BaseModel):
     sort_order: int = 0
     display_type: str | None = None  # for dimensions/participant_lists only
     required: bool = False  # for dimensions/participant_lists only
+    stage: str | None = None  # for dimensions/participant_lists: "create", "record", "both"
     config: dict[str, Any] | None = None  # for title generation config
 
 

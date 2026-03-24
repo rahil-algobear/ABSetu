@@ -166,7 +166,8 @@ function NewActivityPageContent() {
           if (def.stage && def.stage !== "both" && def.stage !== "create") return false;
           return true;
         }
-        // Structural elements always shown
+        // Structural elements: respect stage if set
+        if (el.stage && el.stage !== "both" && el.stage !== "create") return false;
         return true;
       })
       .sort((a, b) => a.sort_order - b.sort_order);

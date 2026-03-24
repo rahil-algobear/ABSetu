@@ -162,6 +162,7 @@ export interface ActivityFormElement {
   sort_order: number;
   display_type?: string | null; // for dimensions/participant_lists only
   required?: boolean; // for dimensions/participant_lists only
+  stage?: "create" | "record" | "both" | null; // for dimensions/participant_lists only
   config?: Record<string, unknown>; // for title generation config
 }
 

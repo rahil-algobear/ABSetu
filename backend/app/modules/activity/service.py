@@ -411,15 +411,18 @@ class ActivityFormService:
                 "config": el.get("config"),
             }
         elif old_type == "dimension":
-            return {
+            migrated = {
                 "type": "dimension",
                 "dimension_id": el.get("ref_id"),
                 "sort_order": el.get("sort_order", 0),
                 "display_type": el.get("display_type", "dropdown"),
                 "required": el.get("required", False),
             }
+            if el.get("stage"):
+                migrated["stage"] = el["stage"]
+            return migrated
         elif old_type == "entity_type":
-            return {
+            migrated = {
                 "type": "participant_list",
                 "entity_type_id": el.get("ref_id"),
                 "sort_order": el.get("sort_order", 0),
@@ -427,6 +430,9 @@ class ActivityFormService:
                 "required": el.get("required", False),
                 "config": el.get("config"),
             }
+            if el.get("stage"):
+                migrated["stage"] = el["stage"]
+            return migrated
         elif old_type == "activity_meta":
             # activity_meta elements are no longer needed — meta fields are
             # now included as individual "field" elements via FieldDefinition.
