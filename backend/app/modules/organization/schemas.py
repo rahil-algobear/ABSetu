@@ -26,7 +26,7 @@ STAGE_TYPES = Literal["create", "record", "both"]
 class FieldDefinition(BaseModel):
     """Typed definition for a single field in a meta field schema."""
 
-    key: str = Field(..., min_length=1)
+    key: str = Field(default="")
     label: str = Field(..., min_length=1)
     type: FIELD_TYPES
     system: bool = False
