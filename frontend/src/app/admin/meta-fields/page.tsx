@@ -923,7 +923,8 @@ export default function MetaFieldsPage() {
                   <TableHead>Label</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Required</TableHead>
-                  <TableHead>Stage</TableHead>
+                  <TableHead>Visible</TableHead>
+                  <TableHead>Editable On</TableHead>
                   <TableHead className="w-20 text-center">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -958,6 +959,7 @@ export default function MetaFieldsPage() {
                       {getTypeLabel(row.field)}
                     </TableCell>
                     <TableCell>{row.field.required ? "Yes" : "No"}</TableCell>
+                    <TableCell>{row.field.visible !== false ? "Yes" : "No"}</TableCell>
                     <TableCell className="text-sm text-gray-500">
                       {row.field.stage === "create" ? "Create only"
                         : row.field.stage === "record" ? "Edit only"
@@ -1080,6 +1082,20 @@ export default function MetaFieldsPage() {
             <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Field Details</p>
 
             <div>
+              <Label htmlFor="field-type">Type</Label>
+              <select
+                id="field-type"
+                className="w-full border rounded-md p-2 text-sm"
+                value={fieldForm.type}
+                onChange={(e) => setFieldForm({ ...fieldForm, type: e.target.value as MetaFieldType })}
+              >
+                {availableFieldTypes.map((ft) => (
+                  <option key={ft.value} value={ft.value}>{ft.label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
               <Label htmlFor="field-label">Label</Label>
               <Input
                 id="field-label"
@@ -1094,19 +1110,6 @@ export default function MetaFieldsPage() {
                 Key: {fieldForm.key}
               </p>
             )}
-            <div>
-              <Label htmlFor="field-type">Type</Label>
-              <select
-                id="field-type"
-                className="w-full border rounded-md p-2 text-sm"
-                value={fieldForm.type}
-                onChange={(e) => setFieldForm({ ...fieldForm, type: e.target.value as MetaFieldType })}
-              >
-                {availableFieldTypes.map((ft) => (
-                  <option key={ft.value} value={ft.value}>{ft.label}</option>
-                ))}
-              </select>
-            </div>
 
             {/* Dimension picker for type=dimension */}
             {fieldForm.type === "dimension" && (
