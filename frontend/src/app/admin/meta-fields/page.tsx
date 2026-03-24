@@ -868,7 +868,7 @@ export default function MetaFieldsPage() {
             </Button>
           </div>
 
-          {flatGroups.length === 0 ? (
+          {flatRows.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-gray-500 text-sm">
                 {hasFilters
