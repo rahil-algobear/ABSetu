@@ -60,7 +60,7 @@ ENTITY_TYPES = [
 # Activity Type: Sessions (form builder config)
 # participant_source UUIDs are populated at seed time after entity types are created
 # ---------------------------------------------------------------------------
-SESSIONS_TYPE_NAME = "Sessions"
+SESSIONS_TYPE_NAME = "Session"
 SESSIONS_TYPE_SORT_ORDER = 0
 SESSIONS_SECTIONS_TEMPLATE = [
     {
