@@ -222,11 +222,35 @@ export default function FormBuilderPage() {
     setTimeout(() => setAddModalOpen(true), 0);
   };
 
+  // Build a field key → label lookup from meta schemas (includes system fields)
+  const fieldLabelMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const schema of allSchemas) {
+      if (schema.scope.type !== "activity") continue;
+      for (const f of schema.fields) {
+        if (!map[f.key]) map[f.key] = f.label;
+      }
+    }
+    return map;
+  }, [allSchemas]);
+
+  // Build a field key → visible lookup
+  const fieldVisibleMap = useMemo(() => {
+    const map: Record<string, boolean> = {};
+    for (const schema of allSchemas) {
+      if (schema.scope.type !== "activity") continue;
+      for (const f of schema.fields) {
+        if (!(f.key in map)) map[f.key] = f.visible !== false;
+      }
+    }
+    return map;
+  }, [allSchemas]);
+
   // Resolve element label
   const getElementLabel = (el: ActivityFormElement): string => {
     switch (el.type) {
       case "field":
-        return DEFAULT_ELEMENT_LABELS[el.ref_key || ""] || el.ref_key || "Field";
+        return fieldLabelMap[el.ref_key || ""] || DEFAULT_ELEMENT_LABELS[el.ref_key || ""] || el.ref_key || "Field";
       case "dimension": {
         const dim = dimensions.find((d) => d.id === el.dimension_id);
         return dim ? dim.name : "Dimension";
@@ -329,6 +353,7 @@ export default function FormBuilderPage() {
                 const Icon = getElementIcon(el.type, el.type === "field" ? el.ref_key : undefined);
                 const metaCount = getParticipationMetaCount(el);
                 const isDefault = el.type === "field" && isSystemField(el.ref_key);
+                const isHidden = el.type === "field" && el.ref_key && fieldVisibleMap[el.ref_key] === false;
                 const isRemovable = !isDefault;
                 const isStructural = el.type === "dimension" || el.type === "participant_list";
                 const isTitleEl = el.type === "field" && el.ref_key === "title";
@@ -339,7 +364,7 @@ export default function FormBuilderPage() {
                     <div
                       className={`border rounded-lg p-3 flex items-center gap-3 bg-white ${
                         isDefault ? "border-purple-200" : ""
-                      } ${isTitleEl && titleConfig ? "rounded-b-none" : ""}`}
+                      } ${isTitleEl && titleConfig ? "rounded-b-none" : ""} ${isHidden ? "opacity-50" : ""}`}
                     >
                       {/* Reorder */}
                       <div className="flex flex-col -space-y-1">
@@ -370,6 +395,11 @@ export default function FormBuilderPage() {
                             {isDefault && (
                               <span className="ml-1.5 text-[10px] font-medium text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded">
                                 System
+                              </span>
+                            )}
+                            {isHidden && (
+                              <span className="ml-1.5 text-[10px] font-medium text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">
+                                Hidden
                               </span>
                             )}
                             {isTitleEl && (
