@@ -1205,7 +1205,6 @@ export default function MetaFieldsPage() {
             />
             <Label>Required</Label>
           </div>
-          {!isStructuralType && (
           <div className="flex items-center gap-2">
             <Switch
               checked={fieldForm.visible !== false}
@@ -1213,8 +1212,7 @@ export default function MetaFieldsPage() {
             />
             <Label>Visible on forms</Label>
           </div>
-          )}
-          {fieldForm.visible !== false && !isStructuralType && (
+          {fieldForm.visible !== false && (
             <div>
               <Label htmlFor="field-stage">Editable on</Label>
               <select
