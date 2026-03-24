@@ -807,6 +807,7 @@ export default function MetaFieldsPage() {
                   <TableHead>Required</TableHead>
                   <TableHead>Default</TableHead>
                   <TableHead>Options</TableHead>
+                  <TableHead>Visible</TableHead>
                   <TableHead className="w-20 text-center">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -850,6 +851,7 @@ export default function MetaFieldsPage() {
                     <TableCell>
                       {field.options?.length ? field.options.join(", ") : "\u2014"}
                     </TableCell>
+                    <TableCell>{field.visible !== false ? "Yes" : "No"}</TableCell>
                     <TableCell>
                       <div className="flex items-center justify-center gap-2">
                         <button onClick={() => openEdit(index)} className="text-gray-400 hover:text-purple-600">
@@ -919,6 +921,8 @@ export default function MetaFieldsPage() {
                   <TableHead>Label</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Required</TableHead>
+                  <TableHead>Default</TableHead>
+                  <TableHead>Options</TableHead>
                   <TableHead>Visible</TableHead>
                   <TableHead>Editable On</TableHead>
                   <TableHead className="w-20 text-center">Actions</TableHead>
@@ -955,6 +959,18 @@ export default function MetaFieldsPage() {
                       {getTypeLabel(row.field)}
                     </TableCell>
                     <TableCell>{row.field.required ? "Yes" : "No"}</TableCell>
+                    <TableCell className="text-sm text-gray-500">
+                      {row.field.default != null && row.field.default !== ""
+                        ? row.field.type === "boolean"
+                          ? (row.field.default ? "Yes" : "No")
+                          : Array.isArray(row.field.default)
+                            ? row.field.default.join(", ")
+                            : String(row.field.default)
+                        : "\u2014"}
+                    </TableCell>
+                    <TableCell>
+                      {row.field.options?.length ? row.field.options.join(", ") : "\u2014"}
+                    </TableCell>
                     <TableCell>{row.field.visible !== false ? "Yes" : "No"}</TableCell>
                     <TableCell className="text-sm text-gray-500">
                       {row.field.stage === "create" ? "Create only"
