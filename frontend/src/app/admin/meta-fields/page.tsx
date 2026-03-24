@@ -1027,7 +1027,7 @@ export default function MetaFieldsPage() {
           </div>
           {fieldForm.visible !== false && (
             <div>
-              <Label htmlFor="field-stage">Show on</Label>
+              <Label htmlFor="field-stage">Editable on</Label>
               <select
                 id="field-stage"
                 className="w-full border rounded-md p-2 text-sm"

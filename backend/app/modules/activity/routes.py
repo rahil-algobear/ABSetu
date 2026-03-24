@@ -438,6 +438,10 @@ def create_activity(
                     if ref_key:
                         field_def = all_field_defs.get(ref_key)
                         if field_def and field_def.get("required"):
+                            # Only enforce required on the create stage
+                            stage = field_def.get("stage") or "both"
+                            if stage not in ("both", "create"):
+                                continue
                             val = submitted_meta.get(ref_key)
                             if val is None or val == "":
                                 label = field_def.get("label", ref_key)
@@ -464,10 +468,45 @@ def update_activity(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    # Validate required fields for the edit/record stage
+    activity_type_id = str(activity.activity_type_id) if activity.activity_type_id else None
+    form = None
+    if activity_type_id:
+        form_service = ActivityFormService(db)
+        form = form_service.get_by_type(activity.activity_type_id, current_user.organization_id)
+        if form and form.elements and data.meta is not None:
+            elements = ActivityFormService._ensure_defaults(list(form.elements))
+            meta_service = MetaFieldSchemaService(db)
+            all_field_defs: dict[str, dict] = {}
+            type_uuid = uuid.UUID(activity_type_id)
+            for fd in meta_service.get_schema_by_scope(current_user.organization_id, "activity"):
+                all_field_defs[fd["key"]] = fd
+            for fd in meta_service.get_schema_by_scope(
+                current_user.organization_id, "activity", activity_type_id=type_uuid
+            ):
+                all_field_defs[fd["key"]] = fd
+
+            submitted_meta = data.meta or {}
+
+            for el in elements:
+                if el.get("type") != "field" or not el.get("required"):
+                    continue
+                ref_key = el.get("ref_key")
+                if not ref_key:
+                    continue
+                field_def = all_field_defs.get(ref_key)
+                if field_def and field_def.get("required"):
+                    stage = field_def.get("stage") or "both"
+                    if stage not in ("both", "record"):
+                        continue
+                    val = submitted_meta.get(ref_key)
+                    if val is None or val == "":
+                        label = field_def.get("label", ref_key)
+                        raise ValidationError(f"{label} is required")
+
     service = ActivityService(db)
     updated = service.update(activity.id, data.model_dump(exclude_none=True))
-    form = None
-    if updated.activity_type_id:
+    if not form and updated.activity_type_id:
         form_service = ActivityFormService(db)
         form = form_service.get_by_type(updated.activity_type_id, current_user.organization_id)
     return _build_activity_response(updated, form)

@@ -11,9 +11,11 @@ interface DynamicMetaFormProps {
   fields: MetaFieldDefinition[];
   values: Record<string, unknown>;
   onChange: (values: Record<string, unknown>) => void;
+  /** Field keys that should be rendered as read-only / disabled */
+  disabledKeys?: Set<string>;
 }
 
-export function DynamicMetaForm({ fields, values, onChange }: DynamicMetaFormProps) {
+export function DynamicMetaForm({ fields, values, onChange, disabledKeys }: DynamicMetaFormProps) {
   if (fields.length === 0) return null;
 
   const getVal = (field: MetaFieldDefinition) => {
@@ -28,11 +30,13 @@ export function DynamicMetaForm({ fields, values, onChange }: DynamicMetaFormPro
 
   return (
     <div className="space-y-3">
-      {fields.map((field) => (
-        <div key={field.key}>
+      {fields.map((field) => {
+        const isDisabled = disabledKeys?.has(field.key) ?? false;
+        return (
+        <div key={field.key} className={isDisabled ? "opacity-60" : undefined}>
           <Label htmlFor={`meta-${field.key}`} className="text-sm mb-1 block">
             {field.label}
-            {field.required && <span className="text-red-500 ml-0.5">*</span>}
+            {field.required && !isDisabled && <span className="text-red-500 ml-0.5">*</span>}
           </Label>
 
           {field.type === "text" && (
@@ -40,7 +44,8 @@ export function DynamicMetaForm({ fields, values, onChange }: DynamicMetaFormPro
               id={`meta-${field.key}`}
               value={(getVal(field) as string) || ""}
               onChange={(e) => setValue(field.key, e.target.value)}
-              required={field.required}
+              required={field.required && !isDisabled}
+              disabled={isDisabled}
             />
           )}
 
@@ -50,7 +55,8 @@ export function DynamicMetaForm({ fields, values, onChange }: DynamicMetaFormPro
               type="number"
               value={getVal(field) != null ? String(getVal(field)) : ""}
               onChange={(e) => setValue(field.key, e.target.value ? Number(e.target.value) : "")}
-              required={field.required}
+              required={field.required && !isDisabled}
+              disabled={isDisabled}
             />
           )}
 
@@ -58,8 +64,9 @@ export function DynamicMetaForm({ fields, values, onChange }: DynamicMetaFormPro
             <DateTimeInput
               value={(getVal(field) as string) || ""}
               onChange={(val) => setValue(field.key, val)}
-              required={field.required}
+              required={field.required && !isDisabled}
               allowTime={field.type === "datetime"}
+              disabled={isDisabled}
             />
           )}
 
@@ -69,7 +76,8 @@ export function DynamicMetaForm({ fields, values, onChange }: DynamicMetaFormPro
               className="w-full border rounded-md p-2 text-sm"
               value={(getVal(field) as string) || ""}
               onChange={(e) => setValue(field.key, e.target.value)}
-              required={field.required}
+              required={field.required && !isDisabled}
+              disabled={isDisabled}
             >
               <option value="">Select...</option>
               {field.options?.map((opt) => (
@@ -90,6 +98,7 @@ export function DynamicMetaForm({ fields, values, onChange }: DynamicMetaFormPro
                 const selected = Array.from(e.target.selectedOptions, (o) => o.value);
                 setValue(field.key, selected);
               }}
+              disabled={isDisabled}
             >
               {field.options?.map((opt) => (
                 <option key={opt} value={opt}>
@@ -105,6 +114,7 @@ export function DynamicMetaForm({ fields, values, onChange }: DynamicMetaFormPro
                 id={`meta-${field.key}`}
                 checked={Boolean(getVal(field))}
                 onCheckedChange={(checked) => setValue(field.key, checked)}
+                disabled={isDisabled}
               />
               <span className="text-sm text-gray-600">
                 {getVal(field) ? "Yes" : "No"}
@@ -112,7 +122,8 @@ export function DynamicMetaForm({ fields, values, onChange }: DynamicMetaFormPro
             </div>
           )}
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

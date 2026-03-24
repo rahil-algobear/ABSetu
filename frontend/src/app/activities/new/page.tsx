@@ -156,15 +156,26 @@ function NewActivityPageContent() {
           const def = fieldDefMap[el.ref_key || ""];
           if (!def) return true; // unknown field, show anyway
           if (def.visible === false) return false;
-          if (def.stage && def.stage !== "both" && def.stage !== "create") return false;
+          // "edit only" fields: still show them (as disabled), don't filter out
           return true;
         }
-        // Structural elements: respect stage if set
+        // Structural elements (dimensions, participant_lists): hide if not applicable to create stage
         if (el.stage && el.stage !== "both" && el.stage !== "create") return false;
         return true;
       })
       .sort((a, b) => a.sort_order - b.sort_order);
   }, [formConfig, fieldDefMap]);
+
+  // Field keys that are not editable on the create stage (edit-only fields)
+  const createDisabledKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const f of allActivityFields) {
+      if (f.stage && f.stage !== "both" && f.stage !== "create") {
+        keys.add(f.key);
+      }
+    }
+    return keys;
+  }, [allActivityFields]);
 
   const createEntityElements: ActivityFormElement[] = useMemo(() => {
     return formElements.filter((el) => el.type === "participant_list");
@@ -276,10 +287,10 @@ function NewActivityPageContent() {
   }, [formElements]);
 
   // Custom meta fields NOT in the layout (auto-appended)
+  // Show all visible fields — edit-only ones will render as disabled via createDisabledKeys
   const autoAppendFields = useMemo(() => {
     return customMetaFields.filter(
       (f) => !layoutCustomFieldKeys.has(f.key) && f.visible !== false
-        && (!f.stage || f.stage === "both" || f.stage === "create")
     );
   }, [customMetaFields, layoutCustomFieldKeys]);
 
@@ -305,6 +316,7 @@ function NewActivityPageContent() {
                 fields={[def]}
                 values={metaValues}
                 onChange={setMetaValues}
+                disabledKeys={createDisabledKeys}
               />
             </div>
           );
@@ -434,7 +446,7 @@ function NewActivityPageContent() {
                 ...autoAppendFields,
               ];
               for (const field of visibleFields) {
-                if (field.required) {
+                if (field.required && !createDisabledKeys.has(field.key)) {
                   const val = metaValues[field.key];
                   if (val === undefined || val === null || val === "") {
                     toast.error(`${field.label} is required`);
@@ -461,6 +473,7 @@ function NewActivityPageContent() {
                       fields={autoAppendFields}
                       values={metaValues}
                       onChange={setMetaValues}
+                      disabledKeys={createDisabledKeys}
                     />
                   )}
                 </>

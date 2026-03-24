@@ -108,8 +108,7 @@ export default function ActivityDetailPage() {
           // For field elements, check visibility from FieldDefinition
           const def = el.ref_key ? fieldDefMap[el.ref_key] : undefined;
           if (def && def.visible === false) return false;
-          // Detail/edit is the "record" stage
-          if (def?.stage && def.stage !== "both" && def.stage !== "record") return false;
+          // Show all fields — create-only ones will render as disabled
           return true;
         }
         if (el.type === "dimension") {
@@ -302,6 +301,17 @@ export default function ActivityDetailPage() {
     return collectActivityFields(allMetaSchemas, activityTypeId || null, dvIds);
   }, [activityTypeId, activity, allMetaSchemas]);
 
+  // Field keys that are not editable on the edit/record stage (create-only fields)
+  const editDisabledKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const f of activityTypeFields) {
+      if (f.stage && f.stage !== "both" && f.stage !== "record") {
+        keys.add(f.key);
+      }
+    }
+    return keys;
+  }, [activityTypeFields]);
+
   // Field keys that are in the form builder layout (rendered inline)
   const layoutCustomFieldKeys = useMemo(() => {
     return new Set(
@@ -312,10 +322,10 @@ export default function ActivityDetailPage() {
   }, [detailElements]);
 
   // Custom meta fields NOT in the layout (auto-appended after form elements)
+  // Show all visible fields — create-only ones will render as disabled via editDisabledKeys
   const autoAppendFields = useMemo(() => {
     return activityTypeFields.filter(
       (f) => !layoutCustomFieldKeys.has(f.key) && f.visible !== false
-        && (!f.stage || f.stage === "both" || f.stage === "record")
     );
   }, [activityTypeFields, layoutCustomFieldKeys]);
 
@@ -379,6 +389,7 @@ export default function ActivityDetailPage() {
                           fields={[def]}
                           values={detailMetaValues}
                           onChange={setDetailMetaValues}
+                          disabledKeys={editDisabledKeys}
                         />
                       </div>
                     );
@@ -411,6 +422,7 @@ export default function ActivityDetailPage() {
                     fields={autoAppendFields}
                     values={detailMetaValues}
                     onChange={setDetailMetaValues}
+                    disabledKeys={editDisabledKeys}
                   />
                 </div>
               )}
