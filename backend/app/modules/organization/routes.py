@@ -84,36 +84,40 @@ def _resolve_scope(scope: MetaFieldScope, org_id, db: Session) -> dict:
         if scope.entity_type_id == "user":
             result["entity_type_id"] = uuid.UUID(USER_ENTITY_SENTINEL)
         else:
-            et = db.query(EntityType).filter_by(
-                organization_id=org_id, id=scope.entity_type_id
-            ).first()
+            et = (
+                db.query(EntityType)
+                .filter_by(organization_id=org_id, id=scope.entity_type_id)
+                .first()
+            )
             if not et:
                 raise HTTPException(400, f"Entity type not found: {scope.entity_type_id}")
             result["entity_type_id"] = et.id
 
     # Validate and resolve activity_type_id
     if scope.activity_type_id:
-        at = db.query(ActivityType).filter_by(
-            organization_id=org_id, id=scope.activity_type_id
-        ).first()
+        at = (
+            db.query(ActivityType)
+            .filter_by(organization_id=org_id, id=scope.activity_type_id)
+            .first()
+        )
         if not at:
             raise HTTPException(400, f"Activity type not found: {scope.activity_type_id}")
         result["activity_type_id"] = at.id
 
     # Validate and resolve dimension_id
     if scope.dimension_id:
-        dim = db.query(Dimension).filter_by(
-            organization_id=org_id, id=scope.dimension_id
-        ).first()
+        dim = db.query(Dimension).filter_by(organization_id=org_id, id=scope.dimension_id).first()
         if not dim:
             raise HTTPException(400, f"Dimension not found: {scope.dimension_id}")
         result["dimension_id"] = dim.id
 
     # Validate and resolve dimension_value_id
     if scope.dimension_value_id:
-        dv = db.query(DimensionValue).filter_by(
-            organization_id=org_id, id=scope.dimension_value_id
-        ).first()
+        dv = (
+            db.query(DimensionValue)
+            .filter_by(organization_id=org_id, id=scope.dimension_value_id)
+            .first()
+        )
         if not dv:
             raise HTTPException(400, f"Dimension value not found: {scope.dimension_value_id}")
         result["dimension_value_id"] = dv.id
@@ -134,7 +138,9 @@ def _schema_to_response(row, fields=None) -> dict:
     """Convert a MetaFieldSchema model to a response dict."""
     et_id = None
     if row.entity_type_id:
-        et_id = "user" if str(row.entity_type_id) == USER_ENTITY_SENTINEL else str(row.entity_type_id)
+        et_id = (
+            "user" if str(row.entity_type_id) == USER_ENTITY_SENTINEL else str(row.entity_type_id)
+        )
     return MetaFieldSchemaResponse(
         scope=MetaFieldScope(
             type=row.scope_type,
@@ -167,24 +173,16 @@ def get_all_meta_field_schemas(
             et_id = entry.get("entity_type_id")
             et_id_str = None
             if et_id:
-                et_id_str = (
-                    "user"
-                    if str(et_id) == USER_ENTITY_SENTINEL
-                    else str(et_id)
-                )
+                et_id_str = "user" if str(et_id) == USER_ENTITY_SENTINEL else str(et_id)
             resp = MetaFieldSchemaResponse(
                 scope=MetaFieldScope(
                     type=entry["scope_type"],
                     entity_type_id=et_id_str,
                     activity_type_id=(
-                        str(entry["activity_type_id"])
-                        if entry.get("activity_type_id")
-                        else None
+                        str(entry["activity_type_id"]) if entry.get("activity_type_id") else None
                     ),
                     dimension_id=(
-                        str(entry["dimension_id"])
-                        if entry.get("dimension_id")
-                        else None
+                        str(entry["dimension_id"]) if entry.get("dimension_id") else None
                     ),
                     dimension_value_id=(
                         str(entry["dimension_value_id"])

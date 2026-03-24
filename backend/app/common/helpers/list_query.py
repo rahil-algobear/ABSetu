@@ -195,11 +195,7 @@ def apply_filters(
             assoc_fk = config["assoc_fk"]
             assoc_dv = config["assoc_dv"]
             parent_pk = config["parent_pk"]
-            query = query.filter(
-                exists()
-                .where(assoc_fk == parent_pk)
-                .where(assoc_dv.in_(value))
-            )
+            query = query.filter(exists().where(assoc_fk == parent_pk).where(assoc_dv.in_(value)))
 
         elif filter_type == "meta_select":
             meta_col = config["meta_column"]
@@ -248,9 +244,7 @@ def apply_filters(
             meta_key = config.get("meta_key")
             if meta_key:
                 meta_col = config["meta_column"]
-                query = query.filter(
-                    meta_col[meta_key].astext == str(value).lower()
-                )
+                query = query.filter(meta_col[meta_key].astext == str(value).lower())
             else:
                 col = config["column"]
                 query = query.filter(col == value)
@@ -320,9 +314,11 @@ def _normalize_to_utc_str(value: str) -> str:
         dt = datetime.fromisoformat(value)
         if dt.tzinfo is not None:
             from datetime import timezone
+
             dt = dt.astimezone(timezone.utc)
         else:
             from datetime import timezone
+
             dt = dt.replace(tzinfo=timezone.utc)
         return dt.isoformat()
     except (ValueError, TypeError):

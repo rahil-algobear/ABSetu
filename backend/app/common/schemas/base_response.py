@@ -45,10 +45,7 @@ class BaseResponseSchema(BaseModel):
     def _coerce_uuids_and_datetimes(cls, data: Any) -> Any:
         """Convert UUID values to str and datetime/date to ISO strings before field validation."""
         if isinstance(data, dict):
-            return {
-                k: _coerce_value(v)
-                for k, v in data.items()
-            }
+            return {k: _coerce_value(v) for k, v in data.items()}
         # ORM model with from_attributes — read declared fields and coerce
         if hasattr(data, "__dict__"):
             out: dict[str, Any] = {}

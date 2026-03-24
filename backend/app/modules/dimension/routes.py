@@ -129,9 +129,7 @@ def delete_dimension(
 def list_dimension_values(
     dimension_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
-    accessible_dv_ids: list[uuid.UUID] | None = Depends(
-        get_accessible_dimension_value_ids
-    ),
+    accessible_dv_ids: list[uuid.UUID] | None = Depends(get_accessible_dimension_value_ids),
     db: Session = Depends(get_db),
 ):
     """List values for a dimension, scoped by user's dimension access."""

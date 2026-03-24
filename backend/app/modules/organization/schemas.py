@@ -8,16 +8,11 @@ from pydantic import BaseModel, Field, model_validator
 
 from app.common.schemas.base_response import BaseResponseSchema
 
-
 # --- Field Definition ---
 
-FIELD_TYPES = Literal[
-    "text", "number", "date", "datetime", "select", "multiselect", "boolean"
-]
+FIELD_TYPES = Literal["text", "number", "date", "datetime", "select", "multiselect", "boolean"]
 
-DISPLAY_TYPES = Literal[
-    "input", "dropdown", "radio", "checklist", "textarea", "date", "datetime"
-]
+DISPLAY_TYPES = Literal["input", "dropdown", "radio", "checklist", "textarea", "date", "datetime"]
 
 STAGE_TYPES = Literal["create", "record", "both"]
 
