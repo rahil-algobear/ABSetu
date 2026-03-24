@@ -350,10 +350,11 @@ export default function FormBuilderPage() {
           ) : (
             <div className="space-y-2">
               {elements.map((el, idx) => {
+                // Skip fields that are hidden in Form Fields admin
+                if (el.type === "field" && el.ref_key && fieldVisibleMap[el.ref_key] === false) return null;
                 const Icon = getElementIcon(el.type, el.type === "field" ? el.ref_key : undefined);
                 const metaCount = getParticipationMetaCount(el);
                 const isDefault = el.type === "field" && isSystemField(el.ref_key);
-                const isHidden = el.type === "field" && el.ref_key && fieldVisibleMap[el.ref_key] === false;
                 const isRemovable = !isDefault;
                 const isStructural = el.type === "dimension" || el.type === "participant_list";
                 const isTitleEl = el.type === "field" && el.ref_key === "title";
@@ -364,7 +365,7 @@ export default function FormBuilderPage() {
                     <div
                       className={`border rounded-lg p-3 flex items-center gap-3 bg-white ${
                         isDefault ? "border-purple-200" : ""
-                      } ${isTitleEl && titleConfig ? "rounded-b-none" : ""} ${isHidden ? "opacity-50" : ""}`}
+                      } ${isTitleEl && titleConfig ? "rounded-b-none" : ""}`}
                     >
                       {/* Reorder */}
                       <div className="flex flex-col -space-y-1">
@@ -395,11 +396,6 @@ export default function FormBuilderPage() {
                             {isDefault && (
                               <span className="ml-1.5 text-[10px] font-medium text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded">
                                 System
-                              </span>
-                            )}
-                            {isHidden && (
-                              <span className="ml-1.5 text-[10px] font-medium text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">
-                                Hidden
                               </span>
                             )}
                             {isTitleEl && (
