@@ -328,6 +328,23 @@ export default function ActivityDetailPage() {
     return all.filter((f) => !f.system);
   }, [activityTypeId, activity, allMetaSchemas]);
 
+  // Custom field keys that are in the form builder layout (rendered inline)
+  const layoutCustomFieldKeys = useMemo(() => {
+    return new Set(
+      detailElements
+        .filter((el) => el.type === "field" && el.ref_key && !fieldDefMap[el.ref_key]?.system)
+        .map((el) => el.ref_key!)
+    );
+  }, [detailElements, fieldDefMap]);
+
+  // Custom meta fields NOT in the layout (auto-appended after form elements)
+  const autoAppendFields = useMemo(() => {
+    return activityTypeFields.filter(
+      (f) => !layoutCustomFieldKeys.has(f.key) && f.visible !== false
+        && (!f.stage || f.stage === "both" || f.stage === "record")
+    );
+  }, [activityTypeFields, layoutCustomFieldKeys]);
+
   if (isLoading) return <PageLayout><PageContent><p>Loading...</p></PageContent></PageLayout>;
   if (!activity) return <PageLayout><PageContent><p>Not found</p></PageContent></PageLayout>;
 
@@ -449,13 +466,46 @@ export default function ActivityDetailPage() {
                     </div>
                   );
                 }
+                // Custom meta field in layout: render inline
+                if (el.type === "field" && el.ref_key) {
+                  const def = fieldDefMap[el.ref_key];
+                  if (def && !def.system) {
+                    return (
+                      <div key={`edit-field-${el.ref_key}`}>
+                        <DynamicMetaForm
+                          fields={[def]}
+                          values={detailMetaValues}
+                          onChange={setDetailMetaValues}
+                        />
+                      </div>
+                    );
+                  }
+                }
+
+                // Dimension elements in edit mode — show as read-only
+                if (el.type === "dimension") {
+                  const dimId = el.dimension_id;
+                  const dimInfo = activity.dimensions.find(
+                    (d) => dimensions.find((dim) => dim.id === dimId)?.key === d.dimension_key
+                  );
+                  const dimObj = dimensions.find((d) => d.id === dimId);
+                  return (
+                    <div key={`edit-dim-${dimId}`} className="flex items-center gap-2">
+                      <div>
+                        <p className="text-xs text-gray-500">{dimObj?.name || "Dimension"}</p>
+                        <p className="text-sm font-medium">{dimInfo?.value_name || "—"}</p>
+                      </div>
+                    </div>
+                  );
+                }
+
                 return null;
               })}
-              {/* Auto-render custom (non-system) meta fields */}
-              {activityTypeFields.length > 0 && (
+              {/* Auto-render custom meta fields NOT in the layout */}
+              {autoAppendFields.length > 0 && (
                 <div key="edit-activity_meta">
                   <DynamicMetaForm
-                    fields={activityTypeFields}
+                    fields={autoAppendFields}
                     values={detailMetaValues}
                     onChange={setDetailMetaValues}
                   />
@@ -562,14 +612,30 @@ export default function ActivityDetailPage() {
                   );
                 }
 
+                // Custom meta field in layout: render inline
+                if (el.type === "field" && el.ref_key) {
+                  const def = fieldDefMap[el.ref_key];
+                  if (def && !def.system) {
+                    return (
+                      <div key={`view-field-${el.ref_key}`}>
+                        <MetaFieldDisplay
+                          fields={[def]}
+                          values={activity.meta}
+                          showEmpty
+                        />
+                      </div>
+                    );
+                  }
+                }
+
                 return null;
               })}
-              {/* Auto-render custom (non-system) meta fields */}
-              {activityTypeFields.length > 0 && (
+              {/* Auto-render custom meta fields NOT in the layout */}
+              {autoAppendFields.length > 0 && (
                 <div key="activity_meta">
                   <hr className="border-gray-100 mb-3" />
                   <MetaFieldDisplay
-                    fields={activityTypeFields}
+                    fields={autoAppendFields}
                     values={activity.meta}
                     showEmpty
                   />
