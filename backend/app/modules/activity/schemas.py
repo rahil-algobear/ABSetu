@@ -28,47 +28,6 @@ class ActivityTypeResponse(BaseResponseSchema):
     sort_order: int = 0
 
 
-# --- Activity Form ---
-
-
-class ActivityFormElement(BaseModel):
-    """Simplified form element — layout sequencer.
-
-    Field-level config (required, visible, stage, display_type for fields)
-    now lives on FieldDefinition in meta_field_schemas.
-
-    This element only controls:
-    - Which elements appear and in what order (sort_order)
-    - Structural config for dimensions/participant_lists (display_type, required)
-    - Title generation config (config)
-    """
-
-    type: str  # "field", "dimension", "participant_list"
-    ref_key: str | None = None  # for type="field" → field key (system or custom)
-    dimension_id: str | None = None  # for type="dimension"
-    entity_type_id: str | None = None  # for type="participant_list"
-    sort_order: int = 0
-    display_type: str | None = None  # for dimensions/participant_lists only
-    required: bool = False  # for dimensions/participant_lists only
-    stage: str | None = None  # for dimensions/participant_lists: "create", "record", "both"
-    config: dict[str, Any] | None = None  # for title generation config
-
-
-class ActivityFormCreate(BaseModel):
-    activity_type_id: str
-    elements: list[ActivityFormElement] = []
-
-
-class ActivityFormUpdate(BaseModel):
-    elements: list[ActivityFormElement] = []
-
-
-class ActivityFormResponse(BaseResponseSchema):
-    organization_id: str
-    activity_type_id: str
-    elements: list[dict[str, Any]] = []
-
-
 # --- Activity ---
 
 

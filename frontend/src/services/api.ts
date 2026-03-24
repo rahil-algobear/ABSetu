@@ -2,8 +2,6 @@ import authAxios, { publicAxios } from './axios';
 import {
   Activity,
   ActivityType,
-  ActivityForm,
-  ActivityFormElement,
   ActivityParticipant,
   DashboardFilters,
   DashboardStats,
@@ -292,22 +290,6 @@ export const activityTypeApi = {
   },
 };
 
-// --- Activity Forms (Form Builder) ---
-
-export const activityFormApi = {
-  get: async (activityTypeId: string): Promise<ActivityForm> => {
-    const response = await authAxios.get<ActivityForm>(`/activity-forms/${activityTypeId}`);
-    return response.data;
-  },
-  upsert: async (activityTypeId: string, elements: ActivityFormElement[]): Promise<ActivityForm> => {
-    const response = await authAxios.put<ActivityForm>(`/activity-forms/${activityTypeId}`, { elements });
-    return response.data;
-  },
-  delete: async (activityTypeId: string) => {
-    const response = await authAxios.delete(`/activity-forms/${activityTypeId}`);
-    return response.data;
-  },
-};
 
 // --- Activities ---
 

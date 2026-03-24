@@ -27,7 +27,6 @@ import {
   Link2,
   SlidersHorizontal,
   ClipboardList,
-  LayoutTemplate,
 } from "lucide-react";
 
 /* ── NavDropdown ── */
@@ -323,8 +322,7 @@ function NavigationContent() {
     { href: "/admin/dimension-linking", label: "Dimension Linking", icon: Link2, permission: "dimension:manage" },
     { href: "/admin/entity-types", label: "Entity Types", icon: UserCog, permission: "entity_type:manage" },
     { href: "/admin/activity-types", label: "Activity Types", icon: ClipboardList, permission: "activity_type:manage" },
-    { href: "/admin/form-builder", label: "Form Builder", icon: LayoutTemplate, permission: "activity_type:manage" },
-    { href: "/admin/list-settings", label: "List Settings", icon: Columns, permission: "org:settings" },
+{ href: "/admin/list-settings", label: "List Settings", icon: Columns, permission: "org:settings" },
   ];
 
   // Close mobile menu on navigation

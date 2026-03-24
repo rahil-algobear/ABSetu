@@ -10,9 +10,15 @@ from app.common.schemas.base_response import BaseResponseSchema
 
 # --- Field Definition ---
 
-FIELD_TYPES = Literal["text", "number", "date", "datetime", "select", "multiselect", "boolean"]
+FIELD_TYPES = Literal[
+    "text", "number", "date", "datetime", "select", "multiselect", "boolean",
+    "dimension", "participant_list",
+]
 
-DISPLAY_TYPES = Literal["input", "dropdown", "radio", "checklist", "textarea", "date", "datetime"]
+DISPLAY_TYPES = Literal[
+    "input", "dropdown", "radio", "checklist", "textarea", "date", "datetime",
+    "search_select", "multi_select",
+]
 
 STAGE_TYPES = Literal["create", "record", "both"]
 
@@ -31,13 +37,29 @@ class FieldDefinition(BaseModel):
     display_type: DISPLAY_TYPES | None = None
     stage: STAGE_TYPES = "both"
     visible: bool = True
+    sort_order: int = 0
+
+    # For type="dimension"
+    dimension_id: str | None = None
+    # For type="participant_list" (can be "user" for staff)
+    entity_type_id: str | None = None
+    # For title generation config, status capture config, etc.
+    config: dict[str, Any] | None = None
 
     @model_validator(mode="after")
     def validate_options(self):
         if self.type in ("select", "multiselect") and not self.options:
             raise ValueError(f"options are required for {self.type} fields")
-        if self.type not in ("select", "multiselect") and self.options:
+        if self.type not in ("select", "multiselect", "dimension", "participant_list") and self.options:
             raise ValueError(f"options are not allowed for {self.type} fields")
+        return self
+
+    @model_validator(mode="after")
+    def validate_structural_refs(self):
+        if self.type == "dimension" and not self.dimension_id:
+            raise ValueError("dimension_id is required for dimension fields")
+        if self.type == "participant_list" and not self.entity_type_id:
+            raise ValueError("entity_type_id is required for participant_list fields")
         return self
 
 

@@ -1,5 +1,5 @@
 """
-Activity models: ActivityType, ActivityForm, Activity, ActivityParticipant
+Activity models: ActivityType, Activity, ActivityParticipant
 """
 
 from sqlalchemy import Column, ForeignKey, Integer, String, UniqueConstraint
@@ -23,30 +23,8 @@ class ActivityType(BaseModel):
     sort_order = Column(Integer, nullable=False, default=0)
 
     organization = relationship("Organization", back_populates="activity_types")
-    form = relationship("ActivityForm", back_populates="activity_type", uselist=False)
 
     __table_args__ = (UniqueConstraint("organization_id", "key", name="uq_activity_type_org_key"),)
-
-
-class ActivityForm(BaseModel):
-    __tablename__ = "activity_forms"
-
-    organization_id = Column(
-        UUID(as_uuid=True),
-        ForeignKey("organizations.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-    activity_type_id = Column(
-        UUID(as_uuid=True),
-        ForeignKey("activity_types.id", ondelete="CASCADE"),
-        nullable=False,
-        unique=True,
-    )
-    elements = Column(JSONB, nullable=False, default=list)
-
-    organization = relationship("Organization", back_populates="activity_forms")
-    activity_type = relationship("ActivityType", back_populates="form")
 
 
 class Activity(BaseModel):

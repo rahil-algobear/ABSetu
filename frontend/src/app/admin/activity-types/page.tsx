@@ -104,11 +104,11 @@ export default function ActivityTypesPage() {
       />
       <PageContent>
       <p className="text-sm text-gray-500 mb-4">
-        Activity types define the structural type of an activity. Use the{" "}
-        <a href="/admin/form-builder" className="text-purple-600 underline">
-          Form Builder
+        Activity types define the structural type of an activity. Use{" "}
+        <a href="/admin/meta-fields" className="text-purple-600 underline">
+          Form Fields
         </a>{" "}
-        to configure what appears when recording an activity.
+        to configure what fields appear when recording an activity.
       </p>
 
       {isLoading ? (

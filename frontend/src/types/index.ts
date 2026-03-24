@@ -152,28 +152,6 @@ export interface ActivityType {
   updated_at: string | null;
 }
 
-// --- Activity Form (Form Builder) ---
-
-export interface ActivityFormElement {
-  type: "field" | "dimension" | "participant_list";
-  ref_key?: string | null; // for type="field" → field key (system or custom)
-  dimension_id?: string | null; // for type="dimension"
-  entity_type_id?: string | null; // for type="participant_list"
-  sort_order: number;
-  display_type?: string | null; // for dimensions/participant_lists only
-  required?: boolean; // for dimensions/participant_lists only
-  stage?: "create" | "record" | "both" | null; // for dimensions/participant_lists only
-  config?: Record<string, unknown>; // for title generation config
-}
-
-export interface ActivityForm {
-  id?: string;
-  organization_id?: string;
-  activity_type_id: string;
-  elements: ActivityFormElement[];
-  updated_at?: string | null;
-}
-
 export interface Activity {
   id: string;
   organization_id: string;
@@ -205,9 +183,14 @@ export interface ActivityParticipant {
 
 // --- Meta Field Definitions ---
 
-export type MetaFieldType = "text" | "number" | "date" | "datetime" | "select" | "multiselect" | "boolean";
+export type MetaFieldType =
+  | "text" | "number" | "date" | "datetime"
+  | "select" | "multiselect" | "boolean"
+  | "dimension" | "participant_list";
 
-export type MetaFieldDisplayType = "input" | "dropdown" | "radio" | "checklist" | "textarea" | "date" | "datetime";
+export type MetaFieldDisplayType =
+  | "input" | "dropdown" | "radio" | "checklist" | "textarea"
+  | "date" | "datetime" | "search_select" | "multi_select";
 export type MetaFieldStage = "create" | "record" | "both";
 
 export interface MetaFieldDefinition {
@@ -223,6 +206,14 @@ export interface MetaFieldDefinition {
   display_type?: MetaFieldDisplayType | null;
   stage?: MetaFieldStage;
   visible?: boolean;
+  sort_order?: number;
+
+  // For type="dimension"
+  dimension_id?: string | null;
+  // For type="participant_list" (can be "user" for staff)
+  entity_type_id?: string | null;
+  // For title generation config, status capture config, etc.
+  config?: Record<string, unknown>;
 }
 
 export interface MetaFieldSchemaScope {

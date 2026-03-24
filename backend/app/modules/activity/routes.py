@@ -19,8 +19,6 @@ from app.common.schemas.list_params import ListParams
 from app.core.database import get_db
 from app.modules.activity.schemas import (
     ActivityCreate,
-    ActivityFormResponse,
-    ActivityFormUpdate,
     ActivityResponse,
     ActivityTypeCreate,
     ActivityTypeResponse,
@@ -31,7 +29,6 @@ from app.modules.activity.schemas import (
     ParticipantResponse,
 )
 from app.modules.activity.service import (
-    ActivityFormService,
     ActivityParticipantService,
     ActivityService,
     ActivityTypeService,
@@ -128,30 +125,51 @@ def delete_activity_type(
 activity_router = APIRouter(prefix="/activities")
 
 
-def _resolve_generated_title(activity, form) -> str | None:
-    """Compose a generated title from dimension values based on form config."""
-    if not form or not form.elements:
+def _collect_field_defs(
+    db: Session,
+    org_id: uuid.UUID,
+    activity_type_id: uuid.UUID | None,
+    dimension_value_ids: list[uuid.UUID] | None = None,
+) -> dict[str, dict]:
+    """Collect all applicable meta field definitions for an activity."""
+    meta_service = MetaFieldSchemaService(db)
+    all_field_defs: dict[str, dict] = {}
+    # Base scope
+    for fd in meta_service.get_schema_by_scope(org_id, "activity"):
+        all_field_defs[fd["key"]] = fd
+    # Activity-type scope
+    if activity_type_id:
+        for fd in meta_service.get_schema_by_scope(
+            org_id, "activity", activity_type_id=activity_type_id
+        ):
+            all_field_defs[fd["key"]] = fd
+    # Dimension-value scopes
+    for dv_id in (dimension_value_ids or []):
+        for fd in meta_service.get_schema_by_scope(
+            org_id, "activity", dimension_value_id=dv_id
+        ):
+            all_field_defs[fd["key"]] = fd
+        if activity_type_id:
+            for fd in meta_service.get_schema_by_scope(
+                org_id, "activity",
+                activity_type_id=activity_type_id, dimension_value_id=dv_id,
+            ):
+                all_field_defs[fd["key"]] = fd
+    return all_field_defs
+
+
+def _resolve_generated_title(activity, field_defs: dict[str, dict]) -> str | None:
+    """Compose a generated title from dimension values based on title field config."""
+    title_def = field_defs.get("title")
+    if not title_def:
         return None
-    # Support both old format (type=default, ref_id=title) and new (type=field, ref_key=title)
-    title_el = next(
-        (
-            el
-            for el in form.elements
-            if (el.get("type") == "default" and el.get("ref_id") == "title")
-            or (el.get("type") == "field" and el.get("ref_key") == "title")
-        ),
-        None,
-    )
-    if not title_el:
-        return None
-    config = title_el.get("config") or {}
+    config = title_def.get("config") or {}
     if config.get("mode") != "generated":
         return None
     dimension_ids = config.get("dimension_ids", [])
     separator = config.get("separator", " - ")
     if not dimension_ids:
         return None
-    # Build title from dimension values in the configured order
     parts = []
     for dim_id in dimension_ids:
         for d in activity.dimensions or []:
@@ -162,7 +180,7 @@ def _resolve_generated_title(activity, form) -> str | None:
     return separator.join(parts) if parts else None
 
 
-def _build_activity_response(a, form=None) -> dict:
+def _build_activity_response(a, field_defs: dict[str, dict] | None = None) -> dict:
     """Build ActivityResponse dict from an Activity model instance."""
     meta = a.meta or {}
     dim_infos = []
@@ -182,7 +200,7 @@ def _build_activity_response(a, form=None) -> dict:
     activity_type_name = a.activity_type.name if a.activity_type else None
 
     # Resolve title: generated from dimensions, or from meta
-    title = _resolve_generated_title(a, form) or meta.get("title")
+    title = _resolve_generated_title(a, field_defs or {}) or meta.get("title")
 
     return ActivityResponse(
         id=str(a.id),
@@ -201,15 +219,14 @@ def _build_activity_response(a, form=None) -> dict:
     ).dump()
 
 
-def _load_forms_by_type(db: Session, activities: list, org_id: uuid.UUID) -> dict:
-    """Load ActivityForm for each unique activity_type_id, keyed by type ID string."""
-    form_service = ActivityFormService(db)
-    forms: dict = {}
+def _load_field_defs_by_type(db: Session, activities: list, org_id: uuid.UUID) -> dict:
+    """Load field defs for each unique activity_type_id, keyed by type ID string."""
+    defs: dict = {}
     for a in activities:
         key = str(a.activity_type_id) if a.activity_type_id else None
-        if key and key not in forms:
-            forms[key] = form_service.get_by_type(a.activity_type_id, org_id)
-    return forms
+        if key and key not in defs:
+            defs[key] = _collect_field_defs(db, org_id, a.activity_type_id)
+    return defs
 
 
 @activity_router.get("/", dependencies=[Depends(require_permissions("activity:view"))])
@@ -264,15 +281,15 @@ def list_activities(
         list_columns=list_columns,
     )
 
-    # Load forms for generated title resolution
+    # Load field defs for generated title resolution
     activities = [activity for activity, _count in rows]
-    forms = _load_forms_by_type(db, activities, current_user.organization_id)
+    all_defs = _load_field_defs_by_type(db, activities, current_user.organization_id)
 
     data = []
     for activity, participant_count in rows:
         resp = _build_activity_response(
             activity,
-            forms.get(str(activity.activity_type_id)) if activity.activity_type_id else None,
+            all_defs.get(str(activity.activity_type_id)) if activity.activity_type_id else None,
         )
         resp["participant_count"] = participant_count or 0
         data.append(resp)
@@ -339,10 +356,10 @@ def list_activities_by_entity(
 ):
     service = ActivityService(db)
     activities = service.list_by_entity(entity_id, current_user.organization_id)
-    forms = _load_forms_by_type(db, activities, current_user.organization_id)
+    all_defs = _load_field_defs_by_type(db, activities, current_user.organization_id)
     return [
         _build_activity_response(
-            a, forms.get(str(a.activity_type_id)) if a.activity_type_id else None
+            a, all_defs.get(str(a.activity_type_id)) if a.activity_type_id else None
         )
         for a in activities
     ]
@@ -357,11 +374,10 @@ def get_activity(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    form = None
-    if activity.activity_type_id:
-        form_service = ActivityFormService(db)
-        form = form_service.get_by_type(activity.activity_type_id, current_user.organization_id)
-    return _build_activity_response(activity, form)
+    field_defs = _collect_field_defs(
+        db, current_user.organization_id, activity.activity_type_id
+    )
+    return _build_activity_response(activity, field_defs)
 
 
 @activity_router.post(
@@ -375,77 +391,46 @@ def create_activity(
     accessible_dv_ids: list[uuid.UUID] | None = Depends(get_accessible_dimension_value_ids),
     db: Session = Depends(get_db),
 ):
-    # Validate required form elements from form builder config
     activity_type_id = data.activity_type_id
-    form = None
-    if activity_type_id:
-        form_service = ActivityFormService(db)
-        form = form_service.get_by_type(uuid.UUID(activity_type_id), current_user.organization_id)
-        if form and form.elements:
-            elements = ActivityFormService._ensure_defaults(list(form.elements))
+    type_uuid = uuid.UUID(activity_type_id) if activity_type_id else None
+    dv_uuids = [uuid.UUID(v) for v in (data.dimension_value_ids or [])]
 
-            # Resolve which dimension IDs are covered by the submitted values
-            submitted_dim_ids = set()
-            if data.dimension_value_ids:
-                dvs = (
-                    db.query(DimensionValue.dimension_id)
-                    .filter(DimensionValue.id.in_([uuid.UUID(v) for v in data.dimension_value_ids]))
-                    .all()
-                )
-                submitted_dim_ids = {str(row[0]) for row in dvs}
+    # Collect all field definitions from meta schemas
+    all_field_defs = _collect_field_defs(
+        db, current_user.organization_id, type_uuid, dv_uuids
+    )
 
-            # Collect all applicable meta field definitions for this activity
-            meta_service = MetaFieldSchemaService(db)
-            all_field_defs: dict[str, dict] = {}
-            type_uuid = uuid.UUID(activity_type_id) if activity_type_id else None
-            # Base scope
-            for fd in meta_service.get_schema_by_scope(current_user.organization_id, "activity"):
-                all_field_defs[fd["key"]] = fd
-            # Activity-type scope
-            if type_uuid:
-                for fd in meta_service.get_schema_by_scope(
-                    current_user.organization_id, "activity", activity_type_id=type_uuid
-                ):
-                    all_field_defs[fd["key"]] = fd
-            # Dimension-value scopes
-            dv_uuids = [uuid.UUID(v) for v in (data.dimension_value_ids or [])]
-            for dv_id in dv_uuids:
-                for fd in meta_service.get_schema_by_scope(
-                    current_user.organization_id, "activity", dimension_value_id=dv_id
-                ):
-                    all_field_defs[fd["key"]] = fd
-                if type_uuid:
-                    for fd in meta_service.get_schema_by_scope(
-                        current_user.organization_id, "activity",
-                        activity_type_id=type_uuid, dimension_value_id=dv_id,
-                    ):
-                        all_field_defs[fd["key"]] = fd
+    submitted_meta = data.meta or {}
 
-            submitted_meta = data.meta or {}
+    # Validate required fields
+    # Resolve which dimension IDs are covered by submitted values
+    submitted_dim_ids = set()
+    if data.dimension_value_ids:
+        dvs = (
+            db.query(DimensionValue.dimension_id)
+            .filter(DimensionValue.id.in_(dv_uuids))
+            .all()
+        )
+        submitted_dim_ids = {str(row[0]) for row in dvs}
 
-            for el in elements:
-                if not el.get("required"):
-                    continue
-                el_type = el.get("type")
-                if el_type == "dimension":
-                    dim_id = el.get("dimension_id") or el.get("ref_id")
-                    if dim_id and dim_id not in submitted_dim_ids:
-                        dim = db.query(Dimension).filter_by(id=dim_id).first()
-                        dim_name = dim.name if dim else "Dimension"
-                        raise ValidationError(f"{dim_name} is required")
-                elif el_type == "field":
-                    ref_key = el.get("ref_key")
-                    if ref_key:
-                        field_def = all_field_defs.get(ref_key)
-                        if field_def and field_def.get("required"):
-                            # Only enforce required on the create stage
-                            stage = field_def.get("stage") or "both"
-                            if stage not in ("both", "create"):
-                                continue
-                            val = submitted_meta.get(ref_key)
-                            if val is None or val == "":
-                                label = field_def.get("label", ref_key)
-                                raise ValidationError(f"{label} is required")
+    for fd in all_field_defs.values():
+        if not fd.get("required"):
+            continue
+        stage = fd.get("stage") or "both"
+        if stage not in ("both", "create"):
+            continue
+
+        fd_type = fd.get("type")
+        if fd_type == "dimension":
+            dim_id = fd.get("dimension_id")
+            if dim_id and dim_id not in submitted_dim_ids:
+                raise ValidationError(f"{fd.get('label', 'Dimension')} is required")
+        elif fd_type == "participant_list":
+            pass  # validated at participant save time
+        else:
+            val = submitted_meta.get(fd["key"])
+            if val is None or val == "":
+                raise ValidationError(f"{fd.get('label', fd['key'])} is required")
 
     service = ActivityService(db)
     activity = service.create(
@@ -455,7 +440,7 @@ def create_activity(
         data.dimension_value_ids,
         accessible_dv_ids=accessible_dv_ids,
     )
-    return _build_activity_response(activity, form)
+    return _build_activity_response(activity, all_field_defs)
 
 
 @activity_router.put(
@@ -469,47 +454,31 @@ def update_activity(
     db: Session = Depends(get_db),
 ):
     # Validate required fields for the edit/record stage
-    activity_type_id = str(activity.activity_type_id) if activity.activity_type_id else None
-    form = None
-    if activity_type_id:
-        form_service = ActivityFormService(db)
-        form = form_service.get_by_type(activity.activity_type_id, current_user.organization_id)
-        if form and form.elements and data.meta is not None:
-            elements = ActivityFormService._ensure_defaults(list(form.elements))
-            meta_service = MetaFieldSchemaService(db)
-            all_field_defs: dict[str, dict] = {}
-            type_uuid = uuid.UUID(activity_type_id)
-            for fd in meta_service.get_schema_by_scope(current_user.organization_id, "activity"):
-                all_field_defs[fd["key"]] = fd
-            for fd in meta_service.get_schema_by_scope(
-                current_user.organization_id, "activity", activity_type_id=type_uuid
-            ):
-                all_field_defs[fd["key"]] = fd
+    if data.meta is not None and activity.activity_type_id:
+        all_field_defs = _collect_field_defs(
+            db, current_user.organization_id, activity.activity_type_id
+        )
+        submitted_meta = data.meta or {}
 
-            submitted_meta = data.meta or {}
-
-            for el in elements:
-                if el.get("type") != "field" or not el.get("required"):
-                    continue
-                ref_key = el.get("ref_key")
-                if not ref_key:
-                    continue
-                field_def = all_field_defs.get(ref_key)
-                if field_def and field_def.get("required"):
-                    stage = field_def.get("stage") or "both"
-                    if stage not in ("both", "record"):
-                        continue
-                    val = submitted_meta.get(ref_key)
-                    if val is None or val == "":
-                        label = field_def.get("label", ref_key)
-                        raise ValidationError(f"{label} is required")
+        for fd in all_field_defs.values():
+            if not fd.get("required"):
+                continue
+            stage = fd.get("stage") or "both"
+            if stage not in ("both", "record"):
+                continue
+            fd_type = fd.get("type")
+            if fd_type in ("dimension", "participant_list"):
+                continue
+            val = submitted_meta.get(fd["key"])
+            if val is None or val == "":
+                raise ValidationError(f"{fd.get('label', fd['key'])} is required")
 
     service = ActivityService(db)
     updated = service.update(activity.id, data.model_dump(exclude_none=True))
-    if not form and updated.activity_type_id:
-        form_service = ActivityFormService(db)
-        form = form_service.get_by_type(updated.activity_type_id, current_user.organization_id)
-    return _build_activity_response(updated, form)
+    field_defs = _collect_field_defs(
+        db, current_user.organization_id, updated.activity_type_id
+    )
+    return _build_activity_response(updated, field_defs)
 
 
 @activity_router.delete(
@@ -584,30 +553,24 @@ def save_participants(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-
-    # Validate required participant_list sections from form builder config
+    # Validate required participant_list sections from field definitions
     if activity.activity_type_id:
-        form_service = ActivityFormService(db)
-        form = form_service.get_by_type(activity.activity_type_id, current_user.organization_id)
-        if form and form.elements:
-            elements = ActivityFormService._ensure_defaults(list(form.elements))
-            submitted_sections = {r.section_key for r in data.records}
-            for el in elements:
-                el_type = el.get("type")
-                is_participant = el_type in ("participant_list", "entity_type")
-                if is_participant and el.get("required"):
-                    # Support both old and new format
-                    section_key = el.get("entity_type_id") or el.get("ref_id") or el_type
-                    if section_key not in submitted_sections:
-                        ref_id = el.get("entity_type_id") or el.get("ref_id")
-                        if ref_id == "user":
-                            label = "Users (staff)"
-                        else:
-                            from app.modules.entity.model import EntityType
-
-                            et = db.query(EntityType).filter_by(id=ref_id).first()
-                            label = et.name if et else "Participants"
-                        raise ValidationError(f"{label} is required — add at least one participant")
+        all_field_defs = _collect_field_defs(
+            db, current_user.organization_id, activity.activity_type_id
+        )
+        submitted_sections = {r.section_key for r in data.records}
+        for fd in all_field_defs.values():
+            if fd.get("type") != "participant_list" or not fd.get("required"):
+                continue
+            section_key = fd.get("entity_type_id") or fd["key"]
+            if section_key not in submitted_sections:
+                if fd.get("entity_type_id") == "user":
+                    label = "Users (staff)"
+                else:
+                    from app.modules.entity.model import EntityType
+                    et = db.query(EntityType).filter_by(id=fd.get("entity_type_id")).first()
+                    label = et.name if et else fd.get("label", "Participants")
+                raise ValidationError(f"{label} is required — add at least one participant")
 
     # Validate required participant meta fields
     meta_service = MetaFieldSchemaService(db)
@@ -617,7 +580,6 @@ def save_participants(
     ]
 
     for record in data.records:
-        # Resolve entity_type_id: "user" → sentinel UUID, else parse as UUID
         entity_type_id = MetaFieldSchemaService._resolve_entity_type_id(record.section_key)
 
         fields = meta_service.get_participant_schemas(
@@ -652,68 +614,6 @@ def save_participants(
     ]
 
 
-# --- Activity Forms ---
-
-form_router = APIRouter(prefix="/activity-forms")
-
-
-@form_router.get(
-    "/{activity_type_id}",
-    dependencies=[Depends(require_permissions("activity_type:view"))],
-)
-def get_activity_form(
-    activity_type_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    service = ActivityFormService(db)
-    form = service.get_by_type(activity_type_id, current_user.organization_id)
-    if not form:
-        return {
-            "activity_type_id": str(activity_type_id),
-            "elements": [],
-        }
-    # Migrate old format elements
-    patched_elements = ActivityFormService._ensure_defaults(list(form.elements))
-    resp = ActivityFormResponse.dump_from_model(form)
-    resp["elements"] = patched_elements
-    return resp
-
-
-@form_router.put(
-    "/{activity_type_id}",
-    dependencies=[Depends(require_permissions("activity_type:manage"))],
-)
-def upsert_activity_form(
-    activity_type_id: uuid.UUID,
-    data: ActivityFormUpdate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    service = ActivityFormService(db)
-    form = service.upsert(
-        current_user.organization_id,
-        activity_type_id,
-        [e.model_dump() for e in data.elements],
-    )
-    return ActivityFormResponse.dump_from_model(form)
-
-
-@form_router.delete(
-    "/{activity_type_id}",
-    dependencies=[Depends(require_permissions("activity_type:manage"))],
-)
-def delete_activity_form(
-    activity_type_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    service = ActivityFormService(db)
-    service.delete(activity_type_id, current_user.organization_id)
-    return {"message": "Activity form deleted"}
-
-
 # Include sub-routers
 router.include_router(activity_type_router)
 router.include_router(activity_router)
-router.include_router(form_router)

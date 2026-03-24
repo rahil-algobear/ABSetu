@@ -12,8 +12,8 @@ from app.common.helpers.dimension_scoping import (
     apply_dimension_access_scoping,
     group_dvs_by_dimension,
 )
-from app.modules.activity.model import Activity, ActivityForm, ActivityType, ActivityParticipant
-from app.modules.activity.routes import _resolve_generated_title
+from app.modules.activity.model import Activity, ActivityType, ActivityParticipant
+from app.modules.activity.routes import _resolve_generated_title, _collect_field_defs
 from app.modules.entity.model import Entity, EntityType
 from app.modules.beneficiary.model import Enrollment
 from app.modules.auth.model import User
@@ -296,15 +296,13 @@ class DashboardService:
             .all()
         )
 
-        # Load forms for title resolution
-        forms_by_type: dict[str, ActivityForm | None] = {}
+        # Load field defs for title resolution
+        field_defs_by_type: dict[str, dict] = {}
         for a in recent_rows:
             key = str(a.activity_type_id) if a.activity_type_id else None
-            if key and key not in forms_by_type:
-                forms_by_type[key] = (
-                    self.db.query(ActivityForm)
-                    .filter_by(activity_type_id=a.activity_type_id, organization_id=organization_id)
-                    .first()
+            if key and key not in field_defs_by_type:
+                field_defs_by_type[key] = _collect_field_defs(
+                    self.db, organization_id, a.activity_type_id
                 )
 
         recent_activities = []
@@ -318,9 +316,9 @@ class DashboardService:
             type_name = a.activity_type.name if a.activity_type else None
 
             # Resolve title: generated from dimensions first, then meta
-            form = forms_by_type.get(str(a.activity_type_id)) if a.activity_type_id else None
+            defs = field_defs_by_type.get(str(a.activity_type_id)) if a.activity_type_id else None
             a_meta = a.meta or {}
-            title = _resolve_generated_title(a, form) or a_meta.get("title")
+            title = _resolve_generated_title(a, defs or {}) or a_meta.get("title")
 
             recent_activities.append(
                 RecentActivity(

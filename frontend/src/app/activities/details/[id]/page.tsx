@@ -5,7 +5,6 @@ import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   activityApi,
-  activityFormApi,
   dimensionApi,
   entityApi,
   entityTypeApi,
@@ -13,8 +12,6 @@ import {
   userApi,
 } from "@/services/api";
 import {
-  ActivityForm,
-  ActivityFormElement,
   ActivityParticipant,
   MetaFieldDefinition,
   MetaFieldSchemaItem,
@@ -71,66 +68,50 @@ export default function ActivityDetailPage() {
     queryFn: metaFieldSchemaApi.getAll,
   });
 
-  // Activity type ID comes directly from the activity
   const activityTypeId = activity?.activity_type_id || "";
 
-  // Load form builder config
-  const { data: formConfig } = useQuery<ActivityForm>({
-    queryKey: ["activity-form", activityTypeId],
-    queryFn: () => activityFormApi.get(activityTypeId),
-    enabled: !!activityTypeId,
-  });
-
-  // Build a map of field key → MetaFieldDefinition for looking up labels, required, visible
-  const fieldDefMap = useMemo(() => {
+  // All field definitions — the sole source of truth
+  const allFields = useMemo((): MetaFieldDefinition[] => {
     const dvIds = (activity?.dimensions || []).map((d) => d.value_id);
-    const allFields = collectActivityFields(allMetaSchemas, activityTypeId || null, dvIds);
-    const map: Record<string, MetaFieldDefinition> = {};
-    for (const f of allFields) map[f.key] = f;
-    return map;
+    return collectActivityFields(allMetaSchemas, activityTypeId || null, dvIds);
   }, [activityTypeId, activity, allMetaSchemas]);
 
-  // Get participant_list elements from form config (these are participant sections)
-  const entityTypeElements: ActivityFormElement[] = useMemo(() => {
-    if (!formConfig?.elements?.length) return [];
-    return formConfig.elements
-      .filter((el) => el.type === "participant_list"
-        && (!el.stage || el.stage === "both" || el.stage === "record"))
-      .sort((a, b) => a.sort_order - b.sort_order);
-  }, [formConfig]);
+  // Visible fields split by purpose
+  const detailFields = useMemo(() => {
+    return allFields.filter((f) =>
+      f.visible !== false
+      && f.type !== "participant_list"
+    );
+  }, [allFields]);
 
-  // Non-participant elements (field + dimension) for the detail/edit view
-  const detailElements: ActivityFormElement[] = useMemo(() => {
-    if (!formConfig?.elements?.length) return [];
-    return formConfig.elements
-      .filter((el) => {
-        if (el.type === "field") {
-          // For field elements, check visibility from FieldDefinition
-          const def = el.ref_key ? fieldDefMap[el.ref_key] : undefined;
-          if (def && def.visible === false) return false;
-          // Show all fields — create-only ones will render as disabled
-          return true;
-        }
-        if (el.type === "dimension") {
-          // Respect stage on structural elements
-          if (el.stage && el.stage !== "both" && el.stage !== "record") return false;
-          return true;
-        }
-        return false;
-      })
-      .sort((a, b) => a.sort_order - b.sort_order);
-  }, [formConfig, fieldDefMap]);
+  const participantListFields = useMemo(() => {
+    return allFields.filter((f) =>
+      f.visible !== false
+      && f.type === "participant_list"
+      && (!f.stage || f.stage === "both" || f.stage === "record")
+    );
+  }, [allFields]);
 
-  // Entity type source IDs from form elements
+  // Field keys not editable on the edit/record stage (create-only fields)
+  const editDisabledKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const f of allFields) {
+      if (f.stage && f.stage !== "both" && f.stage !== "record") {
+        keys.add(f.key);
+      }
+    }
+    return keys;
+  }, [allFields]);
+
+  // Entity type source IDs for loading entity options
   const entitySourceIds = useMemo(() => {
-    return entityTypeElements
-      .filter((el) => el.entity_type_id && el.entity_type_id !== "user")
-      .map((el) => el.entity_type_id!);
-  }, [entityTypeElements]);
+    return participantListFields
+      .filter((f) => f.entity_type_id && f.entity_type_id !== "user")
+      .map((f) => f.entity_type_id!);
+  }, [participantListFields]);
 
-  const hasUserSection = entityTypeElements.some((el) => el.entity_type_id === "user");
+  const hasUserSection = participantListFields.some((f) => f.entity_type_id === "user");
 
-  // Load entities for each entity type
   const { data: entitiesByType = {} } = useQuery({
     queryKey: ["entities-for-sections", entitySourceIds.join(",")],
     queryFn: async () => {
@@ -150,16 +131,15 @@ export default function ActivityDetailPage() {
     enabled: hasUserSection,
   });
 
-  // Get participation meta fields for an entity type element
-  const getParticipationMetaFields = (el: ActivityFormElement): MetaFieldDefinition[] => {
-    if (!el.entity_type_id) return [];
+  // Get participation meta fields for an entity type
+  const getParticipationMetaFields = (field: MetaFieldDefinition): MetaFieldDefinition[] => {
+    if (!field.entity_type_id) return [];
     const dvIds = (activity?.dimensions || []).map((d) => d.value_id);
-    return collectParticipantFields(allMetaSchemas, el.entity_type_id, activityTypeId || null, dvIds);
+    return collectParticipantFields(allMetaSchemas, field.entity_type_id, activityTypeId || null, dvIds);
   };
 
-  // Use entity_type_id as section_key for participant records
-  const getSectionKey = (el: ActivityFormElement): string => {
-    return el.entity_type_id || el.type;
+  const getSectionKey = (field: MetaFieldDefinition): string => {
+    return field.entity_type_id || field.key;
   };
 
   const saveMutation = useMutation({
@@ -177,7 +157,7 @@ export default function ActivityDetailPage() {
   });
 
   const updateDetailsMutation = useMutation({
-    mutationFn: (data: { start_date?: string; end_date?: string; notes?: string; meta?: Record<string, unknown> }) =>
+    mutationFn: (data: { meta?: Record<string, unknown> }) =>
       activityApi.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["activity", id] });
@@ -215,8 +195,8 @@ export default function ActivityDetailPage() {
 
   const openEditing = () => {
     const state: typeof participantState = {};
-    for (const el of entityTypeElements) {
-      const sectionKey = getSectionKey(el);
+    for (const field of participantListFields) {
+      const sectionKey = getSectionKey(field);
       const sectionParticipants = participants.filter((p) => p.section_key === sectionKey);
       state[sectionKey] = sectionParticipants.map((p) => ({
         participant_id: p.participant_id,
@@ -230,23 +210,23 @@ export default function ActivityDetailPage() {
   };
 
   const handleSave = () => {
-    // Validate required sections have at least one participant
-    for (const el of entityTypeElements) {
-      if (el.required) {
-        const sectionKey = getSectionKey(el);
+    // Validate required sections
+    for (const field of participantListFields) {
+      if (field.required) {
+        const sectionKey = getSectionKey(field);
         const sectionState = participantState[sectionKey] || [];
         if (sectionState.length === 0) {
-          toast.error(`${getElementLabel(el)} is required — add at least one participant`);
+          toast.error(`${getFieldLabel(field)} is required — add at least one participant`);
           return;
         }
       }
     }
 
-    // Validate required meta fields for each participant
-    for (const el of entityTypeElements) {
-      const sectionKey = getSectionKey(el);
+    // Validate required meta fields per participant
+    for (const field of participantListFields) {
+      const sectionKey = getSectionKey(field);
       const sectionState = participantState[sectionKey] || [];
-      const metaFields = getParticipationMetaFields(el);
+      const metaFields = getParticipationMetaFields(field);
       const requiredFields = metaFields.filter((f) => f.required);
       if (requiredFields.length > 0) {
         for (const p of sectionState) {
@@ -262,8 +242,8 @@ export default function ActivityDetailPage() {
     }
 
     const records: { participant_type: string; participant_id: string; section_key: string; status?: string; meta?: Record<string, unknown> }[] = [];
-    for (const el of entityTypeElements) {
-      const sectionKey = getSectionKey(el);
+    for (const field of participantListFields) {
+      const sectionKey = getSectionKey(field);
       const sectionState = participantState[sectionKey] || [];
       for (const p of sectionState) {
         records.push({
@@ -278,7 +258,6 @@ export default function ActivityDetailPage() {
     saveMutation.mutate(records);
   };
 
-  // Group existing participants by section_key
   const participantsBySection = useMemo(() => {
     const map: Record<string, ActivityParticipant[]> = {};
     for (const p of participants) {
@@ -288,48 +267,14 @@ export default function ActivityDetailPage() {
     return map;
   }, [participants]);
 
-  // Get label for an entity type element
-  const getElementLabel = (el: ActivityFormElement): string => {
-    if (el.entity_type_id === "user") return "Users (staff)";
-    const et = entityTypes.find((t) => t.id === el.entity_type_id);
-    return et?.name || "Participants";
-  };
-
-  // Activity meta fields: base + activity type + dimension values + type×dimension_value combos
-  const activityTypeFields = useMemo((): MetaFieldDefinition[] => {
-    const dvIds = (activity?.dimensions || []).map((d) => d.value_id);
-    return collectActivityFields(allMetaSchemas, activityTypeId || null, dvIds);
-  }, [activityTypeId, activity, allMetaSchemas]);
-
-  // Field keys that are not editable on the edit/record stage (create-only fields)
-  const editDisabledKeys = useMemo(() => {
-    const keys = new Set<string>();
-    for (const f of activityTypeFields) {
-      if (f.stage && f.stage !== "both" && f.stage !== "record") {
-        keys.add(f.key);
-      }
+  const getFieldLabel = (field: MetaFieldDefinition): string => {
+    if (field.entity_type_id === "user") return "Users (staff)";
+    if (field.entity_type_id) {
+      const et = entityTypes.find((t) => t.id === field.entity_type_id);
+      return et?.name || field.label;
     }
-    return keys;
-  }, [activityTypeFields]);
-
-  // Field keys that are in the form builder layout (rendered inline)
-  // Use all form config elements (not just detailElements) to avoid duplicates
-  const layoutCustomFieldKeys = useMemo(() => {
-    const elements = formConfig?.elements || [];
-    return new Set(
-      elements
-        .filter((el) => el.type === "field" && el.ref_key)
-        .map((el) => el.ref_key!)
-    );
-  }, [formConfig]);
-
-  // Custom meta fields NOT in the layout (auto-appended after form elements)
-  // Show all visible fields — create-only ones will render as disabled via editDisabledKeys
-  const autoAppendFields = useMemo(() => {
-    return activityTypeFields.filter(
-      (f) => !layoutCustomFieldKeys.has(f.key) && f.visible !== false
-    );
-  }, [activityTypeFields, layoutCustomFieldKeys]);
+    return field.label;
+  };
 
   if (isLoading) return <PageLayout><PageContent><p>Loading...</p></PageContent></PageLayout>;
   if (!activity) return <PageLayout><PageContent><p>Not found</p></PageContent></PageLayout>;
@@ -338,7 +283,6 @@ export default function ActivityDetailPage() {
 
   return (
     <PageLayout>
-      {/* Header */}
       <PageHeader
         title={activityTitle}
         description={activity.activity_type_name || undefined}
@@ -375,59 +319,40 @@ export default function ActivityDetailPage() {
         <CardContent>
           {editingDetails ? (
             <form onSubmit={(e) => { e.preventDefault(); handleDetailSave(); }} className="space-y-3">
-              {detailElements.map((el) => {
-                // Field elements: render via DynamicMetaForm
-                if (el.type === "field" && el.ref_key) {
-                  // Title with "generated" mode: skip
-                  if (el.ref_key === "title") {
-                    const titleConfig = el.config || { mode: "free_text" };
-                    if ((titleConfig.mode as string) === "generated") return null;
-                  }
-                  const def = fieldDefMap[el.ref_key];
-                  if (def) {
-                    return (
-                      <div key={`edit-field-${el.ref_key}`}>
-                        <DynamicMetaForm
-                          fields={[def]}
-                          values={detailMetaValues}
-                          onChange={setDetailMetaValues}
-                          disabledKeys={editDisabledKeys}
-                        />
-                      </div>
-                    );
-                  }
-                }
-
-                // Dimension elements in edit mode — show as read-only
-                if (el.type === "dimension") {
-                  const dimId = el.dimension_id;
+              {detailFields.map((field) => {
+                if (field.type === "dimension") {
+                  const dimId = field.dimension_id;
                   const dimInfo = activity.dimensions.find(
                     (d) => dimensions.find((dim) => dim.id === dimId)?.key === d.dimension_key
                   );
                   const dimObj = dimensions.find((d) => d.id === dimId);
                   return (
-                    <div key={`edit-dim-${dimId}`} className="flex items-center gap-2">
+                    <div key={`edit-dim-${field.key}`} className="flex items-center gap-2">
                       <div>
-                        <p className="text-xs text-gray-500">{dimObj?.name || "Dimension"}</p>
+                        <p className="text-xs text-gray-500">{dimObj?.name || field.label}</p>
                         <p className="text-sm font-medium">{dimInfo?.value_name || "—"}</p>
                       </div>
                     </div>
                   );
                 }
 
-                return null;
+                // Title with generated mode: skip
+                if (field.key === "title") {
+                  const titleConfig = field.config || { mode: "free_text" };
+                  if ((titleConfig.mode as string) === "generated") return null;
+                }
+
+                return (
+                  <div key={`edit-field-${field.key}`}>
+                    <DynamicMetaForm
+                      fields={[field]}
+                      values={detailMetaValues}
+                      onChange={setDetailMetaValues}
+                      disabledKeys={editDisabledKeys}
+                    />
+                  </div>
+                );
               })}
-              {/* Auto-render fields NOT in the layout */}
-              {autoAppendFields.length > 0 && (
-                <div key="edit-activity_meta">
-                  <DynamicMetaForm
-                    fields={autoAppendFields}
-                    values={detailMetaValues}
-                    onChange={setDetailMetaValues}
-                    disabledKeys={editDisabledKeys}
-                  />
-                </div>
-              )}
               <div className="flex gap-2 pt-2">
                 <Button type="submit" disabled={updateDetailsMutation.isPending}>
                   Save
@@ -439,16 +364,15 @@ export default function ActivityDetailPage() {
             </form>
           ) : (
             <div className="space-y-3">
-              {detailElements.map((el) => {
-                // Dimension elements
-                if (el.type === "dimension") {
-                  const dimDef = dimensions.find((d) => d.id === el.dimension_id);
+              {detailFields.map((field) => {
+                if (field.type === "dimension") {
+                  const dimDef = dimensions.find((d) => d.id === field.dimension_id);
                   const dimInfo = dimDef
                     ? activity.dimensions.find((d) => d.dimension_key === dimDef.key)
                     : undefined;
                   return (
-                    <div key={`dim-${el.dimension_id}`}>
-                      <p className="text-xs text-gray-500">{dimInfo?.dimension_name || dimDef?.name || el.dimension_id}</p>
+                    <div key={`dim-${field.key}`}>
+                      <p className="text-xs text-gray-500">{dimInfo?.dimension_name || dimDef?.name || field.label}</p>
                       {dimInfo ? (
                         <p className="text-sm font-medium">{dimInfo.value_name}</p>
                       ) : (
@@ -458,42 +382,23 @@ export default function ActivityDetailPage() {
                   );
                 }
 
-                // Field elements: render via MetaFieldDisplay
-                if (el.type === "field" && el.ref_key) {
-                  const def = fieldDefMap[el.ref_key];
-                  if (def) {
-                    return (
-                      <div key={`view-field-${el.ref_key}`}>
-                        <MetaFieldDisplay
-                          fields={[def]}
-                          values={activity.meta}
-                          showEmpty
-                        />
-                      </div>
-                    );
-                  }
-                }
-
-                return null;
+                return (
+                  <div key={`view-field-${field.key}`}>
+                    <MetaFieldDisplay
+                      fields={[field]}
+                      values={activity.meta}
+                      showEmpty
+                    />
+                  </div>
+                );
               })}
-              {/* Auto-render fields NOT in the layout */}
-              {autoAppendFields.length > 0 && (
-                <div key="activity_meta">
-                  <hr className="border-gray-100 mb-3" />
-                  <MetaFieldDisplay
-                    fields={autoAppendFields}
-                    values={activity.meta}
-                    showEmpty
-                  />
-                </div>
-              )}
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Participant sections from form builder */}
-      {entityTypeElements.length > 0 ? (
+      {/* Participant sections */}
+      {participantListFields.length > 0 ? (
         <Card>
           <CardHeader className="flex-row items-center justify-between pb-2">
             <CardTitle className="text-base flex items-center gap-2">
@@ -512,28 +417,27 @@ export default function ActivityDetailPage() {
           <CardContent className="space-y-4">
             {editingSections ? (
               <form onSubmit={(e) => { e.preventDefault(); handleSave(); }}>
-                {entityTypeElements.map((el) => {
-                  const sectionKey = getSectionKey(el);
-                  const isUserSource = el.entity_type_id === "user";
+                {participantListFields.map((field) => {
+                  const sectionKey = getSectionKey(field);
+                  const isUserSource = field.entity_type_id === "user";
                   const options = isUserSource
                     ? users.map((u) => ({ id: u.id, name: `${u.first_name} ${u.last_name}` }))
-                    : (entitiesByType[el.entity_type_id || ""] || []);
+                    : (entitiesByType[field.entity_type_id || ""] || []);
                   const sectionState = participantState[sectionKey] || [];
                   const participantType = isUserSource ? "user" : "entity";
-                  const metaFields = getParticipationMetaFields(el);
+                  const metaFields = getParticipationMetaFields(field);
 
-                  // Check element config for status capture
-                  const captureStatus = el.config?.capture_status as boolean || false;
-                  const statuses = (el.config?.statuses as string[]) || ["present", "absent"];
-                  const defaultStatus = (el.config?.default_status as string) || statuses[0];
+                  const captureStatus = field.config?.capture_status as boolean || false;
+                  const statuses = (field.config?.statuses as string[]) || ["present", "absent"];
+                  const defaultStatus = (field.config?.default_status as string) || statuses[0];
 
-                  const useSearchSelect = el.display_type === "search_select";
+                  const useSearchSelect = field.display_type === "search_select";
 
                   return (
                     <div key={sectionKey}>
                       <h3 className="text-sm font-semibold mb-2">
-                        {getElementLabel(el)}
-                        {el.required && <span className="text-red-500 ml-0.5">*</span>}
+                        {getFieldLabel(field)}
+                        {field.required && <span className="text-red-500 ml-0.5">*</span>}
                       </h3>
                       {useSearchSelect ? (
                         <SearchSelectParticipants
@@ -548,8 +452,8 @@ export default function ActivityDetailPage() {
                           statuses={statuses}
                           defaultStatus={defaultStatus}
                           metaFields={metaFields}
-                          entityTypeId={isUserSource ? null : (el.entity_type_id || null)}
-                          entityTypeName={getElementLabel(el)}
+                          entityTypeId={isUserSource ? null : (field.entity_type_id || null)}
+                          entityTypeName={getFieldLabel(field)}
                         />
                       ) : (
                       <div className="space-y-1 max-h-64 overflow-y-auto border rounded-md p-2">
@@ -602,7 +506,6 @@ export default function ActivityDetailPage() {
                                 )}
                               </div>
 
-                              {/* Participation meta fields per participant */}
                               {isSelected && metaFields.length > 0 && (
                                 <div className="ml-6 mt-2">
                                   <DynamicMetaForm
@@ -637,19 +540,19 @@ export default function ActivityDetailPage() {
                 </div>
               </form>
             ) : (
-              entityTypeElements.map((el) => {
-                const sectionKey = getSectionKey(el);
+              participantListFields.map((field) => {
+                const sectionKey = getSectionKey(field);
                 const sectionParticipants = participantsBySection[sectionKey] || [];
-                const metaFields = getParticipationMetaFields(el);
-                const captureStatus = el.config?.capture_status as boolean || false;
+                const metaFields = getParticipationMetaFields(field);
+                const captureStatus = field.config?.capture_status as boolean || false;
                 const hasStatus = captureStatus || sectionParticipants.some((p) => p.status);
                 const useTable = hasStatus || metaFields.length > 0;
 
                 return (
                   <div key={sectionKey}>
                     <h3 className="text-sm font-semibold mb-1 flex items-center gap-1.5">
-                      {getElementLabel(el)}
-                      {el.required && <span className="text-red-500 ml-0.5">*</span>}
+                      {getFieldLabel(field)}
+                      {field.required && <span className="text-red-500 ml-0.5">*</span>}
                       <Badge variant="secondary" className="text-xs font-normal ml-1">
                         {sectionParticipants.length}
                       </Badge>
@@ -718,7 +621,7 @@ export default function ActivityDetailPage() {
           </CardContent>
         </Card>
       ) : (
-        /* No form config — show flat participant list */
+        /* No participant fields — show flat participant list */
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">

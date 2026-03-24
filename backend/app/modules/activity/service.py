@@ -1,5 +1,5 @@
 """
-Activity, ActivityType, ActivityParticipant, ActivityForm services
+Activity, ActivityType, ActivityParticipant services
 """
 
 import uuid
@@ -17,7 +17,7 @@ from app.common.helpers.filter_definitions import build_dimension_filter_config
 from app.common.helpers.list_query import apply_filters, apply_search, apply_sort, paginate
 from app.common.helpers.slugify import slugify
 from app.common.schemas.list_params import ListParams
-from app.modules.activity.model import Activity, ActivityForm, ActivityParticipant, ActivityType
+from app.modules.activity.model import Activity, ActivityParticipant, ActivityType
 from app.modules.dimension.model import ActivityDimension, DimensionValue
 
 
@@ -362,118 +362,3 @@ class ActivityParticipantService:
         return participants
 
 
-class ActivityFormService:
-    def __init__(self, db: Session):
-        self.db = db
-
-    @staticmethod
-    def _migrate_element(el: dict) -> dict:
-        """Migrate a single element from old format to new format.
-
-        Old format: type=default/dimension/entity_type/activity_meta, ref_id=...
-        New format: type=field/dimension/participant_list, ref_key/dimension_id/entity_type_id=...
-        """
-        old_type = el.get("type")
-
-        # Already in new format
-        if old_type in ("field", "participant_list"):
-            return el
-        # Dimension type is the same in old and new format — distinguish by
-        # checking whether dimension_id is already set (new) vs ref_id (old).
-        if old_type == "dimension" and el.get("dimension_id") is not None:
-            return el
-
-        if old_type == "default":
-            # default → field
-            return {
-                "type": "field",
-                "ref_key": el.get("ref_id"),
-                "sort_order": el.get("sort_order", 0),
-                "config": el.get("config"),
-            }
-        elif old_type == "dimension":
-            migrated = {
-                "type": "dimension",
-                "dimension_id": el.get("ref_id"),
-                "sort_order": el.get("sort_order", 0),
-                "display_type": el.get("display_type", "dropdown"),
-                "required": el.get("required", False),
-            }
-            if el.get("stage"):
-                migrated["stage"] = el["stage"]
-            return migrated
-        elif old_type == "entity_type":
-            migrated = {
-                "type": "participant_list",
-                "entity_type_id": el.get("ref_id"),
-                "sort_order": el.get("sort_order", 0),
-                "display_type": el.get("display_type", "checklist"),
-                "required": el.get("required", False),
-                "config": el.get("config"),
-            }
-            if el.get("stage"):
-                migrated["stage"] = el["stage"]
-            return migrated
-        elif old_type == "activity_meta":
-            # activity_meta elements are no longer needed — meta fields are
-            # now included as individual "field" elements via FieldDefinition.
-            # Skip them during migration.
-            return None
-        else:
-            return el
-
-    @staticmethod
-    def _migrate_elements(elements: list[dict]) -> list[dict]:
-        """Migrate all elements from old format to new format."""
-        migrated = []
-        for el in elements:
-            result = ActivityFormService._migrate_element(el)
-            if result is not None:
-                migrated.append(result)
-        return migrated
-
-    @staticmethod
-    def _ensure_defaults(elements: list[dict]) -> list[dict]:
-        """Migrate old-format elements to new format."""
-        return ActivityFormService._migrate_elements(elements)
-
-    def get_by_type(self, activity_type_id: uuid.UUID, org_id: uuid.UUID) -> ActivityForm | None:
-        return (
-            self.db.query(ActivityForm)
-            .filter_by(activity_type_id=activity_type_id, organization_id=org_id)
-            .first()
-        )
-
-    def upsert(
-        self, org_id: uuid.UUID, activity_type_id: uuid.UUID, elements: list[dict]
-    ) -> ActivityForm:
-        at = (
-            self.db.query(ActivityType)
-            .filter_by(id=activity_type_id, organization_id=org_id)
-            .first()
-        )
-        if not at:
-            raise NotFoundError("Activity type not found")
-
-        elements = self._ensure_defaults(elements)
-
-        form = self.get_by_type(activity_type_id, org_id)
-        if form:
-            form.elements = elements
-        else:
-            form = ActivityForm(
-                organization_id=org_id,
-                activity_type_id=activity_type_id,
-                elements=elements,
-            )
-            self.db.add(form)
-        self.db.commit()
-        self.db.refresh(form)
-        return form
-
-    def delete(self, activity_type_id: uuid.UUID, org_id: uuid.UUID) -> None:
-        form = self.get_by_type(activity_type_id, org_id)
-        if not form:
-            raise NotFoundError("Activity form not found")
-        self.db.delete(form)
-        self.db.commit()

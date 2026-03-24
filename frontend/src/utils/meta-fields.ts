@@ -68,6 +68,8 @@ export function collectActivityFields(
     }
   }
 
+  // Sort by sort_order
+  fields.sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
   return fields;
 }
 
