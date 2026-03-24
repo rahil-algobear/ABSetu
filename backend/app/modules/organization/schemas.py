@@ -12,7 +12,7 @@ from app.common.schemas.base_response import BaseResponseSchema
 
 FIELD_TYPES = Literal[
     "text", "number", "date", "datetime", "select", "multiselect", "boolean",
-    "dimension", "participant_list",
+    "dimension", "entity_list", "user_list",
 ]
 
 DISPLAY_TYPES = Literal[
@@ -41,7 +41,7 @@ class FieldDefinition(BaseModel):
 
     # For type="dimension"
     dimension_id: str | None = None
-    # For type="participant_list" (can be "user" for staff)
+    # For type="entity_list"
     entity_type_id: str | None = None
     # For title generation config, status capture config, etc.
     config: dict[str, Any] | None = None
@@ -50,7 +50,7 @@ class FieldDefinition(BaseModel):
     def validate_options(self):
         if self.type in ("select", "multiselect") and not self.options:
             raise ValueError(f"options are required for {self.type} fields")
-        if self.type not in ("select", "multiselect", "dimension", "participant_list") and self.options:
+        if self.type not in ("select", "multiselect", "dimension", "entity_list", "user_list") and self.options:
             raise ValueError(f"options are not allowed for {self.type} fields")
         return self
 
@@ -58,8 +58,8 @@ class FieldDefinition(BaseModel):
     def validate_structural_refs(self):
         if self.type == "dimension" and not self.dimension_id:
             raise ValueError("dimension_id is required for dimension fields")
-        if self.type == "participant_list" and not self.entity_type_id:
-            raise ValueError("entity_type_id is required for participant_list fields")
+        if self.type == "entity_list" and not self.entity_type_id:
+            raise ValueError("entity_type_id is required for entity_list fields")
         return self
 
 

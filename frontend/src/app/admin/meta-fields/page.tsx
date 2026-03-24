@@ -49,7 +49,8 @@ const FIELD_TYPES: { value: MetaFieldType; label: string; section?: SectionKind 
   { value: "multiselect", label: "Multi-select" },
   { value: "boolean", label: "Yes/No" },
   { value: "dimension", label: "Dimension picker", section: "activity" },
-  { value: "participant_list", label: "Participant list", section: "activity" },
+  { value: "entity_list", label: "Entity list", section: "activity" },
+  { value: "user_list", label: "User list", section: "activity" },
 ];
 
 const emptyField: MetaFieldDefinition = {
@@ -374,8 +375,8 @@ export default function MetaFieldsPage() {
       options,
       default: defaultVal,
       dimension_id: fieldForm.type === "dimension" ? fieldForm.dimension_id : undefined,
-      entity_type_id: fieldForm.type === "participant_list" ? fieldForm.entity_type_id : undefined,
-      config: (fieldForm.type === "participant_list" || fieldForm.type === "dimension" || fieldForm.config)
+      entity_type_id: fieldForm.type === "entity_list" ? fieldForm.entity_type_id : undefined,
+      config: (fieldForm.type === "entity_list" || fieldForm.type === "user_list" || fieldForm.type === "dimension" || fieldForm.config)
         ? fieldForm.config
         : undefined,
     };
@@ -402,11 +403,13 @@ export default function MetaFieldsPage() {
           saveFields(oldScope, updated);
         }
       } else {
-        // Auto-assign sort_order: max across all visible rows + 1
+        // New field — add to the scope from modal
+        const newScope = buildScopeFromModal();
+        const existingFields = findMatchingSchema(newScope)?.fields || [];
         const rows = activeSection === "activity" ? activityRows : participantRows;
         const maxOrder = rows.reduce((max, r) => Math.max(max, r.field.sort_order ?? 0), -1);
         const newField = { ...field, sort_order: maxOrder + 1 };
-        saveFields(scope, [...existingFields, newField]);
+        saveFields(newScope, [...existingFields, newField]);
       }
     } else {
       if (!currentScope) return;
@@ -478,14 +481,16 @@ export default function MetaFieldsPage() {
       const dim = dimensions.find((d) => d.id === field.dimension_id);
       return dim ? `Dimension: ${dim.name}` : "Dimension";
     }
-    if (field.type === "participant_list") {
-      if (field.entity_type_id === "user") return "Participants: Users (staff)";
+    if (field.type === "user_list") {
+      return "Users (staff)";
+    }
+    if (field.type === "entity_list") {
       const et = entityTypesList.find((t) => t.id === field.entity_type_id);
-      return et ? `Participants: ${et.name}` : "Participant list";
+      return et ? `Entity list: ${et.name}` : "Entity list";
     }
     return FIELD_TYPES.find((ft) => ft.value === field.type)?.label || field.type;
   };
-  const isStructuralType = fieldForm.type === "dimension" || fieldForm.type === "participant_list";
+  const isStructuralType = fieldForm.type === "dimension" || fieldForm.type === "entity_list" || fieldForm.type === "user_list";
   const availableFieldTypes = useMemo(() => {
     return FIELD_TYPES.filter((ft) => !ft.section || ft.section === activeSection);
   }, [activeSection]);
@@ -1113,33 +1118,36 @@ export default function MetaFieldsPage() {
               </div>
             )}
 
-            {/* Entity type picker + participant-specific options for type=participant_list */}
-            {fieldForm.type === "participant_list" && (
+            {/* Entity type picker for type=entity_list */}
+            {fieldForm.type === "entity_list" && (
+              <div>
+                <Label htmlFor="field-entity-type">Entity Type</Label>
+                <select
+                  id="field-entity-type"
+                  className="w-full border rounded-md p-2 text-sm"
+                  value={fieldForm.entity_type_id || ""}
+                  onChange={(e) => {
+                    const etId = e.target.value;
+                    const et = entityTypesList.find((t) => t.id === etId);
+                    setFieldForm({
+                      ...fieldForm,
+                      entity_type_id: etId || null,
+                      label: et?.name ? `${et.name}s` : fieldForm.label,
+                    });
+                  }}
+                  required
+                >
+                  <option value="">Select...</option>
+                  {entityTypesList.map((et) => (
+                    <option key={et.id} value={et.id}>{et.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Participant config options for entity_list and user_list */}
+            {(fieldForm.type === "entity_list" || fieldForm.type === "user_list") && (
               <>
-                <div>
-                  <Label htmlFor="field-entity-type">Entity Type / Source</Label>
-                  <select
-                    id="field-entity-type"
-                    className="w-full border rounded-md p-2 text-sm"
-                    value={fieldForm.entity_type_id || ""}
-                    onChange={(e) => {
-                      const etId = e.target.value;
-                      const et = entityTypesList.find((t) => t.id === etId);
-                      setFieldForm({
-                        ...fieldForm,
-                        entity_type_id: etId || null,
-                        label: etId === "user" ? "Users (staff)" : et?.name || fieldForm.label,
-                      });
-                    }}
-                    required
-                  >
-                    <option value="">Select...</option>
-                    <option value="user">Users (staff)</option>
-                    {entityTypesList.map((et) => (
-                      <option key={et.id} value={et.id}>{et.name}</option>
-                    ))}
-                  </select>
-                </div>
                 <div>
                   <Label htmlFor="field-display-type-pl">Display as</Label>
                   <select

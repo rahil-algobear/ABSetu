@@ -186,7 +186,7 @@ export interface ActivityParticipant {
 export type MetaFieldType =
   | "text" | "number" | "date" | "datetime"
   | "select" | "multiselect" | "boolean"
-  | "dimension" | "participant_list";
+  | "dimension" | "entity_list" | "user_list";
 
 export type MetaFieldDisplayType =
   | "input" | "dropdown" | "radio" | "checklist" | "textarea"
@@ -210,7 +210,7 @@ export interface MetaFieldDefinition {
 
   // For type="dimension"
   dimension_id?: string | null;
-  // For type="participant_list" (can be "user" for staff)
+  // For type="entity_list"
   entity_type_id?: string | null;
   // For title generation config, status capture config, etc.
   config?: Record<string, unknown>;
@@ -232,14 +232,13 @@ export interface MetaFieldSchemaItem {
 // --- List Configuration ---
 
 export interface ListColumnConfig {
-  source: "static" | "dimension" | "meta";
   key: string;
   label: string;
+  field_type: string; // MetaFieldType for field-backed columns, "static" for built-in
   visible: boolean;
   filterable: boolean;
   sortable: boolean;
   sort_order: number;
-  meta_type?: MetaFieldType;
   dimension_key?: string;
   filter_supported?: boolean;
 }

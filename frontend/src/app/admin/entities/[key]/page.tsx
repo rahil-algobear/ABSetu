@@ -98,20 +98,9 @@ function EntityTypeEntitiesContent() {
 
   // Helper to render a cell value for a given column config
   const renderCellValue = (entity: Entity, col: ListColumnConfig) => {
-    if (col.source === "static") {
+    // Static built-in columns
+    if (col.field_type === "static") {
       switch (col.key) {
-        case "name":
-          return (
-            <Link
-              href={`/entities/details/${entity.id}`}
-              className="text-primary hover:underline"
-              onClick={(ev) => ev.stopPropagation()}
-            >
-              {entity.name}
-            </Link>
-          );
-        case "case_number":
-          return entity.case_number || "—";
         case "enrollment_count":
           return entity.enrollment_count;
         case "activity_count":
@@ -122,18 +111,27 @@ function EntityTypeEntitiesContent() {
           return "—";
       }
     }
-    if (col.source === "meta") {
-      // col.key is "meta:{field_key}"
-      const metaKey = col.key.replace(/^meta:/, "");
-      const val = entity.meta?.[metaKey];
-      if (val === undefined || val === null) return "—";
-      if (col.meta_type === "date" && typeof val === "string") return formatDate(val);
-      if (col.meta_type === "datetime" && typeof val === "string") return formatDateTime(val);
-      if (Array.isArray(val)) return val.join(", ");
-      if (typeof val === "boolean") return val ? "Yes" : "No";
-      return String(val);
+    // Meta field columns (key format: "meta:{field_key}")
+    const metaKey = col.key.replace(/^meta:/, "");
+    const val = entity.meta?.[metaKey];
+    if (val === undefined || val === null) return "—";
+    if (col.field_type === "date" && typeof val === "string") return formatDate(val);
+    if (col.field_type === "datetime" && typeof val === "string") return formatDateTime(val);
+    if (Array.isArray(val)) return val.join(", ");
+    if (typeof val === "boolean") return val ? "Yes" : "No";
+    // Render name as a link
+    if (metaKey === "name" || col.label === "Name") {
+      return (
+        <Link
+          href={`/entities/details/${entity.id}`}
+          className="text-primary hover:underline"
+          onClick={(ev) => ev.stopPropagation()}
+        >
+          {String(val)}
+        </Link>
+      );
     }
-    return "—";
+    return String(val);
   };
 
   const createMutation = useMutation({

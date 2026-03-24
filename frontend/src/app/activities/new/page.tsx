@@ -144,17 +144,17 @@ function NewActivityPageContent() {
 
   // Participant list fields for entity queries
   const participantFields = useMemo(() => {
-    return formFields.filter((f) => f.type === "participant_list"
+    return formFields.filter((f) => (f.type === "entity_list" || f.type === "user_list")
       && !createDisabledKeys.has(f.key));
   }, [formFields, createDisabledKeys]);
 
   const entitySourceIds = useMemo(() => {
     return participantFields
-      .filter((f) => f.entity_type_id && f.entity_type_id !== "user")
+      .filter((f) => f.type === "entity_list" && f.entity_type_id)
       .map((f) => f.entity_type_id!);
   }, [participantFields]);
 
-  const hasCreateUserSection = participantFields.some((f) => f.entity_type_id === "user");
+  const hasCreateUserSection = participantFields.some((f) => f.type === "user_list");
 
   const { data: createEntitiesByType = {} } = useQuery({
     queryKey: ["entities-for-create", entitySourceIds.join(",")],
@@ -302,11 +302,12 @@ function NewActivityPageContent() {
         );
       }
 
-      case "participant_list": {
-        if (isDisabled) return null; // hide participant lists that are edit-only
+      case "entity_list":
+      case "user_list": {
+        if (isDisabled) return null;
+        const isUserSource = field.type === "user_list";
         const etId = field.entity_type_id;
-        const isUserSource = etId === "user";
-        const sectionKey = etId || field.key;
+        const sectionKey = isUserSource ? "user" : (etId || field.key);
         const options = isUserSource
           ? createUsers.map((u) => ({ id: u.id, name: `${u.first_name} ${u.last_name}` }))
           : (createEntitiesByType[etId || ""] || []);
@@ -385,7 +386,7 @@ function NewActivityPageContent() {
               // Validate required meta fields (skip disabled/edit-only and structural types)
               for (const field of formFields) {
                 if (!field.required || createDisabledKeys.has(field.key)) continue;
-                if (field.type === "dimension" || field.type === "participant_list") continue;
+                if (field.type === "dimension" || field.type === "entity_list" || field.type === "user_list") continue;
                 const val = metaValues[field.key];
                 if (val === undefined || val === null || val === "") {
                   toast.error(`${field.label} is required`);

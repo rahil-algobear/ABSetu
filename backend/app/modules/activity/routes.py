@@ -425,7 +425,7 @@ def create_activity(
             dim_id = fd.get("dimension_id")
             if dim_id and dim_id not in submitted_dim_ids:
                 raise ValidationError(f"{fd.get('label', 'Dimension')} is required")
-        elif fd_type == "participant_list":
+        elif fd_type in ("entity_list", "user_list"):
             pass  # validated at participant save time
         else:
             val = submitted_meta.get(fd["key"])
@@ -467,7 +467,7 @@ def update_activity(
             if stage not in ("both", "record"):
                 continue
             fd_type = fd.get("type")
-            if fd_type in ("dimension", "participant_list"):
+            if fd_type in ("dimension", "entity_list", "user_list"):
                 continue
             val = submitted_meta.get(fd["key"])
             if val is None or val == "":
@@ -553,23 +553,22 @@ def save_participants(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    # Validate required participant_list sections from field definitions
+    # Validate required entity_list/user_list sections from field definitions
     if activity.activity_type_id:
         all_field_defs = _collect_field_defs(
             db, current_user.organization_id, activity.activity_type_id
         )
         submitted_sections = {r.section_key for r in data.records}
         for fd in all_field_defs.values():
-            if fd.get("type") != "participant_list" or not fd.get("required"):
+            fd_type = fd.get("type")
+            if fd_type not in ("entity_list", "user_list") or not fd.get("required"):
                 continue
-            section_key = fd.get("entity_type_id") or fd["key"]
+            if fd_type == "user_list":
+                section_key = "user"
+            else:
+                section_key = fd.get("entity_type_id") or fd["key"]
             if section_key not in submitted_sections:
-                if fd.get("entity_type_id") == "user":
-                    label = "Users (staff)"
-                else:
-                    from app.modules.entity.model import EntityType
-                    et = db.query(EntityType).filter_by(id=fd.get("entity_type_id")).first()
-                    label = et.name if et else fd.get("label", "Participants")
+                label = fd.get("label", "Participants")
                 raise ValidationError(f"{label} is required — add at least one participant")
 
     # Validate required participant meta fields

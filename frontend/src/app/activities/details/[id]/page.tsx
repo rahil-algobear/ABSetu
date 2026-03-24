@@ -80,14 +80,14 @@ export default function ActivityDetailPage() {
   const detailFields = useMemo(() => {
     return allFields.filter((f) =>
       f.visible !== false
-      && f.type !== "participant_list"
+      && f.type !== "entity_list" && f.type !== "user_list"
     );
   }, [allFields]);
 
   const participantListFields = useMemo(() => {
     return allFields.filter((f) =>
       f.visible !== false
-      && f.type === "participant_list"
+      && (f.type === "entity_list" || f.type === "user_list")
       && (!f.stage || f.stage === "both" || f.stage === "record")
     );
   }, [allFields]);
@@ -106,11 +106,11 @@ export default function ActivityDetailPage() {
   // Entity type source IDs for loading entity options
   const entitySourceIds = useMemo(() => {
     return participantListFields
-      .filter((f) => f.entity_type_id && f.entity_type_id !== "user")
+      .filter((f) => f.type === "entity_list" && f.entity_type_id)
       .map((f) => f.entity_type_id!);
   }, [participantListFields]);
 
-  const hasUserSection = participantListFields.some((f) => f.entity_type_id === "user");
+  const hasUserSection = participantListFields.some((f) => f.type === "user_list");
 
   const { data: entitiesByType = {} } = useQuery({
     queryKey: ["entities-for-sections", entitySourceIds.join(",")],
@@ -139,6 +139,7 @@ export default function ActivityDetailPage() {
   };
 
   const getSectionKey = (field: MetaFieldDefinition): string => {
+    if (field.type === "user_list") return "user";
     return field.entity_type_id || field.key;
   };
 
@@ -268,7 +269,7 @@ export default function ActivityDetailPage() {
   }, [participants]);
 
   const getFieldLabel = (field: MetaFieldDefinition): string => {
-    if (field.entity_type_id === "user") return "Users (staff)";
+    if (field.type === "user_list") return "Users (staff)";
     if (field.entity_type_id) {
       const et = entityTypes.find((t) => t.id === field.entity_type_id);
       return et?.name || field.label;
@@ -419,7 +420,7 @@ export default function ActivityDetailPage() {
               <form onSubmit={(e) => { e.preventDefault(); handleSave(); }}>
                 {participantListFields.map((field) => {
                   const sectionKey = getSectionKey(field);
-                  const isUserSource = field.entity_type_id === "user";
+                  const isUserSource = field.type === "user_list";
                   const options = isUserSource
                     ? users.map((u) => ({ id: u.id, name: `${u.first_name} ${u.last_name}` }))
                     : (entitiesByType[field.entity_type_id || ""] || []);

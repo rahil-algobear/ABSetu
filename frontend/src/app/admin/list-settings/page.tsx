@@ -26,21 +26,20 @@ import toast from "react-hot-toast";
 
 type SectionKind = "entity" | "activity";
 
-const UNSORTABLE_META_TYPES: Set<string> = new Set(["multiselect", "boolean"]);
+const UNSORTABLE_TYPES: Set<string> = new Set(["multiselect", "boolean", "dimension", "entity_list", "user_list"]);
 
-const SOURCE_LABELS: Record<string, string> = {
+const FIELD_TYPE_LABELS: Record<string, string> = {
   static: "Built-in",
   dimension: "Dimension",
-  meta: "Meta Field",
-};
-
-const META_TYPE_LABELS: Record<string, string> = {
   text: "Text",
   number: "Number",
   date: "Date",
+  datetime: "Date & Time",
   select: "Dropdown",
   multiselect: "Multi-select",
   boolean: "Yes/No",
+  entity_list: "Entity list",
+  user_list: "User list",
 };
 
 export default function ListSettingsPage() {
@@ -137,12 +136,9 @@ export default function ListSettingsPage() {
   };
 
   const canToggleSortable = (col: ListColumnConfig) => {
-    // Dimensions can't be sorted (requires join-based sort not supported)
-    if (col.source === "dimension") return false;
-    // Certain meta types can't be sorted
-    if (col.source === "meta" && col.meta_type && UNSORTABLE_META_TYPES.has(col.meta_type)) return false;
+    if (UNSORTABLE_TYPES.has(col.field_type)) return false;
     // Static count columns can't be sorted
-    if (col.source === "static" && ["enrollment_count", "activity_count", "participant_count"].includes(col.key)) return false;
+    if (col.field_type === "static" && ["enrollment_count", "activity_count", "participant_count"].includes(col.key)) return false;
     return true;
   };
 
@@ -203,7 +199,7 @@ export default function ListSettingsPage() {
                   <TableRow>
                     <TableHead className="w-12">{""}</TableHead>
                     <TableHead>Column</TableHead>
-                    <TableHead>Source</TableHead>
+                    <TableHead>Type</TableHead>
                     <TableHead className="text-center">Visible</TableHead>
                     <TableHead className="text-center">Filterable</TableHead>
                     <TableHead className="text-center">Sortable</TableHead>
@@ -234,17 +230,12 @@ export default function ListSettingsPage() {
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <span className="font-medium">{col.label}</span>
-                          {col.source === "meta" && col.meta_type && (
-                            <Badge variant="secondary" className="text-xs">
-                              {META_TYPE_LABELS[col.meta_type] || col.meta_type}
-                            </Badge>
-                          )}
                         </div>
                       </TableCell>
                       <TableCell>
-                        <span className="text-gray-500 text-sm">
-                          {SOURCE_LABELS[col.source] || col.source}
-                        </span>
+                        <Badge variant="secondary" className="text-xs">
+                          {FIELD_TYPE_LABELS[col.field_type] || col.field_type}
+                        </Badge>
                       </TableCell>
                       <TableCell className="text-center">
                         <Switch

@@ -408,7 +408,7 @@ FACILITATOR_CUSTOM_FIELDS = [
 
 # ---------------------------------------------------------------------------
 # Meta Field Schemas — custom fields for Sessions activity type
-# Dimension and participant_list fields reference UUIDs resolved at seed time.
+# Dimension and entity_list/user_list fields reference UUIDs resolved at seed time.
 # ---------------------------------------------------------------------------
 SESSION_META_FIELDS = [
     {"label": "Date", "type": "date", "required": True, "stage": "create", "sort_order": 0},
@@ -423,12 +423,12 @@ SESSION_DIMENSION_FIELDS = [
     ("Project", False, 4),
 ]
 
-# Participant list fields added to Session scope (edit only, search_select)
-# (entity_type_name_or_user, sort_order) — entity_type_id resolved at seed time
+# Participant fields added to Session scope (edit only, search_select)
+# (field_type, entity_type_name_or_none, label, sort_order)
 SESSION_PARTICIPANT_FIELDS = [
-    ("user", 5),
-    ("Facilitator", 6),
-    ("Beneficiary", 7),
+    ("user_list", None, "Users (staff)", 5),
+    ("entity_list", "Facilitator", "Facilitators", 6),
+    ("entity_list", "Beneficiary", "Beneficiaries", 7),
 ]
 
 
@@ -743,22 +743,18 @@ def seed():
                 "stage": "create",
                 "sort_order": sort_order,
             })
-        for et_name_or_user, sort_order in SESSION_PARTICIPANT_FIELDS:
-            if et_name_or_user == "user":
-                et_id = "user"
-                label = "Users (staff)"
-            else:
-                et_id = str(entity_type_map[et_name_or_user].id)
-                label = et_name_or_user + "s"
-            session_fields.append({
+        for field_type, et_name, label, sort_order in SESSION_PARTICIPANT_FIELDS:
+            field_def = {
                 "label": label,
-                "type": "participant_list",
-                "entity_type_id": et_id,
+                "type": field_type,
                 "required": False,
                 "stage": "record",
                 "display_type": "search_select",
                 "sort_order": sort_order,
-            })
+            }
+            if field_type == "entity_list":
+                field_def["entity_type_id"] = str(entity_type_map[et_name].id)
+            session_fields.append(field_def)
         meta_service.update_schema(
             org.id, "activity", session_fields,
             activity_type_id=sessions_type.id,

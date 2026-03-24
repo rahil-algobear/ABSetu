@@ -112,26 +112,9 @@ function ActivityTypeListContent() {
 
   // Helper to render a cell value for a given column config
   const renderCellValue = (activity: Activity, col: ListColumnConfig) => {
-    if (col.source === "static") {
+    // Static built-in columns
+    if (col.field_type === "static") {
       switch (col.key) {
-        case "start_date":
-          return col.meta_type === "datetime"
-            ? formatDateTime(activity.start_date)
-            : formatDate(activity.start_date);
-        case "end_date":
-          return col.meta_type === "datetime"
-            ? formatDateTime(activity.end_date)
-            : formatDate(activity.end_date);
-        case "title":
-          return (
-            <Link
-              href={`/activities/details/${activity.id}`}
-              className="text-primary hover:underline"
-              onClick={(ev) => ev.stopPropagation()}
-            >
-              {getActivityTitle(activity)}
-            </Link>
-          );
         case "participant_count":
           return activity.participant_count;
         case "created_at":
@@ -140,23 +123,22 @@ function ActivityTypeListContent() {
           return "—";
       }
     }
-    if (col.source === "dimension") {
+    // Dimension columns
+    if (col.field_type === "dimension") {
       const dim = activity.dimensions.find(
         (d) => d.dimension_key === col.dimension_key
       );
       return dim ? dim.value_name : "—";
     }
-    if (col.source === "meta") {
-      const metaKey = col.key.replace(/^meta:/, "");
-      const val = activity.meta?.[metaKey];
-      if (val === undefined || val === null) return "—";
-      if (col.meta_type === "date" && typeof val === "string") return formatDate(val);
-      if (col.meta_type === "datetime" && typeof val === "string") return formatDateTime(val);
-      if (Array.isArray(val)) return val.join(", ");
-      if (typeof val === "boolean") return val ? "Yes" : "No";
-      return String(val);
-    }
-    return "—";
+    // Meta field columns
+    const metaKey = col.key.replace(/^meta:/, "");
+    const val = activity.meta?.[metaKey];
+    if (val === undefined || val === null) return "—";
+    if (col.field_type === "date" && typeof val === "string") return formatDate(val);
+    if (col.field_type === "datetime" && typeof val === "string") return formatDateTime(val);
+    if (Array.isArray(val)) return val.join(", ");
+    if (typeof val === "boolean") return val ? "Yes" : "No";
+    return String(val);
   };
 
   return (
