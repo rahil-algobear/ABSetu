@@ -397,6 +397,10 @@ class ActivityFormService:
         # Already in new format
         if old_type in ("field", "participant_list"):
             return el
+        # Dimension type is the same in old and new format — distinguish by
+        # checking whether dimension_id is already set (new) vs ref_id (old).
+        if old_type == "dimension" and el.get("dimension_id") is not None:
+            return el
 
         if old_type == "default":
             # default → field

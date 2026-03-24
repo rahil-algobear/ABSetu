@@ -33,7 +33,7 @@ import { PageContent } from "@/components/ui/page-content";
 import { PageHeader } from "@/components/ui/page-header";
 import { Trash2, Pencil, Calendar, FileText, Users, Type } from "lucide-react";
 import toast from "react-hot-toast";
-import { formatDateTime } from "@/utils/date";
+import { formatDate, formatDateTime } from "@/utils/date";
 import { DateTimeInput } from "@/components/ui/date-time-input";
 
 export default function ActivityDetailPage() {
@@ -374,7 +374,7 @@ export default function ActivityDetailPage() {
                   return (
                     <div key="edit-title">
                       <label className="text-sm font-medium">
-                        Title{isRequired && <span className="text-red-500 ml-0.5">*</span>}
+                        {fieldDef?.label || "Title"}{isRequired && <span className="text-red-500 ml-0.5">*</span>}
                       </label>
                       <Input
                         placeholder="Activity title..."
@@ -392,12 +392,13 @@ export default function ActivityDetailPage() {
                   return (
                     <div key="edit-start_date">
                       <label className="text-sm font-medium">
-                        Start Date{isRequired && <span className="text-red-500 ml-0.5">*</span>}
+                        {fieldDef?.label || "Start Date"}{isRequired && <span className="text-red-500 ml-0.5">*</span>}
                       </label>
                       <DateTimeInput
                         value={detailFormData.start_date}
                         onChange={(value) => setDetailFormData({ ...detailFormData, start_date: value })}
                         required={isRequired}
+                        allowTime={fieldDef?.type === "datetime"}
                         className="mt-1"
                       />
                     </div>
@@ -409,13 +410,14 @@ export default function ActivityDetailPage() {
                   return (
                     <div key="edit-end_date">
                       <label className="text-sm font-medium">
-                        End Date{isRequired && <span className="text-red-500 ml-0.5">*</span>}
+                        {fieldDef?.label || "End Date"}{isRequired && <span className="text-red-500 ml-0.5">*</span>}
                       </label>
                       <DateTimeInput
                         value={detailFormData.end_date}
                         onChange={(value) => setDetailFormData({ ...detailFormData, end_date: value })}
                         min={detailFormData.start_date}
                         required={isRequired}
+                        allowTime={fieldDef?.type === "datetime"}
                         className="mt-1"
                       />
                     </div>
@@ -427,7 +429,7 @@ export default function ActivityDetailPage() {
                   return (
                     <div key="edit-notes">
                       <label className="text-sm font-medium">
-                        Notes{isRequired && <span className="text-red-500 ml-0.5">*</span>}
+                        {fieldDef?.label || "Notes"}{isRequired && <span className="text-red-500 ml-0.5">*</span>}
                       </label>
                       <Input
                         placeholder="Notes..."
@@ -468,7 +470,7 @@ export default function ActivityDetailPage() {
                     <div key="title" className="flex items-center gap-2">
                       <Type className="h-4 w-4 text-gray-400 shrink-0" />
                       <div>
-                        <p className="text-xs text-gray-500">Title</p>
+                        <p className="text-xs text-gray-500">{fieldDefMap["title"]?.label || "Title"}</p>
                         {activity.title ? (
                           <p className="text-sm font-medium">{activity.title}</p>
                         ) : (
@@ -500,13 +502,15 @@ export default function ActivityDetailPage() {
 
                 // Start Date
                 if (el.type === "field" && el.ref_key === "start_date") {
+                  const fieldDef = fieldDefMap["start_date"];
+                  const dateFormatter = fieldDef?.type === "datetime" ? formatDateTime : formatDate;
                   return (
                     <div key="start_date" className="flex items-center gap-2">
                       <Calendar className="h-4 w-4 text-gray-400 shrink-0" />
                       <div>
-                        <p className="text-xs text-gray-500">Start Date</p>
+                        <p className="text-xs text-gray-500">{fieldDef?.label || "Start Date"}</p>
                         <p className="text-sm font-medium">
-                          {formatDateTime(activity.start_date)}
+                          {dateFormatter(activity.start_date)}
                         </p>
                       </div>
                     </div>
@@ -516,13 +520,15 @@ export default function ActivityDetailPage() {
                 // End Date
                 if (el.type === "field" && el.ref_key === "end_date") {
                   if (!activity.end_date) return null;
+                  const fieldDef = fieldDefMap["end_date"];
+                  const dateFormatter = fieldDef?.type === "datetime" ? formatDateTime : formatDate;
                   return (
                     <div key="end_date" className="flex items-center gap-2">
                       <Calendar className="h-4 w-4 text-gray-400 shrink-0" />
                       <div>
-                        <p className="text-xs text-gray-500">End Date</p>
+                        <p className="text-xs text-gray-500">{fieldDef?.label || "End Date"}</p>
                         <p className="text-sm font-medium">
-                          {formatDateTime(activity.end_date)}
+                          {dateFormatter(activity.end_date)}
                         </p>
                       </div>
                     </div>
@@ -531,11 +537,12 @@ export default function ActivityDetailPage() {
 
                 // Notes
                 if (el.type === "field" && el.ref_key === "notes") {
+                  const fieldDef = fieldDefMap["notes"];
                   return (
                     <div key="notes" className="flex items-start gap-2">
                       <FileText className="h-4 w-4 text-gray-400 shrink-0 mt-0.5" />
                       <div>
-                        <p className="text-xs text-gray-500">Notes</p>
+                        <p className="text-xs text-gray-500">{fieldDef?.label || "Notes"}</p>
                         {activity.notes ? (
                           <p className="text-sm">{activity.notes}</p>
                         ) : (

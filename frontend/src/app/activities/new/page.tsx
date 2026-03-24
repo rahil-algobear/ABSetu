@@ -329,6 +329,7 @@ function NewActivityPageContent() {
                   value={formData.start_date}
                   onChange={(value) => setFormData({ ...formData, start_date: value })}
                   required={isRequired}
+                  allowTime={def?.type === "datetime"}
                   className="mt-1"
                 />
               </div>
@@ -345,6 +346,7 @@ function NewActivityPageContent() {
                   onChange={(value) => setFormData({ ...formData, end_date: value })}
                   min={formData.start_date}
                   required={isRequired}
+                  allowTime={def?.type === "datetime"}
                   className="mt-1"
                 />
               </div>

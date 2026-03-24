@@ -4,7 +4,7 @@ import { Suspense, useState, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { entityApi, entityTypeApi, metaFieldSchemaApi } from "@/services/api";
-import { Entity, ListColumnConfig, MetaFieldDefinition, MetaFieldSchemaItem } from "@/types";
+import { Entity, ListColumnConfig, MetaFieldSchemaItem } from "@/types";
 import { getFieldsForScope } from "@/utils/meta-fields";
 import { Can } from "@/components/Auth/Permissions";
 import { useListParams } from "@/hooks/useListParams";
@@ -309,20 +309,34 @@ function EntityTypeEntitiesContent() {
         title={editing ? `Edit ${typeName}` : `Add ${typeName}`}
       >
         <form onSubmit={handleSubmit} className="space-y-3">
-          <div>
-            <Label htmlFor="name">Name</Label>
-            <Input
-              id="name"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              required
-            />
-          </div>
-          <DynamicMetaForm
-            fields={metaFields}
-            values={metaValues}
-            onChange={setMetaValues}
-          />
+          {metaFields.map((field) => {
+            if (field.visible === false) return null;
+            if (field.system) {
+              if (field.key === "name") {
+                return (
+                  <div key="name">
+                    <Label htmlFor="name">{field.label || "Name"}</Label>
+                    <Input
+                      id="name"
+                      value={form.name}
+                      onChange={(e) => setForm({ ...form, name: e.target.value })}
+                      required={field.required !== false}
+                    />
+                  </div>
+                );
+              }
+              // Other system fields (e.g. case_number) are auto-generated
+              return null;
+            }
+            return (
+              <DynamicMetaForm
+                key={field.key}
+                fields={[field]}
+                values={metaValues}
+                onChange={setMetaValues}
+              />
+            );
+          })}
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={closeModal}>
               Cancel

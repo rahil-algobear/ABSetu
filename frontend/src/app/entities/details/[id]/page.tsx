@@ -92,7 +92,10 @@ export default function EntityDetailPage() {
     queryFn: metaFieldSchemaApi.getAll,
   });
   const metaFields = useMemo(
-    () => entity ? getFieldsForScope(allSchemas, { type: "entity", entity_type_id: entity.entity_type_id }) : [],
+    () => entity
+      ? getFieldsForScope(allSchemas, { type: "entity", entity_type_id: entity.entity_type_id })
+        .filter((f) => !f.system)
+      : [],
     [allSchemas, entity],
   );
   const enrollmentMetaFields = useMemo(
