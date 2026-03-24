@@ -788,6 +788,23 @@ def seed():
         list_service.update_config(org.id, beneficiary_scope, bene_cols)
         print(f"  Seeded beneficiary list config ({len(bene_cols)} columns)")
 
+        # 7c-ii. List config — Facilitator
+        facilitator_scope = f"entity:{facilitator_et.id}"
+        fac_catalog = {c["label"]: c for c in list_service._all_meta_columns(org.id, facilitator_scope)}
+        fac_static = list_service._static_defaults(facilitator_scope)
+        FAC_LIST_SPEC = [
+            ("Name", {"sortable": True}),
+        ]
+        fac_cols = []
+        for i, (label, overrides) in enumerate(FAC_LIST_SPEC):
+            col = fac_catalog.get(label)
+            if col:
+                fac_cols.append({**col, "sort_order": i, **overrides})
+        for s in fac_static:
+            fac_cols.append({**s, "sort_order": len(fac_cols)})
+        list_service.update_config(org.id, facilitator_scope, fac_cols)
+        print(f"  Seeded facilitator list config ({len(fac_cols)} columns)")
+
         # 7d. List config — Session activities
         session_scope = f"activity:{sessions_type.id}"
         sess_catalog = {c["label"]: c for c in list_service._all_meta_columns(org.id, session_scope)}
