@@ -356,15 +356,17 @@ export default function MetaFieldsPage() {
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
+    const suffix = Math.random().toString(36).substring(2, 6);
     let key: string;
     if (editingIndex !== null) {
       key = fieldForm.key;
     } else if (fieldForm.type === "dimension" && fieldForm.dimension_id) {
-      key = `dim_${fieldForm.dimension_id}`;
+      key = `dim_${suffix}`;
     } else if (fieldForm.type === "participant_list" && fieldForm.entity_type_id) {
-      key = `pl_${fieldForm.entity_type_id}`;
+      key = `pl_${suffix}`;
     } else {
-      key = fieldForm.label.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
+      const slug = fieldForm.label.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
+      key = `${slug}_${suffix}`;
     }
     const options =
       fieldForm.type === "select" || fieldForm.type === "multiselect"
@@ -388,13 +390,26 @@ export default function MetaFieldsPage() {
     };
 
     if (activeSection === "activity" || activeSection === "participant") {
-      const scope = editingIndex !== null && editingSchema
-        ? editingSchema.scope
-        : buildScopeFromModal();
-      const existingFields = findMatchingSchema(scope)?.fields || [];
-      if (editingIndex !== null) {
-        const updated = existingFields.map((f, i) => (i === editingIndex ? field : f));
-        saveFields(scope, updated);
+      const newScope = buildScopeFromModal();
+      if (editingIndex !== null && editingSchema) {
+        const oldScope = editingSchema.scope;
+        const scopeChanged =
+          (oldScope.activity_type_id || "") !== (newScope.activity_type_id || "") ||
+          (oldScope.dimension_value_id || "") !== (newScope.dimension_value_id || "") ||
+          (oldScope.entity_type_id || "") !== (newScope.entity_type_id || "");
+
+        if (scopeChanged) {
+          // Remove from old schema
+          const oldFields = editingSchema.fields.filter((_, i) => i !== editingIndex);
+          saveFields(oldScope, oldFields);
+          // Add to new schema
+          const newExisting = findMatchingSchema(newScope)?.fields || [];
+          saveFields(newScope, [...newExisting, field]);
+        } else {
+          const existingFields = editingSchema.fields;
+          const updated = existingFields.map((f, i) => (i === editingIndex ? field : f));
+          saveFields(oldScope, updated);
+        }
       } else {
         // Auto-assign sort_order: max across all visible rows + 1
         const rows = activeSection === "activity" ? activityRows : participantRows;
@@ -990,10 +1005,9 @@ export default function MetaFieldsPage() {
                   <Label htmlFor="modal-entity">Entity Type</Label>
                   <select
                     id="modal-entity"
-                    className="w-full border rounded-md p-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-gray-50"
+                    className="w-full border rounded-md p-2 text-sm "
                     value={modalEntityId}
                     onChange={(e) => setModalEntityId(e.target.value)}
-                    disabled={editingIndex !== null}
                   >
                     {participantEntityOptions.map((opt) => (
                       <option key={opt.id} value={opt.id}>{opt.name}</option>
@@ -1008,7 +1022,7 @@ export default function MetaFieldsPage() {
                 </Label>
                 <select
                   id="modal-activity-type"
-                  className="w-full border rounded-md p-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-gray-50"
+                  className="w-full border rounded-md p-2 text-sm "
                   value={modalActivityTypeId}
                   onChange={(e) => setModalActivityTypeId(e.target.value)}
                   disabled={editingIndex !== null}
@@ -1026,7 +1040,7 @@ export default function MetaFieldsPage() {
                 </Label>
                 <select
                   id="modal-dimension"
-                  className="w-full border rounded-md p-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-gray-50"
+                  className="w-full border rounded-md p-2 text-sm "
                   value={modalDimId}
                   onChange={(e) => {
                     setModalDimId(e.target.value);
@@ -1046,10 +1060,9 @@ export default function MetaFieldsPage() {
                   <Label htmlFor="modal-dv">Value</Label>
                   <select
                     id="modal-dv"
-                    className="w-full border rounded-md p-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-gray-50"
+                    className="w-full border rounded-md p-2 text-sm "
                     value={modalDvId}
                     onChange={(e) => setModalDvId(e.target.value)}
-                    disabled={editingIndex !== null}
                     required
                   >
                     <option value="">Select...</option>
