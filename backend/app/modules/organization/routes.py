@@ -130,7 +130,7 @@ def _resolve_scope(scope: MetaFieldScope, org_id, db: Session) -> dict:
     return result
 
 
-def _schema_to_response(row) -> dict:
+def _schema_to_response(row, fields=None) -> dict:
     """Convert a MetaFieldSchema model to a response dict."""
     et_id = None
     if row.entity_type_id:
@@ -143,7 +143,7 @@ def _schema_to_response(row) -> dict:
             dimension_id=str(row.dimension_id) if row.dimension_id else None,
             dimension_value_id=str(row.dimension_value_id) if row.dimension_value_id else None,
         ),
-        fields=row.fields,
+        fields=fields if fields is not None else row.fields,
     ).model_dump()
 
 
@@ -161,8 +161,7 @@ def get_all_meta_field_schemas(
     for entry in entries:
         row = entry.get("row")
         if row:
-            resp = _schema_to_response(row)
-            resp["fields"] = entry["fields"]
+            resp = _schema_to_response(row, fields=entry["fields"])
         else:
             # Synthetic entry for system-field-only scopes (no DB row)
             et_id = entry.get("entity_type_id")
