@@ -36,7 +36,7 @@ import {
 } from "@/components/ui/page-table";
 import { PageHeader } from "@/components/ui/page-header";
 import { PageContent } from "@/components/ui/page-content";
-import { Plus, Pencil, Trash2, GripVertical } from "lucide-react";
+import { Plus, Pencil, Trash2, ChevronUp, ChevronDown } from "lucide-react";
 import toast from "react-hot-toast";
 
 
@@ -392,6 +392,16 @@ export default function MetaFieldsPage() {
     saveFields(target.scope, updated);
   };
 
+  const moveField = (index: number, direction: "up" | "down", schema?: MetaFieldSchemaItem) => {
+    const target = schema || (currentScope ? findMatchingSchema(currentScope) : undefined);
+    if (!target) return;
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= target.fields.length) return;
+    const updated = [...target.fields];
+    [updated[index], updated[targetIndex]] = [updated[targetIndex], updated[index]];
+    saveFields(target.scope, updated);
+  };
+
   const showOptions = fieldForm.type === "select" || fieldForm.type === "multiselect";
 
   // Selected label for entity/dimension/other header
@@ -713,7 +723,22 @@ export default function MetaFieldsPage() {
                 {fields.map((field, index) => (
                   <TableRow key={field.key}>
                     <TableCell>
-                      <GripVertical className="h-4 w-4 text-gray-300" />
+                      <div className="flex flex-col items-center">
+                        <button
+                          onClick={() => moveField(index, "up")}
+                          disabled={index === 0}
+                          className="text-gray-400 hover:text-purple-600 disabled:opacity-20 disabled:cursor-not-allowed"
+                        >
+                          <ChevronUp className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => moveField(index, "down")}
+                          disabled={index === fields.length - 1}
+                          className="text-gray-400 hover:text-purple-600 disabled:opacity-20 disabled:cursor-not-allowed"
+                        >
+                          <ChevronDown className="h-4 w-4" />
+                        </button>
+                      </div>
                     </TableCell>
                     <TableCell className="font-medium">
                       {field.label}
@@ -806,6 +831,7 @@ export default function MetaFieldsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Scope</TableHead>
+                  <TableHead className="w-8">{""}</TableHead>
                   <TableHead>Label</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Required</TableHead>
@@ -820,6 +846,24 @@ export default function MetaFieldsPage() {
                         {index === 0 && (
                           <span className="font-medium text-gray-600">{group.scopeLabel}</span>
                         )}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col items-center">
+                          <button
+                            onClick={() => moveField(index, "up", group.schema)}
+                            disabled={index === 0}
+                            className="text-gray-400 hover:text-purple-600 disabled:opacity-20 disabled:cursor-not-allowed"
+                          >
+                            <ChevronUp className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => moveField(index, "down", group.schema)}
+                            disabled={index === group.schema.fields.length - 1}
+                            className="text-gray-400 hover:text-purple-600 disabled:opacity-20 disabled:cursor-not-allowed"
+                          >
+                            <ChevronDown className="h-4 w-4" />
+                          </button>
+                        </div>
                       </TableCell>
                       <TableCell className="font-medium">
                         {field.label}
