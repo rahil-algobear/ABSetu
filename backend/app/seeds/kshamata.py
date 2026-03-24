@@ -751,11 +751,20 @@ def seed():
                 f" ({len(FACILITATOR_CUSTOM_FIELDS)} fields)"
             )
 
-        # 3. Activity Type: Sessions
+        # 3. Activity Type: Session (look up by new or legacy key)
         sessions_type_key = slugify(SESSIONS_TYPE_NAME)
         sessions_type = (
             db.query(ActivityType).filter_by(organization_id=org.id, key=sessions_type_key).first()
         )
+        if not sessions_type:
+            # Check for legacy key "sessions"
+            sessions_type = (
+                db.query(ActivityType).filter_by(organization_id=org.id, key="sessions").first()
+            )
+            if sessions_type:
+                sessions_type.key = sessions_type_key
+                sessions_type.name = SESSIONS_TYPE_NAME
+                db.flush()
         if not sessions_type:
             sessions_type = ActivityType(
                 organization_id=org.id,
@@ -765,6 +774,10 @@ def seed():
             )
             db.add(sessions_type)
             db.flush()
+        else:
+            if sessions_type.name != SESSIONS_TYPE_NAME:
+                sessions_type.name = SESSIONS_TYPE_NAME
+                db.flush()
         print(f"  Ensured activity type: {sessions_type.name}")
 
         # 3b. Meta Field Schemas — Session activity type custom fields
