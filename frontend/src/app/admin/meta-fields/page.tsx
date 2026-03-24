@@ -1022,10 +1022,9 @@ export default function MetaFieldsPage() {
                 </Label>
                 <select
                   id="modal-activity-type"
-                  className="w-full border rounded-md p-2 text-sm "
+                  className="w-full border rounded-md p-2 text-sm"
                   value={modalActivityTypeId}
                   onChange={(e) => setModalActivityTypeId(e.target.value)}
-                  disabled={editingIndex !== null}
                 >
                   <option value="">All</option>
                   {activityTypes.map((at) => (
@@ -1046,7 +1045,6 @@ export default function MetaFieldsPage() {
                     setModalDimId(e.target.value);
                     setModalDvId("");
                   }}
-                  disabled={editingIndex !== null}
                 >
                   <option value="">None</option>
                   {dimensions.map((d) => (
