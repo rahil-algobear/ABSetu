@@ -390,12 +390,13 @@ class ListConfigService:
                 sys_fields[f["key"]] = f
 
         # Static: name
-        cols.append(self._col("static", "name", sys_fields.get("name", {}).get("label", "Name"), order, sortable=True))
-        order += 1
+        if sys_fields.get("name", {}).get("visible", True) is not False:
+            cols.append(self._col("static", "name", sys_fields.get("name", {}).get("label", "Name"), order, sortable=True))
+            order += 1
 
         # Static: case_number (if enabled)
         config = et.config or {}
-        if config.get("case_number_enabled"):
+        if config.get("case_number_enabled") and sys_fields.get("case_number", {}).get("visible", True) is not False:
             cols.append(self._col("static", "case_number", sys_fields.get("case_number", {}).get("label", "Case No."), order, sortable=True))
             order += 1
 
@@ -443,18 +444,21 @@ class ListConfigService:
             if f.get("system"):
                 sys_fields[f["key"]] = f
 
-        def sys_label(key: str, default: str) -> str:
-            return sys_fields.get(key, {}).get("label", default)
+        def sys_prop(key: str, prop: str, default: str) -> str:
+            return sys_fields.get(key, {}).get(prop, default)
 
-        def sys_type(key: str, default: str) -> str:
-            return sys_fields.get(key, {}).get("type", default)
+        def sys_visible(key: str) -> bool:
+            return sys_fields.get(key, {}).get("visible", True) is not False
 
-        cols.append(self._col("static", "start_date", sys_label("start_date", "Start Date"), order, sortable=True, filterable=True, filter_supported=True, meta_type=sys_type("start_date", "datetime")))
-        order += 1
-        cols.append(self._col("static", "end_date", sys_label("end_date", "End Date"), order, sortable=True, filterable=True, filter_supported=True, meta_type=sys_type("end_date", "datetime")))
-        order += 1
-        cols.append(self._col("static", "title", sys_label("title", "Title"), order, sortable=True))
-        order += 1
+        if sys_visible("start_date"):
+            cols.append(self._col("static", "start_date", sys_prop("start_date", "label", "Start Date"), order, sortable=True, filterable=True, filter_supported=True, meta_type=sys_prop("start_date", "type", "datetime")))
+            order += 1
+        if sys_visible("end_date"):
+            cols.append(self._col("static", "end_date", sys_prop("end_date", "label", "End Date"), order, sortable=True, filterable=True, filter_supported=True, meta_type=sys_prop("end_date", "type", "datetime")))
+            order += 1
+        if sys_visible("title"):
+            cols.append(self._col("static", "title", sys_prop("title", "label", "Title"), order, sortable=True))
+            order += 1
 
         # Dimensions (visible + filterable for activities)
         order = self._add_dimension_columns(cols, org_id, order, visible=True)
