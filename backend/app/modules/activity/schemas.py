@@ -84,17 +84,19 @@ class DimensionInfo(BaseModel):
 class ActivityCreate(BaseModel):
     activity_type_id: str | None = None
     dimension_value_ids: list[str] = []
+    # System fields accepted at top-level for backward compat; merged into meta by service
     title: str | None = None
-    start_date: datetime.datetime | None = None
-    end_date: datetime.datetime | None = None
+    start_date: datetime.datetime | str | None = None
+    end_date: datetime.datetime | str | None = None
     notes: str | None = None
     meta: dict[str, Any] | None = None
 
 
 class ActivityUpdate(BaseModel):
+    # System fields accepted at top-level for backward compat; merged into meta by service
     title: str | None = None
-    start_date: Optional[datetime.datetime] = None
-    end_date: Optional[datetime.datetime] = None
+    start_date: Optional[datetime.datetime | str] = None
+    end_date: Optional[datetime.datetime | str] = None
     notes: str | None = None
     meta: dict[str, Any] | None = None
 

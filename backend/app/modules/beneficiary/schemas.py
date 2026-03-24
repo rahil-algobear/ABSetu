@@ -2,7 +2,6 @@
 Enrollment schemas (legacy beneficiary module — Beneficiary replaced by Entity)
 """
 
-from datetime import date
 from typing import Any
 
 from pydantic import BaseModel
@@ -23,23 +22,26 @@ class DimensionInfo(BaseModel):
 
 class EnrollmentCreate(BaseModel):
     entity_id: str
-    admission_date: date
-    release_date: date | None = None
+    # System fields accepted at top-level for backward compat; merged into meta by service
+    admission_date: str | None = None
+    release_date: str | None = None
     meta: dict[str, Any] | None = None
     dimension_value_ids: list[str] = []
 
 
 class EnrollmentUpdate(BaseModel):
-    admission_date: date | None = None
-    release_date: date | None = None
+    # System fields accepted at top-level for backward compat; merged into meta by service
+    admission_date: str | None = None
+    release_date: str | None = None
     meta: dict[str, Any] | None = None
 
 
 class EnrollmentResponse(BaseResponseSchema):
     organization_id: str
     entity_id: str
-    admission_date: date
-    release_date: date | None = None
+    # System fields extracted from meta for backward compat
+    admission_date: str | None = None
+    release_date: str | None = None
     meta: dict[str, Any] | None = None
     entity_name: str | None = None
     dimensions: list[DimensionInfo] = []

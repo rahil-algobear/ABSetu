@@ -134,9 +134,12 @@ def _resolve_generated_title(activity, form) -> str | None:
         return None
     # Support both old format (type=default, ref_id=title) and new (type=field, ref_key=title)
     title_el = next(
-        (el for el in form.elements
-         if (el.get("type") == "default" and el.get("ref_id") == "title")
-         or (el.get("type") == "field" and el.get("ref_key") == "title")),
+        (
+            el
+            for el in form.elements
+            if (el.get("type") == "default" and el.get("ref_id") == "title")
+            or (el.get("type") == "field" and el.get("ref_key") == "title")
+        ),
         None,
     )
     if not title_el:
@@ -161,6 +164,7 @@ def _resolve_generated_title(activity, form) -> str | None:
 
 def _build_activity_response(a, form=None) -> dict:
     """Build ActivityResponse dict from an Activity model instance."""
+    meta = a.meta or {}
     dim_infos = []
     for d in a.dimensions or []:
         dv = d.dimension_value
@@ -177,8 +181,8 @@ def _build_activity_response(a, form=None) -> dict:
 
     activity_type_name = a.activity_type.name if a.activity_type else None
 
-    # Resolve title: generated from dimensions, or free-text from DB
-    title = _resolve_generated_title(a, form) or a.title
+    # Resolve title: generated from dimensions, or from meta
+    title = _resolve_generated_title(a, form) or meta.get("title")
 
     return ActivityResponse(
         id=str(a.id),
@@ -187,11 +191,11 @@ def _build_activity_response(a, form=None) -> dict:
         organization_id=str(a.organization_id),
         activity_type_id=str(a.activity_type_id) if a.activity_type_id else None,
         title=title,
-        start_date=a.start_date,
-        end_date=a.end_date,
-        notes=a.notes,
+        start_date=meta.get("start_date", ""),
+        end_date=meta.get("end_date"),
+        notes=meta.get("notes"),
         created_by=str(a.created_by) if a.created_by else None,
-        meta=a.meta,
+        meta=meta,
         activity_type_name=activity_type_name,
         dimensions=dim_infos,
     ).dump()
@@ -311,6 +315,7 @@ def get_activity_filters(
 
     # Look up org-configured labels and types for system fields
     from app.modules.organization.service import MetaFieldSchemaService
+
     meta_svc = MetaFieldSchemaService(db)
     sys_fields: dict[str, dict] = {}
     for f in meta_svc.get_schema_by_scope(org_id, "activity"):
@@ -333,8 +338,16 @@ def get_activity_filters(
         scope_prefix="activity",
         meta_scopes=meta_scopes,
         date_filters=[
-            {"key": "start_date", "label": sys_label("start_date", "Start Date"), "type": sys_date_type("start_date")},
-            {"key": "end_date", "label": sys_label("end_date", "End Date"), "type": sys_date_type("end_date")},
+            {
+                "key": "start_date",
+                "label": sys_label("start_date", "Start Date"),
+                "type": sys_date_type("start_date"),
+            },
+            {
+                "key": "end_date",
+                "label": sys_label("end_date", "End Date"),
+                "type": sys_date_type("end_date"),
+            },
             {"key": "created_at", "label": "Created Date"},
         ],
         default_sortable_keys=["title", "start_date", "end_date", "created_at"],
@@ -420,15 +433,22 @@ def create_activity(
 
     # Validate system field requirements based on org config
     from app.modules.organization.service import MetaFieldSchemaService
+
     meta_svc = MetaFieldSchemaService(db)
     sys_fields: dict[str, dict] = {}
     for f in meta_svc.get_schema_by_scope(current_user.organization_id, "activity"):
         if f.get("system"):
             sys_fields[f["key"]] = f
 
-    if sys_fields.get("start_date", {}).get("required", True) and not data.start_date:
-        raise ValidationError(f"{sys_fields.get('start_date', {}).get('label', 'Start Date')} is required")
-    if sys_fields.get("title", {}).get("required", False) and not data.title:
+    # Check system field requirements — values may be top-level or in meta
+    req_meta = data.meta or {}
+    eff_start = data.start_date or req_meta.get("start_date")
+    eff_title = data.title or req_meta.get("title")
+    if sys_fields.get("start_date", {}).get("required", True) and not eff_start:
+        raise ValidationError(
+            f"{sys_fields.get('start_date', {}).get('label', 'Start Date')} is required"
+        )
+    if sys_fields.get("title", {}).get("required", False) and not eff_title:
         raise ValidationError(f"{sys_fields.get('title', {}).get('label', 'Title')} is required")
 
     service = ActivityService(db)
@@ -483,7 +503,7 @@ def _resolve_participant_name(db, participant_type, participant_id):
         from app.modules.entity.model import Entity
 
         entity = db.query(Entity).filter_by(id=participant_id).first()
-        return entity.name if entity else None
+        return (entity.meta or {}).get("name") if entity else None
     elif participant_type == "user":
         from app.modules.auth.model import User as UserModel
 
@@ -546,11 +566,7 @@ def save_participants(
                 is_participant = el_type in ("participant_list", "entity_type")
                 if is_participant and el.get("required"):
                     # Support both old and new format
-                    section_key = (
-                        el.get("entity_type_id")
-                        or el.get("ref_id")
-                        or el_type
-                    )
+                    section_key = el.get("entity_type_id") or el.get("ref_id") or el_type
                     if section_key not in submitted_sections:
                         ref_id = el.get("entity_type_id") or el.get("ref_id")
                         if ref_id == "user":

@@ -2,7 +2,7 @@
 Enrollment model (legacy beneficiary module — Beneficiary replaced by Entity)
 """
 
-from sqlalchemy import Column, Date, ForeignKey
+from sqlalchemy import Column, ForeignKey
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 
@@ -24,8 +24,6 @@ class Enrollment(BaseModel):
         nullable=False,
         index=True,
     )
-    admission_date = Column(Date, nullable=False)
-    release_date = Column(Date, nullable=True)
     meta = Column(JSONB, nullable=True, default=dict)
 
     entity = relationship("Entity", back_populates="enrollments")

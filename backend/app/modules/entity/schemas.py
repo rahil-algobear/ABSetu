@@ -44,12 +44,14 @@ class DimensionInfo(BaseModel):
 
 class EntityCreate(BaseModel):
     entity_type_id: str
+    # System fields accepted at top-level for backward compat; merged into meta by service
     name: str | None = Field(None, max_length=200)
     meta: dict[str, Any] | None = None
     dimension_value_ids: list[str] = []
 
 
 class EntityUpdate(BaseModel):
+    # System fields accepted at top-level for backward compat; merged into meta by service
     name: str | None = Field(None, max_length=200)
     meta: dict[str, Any] | None = None
 
@@ -57,8 +59,9 @@ class EntityUpdate(BaseModel):
 class EntityResponse(BaseResponseSchema):
     organization_id: str
     entity_type_id: str
+    # System fields extracted from meta for backward compat
     case_number: str | None = None
-    name: str
+    name: str = ""
     created_at: str | None = None
     meta: dict[str, Any] | None = None
     entity_type_name: str | None = None

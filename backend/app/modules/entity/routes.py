@@ -37,6 +37,7 @@ entity_router = APIRouter(prefix="/entities")
 
 
 def _build_entity_response(e, enrollment_count: int = 0, activity_count: int = 0) -> dict:
+    meta = e.meta or {}
     dim_infos = []
     for d in e.dimensions or []:
         dv = d.dimension_value
@@ -56,9 +57,9 @@ def _build_entity_response(e, enrollment_count: int = 0, activity_count: int = 0
         updated_at=e.updated_at,
         organization_id=str(e.organization_id),
         entity_type_id=str(e.entity_type_id),
-        case_number=e.case_number,
-        name=e.name,
-        meta=e.meta,
+        case_number=meta.get("case_number"),
+        name=meta.get("name", ""),
+        meta=meta,
         entity_type_name=e.entity_type.name if e.entity_type else None,
         entity_type_key=e.entity_type.key if e.entity_type else None,
         entity_type_config=e.entity_type.config if e.entity_type else None,
@@ -273,15 +274,19 @@ def create_entity(
 ):
     # Validate system field requirements based on org config
     from app.modules.organization.service import MetaFieldSchemaService
+
     meta_svc = MetaFieldSchemaService(db)
     org_id = current_user.organization_id
     sys_fields = {
         f["key"]: f
-        for f in meta_svc.get_schema_by_scope(org_id, "entity", entity_type_id=uuid.UUID(data.entity_type_id))
+        for f in meta_svc.get_schema_by_scope(
+            org_id, "entity", entity_type_id=uuid.UUID(data.entity_type_id)
+        )
         if f.get("system")
     }
     name_def = sys_fields.get("name", {})
-    if name_def.get("required", True) and not data.name:
+    eff_name = data.name or (data.meta or {}).get("name")
+    if name_def.get("required", True) and not eff_name:
         raise ValidationError("Name is required")
 
     service = EntityService(db)

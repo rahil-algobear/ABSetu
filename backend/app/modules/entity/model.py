@@ -2,7 +2,7 @@
 Entity models: EntityType, Entity
 """
 
-from sqlalchemy import Column, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Column, ForeignKey, Index, Integer, String, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 
@@ -44,8 +44,6 @@ class Entity(BaseModel):
         nullable=False,
         index=True,
     )
-    case_number = Column(String, nullable=True)
-    name = Column(String, nullable=False)
     meta = Column(JSONB, nullable=True, default=dict)
 
     organization = relationship("Organization", back_populates="entities")
@@ -59,5 +57,11 @@ class Entity(BaseModel):
     )
 
     __table_args__ = (
-        UniqueConstraint("organization_id", "case_number", name="uq_entity_case_number"),
+        Index(
+            "uq_entity_case_number",
+            "organization_id",
+            text("(meta->>'case_number')"),
+            unique=True,
+            postgresql_where=text("meta->>'case_number' IS NOT NULL"),
+        ),
     )

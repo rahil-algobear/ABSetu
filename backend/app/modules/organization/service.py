@@ -86,11 +86,7 @@ class MetaFieldSchemaService:
         db_fields = row.fields if row else []
 
         # System fields only apply to base scope (no dimension/activity sub-scoping)
-        is_base_scope = (
-            not activity_type_id
-            and not dimension_value_id
-            and not dimension_id
-        )
+        is_base_scope = not activity_type_id and not dimension_value_id and not dimension_id
         # For entity scope: base = entity_type_id set, no other sub-scoping
         # For activity scope: base = no activity_type_id, no dimension_value_id
         if is_base_scope and scope_type in ("entity", "activity"):
@@ -116,62 +112,64 @@ class MetaFieldSchemaService:
         for row in rows:
             scope_type = row.scope_type
             is_base = (
-                not row.activity_type_id
-                and not row.dimension_value_id
-                and not row.dimension_id
+                not row.activity_type_id and not row.dimension_value_id and not row.dimension_id
             )
 
             if is_base and scope_type in ("entity", "activity"):
                 # Merge system fields into this row's fields
                 merged = merge_system_fields(scope_type, row.fields)
                 seen_base_scopes.add(f"{scope_type}:{row.entity_type_id or ''}")
-                results.append({
-                    "row": row,
-                    "fields": merged,
-                })
+                results.append(
+                    {
+                        "row": row,
+                        "fields": merged,
+                    }
+                )
             else:
-                results.append({
-                    "row": row,
-                    "fields": row.fields,
-                })
+                results.append(
+                    {
+                        "row": row,
+                        "fields": row.fields,
+                    }
+                )
 
         # Inject system-field-only scopes that have no DB row yet
         # For "activity" scope: always inject if no base activity row exists
         if "activity:" not in seen_base_scopes:
             system = get_system_fields("activity")
             if system:
-                results.append({
-                    "row": None,
-                    "scope_type": "activity",
-                    "entity_type_id": None,
-                    "activity_type_id": None,
-                    "dimension_value_id": None,
-                    "dimension_id": None,
-                    "fields": system,
-                })
+                results.append(
+                    {
+                        "row": None,
+                        "scope_type": "activity",
+                        "entity_type_id": None,
+                        "activity_type_id": None,
+                        "dimension_value_id": None,
+                        "dimension_id": None,
+                        "fields": system,
+                    }
+                )
 
         # For "entity" scope: inject for each entity type that has no DB row
         from app.modules.entity.model import EntityType
 
-        entity_types = (
-            self.db.query(EntityType)
-            .filter_by(organization_id=org_id)
-            .all()
-        )
+        entity_types = self.db.query(EntityType).filter_by(organization_id=org_id).all()
         for et in entity_types:
             scope_key = f"entity:{et.id}"
             if scope_key not in seen_base_scopes:
                 system = get_system_fields("entity")
                 if system:
-                    results.append({
-                        "row": None,
-                        "scope_type": "entity",
-                        "entity_type_id": et.id,
-                        "activity_type_id": None,
-                        "dimension_value_id": None,
-                        "dimension_id": None,
-                        "fields": system,
-                    })
+                    results.append(
+                        {
+                            "row": None,
+                            "scope_type": "entity",
+                            "entity_type_id": et.id,
+                            "activity_type_id": None,
+                            "dimension_value_id": None,
+                            "dimension_id": None,
+                            "fields": system,
+                        }
+                    )
 
         return results
 
@@ -197,11 +195,7 @@ class MetaFieldSchemaService:
         )
 
         # Check if this is a base scope that has system fields
-        is_base_scope = (
-            not activity_type_id
-            and not dimension_value_id
-            and not dimension_id
-        )
+        is_base_scope = not activity_type_id and not dimension_value_id and not dimension_id
         system_defaults = get_system_fields(scope_type) if is_base_scope else []
         system_keys = {f["key"] for f in system_defaults}
         system_by_key = {f["key"]: f for f in system_defaults}
@@ -211,9 +205,7 @@ class MetaFieldSchemaService:
             submitted_keys = {f["key"] for f in fields if f.get("system")}
             missing = system_keys - submitted_keys
             if missing:
-                raise ValidationError(
-                    f"System fields cannot be deleted: {', '.join(missing)}"
-                )
+                raise ValidationError(f"System fields cannot be deleted: {', '.join(missing)}")
 
             # Validate: system field immutable props cannot change
             for f in fields:
@@ -221,9 +213,7 @@ class MetaFieldSchemaService:
                     continue
                 default = system_by_key.get(f["key"])
                 if not default:
-                    raise ValidationError(
-                        f"Unknown system field: {f['key']}"
-                    )
+                    raise ValidationError(f"Unknown system field: {f['key']}")
                 for prop in SYSTEM_FIELD_IMMUTABLE_PROPS:
                     if prop in f and f[prop] != default[prop]:
                         raise ValidationError(
@@ -297,16 +287,18 @@ class MetaFieldSchemaService:
         if activity_type_id:
             fields.extend(
                 self.get_schema_by_scope(
-                    org_id, "participant",
+                    org_id,
+                    "participant",
                     entity_type_id=entity_type_id,
                     activity_type_id=activity_type_id,
                 )
             )
 
-        for dv_id in (dimension_value_ids or []):
+        for dv_id in dimension_value_ids or []:
             fields.extend(
                 self.get_schema_by_scope(
-                    org_id, "participant",
+                    org_id,
+                    "participant",
                     entity_type_id=entity_type_id,
                     dimension_value_id=dv_id,
                 )
@@ -314,7 +306,8 @@ class MetaFieldSchemaService:
             if activity_type_id:
                 fields.extend(
                     self.get_schema_by_scope(
-                        org_id, "participant",
+                        org_id,
+                        "participant",
                         entity_type_id=entity_type_id,
                         activity_type_id=activity_type_id,
                         dimension_value_id=dv_id,
@@ -334,25 +327,15 @@ class ListConfigService:
 
     def get_config(self, org_id: uuid.UUID, scope: str) -> list[dict]:
         """Get list config. Auto-generates defaults if none saved, merges new columns."""
-        row = (
-            self.db.query(ListConfig)
-            .filter_by(organization_id=org_id, scope=scope)
-            .first()
-        )
+        row = self.db.query(ListConfig).filter_by(organization_id=org_id, scope=scope).first()
         defaults = self._generate_defaults(org_id, scope)
         if not row:
             return defaults
         return self._merge_with_current(row.columns, defaults)
 
-    def update_config(
-        self, org_id: uuid.UUID, scope: str, columns: list[dict]
-    ) -> list[dict]:
+    def update_config(self, org_id: uuid.UUID, scope: str, columns: list[dict]) -> list[dict]:
         """Save list config."""
-        row = (
-            self.db.query(ListConfig)
-            .filter_by(organization_id=org_id, scope=scope)
-            .first()
-        )
+        row = self.db.query(ListConfig).filter_by(organization_id=org_id, scope=scope).first()
         if row:
             row.columns = columns
         else:
@@ -389,30 +372,54 @@ class ListConfigService:
             if f.get("system"):
                 sys_fields[f["key"]] = f
 
-        # Static: name
+        # System field: name (stored in meta, rendered as "static" key for backward compat)
         if sys_fields.get("name", {}).get("visible", True) is not False:
-            cols.append(self._col("static", "name", sys_fields.get("name", {}).get("label", "Name"), order, sortable=True))
+            cols.append(
+                self._col(
+                    "static",
+                    "name",
+                    sys_fields.get("name", {}).get("label", "Name"),
+                    order,
+                    sortable=True,
+                )
+            )
             order += 1
 
-        # Static: case_number (if enabled)
+        # System field: case_number (stored in meta, if enabled)
         config = et.config or {}
-        if config.get("case_number_enabled") and sys_fields.get("case_number", {}).get("visible", True) is not False:
-            cols.append(self._col("static", "case_number", sys_fields.get("case_number", {}).get("label", "Case No."), order, sortable=True))
+        if (
+            config.get("case_number_enabled")
+            and sys_fields.get("case_number", {}).get("visible", True) is not False
+        ):
+            cols.append(
+                self._col(
+                    "static",
+                    "case_number",
+                    sys_fields.get("case_number", {}).get("label", "Case No."),
+                    order,
+                    sortable=True,
+                )
+            )
             order += 1
 
-        # Meta fields (skip system fields – already added as static columns above)
+        # Custom meta fields (skip system fields – already added above)
         fields = meta_service.get_schema_by_scope(org_id, "entity", entity_type_id=type_id)
         for f in fields:
             if f.get("system"):
                 continue
             ftype = f.get("type", "text")
-            cols.append(self._col(
-                "meta", f"meta:{f['key']}", f.get("label", f["key"]), order,
-                filterable=False,
-                sortable=False,
-                meta_type=ftype,
-                filter_supported=True,
-            ))
+            cols.append(
+                self._col(
+                    "meta",
+                    f"meta:{f['key']}",
+                    f.get("label", f["key"]),
+                    order,
+                    filterable=False,
+                    sortable=False,
+                    meta_type=ftype,
+                    filter_supported=True,
+                )
+            )
             order += 1
 
         # Static: counts
@@ -422,7 +429,17 @@ class ListConfigService:
         order += 1
 
         # Static: created_at
-        cols.append(self._col("static", "created_at", "Created", order, sortable=True, filterable=True, filter_supported=True))
+        cols.append(
+            self._col(
+                "static",
+                "created_at",
+                "Created",
+                order,
+                sortable=True,
+                filterable=True,
+                filter_supported=True,
+            )
+        )
 
         return cols
 
@@ -451,13 +468,39 @@ class ListConfigService:
             return sys_fields.get(key, {}).get("visible", True) is not False
 
         if sys_visible("start_date"):
-            cols.append(self._col("static", "start_date", sys_prop("start_date", "label", "Start Date"), order, sortable=True, filterable=True, filter_supported=True, meta_type=sys_prop("start_date", "type", "datetime")))
+            cols.append(
+                self._col(
+                    "static",
+                    "start_date",
+                    sys_prop("start_date", "label", "Start Date"),
+                    order,
+                    sortable=True,
+                    filterable=True,
+                    filter_supported=True,
+                    meta_type=sys_prop("start_date", "type", "datetime"),
+                )
+            )
             order += 1
         if sys_visible("end_date"):
-            cols.append(self._col("static", "end_date", sys_prop("end_date", "label", "End Date"), order, sortable=True, filterable=True, filter_supported=True, meta_type=sys_prop("end_date", "type", "datetime")))
+            cols.append(
+                self._col(
+                    "static",
+                    "end_date",
+                    sys_prop("end_date", "label", "End Date"),
+                    order,
+                    sortable=True,
+                    filterable=True,
+                    filter_supported=True,
+                    meta_type=sys_prop("end_date", "type", "datetime"),
+                )
+            )
             order += 1
         if sys_visible("title"):
-            cols.append(self._col("static", "title", sys_prop("title", "label", "Title"), order, sortable=True))
+            cols.append(
+                self._col(
+                    "static", "title", sys_prop("title", "label", "Title"), order, sortable=True
+                )
+            )
             order += 1
 
         # Dimensions (visible + filterable for activities)
@@ -479,23 +522,35 @@ class ListConfigService:
             if f.get("system"):
                 continue
             ftype = f.get("type", "text")
-            cols.append(self._col(
-                "meta", f"meta:{f['key']}", f.get("label", f["key"]), order,
-                filterable=False,
-                sortable=False,
-                meta_type=ftype,
-                filter_supported=True,
-            ))
+            cols.append(
+                self._col(
+                    "meta",
+                    f"meta:{f['key']}",
+                    f.get("label", f["key"]),
+                    order,
+                    filterable=False,
+                    sortable=False,
+                    meta_type=ftype,
+                    filter_supported=True,
+                )
+            )
             order += 1
 
         cols.append(self._col("static", "participant_count", "Participants", order))
         order += 1
-        cols.append(self._col("static", "created_at", "Created", order, sortable=True, filter_supported=True))
+        cols.append(
+            self._col(
+                "static", "created_at", "Created", order, sortable=True, filter_supported=True
+            )
+        )
 
         return cols
 
     def _add_dimension_columns(
-        self, cols: list[dict], org_id: uuid.UUID, order: int,
+        self,
+        cols: list[dict],
+        org_id: uuid.UUID,
+        order: int,
         visible: bool = False,
     ) -> int:
         """Add dimension columns — filterable=True, sortable=False.
@@ -515,8 +570,13 @@ class ListConfigService:
         )
         for dim in dims:
             col = self._col(
-                "dimension", f"dim:{dim.id}", dim.name, order,
-                visible=visible, filterable=True, sortable=False,
+                "dimension",
+                f"dim:{dim.id}",
+                dim.name,
+                order,
+                visible=visible,
+                filterable=True,
+                sortable=False,
                 filter_supported=True,
             )
             col["dimension_key"] = dim.key

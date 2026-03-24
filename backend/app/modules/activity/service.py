@@ -20,6 +20,22 @@ from app.common.schemas.list_params import ListParams
 from app.modules.activity.model import Activity, ActivityForm, ActivityParticipant, ActivityType
 from app.modules.dimension.model import ActivityDimension, DimensionValue
 
+# System field keys that are accepted at top-level in requests and merged into meta
+ACTIVITY_SYSTEM_KEYS = ("title", "start_date", "end_date", "notes")
+
+
+def _merge_system_fields_into_meta(data: dict) -> dict:
+    """Merge top-level system fields into the meta dict."""
+    meta = dict(data.get("meta") or {})
+    for key in ACTIVITY_SYSTEM_KEYS:
+        if key in data and data[key] is not None:
+            val = data[key]
+            # Convert datetime objects to ISO strings for JSONB storage
+            if hasattr(val, "isoformat"):
+                val = val.isoformat()
+            meta[key] = val
+    return normalize_meta_datetimes(meta)
+
 
 class ActivityTypeService:
     def __init__(self, db: Session):
@@ -110,9 +126,9 @@ class ActivityService:
     ) -> dict:
         """Sort keys available for activity list, optionally including meta fields from list config."""
         config = {
-            "title": Activity.title,
-            "start_date": Activity.start_date,
-            "end_date": Activity.end_date,
+            "title": Activity.meta["title"].astext,
+            "start_date": Activity.meta["start_date"].astext,
+            "end_date": Activity.meta["end_date"].astext,
             "created_at": Activity.created_at,
         }
         if org_id and sortable_keys:
@@ -143,8 +159,16 @@ class ActivityService:
         """Filter config for activity list."""
         return {
             "activity_type_id": {"type": "exact", "column": Activity.activity_type_id},
-            "start_date": {"type": "datetime_range", "column": Activity.start_date},
-            "end_date": {"type": "datetime_range", "column": Activity.end_date},
+            "start_date": {
+                "type": "meta_date_range",
+                "meta_key": "start_date",
+                "meta_column": Activity.meta,
+            },
+            "end_date": {
+                "type": "meta_date_range",
+                "meta_key": "end_date",
+                "meta_column": Activity.meta,
+            },
             "created_at": {"type": "datetime_range", "column": Activity.created_at},
         }
 
@@ -168,8 +192,8 @@ class ActivityService:
         """Paginated list with search, filter, sort support."""
         query = self._build_base_query(org_id, accessible_dv_ids)
 
-        # Search
-        query = apply_search(query, params.search, [Activity.title])
+        # Search on title in meta
+        query = apply_search(query, params.search, [Activity.meta["title"].astext])
 
         # Build filter/sort keys from list config
         filterable_keys = None
@@ -207,7 +231,7 @@ class ActivityService:
             params.sort_by,
             params.sort_order,
             self.get_sort_config(org_id, sortable_keys),
-            Activity.start_date.desc(),
+            Activity.meta["start_date"].astext.desc(),
         )
 
         # Paginate
@@ -253,14 +277,12 @@ class ActivityService:
             if not at:
                 raise ValidationError("Activity type not found in this organization")
 
+        meta = _merge_system_fields_into_meta(data)
+
         activity = Activity(
             organization_id=org_id,
             activity_type_id=uuid.UUID(activity_type_id) if activity_type_id else None,
-            title=data.get("title"),
-            start_date=data["start_date"],
-            end_date=data.get("end_date"),
-            notes=data.get("notes"),
-            meta=normalize_meta_datetimes(data.get("meta")),
+            meta=meta,
             created_by=user_id,
         )
         self.db.add(activity)
@@ -276,11 +298,21 @@ class ActivityService:
 
     def update(self, activity_id: uuid.UUID, data: dict) -> Activity:
         activity = self.get_by_id(activity_id)
-        if "meta" in data and data["meta"] is not None:
-            data["meta"] = normalize_meta_datetimes(data["meta"])
-        for key, value in data.items():
-            if value is not None:
-                setattr(activity, key, value)
+
+        # Merge existing meta with updates
+        existing_meta = dict(activity.meta or {})
+        incoming_meta = data.get("meta") or {}
+        existing_meta.update(incoming_meta)
+
+        # Merge top-level system fields into meta
+        for key in ACTIVITY_SYSTEM_KEYS:
+            if key in data and data[key] is not None:
+                val = data[key]
+                if hasattr(val, "isoformat"):
+                    val = val.isoformat()
+                existing_meta[key] = val
+
+        activity.meta = normalize_meta_datetimes(existing_meta)
         self.db.commit()
         self.db.refresh(activity)
         return self.get_by_id(activity.id)
@@ -310,7 +342,7 @@ class ActivityService:
                 .joinedload(ActivityDimension.dimension_value)
                 .joinedload(DimensionValue.dimension),
             )
-            .order_by(Activity.start_date.desc())
+            .order_by(Activity.meta["start_date"].astext.desc())
             .all()
         )
 
@@ -458,9 +490,7 @@ class ActivityFormService:
         elements = ActivityFormService._migrate_elements(elements)
 
         existing_keys = {
-            el.get("ref_key")
-            for el in elements
-            if el.get("type") == "field" and el.get("ref_key")
+            el.get("ref_key") for el in elements if el.get("type") == "field" and el.get("ref_key")
         }
         # Add missing system field defaults
         missing = [

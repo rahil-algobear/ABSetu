@@ -25,6 +25,20 @@ from app.modules.dimension.model import EntityDimension
 from app.modules.entity.model import Entity, EntityType
 from app.modules.organization.model import Organization
 
+# System field keys that are accepted at top-level in requests and merged into meta
+ENTITY_SYSTEM_KEYS = ("name", "case_number")
+
+
+def _merge_system_fields_into_meta(data: dict, extra: dict | None = None) -> dict:
+    """Merge top-level system fields into the meta dict."""
+    meta = dict(data.get("meta") or {})
+    for key in ENTITY_SYSTEM_KEYS:
+        if key in data and data[key] is not None:
+            meta[key] = data[key]
+    if extra:
+        meta.update(extra)
+    return normalize_meta_datetimes(meta)
+
 
 class EntityTypeService:
     def __init__(self, db: Session):
@@ -144,8 +158,8 @@ class EntityService:
     ) -> dict:
         """Sort keys available for entity list, optionally including meta fields from list config."""
         config = {
-            "name": Entity.name,
-            "case_number": Entity.case_number,
+            "name": Entity.meta["name"].astext,
+            "case_number": Entity.meta["case_number"].astext,
             "created_at": Entity.created_at,
         }
         if org_id and sortable_keys:
@@ -211,8 +225,10 @@ class EntityService:
         """Paginated list with search, filter, sort support."""
         query = self._build_base_query(org_id, accessible_dv_ids)
 
-        # Search
-        query = apply_search(query, params.search, [Entity.name, Entity.case_number])
+        # Search on name and case_number in meta
+        query = apply_search(
+            query, params.search, [Entity.meta["name"].astext, Entity.meta["case_number"].astext]
+        )
 
         # Build filter/sort keys from list config
         filterable_keys = None
@@ -286,12 +302,19 @@ class EntityService:
             raise ValidationError("Entity type not found in this organization")
 
         case_number = self._generate_case_number(org, entity_type)
+        extra = {}
+        if case_number:
+            extra["case_number"] = case_number
+        # Ensure name defaults to empty string
+        if "name" not in data or data["name"] is None:
+            data["name"] = ""
+
+        meta = _merge_system_fields_into_meta(data, extra)
+
         entity = Entity(
             organization_id=org_id,
             entity_type_id=entity_type.id,
-            case_number=case_number,
-            name=data.get("name") or "",
-            meta=normalize_meta_datetimes(data.get("meta")),
+            meta=meta,
         )
         self.db.add(entity)
         self.db.flush()
@@ -309,11 +332,18 @@ class EntityService:
 
     def update(self, entity_id: uuid.UUID, org_id: uuid.UUID, data: dict) -> Entity:
         entity = self.get_by_id(entity_id, org_id)
-        if "meta" in data and data["meta"] is not None:
-            data["meta"] = normalize_meta_datetimes(data["meta"])
-        for key, value in data.items():
-            if value is not None:
-                setattr(entity, key, value)
+
+        # Merge existing meta with updates
+        existing_meta = dict(entity.meta or {})
+        incoming_meta = data.get("meta") or {}
+        existing_meta.update(incoming_meta)
+
+        # Merge top-level system fields into meta
+        for key in ENTITY_SYSTEM_KEYS:
+            if key in data and data[key] is not None:
+                existing_meta[key] = data[key]
+
+        entity.meta = normalize_meta_datetimes(existing_meta)
         self.db.commit()
         self.db.refresh(entity)
         return entity

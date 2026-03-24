@@ -24,6 +24,7 @@ enrollment_router = APIRouter(prefix="/enrollments")
 
 
 def _build_enrollment_response(e) -> dict:
+    meta = e.meta or {}
     dim_infos = []
     for d in e.dimensions or []:
         dv = d.dimension_value
@@ -37,15 +38,16 @@ def _build_enrollment_response(e) -> dict:
                     value_code=dv.code,
                 ).model_dump()
             )
+    entity_meta = e.entity.meta if e.entity else None
     return EnrollmentResponse(
         id=str(e.id),
         updated_at=e.updated_at,
         organization_id=str(e.organization_id),
         entity_id=str(e.entity_id),
-        admission_date=e.admission_date,
-        release_date=e.release_date,
-        meta=e.meta,
-        entity_name=e.entity.name if e.entity else None,
+        admission_date=meta.get("admission_date"),
+        release_date=meta.get("release_date"),
+        meta=meta,
+        entity_name=(entity_meta or {}).get("name") if entity_meta else None,
         dimensions=dim_infos,
     ).dump()
 

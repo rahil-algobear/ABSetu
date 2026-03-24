@@ -5,7 +5,7 @@ Dashboard service — aggregates stats across modules
 import uuid
 from datetime import date, timedelta
 
-from sqlalchemy import func
+from sqlalchemy import DateTime, func
 from sqlalchemy.orm import Session, Query
 
 from app.common.helpers.dimension_scoping import (
@@ -160,7 +160,7 @@ class DashboardService:
         active_enrollment_q = (
             self.db.query(func.count(Enrollment.id))
             .filter_by(**org_filter)
-            .filter(Enrollment.release_date.is_(None))
+            .filter(Enrollment.meta["release_date"].astext.is_(None))
         )
         if restricted_dims:
             active_enrollment_q = self._apply_enrollment_access_scoping(
@@ -239,12 +239,13 @@ class DashboardService:
 
         # --- Activities over time (last 12 months, with filters) ---
         twelve_months_ago = date.today().replace(day=1) - timedelta(days=365)
+        start_date_cast = func.cast(Activity.meta["start_date"].astext, DateTime(timezone=True))
         time_q = self.db.query(
-            func.to_char(Activity.start_date, "YYYY-MM").label("period"),
+            func.to_char(start_date_cast, "YYYY-MM").label("period"),
             func.count(Activity.id),
         ).filter(
             Activity.organization_id == organization_id,
-            Activity.start_date >= twelve_months_ago,
+            start_date_cast >= twelve_months_ago,
         )
         time_q = self._apply_activity_filters(time_q, dimension_value_ids, activity_type_id)
         if restricted_dims:
@@ -255,12 +256,15 @@ class DashboardService:
         ]
 
         # --- Enrollments over time (last 12 months) ---
+        admission_date_cast = func.cast(
+            Enrollment.meta["admission_date"].astext, DateTime(timezone=True)
+        )
         enroll_time_q = self.db.query(
-            func.to_char(Enrollment.admission_date, "YYYY-MM").label("period"),
+            func.to_char(admission_date_cast, "YYYY-MM").label("period"),
             func.count(Enrollment.id),
         ).filter(
             Enrollment.organization_id == organization_id,
-            Enrollment.admission_date >= twelve_months_ago,
+            admission_date_cast >= twelve_months_ago,
         )
         if restricted_dims:
             enroll_time_q = self._apply_enrollment_access_scoping(enroll_time_q, restricted_dims)
@@ -287,7 +291,7 @@ class DashboardService:
         if restricted_dims:
             recent_q = self._apply_activity_access_scoping(recent_q, restricted_dims)
         recent_rows = (
-            recent_q.order_by(Activity.start_date.desc(), Activity.created_at.desc())
+            recent_q.order_by(Activity.meta["start_date"].astext.desc(), Activity.created_at.desc())
             .limit(10)
             .all()
         )
@@ -313,17 +317,18 @@ class DashboardService:
             )
             type_name = a.activity_type.name if a.activity_type else None
 
-            # Resolve title: generated from dimensions first, then DB
+            # Resolve title: generated from dimensions first, then meta
             form = forms_by_type.get(str(a.activity_type_id)) if a.activity_type_id else None
-            title = _resolve_generated_title(a, form) or a.title
+            a_meta = a.meta or {}
+            title = _resolve_generated_title(a, form) or a_meta.get("title")
 
             recent_activities.append(
                 RecentActivity(
                     id=str(a.id),
-                    date=str(a.start_date),
+                    date=str(a_meta.get("start_date", a.created_at)),
                     title=title,
                     type_name=type_name,
-                    notes=a.notes,
+                    notes=a_meta.get("notes"),
                     participant_count=participant_count,
                 )
             )

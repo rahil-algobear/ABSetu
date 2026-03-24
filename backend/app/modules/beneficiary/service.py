@@ -12,6 +12,22 @@ from app.modules.beneficiary.model import Enrollment
 from app.modules.dimension.model import EnrollmentDimension
 from app.modules.entity.model import Entity
 
+# System field keys that are accepted at top-level in requests and merged into meta
+ENROLLMENT_SYSTEM_KEYS = ("admission_date", "release_date")
+
+
+def _merge_system_fields_into_meta(data: dict) -> dict:
+    """Merge top-level system fields into the meta dict."""
+    meta = dict(data.get("meta") or {})
+    for key in ENROLLMENT_SYSTEM_KEYS:
+        if key in data and data[key] is not None:
+            val = data[key]
+            # Convert date/datetime objects to ISO strings for JSONB storage
+            if hasattr(val, "isoformat"):
+                val = val.isoformat()
+            meta[key] = val
+    return normalize_meta_datetimes(meta)
+
 
 class EnrollmentService:
     def __init__(self, db: Session):
@@ -21,7 +37,7 @@ class EnrollmentService:
         return (
             self.db.query(Enrollment)
             .filter_by(entity_id=entity_id)
-            .order_by(Enrollment.admission_date.desc())
+            .order_by(Enrollment.meta["admission_date"].astext.desc())
             .all()
         )
 
@@ -29,7 +45,7 @@ class EnrollmentService:
         return (
             self.db.query(Enrollment)
             .filter_by(organization_id=org_id)
-            .order_by(Enrollment.admission_date.desc())
+            .order_by(Enrollment.meta["admission_date"].astext.desc())
             .all()
         )
 
@@ -58,12 +74,12 @@ class EnrollmentService:
                 f"Entity type '{entity.entity_type.name}' does not support enrollments"
             )
 
+        meta = _merge_system_fields_into_meta(data)
+
         enrollment = Enrollment(
             organization_id=org_id,
             entity_id=entity.id,
-            admission_date=data["admission_date"],
-            release_date=data.get("release_date"),
-            meta=normalize_meta_datetimes(data.get("meta")),
+            meta=meta,
         )
         self.db.add(enrollment)
         self.db.flush()
@@ -84,11 +100,24 @@ class EnrollmentService:
         if not enrollment:
             raise NotFoundError("Enrollment not found")
 
-        if "meta" in data and data["meta"] is not None:
-            data["meta"] = normalize_meta_datetimes(data["meta"])
-        for key, value in data.items():
-            if value is not None:
-                setattr(enrollment, key, value)
+        # Merge existing meta with updates
+        existing_meta = dict(enrollment.meta or {})
+        incoming_meta = data.get("meta") or {}
+        existing_meta.update(incoming_meta)
+
+        # Merge top-level system fields
+        for key in ENROLLMENT_SYSTEM_KEYS:
+            if key in data and data[key] is not None:
+                val = data[key]
+                if hasattr(val, "isoformat"):
+                    val = val.isoformat()
+                existing_meta[key] = val
+
+        # Handle explicit null for release_date
+        if "release_date" in data and data["release_date"] is None:
+            existing_meta.pop("release_date", None)
+
+        enrollment.meta = normalize_meta_datetimes(existing_meta)
         self.db.commit()
         self.db.refresh(enrollment)
         return enrollment

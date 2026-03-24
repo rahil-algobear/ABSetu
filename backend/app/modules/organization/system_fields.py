@@ -1,17 +1,17 @@
 """
 System field registry.
 
-System fields are backed by real database columns (e.g. Activity.title,
-Entity.name) but are configured identically to custom meta fields in the
-admin UI.  They are defined here in code and merged at read-time with any
-per-org overrides stored in meta_field_schemas.
+System fields are stored in the JSONB ``meta`` column alongside custom
+fields, but are defined here in code so they cannot be deleted by orgs.
+They are merged at read-time with any per-org overrides stored in
+meta_field_schemas.
 
 Orgs can customise label, required, display_type, stage, visible —
 but cannot change key, type, or delete system fields.
 """
 
 # Each entry is a FieldDefinition dict with system=True.
-# The key names match the actual DB column names.
+# The key names match the keys stored in the meta JSONB column.
 
 SYSTEM_FIELDS: dict[str, list[dict]] = {
     "entity": [
@@ -33,6 +33,28 @@ SYSTEM_FIELDS: dict[str, list[dict]] = {
             "required": False,
             "display_type": "input",
             "stage": "create",
+            "visible": True,
+        },
+    ],
+    "enrollment": [
+        {
+            "key": "admission_date",
+            "label": "Admission Date",
+            "type": "date",
+            "system": True,
+            "required": True,
+            "display_type": "date",
+            "stage": "both",
+            "visible": True,
+        },
+        {
+            "key": "release_date",
+            "label": "Release Date",
+            "type": "date",
+            "system": True,
+            "required": False,
+            "display_type": "date",
+            "stage": "both",
             "visible": True,
         },
     ],
@@ -85,7 +107,13 @@ SYSTEM_FIELD_IMMUTABLE_PROPS = {"key", "system"}
 
 # Overridable properties that orgs can customise.
 SYSTEM_FIELD_OVERRIDABLE_PROPS = {
-    "label", "type", "required", "display_type", "stage", "visible", "options",
+    "label",
+    "type",
+    "required",
+    "display_type",
+    "stage",
+    "visible",
+    "options",
 }
 
 
