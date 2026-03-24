@@ -73,6 +73,13 @@ interface ScopeGroup {
   scopeLabel: string;
 }
 
+interface FlatFieldRow {
+  field: MetaFieldDefinition;
+  fieldIndex: number; // index within its schema's fields array
+  schema: MetaFieldSchemaItem;
+  scopeLabel: string;
+}
+
 export default function MetaFieldsPage() {
   const queryClient = useQueryClient();
 
@@ -196,9 +203,9 @@ export default function MetaFieldsPage() {
     return labels.length > 0 ? labels.join(" + ") : fallback;
   };
 
-  // --- Flat table groups for Activity tab ---
-  const activityGroups = useMemo((): ScopeGroup[] => {
-    const groups: ScopeGroup[] = [];
+  // --- Flat rows for Activity tab (one row per field, sorted by sort_order) ---
+  const activityRows = useMemo((): FlatFieldRow[] => {
+    const rows: FlatFieldRow[] = [];
     for (const item of allSchemas) {
       if (!item.fields?.length || item.scope.type !== "activity") continue;
 
@@ -208,27 +215,23 @@ export default function MetaFieldsPage() {
         ? allDimensionValues.find((d) => d.id === dvId)?.dimension_id || ""
         : "";
 
-      // Apply view filters
       if (activityFilterTypeId && atId !== activityFilterTypeId) continue;
       if (activityFilterDimId && dimId !== activityFilterDimId) continue;
       if (activityFilterDvId && dvId !== activityFilterDvId) continue;
 
-      groups.push({ schema: item, scopeLabel: buildScopeLabel(atId, dvId, "All activities") });
+      const scopeLabel = buildScopeLabel(atId, dvId, "All activities");
+      for (let i = 0; i < item.fields.length; i++) {
+        rows.push({ field: item.fields[i], fieldIndex: i, schema: item, scopeLabel });
+      }
     }
-    groups.sort((a, b) => {
-      const aBase = !a.schema.scope.activity_type_id && !a.schema.scope.dimension_value_id;
-      const bBase = !b.schema.scope.activity_type_id && !b.schema.scope.dimension_value_id;
-      if (aBase && !bBase) return -1;
-      if (!aBase && bBase) return 1;
-      return a.scopeLabel.localeCompare(b.scopeLabel);
-    });
-    return groups;
+    rows.sort((a, b) => (a.field.sort_order ?? 0) - (b.field.sort_order ?? 0));
+    return rows;
   }, [allSchemas, activityFilterTypeId, activityFilterDimId, activityFilterDvId, activityTypes, allDimensionValues, dimensions]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // --- Flat table groups for Participant tab ---
-  const participantGroups = useMemo((): ScopeGroup[] => {
+  // --- Flat rows for Participant tab ---
+  const participantRows = useMemo((): FlatFieldRow[] => {
     if (!participantEntityId) return [];
-    const groups: ScopeGroup[] = [];
+    const rows: FlatFieldRow[] = [];
 
     for (const item of allSchemas) {
       if (!item.fields?.length || item.scope.type !== "participant") continue;
@@ -244,16 +247,13 @@ export default function MetaFieldsPage() {
       if (participantFilterDimId && dimId !== participantFilterDimId) continue;
       if (participantFilterDvId && dvId !== participantFilterDvId) continue;
 
-      groups.push({ schema: item, scopeLabel: buildScopeLabel(atId, dvId, "All") });
+      const scopeLabel = buildScopeLabel(atId, dvId, "All");
+      for (let i = 0; i < item.fields.length; i++) {
+        rows.push({ field: item.fields[i], fieldIndex: i, schema: item, scopeLabel });
+      }
     }
-    groups.sort((a, b) => {
-      const aBase = !a.schema.scope.activity_type_id && !a.schema.scope.dimension_value_id;
-      const bBase = !b.schema.scope.activity_type_id && !b.schema.scope.dimension_value_id;
-      if (aBase && !bBase) return -1;
-      if (!aBase && bBase) return 1;
-      return a.scopeLabel.localeCompare(b.scopeLabel);
-    });
-    return groups;
+    rows.sort((a, b) => (a.field.sort_order ?? 0) - (b.field.sort_order ?? 0));
+    return rows;
   }, [allSchemas, participantEntityId, participantFilterTypeId, participantFilterDimId, participantFilterDvId, activityTypes, allDimensionValues, dimensions]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Participant entity pill field counts
@@ -470,8 +470,8 @@ export default function MetaFieldsPage() {
   ];
 
   const isActivityOrParticipant = activeSection === "activity" || activeSection === "participant";
-  const flatGroups = activeSection === "activity" ? activityGroups : participantGroups;
-  const totalFlatFields = flatGroups.reduce((sum, g) => sum + g.schema.fields.length, 0);
+  const flatRows = activeSection === "activity" ? activityRows : participantRows;
+  const totalFlatFields = flatRows.length;
   const hasFilters = activeSection === "activity"
     ? !!(activityFilterTypeId || activityFilterDimId || activityFilterDvId)
     : !!(participantFilterTypeId || participantFilterDimId || participantFilterDvId);
@@ -864,65 +864,48 @@ export default function MetaFieldsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Scope</TableHead>
-                  <TableHead className="w-8">{""}</TableHead>
                   <TableHead>Label</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Required</TableHead>
+                  <TableHead>Stage</TableHead>
                   <TableHead className="w-20 text-center">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {flatGroups.map((group, gi) => (
-                  group.schema.fields.map((field, index) => (
-                    <TableRow key={`${gi}-${field.key}`} className={gi > 0 && index === 0 ? "border-t-4 border-t-gray-100" : ""}>
-                      <TableCell className="text-sm text-gray-500 align-top">
-                        {index === 0 && (
-                          <span className="font-medium text-gray-600">{group.scopeLabel}</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col items-center">
-                          <button
-                            onClick={() => moveField(index, "up", group.schema)}
-                            disabled={index === 0}
-                            className="text-gray-400 hover:text-purple-600 disabled:opacity-20 disabled:cursor-not-allowed"
-                          >
-                            <ChevronUp className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => moveField(index, "down", group.schema)}
-                            disabled={index === group.schema.fields.length - 1}
-                            className="text-gray-400 hover:text-purple-600 disabled:opacity-20 disabled:cursor-not-allowed"
-                          >
-                            <ChevronDown className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </TableCell>
-                      <TableCell className="font-medium">
-                        {field.label}
-                      </TableCell>
-                      <TableCell>
-                        {getTypeLabel(field)}
-                      </TableCell>
-                      <TableCell>{field.required ? "Yes" : "No"}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center justify-center gap-2">
-                          <button
-                            onClick={() => openEdit(index, group.schema)}
-                            className="text-gray-400 hover:text-purple-600"
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(index, group.schema)}
-                            className="text-gray-400 hover:text-red-500"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                {flatRows.map((row, ri) => (
+                  <TableRow key={`${ri}-${row.field.key}`}>
+                    <TableCell className="text-sm">
+                      <span className="font-medium text-gray-600">{row.scopeLabel}</span>
+                    </TableCell>
+                    <TableCell className="font-medium">
+                      {row.field.label}
+                    </TableCell>
+                    <TableCell>
+                      {getTypeLabel(row.field)}
+                    </TableCell>
+                    <TableCell>{row.field.required ? "Yes" : "No"}</TableCell>
+                    <TableCell className="text-sm text-gray-500">
+                      {row.field.stage === "create" ? "Create only"
+                        : row.field.stage === "record" ? "Edit only"
+                        : "Both"}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          onClick={() => openEdit(row.fieldIndex, row.schema)}
+                          className="text-gray-400 hover:text-purple-600"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(row.fieldIndex, row.schema)}
+                          className="text-gray-400 hover:text-red-500"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
                 ))}
               </TableBody>
             </Table>
