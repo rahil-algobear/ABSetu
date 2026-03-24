@@ -44,13 +44,13 @@ class DimensionInfo(BaseModel):
 
 class EntityCreate(BaseModel):
     entity_type_id: str
-    name: str = Field(..., min_length=1, max_length=200)
+    name: str | None = Field(None, max_length=200)
     meta: dict[str, Any] | None = None
     dimension_value_ids: list[str] = []
 
 
 class EntityUpdate(BaseModel):
-    name: str | None = Field(None, min_length=1, max_length=200)
+    name: str | None = Field(None, max_length=200)
     meta: dict[str, Any] | None = None
 
 

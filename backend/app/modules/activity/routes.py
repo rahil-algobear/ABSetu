@@ -418,6 +418,19 @@ def create_activity(
                         dim_name = dim.name if dim else "Dimension"
                         raise ValidationError(f"{dim_name} is required")
 
+    # Validate system field requirements based on org config
+    from app.modules.organization.service import MetaFieldSchemaService
+    meta_svc = MetaFieldSchemaService(db)
+    sys_fields: dict[str, dict] = {}
+    for f in meta_svc.get_schema_by_scope(current_user.organization_id, "activity"):
+        if f.get("system"):
+            sys_fields[f["key"]] = f
+
+    if sys_fields.get("start_date", {}).get("required", True) and not data.start_date:
+        raise ValidationError(f"{sys_fields.get('start_date', {}).get('label', 'Start Date')} is required")
+    if sys_fields.get("title", {}).get("required", False) and not data.title:
+        raise ValidationError(f"{sys_fields.get('title', {}).get('label', 'Title')} is required")
+
     service = ActivityService(db)
     activity = service.create(
         current_user.organization_id,

@@ -7,6 +7,8 @@ import uuid
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
+from app.common.exceptions import ValidationError
+
 from app.common.dependencies import (
     get_accessible_dimension_value_ids,
     get_accessible_entity,
@@ -269,9 +271,22 @@ def create_entity(
     accessible_dv_ids: list[uuid.UUID] | None = Depends(get_accessible_dimension_value_ids),
     db: Session = Depends(get_db),
 ):
+    # Validate system field requirements based on org config
+    from app.modules.organization.service import MetaFieldSchemaService
+    meta_svc = MetaFieldSchemaService(db)
+    org_id = current_user.organization_id
+    sys_fields = {
+        f["key"]: f
+        for f in meta_svc.get_schema_by_scope(org_id, "entity", entity_type_id=uuid.UUID(data.entity_type_id))
+        if f.get("system")
+    }
+    name_def = sys_fields.get("name", {})
+    if name_def.get("required", True) and not data.name:
+        raise ValidationError("Name is required")
+
     service = EntityService(db)
     entity = service.create(
-        current_user.organization_id,
+        org_id,
         data.model_dump(exclude={"dimension_value_ids"}),
         dimension_value_ids=data.dimension_value_ids,
         accessible_dv_ids=accessible_dv_ids,

@@ -85,7 +85,7 @@ class ActivityCreate(BaseModel):
     activity_type_id: str | None = None
     dimension_value_ids: list[str] = []
     title: str | None = None
-    start_date: datetime.datetime
+    start_date: datetime.datetime | None = None
     end_date: datetime.datetime | None = None
     notes: str | None = None
     meta: dict[str, Any] | None = None

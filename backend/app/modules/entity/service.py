@@ -290,7 +290,7 @@ class EntityService:
             organization_id=org_id,
             entity_type_id=entity_type.id,
             case_number=case_number,
-            name=data["name"],
+            name=data.get("name") or "",
             meta=normalize_meta_datetimes(data.get("meta")),
         )
         self.db.add(entity)
