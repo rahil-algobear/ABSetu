@@ -2,7 +2,6 @@
 
 import { Suspense, useState, useMemo, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { getTodayDatetime } from "@/utils/date";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   activityApi,
@@ -28,7 +27,6 @@ import {
 import { collectActivityFields } from "@/utils/meta-fields";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DynamicMetaForm } from "@/components/DynamicMetaForm";
 import { SearchSelectParticipants } from "@/components/SearchSelectParticipants";
@@ -39,7 +37,6 @@ import { usePermissions } from "@/components/Auth/Permissions";
 import { useDimensionAutoSelect } from "@/hooks/useDimensionAutoSelect";
 
 import toast from "react-hot-toast";
-import { DateTimeInput } from "@/components/ui/date-time-input";
 
 /**
  * Given a set of dimension value links and the currently selected dimension value IDs,
@@ -120,10 +117,6 @@ function NewActivityPageContent() {
   });
 
   const [formData, setFormData] = useState({
-    title: "",
-    start_date: getTodayDatetime(),
-    end_date: "" as string,
-    notes: "",
     dimension_value_ids: [] as string[],
   });
   const [metaValues, setMetaValues] = useState<Record<string, unknown>>({});
@@ -150,9 +143,9 @@ function NewActivityPageContent() {
     return map;
   }, [allActivityFields]);
 
-  // Custom (non-system) meta fields for DynamicMetaForm
+  // All meta fields for DynamicMetaForm (no system field distinction)
   const customMetaFields = useMemo(() => {
-    return allActivityFields.filter((f) => !f.system);
+    return allActivityFields;
   }, [allActivityFields]);
 
   const formElements: ActivityFormElement[] = useMemo(() => {
@@ -273,14 +266,14 @@ function NewActivityPageContent() {
     onError: () => toast.error(`Failed to create ${typeName.toLowerCase()}`),
   });
 
-  // Collect custom field keys in the layout to avoid duplicating them
+  // Collect field keys in the layout to avoid duplicating them
   const layoutCustomFieldKeys = useMemo(() => {
     return new Set(
       formElements
-        .filter((el) => el.type === "field" && el.ref_key && !fieldDefMap[el.ref_key]?.system)
+        .filter((el) => el.type === "field" && el.ref_key)
         .map((el) => el.ref_key!)
     );
-  }, [formElements, fieldDefMap]);
+  }, [formElements]);
 
   // Custom meta fields NOT in the layout (auto-appended)
   const autoAppendFields = useMemo(() => {
@@ -296,82 +289,15 @@ function NewActivityPageContent() {
         const key = el.ref_key;
         if (!key) return null;
         const def = fieldDefMap[key];
-        const label = def?.label || key;
-        const isRequired = def?.required || false;
 
-        // System fields: render hardcoded inputs
-        if (def?.system) {
-          if (key === "title") {
-            const titleConfig = el.config || { mode: "free_text" };
-            const titleMode = (titleConfig.mode as string) || "free_text";
-            if (titleMode === "generated") return null;
-            return (
-              <div key="field-title">
-                <label className="text-sm font-medium">
-                  {label}{isRequired && <span className="text-red-500 ml-0.5">*</span>}
-                </label>
-                <Input
-                  placeholder="Activity title..."
-                  value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  required={isRequired}
-                  className="mt-1"
-                />
-              </div>
-            );
-          }
-          if (key === "start_date") {
-            return (
-              <div key="field-start_date">
-                <label className="text-sm font-medium">
-                  {label}{isRequired && <span className="text-red-500 ml-0.5">*</span>}
-                </label>
-                <DateTimeInput
-                  value={formData.start_date}
-                  onChange={(value) => setFormData({ ...formData, start_date: value })}
-                  required={isRequired}
-                  allowTime={def?.type === "datetime"}
-                  className="mt-1"
-                />
-              </div>
-            );
-          }
-          if (key === "end_date") {
-            return (
-              <div key="field-end_date">
-                <label className="text-sm font-medium">
-                  {label}{isRequired && <span className="text-red-500 ml-0.5">*</span>}
-                </label>
-                <DateTimeInput
-                  value={formData.end_date}
-                  onChange={(value) => setFormData({ ...formData, end_date: value })}
-                  min={formData.start_date}
-                  required={isRequired}
-                  allowTime={def?.type === "datetime"}
-                  className="mt-1"
-                />
-              </div>
-            );
-          }
-          if (key === "notes") {
-            return (
-              <div key="field-notes">
-                <label className="text-sm font-medium">
-                  {label}{isRequired && <span className="text-red-500 ml-0.5">*</span>}
-                </label>
-                <Input
-                  placeholder="Optional notes..."
-                  value={formData.notes}
-                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  required={isRequired}
-                />
-              </div>
-            );
-          }
-          return null;
+        // Title field with "generated" mode: skip rendering
+        if (key === "title") {
+          const titleConfig = el.config || { mode: "free_text" };
+          const titleMode = (titleConfig.mode as string) || "free_text";
+          if (titleMode === "generated") return null;
         }
 
-        // Custom meta field in layout: render inline via DynamicMetaForm
+        // All fields render through DynamicMetaForm
         if (def) {
           return (
             <div key={`field-${key}`}>
@@ -500,13 +426,9 @@ function NewActivityPageContent() {
             onSubmit={(e) => {
               e.preventDefault();
               const payload = {
-                title: formData.title || undefined,
-                start_date: formData.start_date,
-                end_date: formData.end_date || undefined,
-                notes: formData.notes || undefined,
                 dimension_value_ids: formData.dimension_value_ids,
                 activity_type_id: selectedTypeId || undefined,
-                ...(customMetaFields.length > 0 ? { meta: metaValues } : {}),
+                meta: metaValues,
               };
               createMutation.mutate(payload);
             }}

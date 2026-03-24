@@ -386,7 +386,6 @@ export default function MetaFieldsPage() {
   const handleDelete = (index: number, schema?: MetaFieldSchemaItem) => {
     const target = schema || (currentScope ? findMatchingSchema(currentScope) : undefined);
     if (!target) return;
-    if (target.fields[index]?.system) { toast.error("System fields cannot be deleted"); return; }
     if (!confirm(`Delete field "${target.fields[index]?.label}"?`)) return;
     const updated = target.fields.filter((_, i) => i !== index);
     saveFields(target.scope, updated);
@@ -742,11 +741,6 @@ export default function MetaFieldsPage() {
                     </TableCell>
                     <TableCell className="font-medium">
                       {field.label}
-                      {field.system && (
-                        <span className="ml-1.5 text-[10px] font-medium text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">
-                          System
-                        </span>
-                      )}
                     </TableCell>
                     <TableCell>
                       {FIELD_TYPES.find((ft) => ft.value === field.type)?.label || field.type}
@@ -769,11 +763,9 @@ export default function MetaFieldsPage() {
                         <button onClick={() => openEdit(index)} className="text-gray-400 hover:text-purple-600">
                           <Pencil className="h-4 w-4" />
                         </button>
-                        {!field.system && (
-                          <button onClick={() => handleDelete(index)} className="text-gray-400 hover:text-red-500">
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        )}
+                        <button onClick={() => handleDelete(index)} className="text-gray-400 hover:text-red-500">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -867,11 +859,6 @@ export default function MetaFieldsPage() {
                       </TableCell>
                       <TableCell className="font-medium">
                         {field.label}
-                        {field.system && (
-                          <span className="ml-1.5 text-[10px] font-medium text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">
-                            System
-                          </span>
-                        )}
                       </TableCell>
                       <TableCell>
                         {FIELD_TYPES.find((ft) => ft.value === field.type)?.label || field.type}
@@ -885,14 +872,12 @@ export default function MetaFieldsPage() {
                           >
                             <Pencil className="h-4 w-4" />
                           </button>
-                          {!field.system && (
-                            <button
-                              onClick={() => handleDelete(index, group.schema)}
-                              className="text-gray-400 hover:text-red-500"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          )}
+                          <button
+                            onClick={() => handleDelete(index, group.schema)}
+                            className="text-gray-400 hover:text-red-500"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -1010,7 +995,6 @@ export default function MetaFieldsPage() {
           {editingIndex !== null && (
             <p className="text-xs text-gray-400 font-mono">
               Key: {fieldForm.key}
-              {fieldForm.system && <span className="ml-2 text-blue-500">(system field)</span>}
             </p>
           )}
           <div>

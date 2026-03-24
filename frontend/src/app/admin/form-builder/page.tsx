@@ -52,7 +52,6 @@ const DEFAULT_ELEMENT_LABELS: Record<string, string> = {
   notes: "Notes",
 };
 
-const SYSTEM_FIELD_KEYS = ["title", "start_date", "end_date", "notes"];
 
 const DISPLAY_TYPES: Record<string, { value: string; label: string }[]> = {
   dimension: [
@@ -137,7 +136,6 @@ export default function FormBuilderPage() {
     for (const schema of allSchemas) {
       if (schema.scope.type !== "activity") continue;
       for (const f of schema.fields) {
-        if (SYSTEM_FIELD_KEYS.includes(f.key)) continue;
         if (seenKeys.has(f.key)) continue;
         seenKeys.add(f.key);
         fields.push({ key: f.key, label: f.label });
@@ -152,13 +150,7 @@ export default function FormBuilderPage() {
     setIsDirty(true);
   };
 
-  const isSystemField = (refKey?: string | null): boolean => {
-    return !!refKey && SYSTEM_FIELD_KEYS.includes(refKey);
-  };
-
   const removeElement = (index: number) => {
-    const el = elements[index];
-    if (el?.type === "field" && isSystemField(el.ref_key)) return;
     setElements(elements.filter((_, i) => i !== index));
     setIsDirty(true);
   };
@@ -354,8 +346,7 @@ export default function FormBuilderPage() {
                 if (el.type === "field" && el.ref_key && fieldVisibleMap[el.ref_key] === false) return null;
                 const Icon = getElementIcon(el.type, el.type === "field" ? el.ref_key : undefined);
                 const metaCount = getParticipationMetaCount(el);
-                const isDefault = el.type === "field" && isSystemField(el.ref_key);
-                const isRemovable = !isDefault;
+                const isRemovable = true;
                 const isStructural = el.type === "dimension" || el.type === "participant_list";
                 const isTitleEl = el.type === "field" && el.ref_key === "title";
                 const titleConfig = isTitleEl ? (el.config || { mode: "free_text" }) : null;
@@ -364,8 +355,8 @@ export default function FormBuilderPage() {
                   <div key={`${el.type}-${el.ref_key || el.dimension_id || el.entity_type_id}-${idx}`}>
                     <div
                       className={`border rounded-lg p-3 flex items-center gap-3 bg-white ${
-                        isDefault ? "border-purple-200" : ""
-                      } ${isTitleEl && titleConfig ? "rounded-b-none" : ""}`}
+                        isTitleEl && titleConfig ? "rounded-b-none" : ""
+                      }`}
                     >
                       {/* Reorder */}
                       <div className="flex flex-col -space-y-1">
@@ -393,11 +384,6 @@ export default function FormBuilderPage() {
                         <div className="min-w-0">
                           <p className="text-sm font-medium truncate">
                             {getElementLabel(el)}
-                            {isDefault && (
-                              <span className="ml-1.5 text-[10px] font-medium text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded">
-                                System
-                              </span>
-                            )}
                             {isTitleEl && (
                               <span className="ml-1.5 text-[10px] font-medium text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
                                 {titleMode === "generated" ? "Generated" : "Free text"}
@@ -405,11 +391,9 @@ export default function FormBuilderPage() {
                             )}
                           </p>
                           <p className="text-xs text-gray-400">
-                            {isDefault
-                              ? "System field"
-                              : el.type === "field"
-                                ? "Custom field"
-                                : (ELEMENT_TYPES.find((t) => t.value === el.type)?.label || el.type)}
+                            {el.type === "field"
+                              ? "Field"
+                              : (ELEMENT_TYPES.find((t) => t.value === el.type)?.label || el.type)}
                             {isStructural && (
                               <>
                                 {" \u00b7 "}
@@ -426,7 +410,7 @@ export default function FormBuilderPage() {
                                 {" \u00b7 "}{el.stage === "create" ? "create only" : "edit only"}
                               </span>
                             )}
-                            {!isDefault && el.type === "field" && (
+                            {el.type === "field" && (
                               <span className="ml-1 text-gray-400">
                                 {" \u00b7 "}configured in Form Fields
                               </span>
@@ -487,7 +471,7 @@ export default function FormBuilderPage() {
                             ? "text-gray-400 hover:text-red-500"
                             : "text-gray-200 cursor-not-allowed"
                           }
-                          title={isRemovable ? "Remove" : "System fields cannot be removed"}
+                          title="Remove"
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>

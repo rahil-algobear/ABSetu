@@ -386,34 +386,6 @@ class ActivityParticipantService:
 
 
 class ActivityFormService:
-    # Default system field elements in the new simplified format.
-    # These are always present and cannot be removed.
-    SYSTEM_FIELD_KEYS = ["title", "start_date", "end_date", "notes"]
-
-    DEFAULT_ELEMENTS = [
-        {
-            "type": "field",
-            "ref_key": "title",
-            "sort_order": 0,
-            "config": {"mode": "free_text"},
-        },
-        {
-            "type": "field",
-            "ref_key": "start_date",
-            "sort_order": 1,
-        },
-        {
-            "type": "field",
-            "ref_key": "end_date",
-            "sort_order": 2,
-        },
-        {
-            "type": "field",
-            "ref_key": "notes",
-            "sort_order": 3,
-        },
-    ]
-
     def __init__(self, db: Session):
         self.db = db
 
@@ -485,27 +457,8 @@ class ActivityFormService:
 
     @staticmethod
     def _ensure_defaults(elements: list[dict]) -> list[dict]:
-        """Ensure system field elements are present."""
-        # First migrate any old-format elements
-        elements = ActivityFormService._migrate_elements(elements)
-
-        existing_keys = {
-            el.get("ref_key") for el in elements if el.get("type") == "field" and el.get("ref_key")
-        }
-        # Add missing system field defaults
-        missing = [
-            {**el}
-            for el in ActivityFormService.DEFAULT_ELEMENTS
-            if el["ref_key"] not in existing_keys
-        ]
-        if missing:
-            offset = len(missing)
-            for el in elements:
-                el["sort_order"] = el.get("sort_order", 0) + offset
-            for i, m in enumerate(missing):
-                m["sort_order"] = i
-            elements = missing + elements
-        return elements
+        """Migrate old-format elements to new format."""
+        return ActivityFormService._migrate_elements(elements)
 
     def get_by_type(self, activity_type_id: uuid.UUID, org_id: uuid.UUID) -> ActivityForm | None:
         return (

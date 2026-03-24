@@ -25,16 +25,13 @@ import { Can } from "@/components/Auth/Permissions";
 import { DynamicMetaForm, MetaFieldDisplay } from "@/components/DynamicMetaForm";
 import { SearchSelectParticipants } from "@/components/SearchSelectParticipants";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PageLayout } from "@/components/ui/page-layout";
 import { PageContent } from "@/components/ui/page-content";
 import { PageHeader } from "@/components/ui/page-header";
-import { Trash2, Pencil, Calendar, FileText, Users, Type } from "lucide-react";
+import { Trash2, Pencil, Users } from "lucide-react";
 import toast from "react-hot-toast";
-import { formatDate, formatDateTime } from "@/utils/date";
-import { DateTimeInput } from "@/components/ui/date-time-input";
 
 export default function ActivityDetailPage() {
   const params = useParams();
@@ -44,12 +41,6 @@ export default function ActivityDetailPage() {
 
   const [editingSections, setEditingSections] = useState(false);
   const [editingDetails, setEditingDetails] = useState(false);
-  const [detailFormData, setDetailFormData] = useState({
-    title: "",
-    start_date: "",
-    end_date: "",
-    notes: "",
-  });
   const [detailMetaValues, setDetailMetaValues] = useState<Record<string, unknown>>({});
   const [participantState, setParticipantState] = useState<
     Record<string, { participant_id: string; participant_type: string; status?: string; meta?: Record<string, unknown> }[]>
@@ -209,27 +200,12 @@ export default function ActivityDetailPage() {
 
   const openDetailEditing = () => {
     if (!activity) return;
-    setDetailFormData({
-      title: activity.title || "",
-      start_date: activity.start_date,
-      end_date: activity.end_date || "",
-      notes: activity.notes || "",
-    });
     setDetailMetaValues(activity.meta || {});
     setEditingDetails(true);
   };
 
   const handleDetailSave = () => {
-    const payload: Record<string, unknown> = {
-      title: detailFormData.title || undefined,
-      start_date: detailFormData.start_date,
-      end_date: detailFormData.end_date || undefined,
-      notes: detailFormData.notes || undefined,
-    };
-    if (activityTypeFields.length > 0) {
-      payload.meta = detailMetaValues;
-    }
-    updateDetailsMutation.mutate(payload as Parameters<typeof updateDetailsMutation.mutate>[0]);
+    updateDetailsMutation.mutate({ meta: detailMetaValues });
   };
 
   const handleDelete = () => {
@@ -321,21 +297,19 @@ export default function ActivityDetailPage() {
   };
 
   // Activity meta fields: base + activity type + dimension values + type×dimension_value combos
-  // Filter out system fields since those are rendered separately via form elements
   const activityTypeFields = useMemo((): MetaFieldDefinition[] => {
     const dvIds = (activity?.dimensions || []).map((d) => d.value_id);
-    const all = collectActivityFields(allMetaSchemas, activityTypeId || null, dvIds);
-    return all.filter((f) => !f.system);
+    return collectActivityFields(allMetaSchemas, activityTypeId || null, dvIds);
   }, [activityTypeId, activity, allMetaSchemas]);
 
-  // Custom field keys that are in the form builder layout (rendered inline)
+  // Field keys that are in the form builder layout (rendered inline)
   const layoutCustomFieldKeys = useMemo(() => {
     return new Set(
       detailElements
-        .filter((el) => el.type === "field" && el.ref_key && !fieldDefMap[el.ref_key]?.system)
+        .filter((el) => el.type === "field" && el.ref_key)
         .map((el) => el.ref_key!)
     );
-  }, [detailElements, fieldDefMap]);
+  }, [detailElements]);
 
   // Custom meta fields NOT in the layout (auto-appended after form elements)
   const autoAppendFields = useMemo(() => {
@@ -390,86 +364,15 @@ export default function ActivityDetailPage() {
           {editingDetails ? (
             <form onSubmit={(e) => { e.preventDefault(); handleDetailSave(); }} className="space-y-3">
               {detailElements.map((el) => {
-                if (el.type === "field" && el.ref_key === "title") {
-                  const titleConfig = el.config || { mode: "free_text" };
-                  const titleMode = (titleConfig.mode as string) || "free_text";
-                  // Generated titles are resolved server-side — nothing to edit
-                  if (titleMode === "generated") return null;
-                  const fieldDef = fieldDefMap["title"];
-                  const isRequired = fieldDef?.required ?? false;
-                  return (
-                    <div key="edit-title">
-                      <label className="text-sm font-medium">
-                        {fieldDef?.label || "Title"}{isRequired && <span className="text-red-500 ml-0.5">*</span>}
-                      </label>
-                      <Input
-                        placeholder="Activity title..."
-                        value={detailFormData.title}
-                        onChange={(e) => setDetailFormData({ ...detailFormData, title: e.target.value })}
-                        required={isRequired}
-                        className="mt-1"
-                      />
-                    </div>
-                  );
-                }
-                if (el.type === "field" && el.ref_key === "start_date") {
-                  const fieldDef = fieldDefMap["start_date"];
-                  const isRequired = fieldDef?.required ?? false;
-                  return (
-                    <div key="edit-start_date">
-                      <label className="text-sm font-medium">
-                        {fieldDef?.label || "Start Date"}{isRequired && <span className="text-red-500 ml-0.5">*</span>}
-                      </label>
-                      <DateTimeInput
-                        value={detailFormData.start_date}
-                        onChange={(value) => setDetailFormData({ ...detailFormData, start_date: value })}
-                        required={isRequired}
-                        allowTime={fieldDef?.type === "datetime"}
-                        className="mt-1"
-                      />
-                    </div>
-                  );
-                }
-                if (el.type === "field" && el.ref_key === "end_date") {
-                  const fieldDef = fieldDefMap["end_date"];
-                  const isRequired = fieldDef?.required ?? false;
-                  return (
-                    <div key="edit-end_date">
-                      <label className="text-sm font-medium">
-                        {fieldDef?.label || "End Date"}{isRequired && <span className="text-red-500 ml-0.5">*</span>}
-                      </label>
-                      <DateTimeInput
-                        value={detailFormData.end_date}
-                        onChange={(value) => setDetailFormData({ ...detailFormData, end_date: value })}
-                        min={detailFormData.start_date}
-                        required={isRequired}
-                        allowTime={fieldDef?.type === "datetime"}
-                        className="mt-1"
-                      />
-                    </div>
-                  );
-                }
-                if (el.type === "field" && el.ref_key === "notes") {
-                  const fieldDef = fieldDefMap["notes"];
-                  const isRequired = fieldDef?.required ?? false;
-                  return (
-                    <div key="edit-notes">
-                      <label className="text-sm font-medium">
-                        {fieldDef?.label || "Notes"}{isRequired && <span className="text-red-500 ml-0.5">*</span>}
-                      </label>
-                      <Input
-                        placeholder="Notes..."
-                        value={detailFormData.notes}
-                        onChange={(e) => setDetailFormData({ ...detailFormData, notes: e.target.value })}
-                        required={isRequired}
-                      />
-                    </div>
-                  );
-                }
-                // Custom meta field in layout: render inline
+                // Field elements: render via DynamicMetaForm
                 if (el.type === "field" && el.ref_key) {
+                  // Title with "generated" mode: skip
+                  if (el.ref_key === "title") {
+                    const titleConfig = el.config || { mode: "free_text" };
+                    if ((titleConfig.mode as string) === "generated") return null;
+                  }
                   const def = fieldDefMap[el.ref_key];
-                  if (def && !def.system) {
+                  if (def) {
                     return (
                       <div key={`edit-field-${el.ref_key}`}>
                         <DynamicMetaForm
@@ -501,7 +404,7 @@ export default function ActivityDetailPage() {
 
                 return null;
               })}
-              {/* Auto-render custom meta fields NOT in the layout */}
+              {/* Auto-render fields NOT in the layout */}
               {autoAppendFields.length > 0 && (
                 <div key="edit-activity_meta">
                   <DynamicMetaForm
@@ -523,26 +426,8 @@ export default function ActivityDetailPage() {
           ) : (
             <div className="space-y-3">
               {detailElements.map((el) => {
-                // Title element
-                if (el.type === "field" && el.ref_key === "title") {
-                  return (
-                    <div key="title" className="flex items-center gap-2">
-                      <Type className="h-4 w-4 text-gray-400 shrink-0" />
-                      <div>
-                        <p className="text-xs text-gray-500">{fieldDefMap["title"]?.label || "Title"}</p>
-                        {activity.title ? (
-                          <p className="text-sm font-medium">{activity.title}</p>
-                        ) : (
-                          <p className="text-sm text-gray-300 italic">Not set</p>
-                        )}
-                      </div>
-                    </div>
-                  );
-                }
-
                 // Dimension elements
                 if (el.type === "dimension") {
-                  // Map form element dimension_id (dimension UUID) to the dimension's key
                   const dimDef = dimensions.find((d) => d.id === el.dimension_id);
                   const dimInfo = dimDef
                     ? activity.dimensions.find((d) => d.dimension_key === dimDef.key)
@@ -559,63 +444,10 @@ export default function ActivityDetailPage() {
                   );
                 }
 
-                // Start Date
-                if (el.type === "field" && el.ref_key === "start_date") {
-                  const fieldDef = fieldDefMap["start_date"];
-                  const dateFormatter = fieldDef?.type === "datetime" ? formatDateTime : formatDate;
-                  return (
-                    <div key="start_date" className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4 text-gray-400 shrink-0" />
-                      <div>
-                        <p className="text-xs text-gray-500">{fieldDef?.label || "Start Date"}</p>
-                        <p className="text-sm font-medium">
-                          {dateFormatter(activity.start_date)}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                }
-
-                // End Date
-                if (el.type === "field" && el.ref_key === "end_date") {
-                  if (!activity.end_date) return null;
-                  const fieldDef = fieldDefMap["end_date"];
-                  const dateFormatter = fieldDef?.type === "datetime" ? formatDateTime : formatDate;
-                  return (
-                    <div key="end_date" className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4 text-gray-400 shrink-0" />
-                      <div>
-                        <p className="text-xs text-gray-500">{fieldDef?.label || "End Date"}</p>
-                        <p className="text-sm font-medium">
-                          {dateFormatter(activity.end_date)}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                }
-
-                // Notes
-                if (el.type === "field" && el.ref_key === "notes") {
-                  const fieldDef = fieldDefMap["notes"];
-                  return (
-                    <div key="notes" className="flex items-start gap-2">
-                      <FileText className="h-4 w-4 text-gray-400 shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-xs text-gray-500">{fieldDef?.label || "Notes"}</p>
-                        {activity.notes ? (
-                          <p className="text-sm">{activity.notes}</p>
-                        ) : (
-                          <p className="text-sm text-gray-300 italic">Not set</p>
-                        )}
-                      </div>
-                    </div>
-                  );
-                }
-
-                // Custom meta field in layout: render inline
+                // Field elements: render via MetaFieldDisplay
                 if (el.type === "field" && el.ref_key) {
                   const def = fieldDefMap[el.ref_key];
-                  if (def && !def.system) {
+                  if (def) {
                     return (
                       <div key={`view-field-${el.ref_key}`}>
                         <MetaFieldDisplay
@@ -630,7 +462,7 @@ export default function ActivityDetailPage() {
 
                 return null;
               })}
-              {/* Auto-render custom meta fields NOT in the layout */}
+              {/* Auto-render fields NOT in the layout */}
               {autoAppendFields.length > 0 && (
                 <div key="activity_meta">
                   <hr className="border-gray-100 mb-3" />

@@ -253,11 +253,11 @@ export const entityApi = {
     const response = await authAxios.get<Entity>(`/entities/${id}`);
     return response.data;
   },
-  create: async (data: { entity_type_id: string; name: string; dimension_value_ids?: string[]; meta?: Record<string, unknown> }): Promise<Entity> => {
+  create: async (data: { entity_type_id: string; dimension_value_ids?: string[]; meta?: Record<string, unknown> }): Promise<Entity> => {
     const response = await authAxios.post<Entity>('/entities/', data);
     return response.data;
   },
-  update: async (id: string, data: { name?: string; meta?: Record<string, unknown> }): Promise<Entity> => {
+  update: async (id: string, data: { meta?: Record<string, unknown> }): Promise<Entity> => {
     const response = await authAxios.put<Entity>(`/entities/${id}`, data);
     return response.data;
   },
@@ -341,9 +341,6 @@ export const activityApi = {
   },
   create: async (data: {
     activity_type_id?: string;
-    start_date: string;
-    end_date?: string;
-    notes?: string;
     dimension_value_ids?: string[];
     meta?: Record<string, unknown>;
   }): Promise<Activity> => {

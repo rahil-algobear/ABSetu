@@ -313,22 +313,6 @@ def get_activity_filters(
             {"scope_type": "activity", "activity_type_id": at.id} for at in activity_types
         )
 
-    # Look up org-configured labels and types for system fields
-    from app.modules.organization.service import MetaFieldSchemaService
-
-    meta_svc = MetaFieldSchemaService(db)
-    sys_fields: dict[str, dict] = {}
-    for f in meta_svc.get_schema_by_scope(org_id, "activity"):
-        if f.get("system"):
-            sys_fields[f["key"]] = f
-
-    def sys_label(key: str, default: str) -> str:
-        return sys_fields.get(key, {}).get("label", default)
-
-    def sys_date_type(key: str) -> str:
-        ftype = sys_fields.get(key, {}).get("type", "datetime")
-        return "date_range" if ftype == "date" else "datetime_range"
-
     return build_list_filter_response(
         db,
         org_id,
@@ -338,19 +322,9 @@ def get_activity_filters(
         scope_prefix="activity",
         meta_scopes=meta_scopes,
         date_filters=[
-            {
-                "key": "start_date",
-                "label": sys_label("start_date", "Start Date"),
-                "type": sys_date_type("start_date"),
-            },
-            {
-                "key": "end_date",
-                "label": sys_label("end_date", "End Date"),
-                "type": sys_date_type("end_date"),
-            },
             {"key": "created_at", "label": "Created Date"},
         ],
-        default_sortable_keys=["title", "start_date", "end_date", "created_at"],
+        default_sortable_keys=["created_at"],
     )
 
 
@@ -430,26 +404,6 @@ def create_activity(
                         dim = db.query(Dimension).filter_by(id=dim_id).first()
                         dim_name = dim.name if dim else "Dimension"
                         raise ValidationError(f"{dim_name} is required")
-
-    # Validate system field requirements based on org config
-    from app.modules.organization.service import MetaFieldSchemaService
-
-    meta_svc = MetaFieldSchemaService(db)
-    sys_fields: dict[str, dict] = {}
-    for f in meta_svc.get_schema_by_scope(current_user.organization_id, "activity"):
-        if f.get("system"):
-            sys_fields[f["key"]] = f
-
-    # Check system field requirements — values may be top-level or in meta
-    req_meta = data.meta or {}
-    eff_start = data.start_date or req_meta.get("start_date")
-    eff_title = data.title or req_meta.get("title")
-    if sys_fields.get("start_date", {}).get("required", True) and not eff_start:
-        raise ValidationError(
-            f"{sys_fields.get('start_date', {}).get('label', 'Start Date')} is required"
-        )
-    if sys_fields.get("title", {}).get("required", False) and not eff_title:
-        raise ValidationError(f"{sys_fields.get('title', {}).get('label', 'Title')} is required")
 
     service = ActivityService(db)
     activity = service.create(
@@ -640,9 +594,9 @@ def get_activity_form(
     if not form:
         return {
             "activity_type_id": str(activity_type_id),
-            "elements": list(ActivityFormService.DEFAULT_ELEMENTS),
+            "elements": [],
         }
-    # Ensure defaults are present and old format is migrated
+    # Migrate old format elements
     patched_elements = ActivityFormService._ensure_defaults(list(form.elements))
     resp = ActivityFormResponse.dump_from_model(form)
     resp["elements"] = patched_elements

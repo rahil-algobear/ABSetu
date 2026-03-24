@@ -185,55 +185,8 @@ class MetaFieldSchemaService:
     ) -> list[dict]:
         """Create or update a meta field schema by structured scope.
 
-        System fields cannot be deleted or have their key/type changed.
-        Only overridable properties (label, required, display_type, stage,
-        visible) are stored for system fields.
+        All fields are user-defined — no system field restrictions.
         """
-        from app.modules.organization.system_fields import (
-            SYSTEM_FIELD_IMMUTABLE_PROPS,
-            SYSTEM_FIELD_OVERRIDABLE_PROPS,
-        )
-
-        # Check if this is a base scope that has system fields
-        is_base_scope = not activity_type_id and not dimension_value_id and not dimension_id
-        system_defaults = get_system_fields(scope_type) if is_base_scope else []
-        system_keys = {f["key"] for f in system_defaults}
-        system_by_key = {f["key"]: f for f in system_defaults}
-
-        if system_keys:
-            # Validate: system fields cannot be deleted
-            submitted_keys = {f["key"] for f in fields if f.get("system")}
-            missing = system_keys - submitted_keys
-            if missing:
-                raise ValidationError(f"System fields cannot be deleted: {', '.join(missing)}")
-
-            # Validate: system field immutable props cannot change
-            for f in fields:
-                if not f.get("system"):
-                    continue
-                default = system_by_key.get(f["key"])
-                if not default:
-                    raise ValidationError(f"Unknown system field: {f['key']}")
-                for prop in SYSTEM_FIELD_IMMUTABLE_PROPS:
-                    if prop in f and f[prop] != default[prop]:
-                        raise ValidationError(
-                            f"Cannot change '{prop}' of system field '{f['key']}'"
-                        )
-
-        # For storage: keep override properties for system fields
-        # Always store system fields (even without overrides) to preserve ordering
-        fields_to_store = []
-        for f in fields:
-            if f.get("system") and f["key"] in system_by_key:
-                default = system_by_key[f["key"]]
-                override = {"key": f["key"], "system": True}
-                for prop in SYSTEM_FIELD_OVERRIDABLE_PROPS:
-                    if prop in f and f[prop] != default.get(prop):
-                        override[prop] = f[prop]
-                fields_to_store.append(override)
-            else:
-                fields_to_store.append(f)
-
         row = (
             self.db.query(MetaFieldSchema)
             .filter_by(
@@ -247,7 +200,7 @@ class MetaFieldSchemaService:
             .first()
         )
         if row:
-            row.fields = fields_to_store
+            row.fields = fields
         else:
             row = MetaFieldSchema(
                 organization_id=org_id,
@@ -256,7 +209,7 @@ class MetaFieldSchemaService:
                 activity_type_id=activity_type_id,
                 dimension_value_id=dimension_value_id,
                 dimension_id=dimension_id,
-                fields=fields_to_store,
+                fields=fields,
             )
             self.db.add(row)
         self.db.commit()
@@ -365,47 +318,11 @@ class ListConfigService:
         cols: list[dict] = []
         order = 0
 
-        # Build a lookup for entity system field overrides (label)
+        # All meta fields (no system field distinction)
         meta_service = MetaFieldSchemaService(self.db)
-        sys_fields: dict[str, dict] = {}
-        for f in meta_service.get_schema_by_scope(org_id, "entity", entity_type_id=type_id):
-            if f.get("system"):
-                sys_fields[f["key"]] = f
-
-        # System field: name (stored in meta, rendered as "static" key for backward compat)
-        if sys_fields.get("name", {}).get("visible", True) is not False:
-            cols.append(
-                self._col(
-                    "static",
-                    "name",
-                    sys_fields.get("name", {}).get("label", "Name"),
-                    order,
-                    sortable=True,
-                )
-            )
-            order += 1
-
-        # System field: case_number (stored in meta, if enabled)
-        config = et.config or {}
-        if (
-            config.get("case_number_enabled")
-            and sys_fields.get("case_number", {}).get("visible", True) is not False
-        ):
-            cols.append(
-                self._col(
-                    "static",
-                    "case_number",
-                    sys_fields.get("case_number", {}).get("label", "Case No."),
-                    order,
-                    sortable=True,
-                )
-            )
-            order += 1
-
-        # Custom meta fields (skip system fields – already added above)
         fields = meta_service.get_schema_by_scope(org_id, "entity", entity_type_id=type_id)
         for f in fields:
-            if f.get("system"):
+            if f.get("visible") is False:
                 continue
             ftype = f.get("type", "text")
             cols.append(
@@ -454,59 +371,11 @@ class ListConfigService:
         cols: list[dict] = []
         order = 0
 
-        # Build a lookup for system field overrides (label, type)
-        meta_service = MetaFieldSchemaService(self.db)
-        sys_fields: dict[str, dict] = {}
-        for f in meta_service.get_schema_by_scope(org_id, "activity"):
-            if f.get("system"):
-                sys_fields[f["key"]] = f
-
-        def sys_prop(key: str, prop: str, default: str) -> str:
-            return sys_fields.get(key, {}).get(prop, default)
-
-        def sys_visible(key: str) -> bool:
-            return sys_fields.get(key, {}).get("visible", True) is not False
-
-        if sys_visible("start_date"):
-            cols.append(
-                self._col(
-                    "static",
-                    "start_date",
-                    sys_prop("start_date", "label", "Start Date"),
-                    order,
-                    sortable=True,
-                    filterable=True,
-                    filter_supported=True,
-                    meta_type=sys_prop("start_date", "type", "datetime"),
-                )
-            )
-            order += 1
-        if sys_visible("end_date"):
-            cols.append(
-                self._col(
-                    "static",
-                    "end_date",
-                    sys_prop("end_date", "label", "End Date"),
-                    order,
-                    sortable=True,
-                    filterable=True,
-                    filter_supported=True,
-                    meta_type=sys_prop("end_date", "type", "datetime"),
-                )
-            )
-            order += 1
-        if sys_visible("title"):
-            cols.append(
-                self._col(
-                    "static", "title", sys_prop("title", "label", "Title"), order, sortable=True
-                )
-            )
-            order += 1
-
         # Dimensions (visible + filterable for activities)
         order = self._add_dimension_columns(cols, org_id, order, visible=True)
 
-        # Meta fields (base "activity" scope + type-specific scope)
+        # All meta fields (base "activity" scope + type-specific scope)
+        meta_service = MetaFieldSchemaService(self.db)
         seen_keys: set[str] = set()
         all_fields: list[dict] = []
         for f in meta_service.get_schema_by_scope(org_id, "activity"):
@@ -517,9 +386,8 @@ class ListConfigService:
             if f["key"] not in seen_keys:
                 seen_keys.add(f["key"])
                 all_fields.append(f)
-        fields = all_fields
-        for f in fields:
-            if f.get("system"):
+        for f in all_fields:
+            if f.get("visible") is False:
                 continue
             ftype = f.get("type", "text")
             cols.append(

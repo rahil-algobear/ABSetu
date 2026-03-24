@@ -11,8 +11,6 @@ import { useListParams } from "@/hooks/useListParams";
 import type { FilterDefinition } from "@/components/ui/filter-modal";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Dialog } from "@/components/ui/dialog";
 import { DynamicMetaForm } from "@/components/DynamicMetaForm";
 import { PageHeader } from "@/components/ui/page-header";
@@ -39,7 +37,6 @@ function EntityTypeEntitiesContent() {
   const router = useRouter();
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Entity | null>(null);
-  const [form, setForm] = useState({ name: "" });
   const [metaValues, setMetaValues] = useState<Record<string, unknown>>({});
 
   // Find the entity type by key
@@ -162,7 +159,6 @@ function EntityTypeEntitiesContent() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ name: "" });
     setMetaValues({});
     setModalOpen(true);
   };
@@ -170,7 +166,6 @@ function EntityTypeEntitiesContent() {
   const openEdit = (e: React.MouseEvent, item: Entity) => {
     e.stopPropagation();
     setEditing(item);
-    setForm({ name: item.name });
     setMetaValues(item.meta || {});
     setModalOpen(true);
   };
@@ -186,12 +181,11 @@ function EntityTypeEntitiesContent() {
     if (editing) {
       updateMutation.mutate({
         id: editing.id,
-        data: { name: form.name, meta: meta || undefined },
+        data: { meta: meta || undefined },
       });
     } else {
       createMutation.mutate({
         entity_type_id: entityType!.id,
-        name: form.name,
         meta,
       });
     }
@@ -309,34 +303,11 @@ function EntityTypeEntitiesContent() {
         title={editing ? `Edit ${typeName}` : `Add ${typeName}`}
       >
         <form onSubmit={handleSubmit} className="space-y-3">
-          {metaFields.map((field) => {
-            if (field.visible === false) return null;
-            if (field.system) {
-              if (field.key === "name") {
-                return (
-                  <div key="name">
-                    <Label htmlFor="name">{field.label || "Name"}</Label>
-                    <Input
-                      id="name"
-                      value={form.name}
-                      onChange={(e) => setForm({ ...form, name: e.target.value })}
-                      required={field.required !== false}
-                    />
-                  </div>
-                );
-              }
-              // Other system fields (e.g. case_number) are auto-generated
-              return null;
-            }
-            return (
-              <DynamicMetaForm
-                key={field.key}
-                fields={[field]}
-                values={metaValues}
-                onChange={setMetaValues}
-              />
-            );
-          })}
+          <DynamicMetaForm
+            fields={metaFields.filter((f) => f.visible !== false)}
+            values={metaValues}
+            onChange={setMetaValues}
+          />
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={closeModal}>
               Cancel
