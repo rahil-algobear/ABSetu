@@ -425,6 +425,24 @@ function NewActivityPageContent() {
           <form
             onSubmit={(e) => {
               e.preventDefault();
+
+              // Validate required meta fields
+              const visibleFields = [
+                ...formElements
+                  .filter((el) => el.type === "field" && el.ref_key && fieldDefMap[el.ref_key])
+                  .map((el) => fieldDefMap[el.ref_key!]),
+                ...autoAppendFields,
+              ];
+              for (const field of visibleFields) {
+                if (field.required) {
+                  const val = metaValues[field.key];
+                  if (val === undefined || val === null || val === "") {
+                    toast.error(`${field.label} is required`);
+                    return;
+                  }
+                }
+              }
+
               const payload = {
                 dimension_value_ids: formData.dimension_value_ids,
                 activity_type_id: selectedTypeId || undefined,

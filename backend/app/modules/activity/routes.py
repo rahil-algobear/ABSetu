@@ -394,6 +394,35 @@ def create_activity(
                 )
                 submitted_dim_ids = {str(row[0]) for row in dvs}
 
+            # Collect all applicable meta field definitions for this activity
+            meta_service = MetaFieldSchemaService(db)
+            all_field_defs: dict[str, dict] = {}
+            type_uuid = uuid.UUID(activity_type_id) if activity_type_id else None
+            # Base scope
+            for fd in meta_service.get_schema_by_scope(current_user.organization_id, "activity"):
+                all_field_defs[fd["key"]] = fd
+            # Activity-type scope
+            if type_uuid:
+                for fd in meta_service.get_schema_by_scope(
+                    current_user.organization_id, "activity", activity_type_id=type_uuid
+                ):
+                    all_field_defs[fd["key"]] = fd
+            # Dimension-value scopes
+            dv_uuids = [uuid.UUID(v) for v in (data.dimension_value_ids or [])]
+            for dv_id in dv_uuids:
+                for fd in meta_service.get_schema_by_scope(
+                    current_user.organization_id, "activity", dimension_value_id=dv_id
+                ):
+                    all_field_defs[fd["key"]] = fd
+                if type_uuid:
+                    for fd in meta_service.get_schema_by_scope(
+                        current_user.organization_id, "activity",
+                        activity_type_id=type_uuid, dimension_value_id=dv_id,
+                    ):
+                        all_field_defs[fd["key"]] = fd
+
+            submitted_meta = data.meta or {}
+
             for el in elements:
                 if not el.get("required"):
                     continue
@@ -404,6 +433,15 @@ def create_activity(
                         dim = db.query(Dimension).filter_by(id=dim_id).first()
                         dim_name = dim.name if dim else "Dimension"
                         raise ValidationError(f"{dim_name} is required")
+                elif el_type == "field":
+                    ref_key = el.get("ref_key")
+                    if ref_key:
+                        field_def = all_field_defs.get(ref_key)
+                        if field_def and field_def.get("required"):
+                            val = submitted_meta.get(ref_key)
+                            if val is None or val == "":
+                                label = field_def.get("label", ref_key)
+                                raise ValidationError(f"{label} is required")
 
     service = ActivityService(db)
     activity = service.create(
