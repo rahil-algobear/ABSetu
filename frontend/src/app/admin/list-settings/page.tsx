@@ -7,7 +7,7 @@ import {
   activityTypeApi,
   listConfigApi,
 } from "@/services/api";
-import { ListColumnConfig, MetaFieldType } from "@/types";
+import { ListColumnConfig } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
@@ -21,7 +21,8 @@ import {
   TableHead,
   TableCell,
 } from "@/components/ui/page-table";
-import { GripVertical, ArrowUp, ArrowDown } from "lucide-react";
+import { Dialog } from "@/components/ui/dialog";
+import { GripVertical, ArrowUp, ArrowDown, Plus, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
 
 type SectionKind = "entity" | "activity";
@@ -47,6 +48,8 @@ export default function ListSettingsPage() {
 
   const [activeSection, setActiveSection] = useState<SectionKind>("entity");
   const [activeTypeId, setActiveTypeId] = useState<string>("");
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [selectedToAdd, setSelectedToAdd] = useState<Set<string>>(new Set());
 
   const { data: entityTypes = [] } = useQuery({
     queryKey: ["entity-types"],
@@ -71,17 +74,25 @@ export default function ListSettingsPage() {
     ? `${activeSection}:${selectedTypeId}`
     : "";
 
-  const { data: columns = [], isLoading } = useQuery({
-    queryKey: ["list-config", scope],
-    queryFn: () => listConfigApi.get(scope),
+  const { data: settings, isLoading } = useQuery({
+    queryKey: ["list-config-settings", scope],
+    queryFn: () => listConfigApi.getSettings(scope),
     enabled: !!scope,
   });
+
+  const columns = settings?.columns || [];
+  const availableColumns = settings?.available_columns || [];
 
   const [localColumns, setLocalColumns] = useState<ListColumnConfig[]>([]);
   const [isDirty, setIsDirty] = useState(false);
 
   // Sync local state when server data changes
   const currentColumns = isDirty ? localColumns : columns;
+
+  // Track which available columns are still available (accounting for local adds)
+  const currentAvailable = isDirty
+    ? availableColumns.filter((ac) => !localColumns.some((lc) => lc.key === ac.key))
+    : availableColumns;
 
   const startEditing = (cols: ListColumnConfig[]) => {
     setLocalColumns([...cols]);
@@ -112,9 +123,44 @@ export default function ListSettingsPage() {
     setIsDirty(true);
   };
 
+  const removeColumn = (index: number) => {
+    const cols = isDirty ? [...localColumns] : [...columns];
+    cols.splice(index, 1);
+    // Re-number sort_order
+    cols.forEach((c, i) => (c.sort_order = i));
+    setLocalColumns(cols);
+    setIsDirty(true);
+  };
+
+  const handleAddColumns = () => {
+    const cols = isDirty ? [...localColumns] : [...columns];
+    let maxOrder = cols.length;
+    for (const key of selectedToAdd) {
+      const col = availableColumns.find((ac) => ac.key === key);
+      if (col) {
+        cols.push({ ...col, sort_order: maxOrder, visible: true });
+        maxOrder++;
+      }
+    }
+    setLocalColumns(cols);
+    setIsDirty(true);
+    setSelectedToAdd(new Set());
+    setShowAddModal(false);
+  };
+
+  const toggleAddSelection = (key: string) => {
+    setSelectedToAdd((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
   const saveMutation = useMutation({
     mutationFn: () => listConfigApi.update(scope, localColumns),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["list-config-settings", scope] });
       queryClient.invalidateQueries({ queryKey: ["list-config", scope] });
       queryClient.invalidateQueries({ queryKey: ["entity-filters"] });
       queryClient.invalidateQueries({ queryKey: ["activity-filters"] });
@@ -137,7 +183,6 @@ export default function ListSettingsPage() {
 
   const canToggleSortable = (col: ListColumnConfig) => {
     if (UNSORTABLE_TYPES.has(col.field_type)) return false;
-    // Static count columns can't be sorted
     if (col.field_type === "static" && ["enrollment_count", "activity_count", "participant_count"].includes(col.key)) return false;
     return true;
   };
@@ -145,6 +190,8 @@ export default function ListSettingsPage() {
   const canToggleFilterable = (col: ListColumnConfig) => {
     return !!col.filter_supported;
   };
+
+  const isStaticColumn = (col: ListColumnConfig) => col.field_type === "static";
 
   return (
     <>
@@ -189,79 +236,110 @@ export default function ListSettingsPage() {
         {/* Columns table */}
         {isLoading ? (
           <p className="text-gray-500 text-sm">Loading...</p>
-        ) : currentColumns.length === 0 ? (
-          <p className="text-gray-500 text-sm">No columns configured. Select a type above.</p>
+        ) : !scope ? (
+          <p className="text-gray-500 text-sm">Select a type above.</p>
         ) : (
           <>
-            <div className="bg-white shadow-sm border rounded-lg overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-12">{""}</TableHead>
-                    <TableHead>Column</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead className="text-center">Visible</TableHead>
-                    <TableHead className="text-center">Filterable</TableHead>
-                    <TableHead className="text-center">Sortable</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {currentColumns.map((col, idx) => (
-                    <TableRow key={col.key}>
-                      <TableCell>
-                        <div className="flex flex-col items-center gap-0.5">
-                          <button
-                            onClick={() => moveColumn(idx, "up")}
-                            disabled={idx === 0}
-                            className="text-gray-400 hover:text-gray-600 disabled:opacity-30"
-                          >
-                            <ArrowUp className="h-3.5 w-3.5" />
-                          </button>
-                          <GripVertical className="h-4 w-4 text-gray-300" />
-                          <button
-                            onClick={() => moveColumn(idx, "down")}
-                            disabled={idx === currentColumns.length - 1}
-                            className="text-gray-400 hover:text-gray-600 disabled:opacity-30"
-                          >
-                            <ArrowDown className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{col.label}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary" className="text-xs">
-                          {FIELD_TYPE_LABELS[col.field_type] || col.field_type}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Switch
-                          checked={col.visible}
-                          onCheckedChange={(v) => updateColumn(idx, { visible: v })}
-                        />
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Switch
-                          checked={col.filterable}
-                          onCheckedChange={(v) => updateColumn(idx, { filterable: v })}
-                          disabled={!canToggleFilterable(col)}
-                        />
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Switch
-                          checked={col.sortable}
-                          onCheckedChange={(v) => updateColumn(idx, { sortable: v })}
-                          disabled={!canToggleSortable(col)}
-                        />
-                      </TableCell>
+            {/* Add column button */}
+            {currentAvailable.length > 0 && (
+              <div className="flex justify-start mb-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setSelectedToAdd(new Set());
+                    setShowAddModal(true);
+                  }}
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add Column
+                </Button>
+              </div>
+            )}
+
+            {currentColumns.length === 0 ? (
+              <p className="text-gray-500 text-sm">No columns configured. Use &quot;Add Column&quot; to get started.</p>
+            ) : (
+              <div className="bg-white shadow-sm border rounded-lg overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-12">{""}</TableHead>
+                      <TableHead>Column</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead className="text-center">Visible</TableHead>
+                      <TableHead className="text-center">Filterable</TableHead>
+                      <TableHead className="text-center">Sortable</TableHead>
+                      <TableHead className="w-12">{""}</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                  </TableHeader>
+                  <TableBody>
+                    {currentColumns.map((col, idx) => (
+                      <TableRow key={col.key}>
+                        <TableCell>
+                          <div className="flex flex-col items-center gap-0.5">
+                            <button
+                              onClick={() => moveColumn(idx, "up")}
+                              disabled={idx === 0}
+                              className="text-gray-400 hover:text-gray-600 disabled:opacity-30"
+                            >
+                              <ArrowUp className="h-3.5 w-3.5" />
+                            </button>
+                            <GripVertical className="h-4 w-4 text-gray-300" />
+                            <button
+                              onClick={() => moveColumn(idx, "down")}
+                              disabled={idx === currentColumns.length - 1}
+                              className="text-gray-400 hover:text-gray-600 disabled:opacity-30"
+                            >
+                              <ArrowDown className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <span className="font-medium">{col.label}</span>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className="text-xs">
+                            {FIELD_TYPE_LABELS[col.field_type] || col.field_type}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Switch
+                            checked={col.visible}
+                            onCheckedChange={(v) => updateColumn(idx, { visible: v })}
+                          />
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Switch
+                            checked={col.filterable}
+                            onCheckedChange={(v) => updateColumn(idx, { filterable: v })}
+                            disabled={!canToggleFilterable(col)}
+                          />
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Switch
+                            checked={col.sortable}
+                            onCheckedChange={(v) => updateColumn(idx, { sortable: v })}
+                            disabled={!canToggleSortable(col)}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          {!isStaticColumn(col) && (
+                            <button
+                              onClick={() => removeColumn(idx)}
+                              className="text-gray-400 hover:text-red-500 transition-colors"
+                              title="Remove column"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
 
             <div className="flex justify-end mt-4">
               <Button
@@ -274,6 +352,55 @@ export default function ListSettingsPage() {
           </>
         )}
       </PageContent>
+
+      {/* Add Column Modal */}
+      <Dialog
+        open={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        title="Add Columns"
+      >
+        {currentAvailable.length === 0 ? (
+          <p className="text-gray-500 text-sm">All available columns have been added.</p>
+        ) : (
+          <>
+            <div className="space-y-2 max-h-80 overflow-y-auto">
+              {currentAvailable.map((col) => (
+                <label
+                  key={col.key}
+                  className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                    selectedToAdd.has(col.key)
+                      ? "border-blue-300 bg-blue-50"
+                      : "border-gray-200 hover:bg-gray-50"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedToAdd.has(col.key)}
+                    onChange={() => toggleAddSelection(col.key)}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="font-medium text-sm">{col.label}</span>
+                  <Badge variant="secondary" className="text-xs ml-auto">
+                    {FIELD_TYPE_LABELS[col.field_type] || col.field_type}
+                  </Badge>
+                </label>
+              ))}
+            </div>
+            <div className="flex justify-end gap-2 mt-4">
+              <Button variant="outline" size="sm" onClick={() => setShowAddModal(false)}>
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleAddColumns}
+                disabled={selectedToAdd.size === 0}
+              >
+                Add {selectedToAdd.size > 0 ? `(${selectedToAdd.size})` : ""}
+              </Button>
+            </div>
+          </>
+        )}
+      </Dialog>
     </>
   );
 }

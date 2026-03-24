@@ -193,13 +193,24 @@ def update_meta_field_schema_structured(
 # --- List Config ---
 
 
+@router.get("/list-config/settings/{scope:path}")
+def get_list_config_settings(
+    scope: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get list column config + available (not-yet-added) meta columns."""
+    service = ListConfigService(db)
+    return service.get_settings(current_user.organization_id, scope)
+
+
 @router.get("/list-config/{scope:path}")
 def get_list_config(
     scope: str,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Get list column config for a scope (auto-generates defaults if none saved)."""
+    """Get active list columns for a scope."""
     service = ListConfigService(db)
     return service.get_config(current_user.organization_id, scope)
 

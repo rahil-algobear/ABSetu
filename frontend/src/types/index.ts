@@ -243,6 +243,11 @@ export interface ListColumnConfig {
   filter_supported?: boolean;
 }
 
+export interface ListConfigSettings {
+  columns: ListColumnConfig[];
+  available_columns: ListColumnConfig[];
+}
+
 // --- Roles & Permissions ---
 
 export interface Permission {

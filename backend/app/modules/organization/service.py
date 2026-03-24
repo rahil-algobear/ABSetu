@@ -239,8 +239,9 @@ class MetaFieldSchemaService:
 class ListConfigService:
     """Manage per-type list page column configuration.
 
-    All field-backed columns are derived from meta_field_schemas.
-    Built-in static columns (counts, created_at) are appended at the end.
+    Columns are explicitly chosen by the admin.  Meta-field columns must
+    be added via the list-settings UI; they are NOT auto-included.
+    Built-in static columns (counts, created_at) are always present.
     """
 
     def __init__(self, db: Session):
@@ -249,16 +250,38 @@ class ListConfigService:
     # ── public API ──────────────────────────────────────────────
 
     def get_config(self, org_id: uuid.UUID, scope: str) -> list[dict]:
-        """Get list config. Auto-generates defaults if none saved, merges new columns."""
-        row = self.db.query(ListConfig).filter_by(organization_id=org_id, scope=scope).first()
-        defaults = self._generate_defaults(org_id, scope)
+        """Return active columns for a scope.
+
+        If no config is saved, returns only the built-in static columns.
+        Saved configs are merged with current static columns (structural
+        props refreshed, stale keys dropped) but new meta-field columns
+        are NOT auto-added — the admin must add them explicitly.
+        """
+        row = self.db.query(ListConfig).filter_by(
+            organization_id=org_id, scope=scope,
+        ).first()
+        static = self._static_defaults(scope)
         if not row:
-            return defaults
-        return self._merge_with_current(row.columns, defaults)
+            return static
+        catalog = self._all_meta_columns(org_id, scope)
+        return self._merge_saved(row.columns, static, catalog)
+
+    def get_settings(self, org_id: uuid.UUID, scope: str) -> dict:
+        """Return columns + available (not-yet-added) meta columns.
+
+        Used by the list-settings admin page.
+        """
+        columns = self.get_config(org_id, scope)
+        catalog = self._all_meta_columns(org_id, scope)
+        active_keys = {c["key"] for c in columns}
+        available = [c for c in catalog if c["key"] not in active_keys]
+        return {"columns": columns, "available_columns": available}
 
     def update_config(self, org_id: uuid.UUID, scope: str, columns: list[dict]) -> list[dict]:
         """Save list config."""
-        row = self.db.query(ListConfig).filter_by(organization_id=org_id, scope=scope).first()
+        row = self.db.query(ListConfig).filter_by(
+            organization_id=org_id, scope=scope,
+        ).first()
         if row:
             row.columns = columns
         else:
@@ -267,19 +290,11 @@ class ListConfigService:
         self.db.commit()
         return columns
 
-    # ── default generation (powered by meta_field_schemas) ──────
-
-    def _generate_defaults(self, org_id: uuid.UUID, scope: str) -> list[dict]:
-        if scope.startswith("entity:"):
-            return self._entity_defaults(org_id, scope)
-        elif scope.startswith("activity:"):
-            return self._activity_defaults(org_id, scope)
-        return []
+    # ── column helpers ──────────────────────────────────────────
 
     def _field_to_col(self, f: dict, order: int) -> dict:
         """Convert a meta field schema field dict to a list column dict."""
         ftype = f.get("type", "text")
-        # Use prefixed keys for dimension columns (needed by filter system)
         if ftype == "dimension" and f.get("dimension_id"):
             key = f"dim:{f['dimension_id']}"
         else:
@@ -289,7 +304,7 @@ class ListConfigService:
             "label": f.get("label", f["key"]),
             "field_type": ftype,
             "visible": True,
-            "filterable": ftype == "dimension",  # dimensions filterable by default
+            "filterable": ftype == "dimension",
             "sortable": False,
             "sort_order": order,
             "filter_supported": ftype in (
@@ -297,7 +312,6 @@ class ListConfigService:
                 "select", "multiselect", "boolean", "dimension",
             ),
         }
-        # Dimension columns need dimension_key for frontend rendering
         if ftype == "dimension" and f.get("dimension_id"):
             from app.modules.dimension.model import Dimension
             dim = self.db.query(Dimension).filter_by(id=f["dimension_id"]).first()
@@ -307,7 +321,7 @@ class ListConfigService:
 
     @staticmethod
     def _static_col(key: str, label: str, order: int, **kwargs) -> dict:
-        col = {
+        return {
             "key": key,
             "label": label,
             "field_type": "static",
@@ -317,68 +331,62 @@ class ListConfigService:
             "sort_order": order,
             "filter_supported": kwargs.get("filter_supported", False),
         }
-        return col
 
-    def _entity_defaults(self, org_id: uuid.UUID, scope: str) -> list[dict]:
-        type_id = uuid.UUID(scope.split(":", 1)[1])
+    # ── static (built-in) defaults ──────────────────────────────
 
+    def _static_defaults(self, scope: str) -> list[dict]:
+        """Built-in columns that are always present."""
+        if scope.startswith("entity:"):
+            return [
+                self._static_col("enrollment_count", "Enrollments", 0),
+                self._static_col("activity_count", "Activities", 1),
+                self._static_col(
+                    "created_at", "Created", 2,
+                    sortable=True, filterable=True, filter_supported=True,
+                ),
+            ]
+        elif scope.startswith("activity:"):
+            return [
+                self._static_col("participant_count", "Participants", 0),
+                self._static_col(
+                    "created_at", "Created", 1,
+                    sortable=True, filter_supported=True,
+                ),
+            ]
+        return []
+
+    # ── full meta-field catalog ─────────────────────────────────
+
+    def _all_meta_columns(self, org_id: uuid.UUID, scope: str) -> list[dict]:
+        """All possible meta-field columns for a scope (the 'catalog')."""
         meta_service = MetaFieldSchemaService(self.db)
-        fields = meta_service.get_schema_by_scope(org_id, "entity", entity_type_id=type_id)
-        # Sort by sort_order
+        fields: list[dict] = []
+
+        if scope.startswith("entity:"):
+            type_id = uuid.UUID(scope.split(":", 1)[1])
+            fields = meta_service.get_schema_by_scope(
+                org_id, "entity", entity_type_id=type_id,
+            )
+        elif scope.startswith("activity:"):
+            type_id = uuid.UUID(scope.split(":", 1)[1])
+            seen_keys: set[str] = set()
+            for f in meta_service.get_schema_by_scope(org_id, "activity"):
+                if f["key"] not in seen_keys:
+                    seen_keys.add(f["key"])
+                    fields.append(f)
+            for f in meta_service.get_schema_by_scope(
+                org_id, "activity", activity_type_id=type_id,
+            ):
+                if f["key"] not in seen_keys:
+                    seen_keys.add(f["key"])
+                    fields.append(f)
+
         fields.sort(key=lambda f: f.get("sort_order", 0))
-
         cols: list[dict] = []
-        order = 0
-        for f in fields:
+        for i, f in enumerate(fields):
             if f.get("visible") is False:
                 continue
-            cols.append(self._field_to_col(f, order))
-            order += 1
-
-        # Built-in static columns
-        cols.append(self._static_col("enrollment_count", "Enrollments", order))
-        order += 1
-        cols.append(self._static_col("activity_count", "Activities", order))
-        order += 1
-        cols.append(self._static_col(
-            "created_at", "Created", order,
-            sortable=True, filterable=True, filter_supported=True,
-        ))
-        return cols
-
-    def _activity_defaults(self, org_id: uuid.UUID, scope: str) -> list[dict]:
-        type_id = uuid.UUID(scope.split(":", 1)[1])
-
-        # Collect all fields from base + type-specific scopes (same as collectActivityFields)
-        meta_service = MetaFieldSchemaService(self.db)
-        seen_keys: set[str] = set()
-        all_fields: list[dict] = []
-        for f in meta_service.get_schema_by_scope(org_id, "activity"):
-            if f["key"] not in seen_keys:
-                seen_keys.add(f["key"])
-                all_fields.append(f)
-        for f in meta_service.get_schema_by_scope(org_id, "activity", activity_type_id=type_id):
-            if f["key"] not in seen_keys:
-                seen_keys.add(f["key"])
-                all_fields.append(f)
-        # Sort by sort_order
-        all_fields.sort(key=lambda f: f.get("sort_order", 0))
-
-        cols: list[dict] = []
-        order = 0
-        for f in all_fields:
-            if f.get("visible") is False:
-                continue
-            cols.append(self._field_to_col(f, order))
-            order += 1
-
-        # Built-in static columns
-        cols.append(self._static_col("participant_count", "Participants", order))
-        order += 1
-        cols.append(self._static_col(
-            "created_at", "Created", order,
-            sortable=True, filter_supported=True,
-        ))
+            cols.append(self._field_to_col(f, i))
         return cols
 
     # ── merge logic ─────────────────────────────────────────────
@@ -386,27 +394,31 @@ class ListConfigService:
     _STRUCTURAL_PROPS = {"field_type", "label", "dimension_key", "filter_supported"}
 
     @classmethod
-    def _merge_with_current(cls, saved: list[dict], defaults: list[dict]) -> list[dict]:
-        """Merge saved config with current defaults.
+    def _merge_saved(
+        cls,
+        saved: list[dict],
+        static: list[dict],
+        catalog: list[dict],
+    ) -> list[dict]:
+        """Merge saved config with current truth.
 
-        - Preserve saved columns order/visibility/flags
-        - Sync structural properties from defaults
-        - Drop columns whose key no longer exists in defaults
-        - Append new columns at the end
+        - Keep saved columns in their order with user-set flags.
+        - Sync structural properties from the catalog / static defaults.
+        - Drop columns whose key no longer exists in catalog or static.
+        - Ensure static columns are present (append missing ones).
+        - Do NOT auto-add new meta-field columns.
         """
-        default_by_key = {d["key"]: d for d in defaults}
+        known = {c["key"]: c for c in catalog}
+        known.update({c["key"]: c for c in static})
 
         result = []
         for c in saved:
-            if c["key"] not in default_by_key:
-                # Migration: check old-format keys (meta:key, dim:id)
-                # and map to new format if possible
+            if c["key"] not in known:
                 continue
             merged = {**c}
-            # Remove legacy source field if present
             merged.pop("source", None)
             merged.pop("meta_type", None)
-            dflt = default_by_key[c["key"]]
+            dflt = known[c["key"]]
             for prop in cls._STRUCTURAL_PROPS:
                 if prop in dflt:
                     merged[prop] = dflt[prop]
@@ -414,13 +426,13 @@ class ListConfigService:
                     del merged[prop]
             result.append(merged)
 
+        # Ensure all static columns are present
         existing_keys = {c["key"] for c in result}
-
-        max_order = max((c.get("sort_order", 0) for c in result), default=0) + 1
-        for d in defaults:
-            if d["key"] not in existing_keys:
-                d["sort_order"] = max_order
+        max_order = max((c.get("sort_order", 0) for c in result), default=-1) + 1
+        for s in static:
+            if s["key"] not in existing_keys:
+                s_copy = {**s, "sort_order": max_order}
                 max_order += 1
-                result.append(d)
+                result.append(s_copy)
 
         return result

@@ -761,35 +761,53 @@ def seed():
         )
         print(f"  Ensured session meta field schema ({len(session_fields)} fields)")
 
-        # 7c. List config — Beneficiary: make nationality filterable + sortable
-        beneficiary_scope = f"entity:{beneficiary_et.id}"
+        # 7c. List config — Beneficiary
         from app.modules.organization.service import ListConfigService
         list_service = ListConfigService(db)
-        bene_cols = list_service.get_config(org.id, beneficiary_scope)
-        updated = False
-        for col in bene_cols:
-            if col.get("label") == "Nationality":
-                if not col.get("filterable") or not col.get("sortable"):
-                    col["filterable"] = True
-                    col["sortable"] = True
-                    updated = True
-        if updated:
-            list_service.update_config(org.id, beneficiary_scope, bene_cols)
-            print("  Updated beneficiary list config (nationality filterable + sortable)")
+        beneficiary_scope = f"entity:{beneficiary_et.id}"
+        bene_catalog = {c["label"]: c for c in list_service._all_meta_columns(org.id, beneficiary_scope)}
+        bene_static = list_service._static_defaults(beneficiary_scope)
+        # Desired columns in order, with overrides
+        BENE_LIST_SPEC = [
+            ("Name", {"sortable": True}),
+            ("Nationality", {"filterable": True, "sortable": True}),
+            ("Contact No.", {}),
+            ("Current Address", {}),
+            ("Native Place", {"sortable": True}),
+            ("Age", {}),
+            ("Education", {}),
+        ]
+        bene_cols = []
+        for i, (label, overrides) in enumerate(BENE_LIST_SPEC):
+            col = bene_catalog.get(label)
+            if col:
+                bene_cols.append({**col, "sort_order": i, **overrides})
+        # Append static columns after meta columns
+        for s in bene_static:
+            bene_cols.append({**s, "sort_order": len(bene_cols)})
+        list_service.update_config(org.id, beneficiary_scope, bene_cols)
+        print(f"  Seeded beneficiary list config ({len(bene_cols)} columns)")
 
-        # 7d. List config — Session activities: date column at top
+        # 7d. List config — Session activities
         session_scope = f"activity:{sessions_type.id}"
-        session_cols = list_service.get_config(org.id, session_scope)
-        date_col = next((c for c in session_cols if c.get("label") == "Date"), None)
-        if date_col and session_cols.index(date_col) != 0:
-            session_cols.remove(date_col)
-            date_col["sort_order"] = 0
-            date_col["sortable"] = True
-            for i, col in enumerate(session_cols):
-                col["sort_order"] = i + 1
-            session_cols.insert(0, date_col)
-            list_service.update_config(org.id, session_scope, session_cols)
-            print("  Updated session list config (date at top, sortable)")
+        sess_catalog = {c["label"]: c for c in list_service._all_meta_columns(org.id, session_scope)}
+        sess_static = list_service._static_defaults(session_scope)
+        SESSION_LIST_SPEC = [
+            ("Date", {"filterable": True, "sortable": True}),
+            ("Intervention", {"filterable": True}),
+            ("Location", {"filterable": True}),
+            ("Programme", {"filterable": True}),
+            ("Project", {"filterable": True}),
+        ]
+        sess_cols = []
+        for i, (label, overrides) in enumerate(SESSION_LIST_SPEC):
+            col = sess_catalog.get(label)
+            if col:
+                sess_cols.append({**col, "sort_order": i, **overrides})
+        for s in sess_static:
+            sess_cols.append({**s, "sort_order": len(sess_cols)})
+        list_service.update_config(org.id, session_scope, sess_cols)
+        print(f"  Seeded session list config ({len(sess_cols)} columns)")
 
         # 8. Ensure permissions exist (in case initial seed hasn't run)
         from app.seeds.initial import PERMISSIONS as CANONICAL_PERMISSIONS

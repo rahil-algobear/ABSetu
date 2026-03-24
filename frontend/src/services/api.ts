@@ -11,6 +11,7 @@ import {
   Entity,
   EntityType,
   ListColumnConfig,
+  ListConfigSettings,
   LoginResponse,
   MetaFieldDefinition,
   MetaFieldSchemaItem,
@@ -441,6 +442,10 @@ export const dashboardApi = {
 export const listConfigApi = {
   get: async (scope: string): Promise<ListColumnConfig[]> => {
     const response = await authAxios.get<ListColumnConfig[]>(`/organization/list-config/${scope}`);
+    return response.data;
+  },
+  getSettings: async (scope: string): Promise<ListConfigSettings> => {
+    const response = await authAxios.get<ListConfigSettings>(`/organization/list-config/settings/${scope}`);
     return response.data;
   },
   update: async (scope: string, columns: ListColumnConfig[]): Promise<ListColumnConfig[]> => {
