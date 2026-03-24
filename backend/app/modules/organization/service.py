@@ -230,21 +230,17 @@ class MetaFieldSchemaService:
                             f"Cannot change '{prop}' of system field '{f['key']}'"
                         )
 
-        # For storage: only keep override properties for system fields
-        # (the defaults are injected at read time)
+        # For storage: keep override properties for system fields
+        # Always store system fields (even without overrides) to preserve ordering
         fields_to_store = []
         for f in fields:
             if f.get("system") and f["key"] in system_by_key:
                 default = system_by_key[f["key"]]
                 override = {"key": f["key"], "system": True}
-                has_override = False
                 for prop in SYSTEM_FIELD_OVERRIDABLE_PROPS:
                     if prop in f and f[prop] != default.get(prop):
                         override[prop] = f[prop]
-                        has_override = True
-                if has_override:
-                    fields_to_store.append(override)
-                # If no overrides, don't store — defaults will be used
+                fields_to_store.append(override)
             else:
                 fields_to_store.append(f)
 

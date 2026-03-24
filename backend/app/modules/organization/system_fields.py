@@ -97,30 +97,33 @@ def get_system_fields(scope_type: str) -> list[dict]:
 def merge_system_fields(scope_type: str, db_fields: list[dict]) -> list[dict]:
     """Merge system field defaults with DB-stored fields.
 
-    System fields appear first, with any matching DB overrides applied.
-    Custom (non-system) fields follow in their original order.
+    If system fields are present in db_fields, their order is preserved.
+    Any system fields missing from db_fields are prepended at the start.
     """
     system_defaults = get_system_fields(scope_type)
     if not system_defaults:
         return db_fields
 
-    # Build lookup of DB overrides for system fields
-    db_system_overrides = {}
-    custom_fields = []
+    system_by_key = {f["key"]: f for f in system_defaults}
+    seen_system_keys: set[str] = set()
+
+    # Walk db_fields in order, merging system defaults where needed
+    result = []
     for f in db_fields:
-        if f.get("system"):
-            db_system_overrides[f["key"]] = f
+        if f.get("system") and f["key"] in system_by_key:
+            seen_system_keys.add(f["key"])
+            merged = dict(system_by_key[f["key"]])
+            for prop in SYSTEM_FIELD_OVERRIDABLE_PROPS:
+                if prop in f:
+                    merged[prop] = f[prop]
+            result.append(merged)
         else:
-            custom_fields.append(f)
+            result.append(f)
 
-    # Merge: start with system defaults, apply overrides
-    merged_system = []
+    # Prepend any system fields not present in db_fields
+    missing = []
     for default in system_defaults:
-        override = db_system_overrides.get(default["key"], {})
-        merged = dict(default)
-        for prop in SYSTEM_FIELD_OVERRIDABLE_PROPS:
-            if prop in override:
-                merged[prop] = override[prop]
-        merged_system.append(merged)
+        if default["key"] not in seen_system_keys:
+            missing.append(dict(default))
 
-    return merged_system + custom_fields
+    return missing + result
