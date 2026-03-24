@@ -14,7 +14,7 @@ import logging
 import sys
 
 from app.core.database import SessionLocal
-from app.modules.organization.model import MetaFieldSchema, Organization
+from app.modules.organization.model import ListConfig, MetaFieldSchema, Organization
 from app.modules.dimension.model import Dimension, DimensionValue, DimensionValueLink
 from app.modules.activity.model import ActivityType
 from app.modules.entity.model import EntityType
@@ -57,35 +57,10 @@ ENTITY_TYPES = [
 ]
 
 # ---------------------------------------------------------------------------
-# Activity Type: Sessions (form builder config)
-# participant_source UUIDs are populated at seed time after entity types are created
+# Activity Type: Sessions
 # ---------------------------------------------------------------------------
 SESSIONS_TYPE_NAME = "Session"
 SESSIONS_TYPE_SORT_ORDER = 0
-SESSIONS_SECTIONS_TEMPLATE = [
-    {
-        "key": "beneficiaries",
-        "label": "Beneficiaries",
-        "entity_type_name": "Beneficiary",  # resolved to UUID at seed time
-        "selection_mode": "enrolled_checklist",
-        "min_count": 0,
-        "max_count": None,
-        "capture_status": True,
-        "statuses": ["present", "absent"],
-        "default_status": "present",
-    },
-    {
-        "key": "facilitators",
-        "label": "Facilitators",
-        "entity_type_name": "Facilitator",  # resolved to UUID at seed time
-        "selection_mode": "multi_select",
-        "min_count": 1,
-        "max_count": None,
-        "capture_status": False,
-        "statuses": [],
-        "default_status": None,
-    },
-]
 
 # ---------------------------------------------------------------------------
 # Dimension: Programme
@@ -479,14 +454,34 @@ FACILITATOR_CUSTOM_FIELDS = [
 
 # ---------------------------------------------------------------------------
 # Meta Field Schemas — custom fields for Sessions activity type
+# Dimension and participant_list fields reference UUIDs resolved at seed time.
 # ---------------------------------------------------------------------------
-SESSION_CUSTOM_FIELDS = [
+SESSION_META_FIELDS = [
     {
         "key": "date",
         "label": "Date",
         "type": "date",
         "required": True,
+        "stage": "create",
+        "sort_order": 0,
     },
+]
+
+# Dimension fields added to Session scope (create only)
+# (dimension_name, required, sort_order) — dimension_id resolved at seed time
+SESSION_DIMENSION_FIELDS = [
+    ("Programme", True, 1),
+    ("Location", True, 2),
+    ("Intervention", False, 3),
+    ("Project", False, 4),
+]
+
+# Participant list fields added to Session scope (edit only, search_select)
+# (entity_type_name_or_user, sort_order) — entity_type_id resolved at seed time
+SESSION_PARTICIPANT_FIELDS = [
+    ("user", 5),
+    ("Facilitator", 6),
+    ("Beneficiary", 7),
 ]
 
 
@@ -781,33 +776,9 @@ def seed():
         print(f"  Ensured activity type: {sessions_type.name}")
 
         # 3b. Meta Field Schemas — Session activity type custom fields
-        mfs_s = (
-            db.query(MetaFieldSchema)
-            .filter_by(
-                organization_id=org.id,
-                scope_type="activity",
-                activity_type_id=sessions_type.id,
-            )
-            .first()
-        )
-        if not mfs_s:
-            mfs_s = MetaFieldSchema(
-                organization_id=org.id,
-                scope_type="activity",
-                activity_type_id=sessions_type.id,
-                fields=SESSION_CUSTOM_FIELDS,
-            )
-            db.add(mfs_s)
-            db.flush()
-            print(
-                f"  Created session meta field schema ({len(SESSION_CUSTOM_FIELDS)} fields)"
-            )
-        else:
-            mfs_s.fields = SESSION_CUSTOM_FIELDS
-            db.flush()
-            print(
-                f"  Updated session meta field schema ({len(SESSION_CUSTOM_FIELDS)} fields)"
-            )
+        # (dimension + participant_list fields are added after dimensions/entity types are seeded)
+        # Placeholder — will be fully built after step 4
+        _session_meta_schema_placeholder = True  # noqa: F841
 
         # 4. Dimensions (intervention is now a regular dimension, not system)
         programme_dim = _ensure_dimension(db, org, "programme", "Programme", 0)
@@ -853,6 +824,155 @@ def seed():
             db, org, project_interventions, project_map, intervention_map
         )
         print(f"  Ensured dimension value links ({new_links} new)")
+
+        # 7b. Build and seed Session meta field schema (now that dimensions + entity types exist)
+        dim_name_to_id = {
+            "Programme": str(programme_dim.id),
+            "Project": str(project_dim.id),
+            "Location": str(location_dim.id),
+            "Intervention": str(intervention_dim.id),
+        }
+        session_fields = list(SESSION_META_FIELDS)  # start with date etc.
+        for dim_name, required, sort_order in SESSION_DIMENSION_FIELDS:
+            dim_id = dim_name_to_id[dim_name]
+            session_fields.append({
+                "key": f"dim_{dim_id[:8]}",
+                "label": dim_name,
+                "type": "dimension",
+                "dimension_id": dim_id,
+                "required": required,
+                "stage": "create",
+                "sort_order": sort_order,
+            })
+        for et_name_or_user, sort_order in SESSION_PARTICIPANT_FIELDS:
+            if et_name_or_user == "user":
+                et_id = "user"
+                label = "Users (staff)"
+            else:
+                et_id = str(entity_type_map[et_name_or_user].id)
+                label = et_name_or_user + "s"
+            session_fields.append({
+                "key": f"pl_{et_id[:8]}",
+                "label": label,
+                "type": "participant_list",
+                "entity_type_id": et_id,
+                "required": False,
+                "stage": "record",
+                "display_type": "search_select",
+                "sort_order": sort_order,
+            })
+        mfs_s = (
+            db.query(MetaFieldSchema)
+            .filter_by(
+                organization_id=org.id,
+                scope_type="activity",
+                activity_type_id=sessions_type.id,
+            )
+            .first()
+        )
+        if not mfs_s:
+            mfs_s = MetaFieldSchema(
+                organization_id=org.id,
+                scope_type="activity",
+                activity_type_id=sessions_type.id,
+                fields=session_fields,
+            )
+            db.add(mfs_s)
+            db.flush()
+        else:
+            mfs_s.fields = session_fields
+            db.flush()
+        print(f"  Ensured session meta field schema ({len(session_fields)} fields)")
+
+        # 7c. List config — Beneficiary: make nationality filterable + sortable
+        beneficiary_scope = f"entity:{beneficiary_et.id}"
+        bene_lc = (
+            db.query(ListConfig)
+            .filter_by(organization_id=org.id, scope=beneficiary_scope)
+            .first()
+        )
+        if not bene_lc:
+            # Generate defaults first, then patch nationality
+            from app.modules.organization.service import ListConfigService
+            bene_cols = ListConfigService(db)._generate_defaults(org.id, beneficiary_scope)
+            for col in bene_cols:
+                if col["key"] == "meta:nationality":
+                    col["filterable"] = True
+                    col["sortable"] = True
+            bene_lc = ListConfig(
+                organization_id=org.id,
+                scope=beneficiary_scope,
+                columns=bene_cols,
+            )
+            db.add(bene_lc)
+            db.flush()
+            print("  Created beneficiary list config (nationality filterable + sortable)")
+        else:
+            # Patch existing
+            updated = False
+            for col in bene_lc.columns:
+                if col["key"] == "meta:nationality":
+                    if not col.get("filterable") or not col.get("sortable"):
+                        col["filterable"] = True
+                        col["sortable"] = True
+                        updated = True
+            if updated:
+                from sqlalchemy.orm.attributes import flag_modified
+                flag_modified(bene_lc, "columns")
+                db.flush()
+                print("  Updated beneficiary list config (nationality filterable + sortable)")
+
+        # 7d. List config — Session activities: date column at top
+        session_scope = f"activity:{sessions_type.id}"
+        session_lc = (
+            db.query(ListConfig)
+            .filter_by(organization_id=org.id, scope=session_scope)
+            .first()
+        )
+        if not session_lc:
+            from app.modules.organization.service import ListConfigService
+            session_cols = ListConfigService(db)._generate_defaults(org.id, session_scope)
+            # Move date to sort_order 0, shift others down
+            date_col = None
+            for col in session_cols:
+                if col["key"] == "meta:date":
+                    date_col = col
+                    break
+            if date_col:
+                session_cols.remove(date_col)
+                date_col["sort_order"] = 0
+                date_col["sortable"] = True
+                for i, col in enumerate(session_cols):
+                    col["sort_order"] = i + 1
+                session_cols.insert(0, date_col)
+            session_lc = ListConfig(
+                organization_id=org.id,
+                scope=session_scope,
+                columns=session_cols,
+            )
+            db.add(session_lc)
+            db.flush()
+            print("  Created session list config (date at top, sortable)")
+        else:
+            # Patch existing: ensure date is at top
+            cols = list(session_lc.columns)
+            date_col = None
+            for col in cols:
+                if col["key"] == "meta:date":
+                    date_col = col
+                    break
+            if date_col and cols.index(date_col) != 0:
+                cols.remove(date_col)
+                date_col["sort_order"] = 0
+                date_col["sortable"] = True
+                for i, col in enumerate(cols):
+                    col["sort_order"] = i + 1
+                cols.insert(0, date_col)
+                session_lc.columns = cols
+                from sqlalchemy.orm.attributes import flag_modified
+                flag_modified(session_lc, "columns")
+                db.flush()
+                print("  Updated session list config (date at top)")
 
         # 8. Ensure permissions exist (in case initial seed hasn't run)
         from app.seeds.initial import PERMISSIONS as CANONICAL_PERMISSIONS
