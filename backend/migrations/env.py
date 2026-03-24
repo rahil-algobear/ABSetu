@@ -14,7 +14,7 @@ from app.modules.dimension.model import (  # noqa: F401
     ActivityDimension, EntityDimension, EnrollmentDimension, UserDimension,
 )
 from app.modules.activity.model import (  # noqa: F401
-    ActivityType, ActivityForm, Activity, ActivityParticipant,
+    ActivityType, Activity, ActivityParticipant,
 )
 from app.modules.beneficiary.model import Enrollment  # noqa: F401
 from app.modules.entity.model import EntityType, Entity  # noqa: F401
