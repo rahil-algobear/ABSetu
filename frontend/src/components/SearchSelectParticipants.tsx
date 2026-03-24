@@ -70,6 +70,14 @@ export function SearchSelectParticipants({
     [allSchemas, entityTypeId],
   );
 
+  // The standalone Name input in the create dialog handles the "Name" meta field,
+  // so filter it out from DynamicMetaForm to avoid showing it twice.
+  const nameField = entityMetaFields.find((f) => f.label === "Name");
+  const nonNameFields = useMemo(
+    () => entityMetaFields.filter((f) => f.label !== "Name"),
+    [entityMetaFields],
+  );
+
   const createEntityMutation = useMutation({
     mutationFn: entityApi.create,
     onSuccess: (newEntity) => {
@@ -279,10 +287,13 @@ export function SearchSelectParticipants({
             onSubmit={(e) => {
               e.preventDefault();
               if (newEntityName.trim()) {
-                const meta = Object.keys(newEntityMeta).length > 0 ? newEntityMeta : undefined;
+                const meta = { ...newEntityMeta };
+                // Store the name value in its meta field key
+                if (nameField) {
+                  meta[nameField.key] = newEntityName.trim();
+                }
                 createEntityMutation.mutate({
                   entity_type_id: entityTypeId,
-                  name: newEntityName.trim(),
                   meta,
                 });
               }
@@ -301,7 +312,7 @@ export function SearchSelectParticipants({
               />
             </div>
             <DynamicMetaForm
-              fields={entityMetaFields}
+              fields={nonNameFields}
               values={newEntityMeta}
               onChange={setNewEntityMeta}
             />
