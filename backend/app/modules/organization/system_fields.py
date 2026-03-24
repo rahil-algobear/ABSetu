@@ -81,11 +81,11 @@ SYSTEM_FIELDS: dict[str, list[dict]] = {
 }
 
 # Immutable properties that orgs cannot override for system fields.
-SYSTEM_FIELD_IMMUTABLE_PROPS = {"key", "type", "system"}
+SYSTEM_FIELD_IMMUTABLE_PROPS = {"key", "system"}
 
 # Overridable properties that orgs can customise.
 SYSTEM_FIELD_OVERRIDABLE_PROPS = {
-    "label", "required", "display_type", "stage", "visible", "options",
+    "label", "type", "required", "display_type", "stage", "visible", "options",
 }
 
 
