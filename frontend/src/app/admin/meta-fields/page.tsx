@@ -356,18 +356,9 @@ export default function MetaFieldsPage() {
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    const suffix = Math.random().toString(36).substring(2, 6);
-    let key: string;
-    if (editingIndex !== null) {
-      key = fieldForm.key;
-    } else if (fieldForm.type === "dimension" && fieldForm.dimension_id) {
-      key = `dim_${suffix}`;
-    } else if (fieldForm.type === "participant_list" && fieldForm.entity_type_id) {
-      key = `pl_${suffix}`;
-    } else {
-      const slug = fieldForm.label.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
-      key = `${slug}_${suffix}`;
-    }
+    // On edit, keep existing key. On create, send a placeholder — the backend
+    // will auto-assign a unique key with a random suffix via _ensure_field_keys.
+    const key = editingIndex !== null ? fieldForm.key : fieldForm.label.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "") || "field";
     const options =
       fieldForm.type === "select" || fieldForm.type === "multiselect"
         ? optionsText.split("\n").map((o) => o.trim()).filter(Boolean)

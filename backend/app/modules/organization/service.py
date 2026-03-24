@@ -93,6 +93,48 @@ class MetaFieldSchemaService:
         rows = self.get_all_schemas(org_id)
         return [{"row": row, "fields": row.fields} for row in rows]
 
+    @staticmethod
+    def _ensure_field_keys(fields: list[dict]) -> list[dict]:
+        """Ensure every field has a unique key with a random 4-char suffix.
+
+        Fields that already have a suffixed key (containing '_' followed by
+        4+ alphanumeric chars at the end) are left as-is. New or legacy
+        fields get a suffix appended.
+        """
+        import random
+        import re
+        import string
+
+        existing_keys = {f.get("key") for f in fields if f.get("key")}
+        result = []
+        for f in fields:
+            f = dict(f)
+            key = f.get("key") or ""
+            # Check if key already has a random suffix (e.g. name_a3x9)
+            if key and re.search(r"_[a-z0-9]{4,}$", key):
+                result.append(f)
+                continue
+            # Generate a new unique key
+            if f.get("type") == "dimension" and f.get("dimension_id"):
+                base = "dim"
+            elif f.get("type") == "participant_list" and f.get("entity_type_id"):
+                base = "pl"
+            elif key:
+                base = re.sub(r"[^a-z0-9_]", "", key.lower().replace(" ", "_"))
+            else:
+                label = f.get("label", "field")
+                base = re.sub(r"[^a-z0-9_]", "", label.lower().replace(" ", "_"))
+            # Generate suffix and ensure uniqueness
+            for _ in range(100):
+                suffix = "".join(random.choices(string.ascii_lowercase + string.digits, k=4))
+                new_key = f"{base}_{suffix}"
+                if new_key not in existing_keys:
+                    break
+            f["key"] = new_key
+            existing_keys.add(new_key)
+            result.append(f)
+        return result
+
     def update_schema(
         self,
         org_id: uuid.UUID,
@@ -106,7 +148,9 @@ class MetaFieldSchemaService:
         """Create or update a meta field schema by structured scope.
 
         All fields are user-defined — no system field restrictions.
+        Automatically ensures all field keys have unique random suffixes.
         """
+        fields = self._ensure_field_keys(fields)
         row = (
             self.db.query(MetaFieldSchema)
             .filter_by(
