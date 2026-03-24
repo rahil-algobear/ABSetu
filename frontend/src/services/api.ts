@@ -480,8 +480,6 @@ export const enrollmentApi = {
   },
   create: async (data: {
     entity_id: string;
-    admission_date: string;
-    release_date?: string;
     dimension_value_ids?: string[];
     meta?: Record<string, unknown>;
   }): Promise<Enrollment> => {

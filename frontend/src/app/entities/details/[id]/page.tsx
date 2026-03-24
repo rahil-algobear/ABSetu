@@ -36,8 +36,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Plus, Pencil, X, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
-import { formatDate, getToday } from "@/utils/date";
-import { DateTimeInput } from "@/components/ui/date-time-input";
+import { formatDate } from "@/utils/date";
 
 /**
  * Cascading dimension filter — reused from activities page pattern.
@@ -363,11 +362,6 @@ function EnrollmentForm({
     [dimensions]
   );
 
-  // Initialize form data from enrollment if editing
-  const [admissionDate, setAdmissionDate] = useState(
-    enrollment?.admission_date || getToday()
-  );
-  const [releaseDate, setReleaseDate] = useState(enrollment?.release_date || "");
   const [dimensionValueIds, setDimensionValueIds] = useState<string[]>(
     () => enrollment?.dimensions?.map((t) => t.value_id) || []
   );
@@ -416,25 +410,19 @@ function EnrollmentForm({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const meta = Object.keys(metaValues).length > 0 ? metaValues : undefined;
     if (isEdit && enrollment) {
       updateMutation.mutate({
         id: enrollment.id,
-        updates: {
-          admission_date: admissionDate,
-          release_date: releaseDate || null,
-          meta: metaFields.length > 0 ? metaValues : undefined,
-        },
+        updates: { meta },
         tagIds: dimensionValueIds,
       });
     } else {
-      const payload: Parameters<typeof enrollmentApi.create>[0] = {
+      createMutation.mutate({
         entity_id: entityId,
-        admission_date: admissionDate,
+        meta,
         dimension_value_ids: dimensionValueIds,
-      };
-      if (releaseDate) payload.release_date = releaseDate;
-      if (metaFields.length > 0) payload.meta = metaValues;
-      createMutation.mutate(payload);
+      });
     }
   };
 
@@ -492,25 +480,6 @@ function EnrollmentForm({
             </div>
           );
         })}
-
-        <div>
-          <label className="text-sm font-medium">Admission Date</label>
-          <DateTimeInput
-            value={admissionDate}
-            onChange={(val) => setAdmissionDate(val)}
-            required
-            allowTime={false}
-          />
-        </div>
-
-        <div>
-          <label className="text-sm font-medium">Release Date</label>
-          <DateTimeInput
-            value={releaseDate}
-            onChange={(val) => setReleaseDate(val)}
-            allowTime={false}
-          />
-        </div>
 
         <DynamicMetaForm
           fields={metaFields}
