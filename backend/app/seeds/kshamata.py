@@ -392,6 +392,7 @@ BENEFICIARY_CUSTOM_FIELDS = [
     {"label": "Contact No.", "type": "text", "required": False},
     {"label": "Current Address", "type": "text", "required": False},
     {"label": "Native Place", "type": "text", "required": False},
+    {"label": "Date of Birth", "type": "date", "required": False},
     {"label": "Age", "type": "number", "required": False},
     {"label": "Education", "type": "text", "required": False},
 ]
@@ -774,6 +775,7 @@ def seed():
             ("Contact No.", {}),
             ("Current Address", {}),
             ("Native Place", {"sortable": True}),
+            ("Date of Birth", {"filterable": True, "sortable": True}),
             ("Age", {}),
             ("Education", {}),
         ]
