@@ -16,7 +16,7 @@ import {
   MetaFieldDefinition,
   MetaFieldSchemaItem,
 } from "@/types";
-import { collectActivityFields, collectParticipantFields } from "@/utils/meta-fields";
+import { collectActivityFields, collectParticipantFields, getFieldsForScope } from "@/utils/meta-fields";
 import { formatDate, formatDateTime } from "@/utils/date";
 import { Can } from "@/components/Auth/Permissions";
 
@@ -118,7 +118,12 @@ export default function ActivityDetailPage() {
       const result: Record<string, { id: string; name: string }[]> = {};
       for (const typeId of entitySourceIds) {
         const entities = await entityApi.list(typeId);
-        result[typeId] = entities.map((e) => ({ id: e.id, name: e.name }));
+        const fields = getFieldsForScope(allMetaSchemas, { type: "entity", entity_type_id: typeId });
+        const nameField = fields.find((f) => f.label === "Name");
+        result[typeId] = entities.map((e) => ({
+          id: e.id,
+          name: nameField ? String((e.meta || {})[nameField.key] || "") : "",
+        }));
       }
       return result;
     },
@@ -277,10 +282,23 @@ export default function ActivityDetailPage() {
     return field.label;
   };
 
+  const getParticipantName = (p: ActivityParticipant): string => {
+    if (p.participant_type === "user") {
+      const u = users.find((u) => u.id === p.participant_id);
+      return u ? `${u.first_name} ${u.last_name}`.trim() : p.participant_id;
+    }
+    // Entity — look up from loaded entitiesByType
+    for (const opts of Object.values(entitiesByType)) {
+      const found = opts.find((o) => o.id === p.participant_id);
+      if (found) return found.name;
+    }
+    return p.participant_id;
+  };
+
   if (isLoading) return <PageLayout><PageContent><p>Loading...</p></PageContent></PageLayout>;
   if (!activity) return <PageLayout><PageContent><p>Not found</p></PageContent></PageLayout>;
 
-  const activityTitle = activity.title || (activity.dimensions.length > 0 ? activity.dimensions[0].value_name : "Activity");
+  const activityTitle = activity.dimensions.length > 0 ? activity.dimensions[0].value_name : "Activity";
   const typeName = activity.activity_type_name || "Activity";
   const activitySubtitle = activity.dimensions.length > 1
     ? `${typeName} - ${activity.dimensions.slice(1).map((d) => d.value_name).join(" · ")}`
@@ -601,7 +619,7 @@ export default function ActivityDetailPage() {
                           <tbody>
                             {sectionParticipants.map((p) => (
                               <tr key={p.id} className="border-b last:border-0">
-                                <td className="px-3 py-2">{p.participant_name || p.participant_id}</td>
+                                <td className="px-3 py-2">{getParticipantName(p)}</td>
                                 {hasStatus && (
                                   <td className="px-3 py-2">
                                     {p.status && (
@@ -634,7 +652,7 @@ export default function ActivityDetailPage() {
                       <div className="flex flex-wrap gap-1.5">
                         {sectionParticipants.map((p) => (
                           <Badge key={p.id} variant="outline" className="text-sm font-normal py-1 px-2">
-                            {p.participant_name || p.participant_id}
+                            {getParticipantName(p)}
                           </Badge>
                         ))}
                       </div>
@@ -664,7 +682,7 @@ export default function ActivityDetailPage() {
                     key={p.id}
                     className="flex justify-between items-center p-2 border rounded text-sm"
                   >
-                    <span>{p.participant_name || p.participant_id}</span>
+                    <span>{getParticipantName(p)}</span>
                     {p.status && (
                       <Badge variant={p.status === "present" ? "default" : "secondary"}>
                         {p.status}

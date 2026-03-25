@@ -167,8 +167,8 @@ export default function EntityDetailPage() {
       <PageHeader title={entityTitle} />
       <PageContent>
       <div className="flex gap-1 items-center mb-2">
-        {entity.case_number && (
-          <span className="text-gray-500">{entity.case_number}</span>
+        {entity.meta?.case_number && (
+          <span className="text-gray-500">{String(entity.meta.case_number)}</span>
         )}
         {entity.entity_type_name && (
           <Badge variant="secondary">{entity.entity_type_name}</Badge>
@@ -290,13 +290,13 @@ export default function EntityDetailPage() {
                             ))}
                           </div>
                           <p className="text-xs text-gray-500">
-                            {formatDate(e.admission_date)}
-                            {e.release_date ? ` to ${formatDate(e.release_date)}` : ""}
+                            {formatDate(e.meta?.admission_date as string)}
+                            {e.meta?.release_date ? ` to ${formatDate(e.meta.release_date as string)}` : ""}
                           </p>
                         </div>
                         <div className="flex items-center gap-2">
-                          <Badge variant={e.release_date ? "secondary" : "default"}>
-                            {e.release_date ? "Released" : "Active"}
+                          <Badge variant={e.meta?.release_date ? "secondary" : "default"}>
+                            {e.meta?.release_date ? "Released" : "Active"}
                           </Badge>
                           <Can permission="enrollment:manage">
                             <Button
@@ -352,7 +352,7 @@ export default function EntityDetailPage() {
                   >
                     <div className="min-w-0">
                       <div className="text-sm font-medium">
-                        {a.title || (a.dimensions?.length > 0 ? a.dimensions[0].value_name : a.activity_type_name || "Activity")}
+                        {a.dimensions?.length > 0 ? a.dimensions[0].value_name : a.activity_type_name || "Activity"}
                       </div>
                       <div className="text-xs text-gray-500 mt-0.5">
                         {formatDate(a.start_date)}

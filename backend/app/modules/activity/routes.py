@@ -158,40 +158,6 @@ def _collect_field_defs(
     return all_field_defs
 
 
-def _find_field_by_base_key(field_defs: dict[str, dict], base_key: str) -> dict | None:
-    """Find a field definition by its base key, handling prefixed keys (e.g. a3x9_title)."""
-    import re
-    if base_key in field_defs:
-        return field_defs[base_key]
-    escaped = re.escape(base_key)
-    for k, v in field_defs.items():
-        if re.match(rf"^[a-z0-9]{{4}}_{escaped}$", k):
-            return v
-    return None
-
-
-def _resolve_generated_title(activity, field_defs: dict[str, dict]) -> str | None:
-    """Compose a generated title from dimension values based on title field config."""
-    title_def = _find_field_by_base_key(field_defs, "title")
-    if not title_def:
-        return None
-    config = title_def.get("config") or {}
-    if config.get("mode") != "generated":
-        return None
-    dimension_ids = config.get("dimension_ids", [])
-    separator = config.get("separator", " - ")
-    if not dimension_ids:
-        return None
-    parts = []
-    for dim_id in dimension_ids:
-        for d in activity.dimensions or []:
-            dv = d.dimension_value
-            if dv and dv.dimension and str(dv.dimension.id) == dim_id:
-                parts.append(dv.name)
-                break
-    return separator.join(parts) if parts else None
-
-
 def _build_activity_response(a, field_defs: dict[str, dict] | None = None) -> dict:
     """Build ActivityResponse dict from an Activity model instance."""
     meta = a.meta or {}
@@ -211,35 +177,17 @@ def _build_activity_response(a, field_defs: dict[str, dict] | None = None) -> di
 
     activity_type_name = a.activity_type.name if a.activity_type else None
 
-    # Resolve title: generated from dimensions, or from meta
-    from app.modules.entity.routes import _resolve_meta_value
-    title = _resolve_generated_title(a, field_defs or {}) or _resolve_meta_value(meta, "title") or None
-
     return ActivityResponse(
         id=str(a.id),
         created_at=a.created_at,
         updated_at=a.updated_at,
         organization_id=str(a.organization_id),
         activity_type_id=str(a.activity_type_id) if a.activity_type_id else None,
-        title=title,
-        start_date=_resolve_meta_value(meta, "start_date") or _resolve_meta_value(meta, "date") or None,
-        end_date=_resolve_meta_value(meta, "end_date") or None,
-        notes=_resolve_meta_value(meta, "notes") or None,
         created_by=str(a.created_by) if a.created_by else None,
         meta=meta,
         activity_type_name=activity_type_name,
         dimensions=dim_infos,
     ).dump()
-
-
-def _load_field_defs_by_type(db: Session, activities: list, org_id: uuid.UUID) -> dict:
-    """Load field defs for each unique activity_type_id, keyed by type ID string."""
-    defs: dict = {}
-    for a in activities:
-        key = str(a.activity_type_id) if a.activity_type_id else None
-        if key and key not in defs:
-            defs[key] = _collect_field_defs(db, org_id, a.activity_type_id)
-    return defs
 
 
 @activity_router.get("/", dependencies=[Depends(require_permissions("activity:view"))])
@@ -294,16 +242,9 @@ def list_activities(
         list_columns=list_columns,
     )
 
-    # Load field defs for generated title resolution
-    activities = [activity for activity, _count in rows]
-    all_defs = _load_field_defs_by_type(db, activities, current_user.organization_id)
-
     data = []
     for activity, participant_count in rows:
-        resp = _build_activity_response(
-            activity,
-            all_defs.get(str(activity.activity_type_id)) if activity.activity_type_id else None,
-        )
+        resp = _build_activity_response(activity)
         resp["participant_count"] = participant_count or 0
         data.append(resp)
 
@@ -369,13 +310,7 @@ def list_activities_by_entity(
 ):
     service = ActivityService(db)
     activities = service.list_by_entity(entity_id, current_user.organization_id)
-    all_defs = _load_field_defs_by_type(db, activities, current_user.organization_id)
-    return [
-        _build_activity_response(
-            a, all_defs.get(str(a.activity_type_id)) if a.activity_type_id else None
-        )
-        for a in activities
-    ]
+    return [_build_activity_response(a) for a in activities]
 
 
 @activity_router.get(
@@ -387,10 +322,7 @@ def get_activity(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    field_defs = _collect_field_defs(
-        db, current_user.organization_id, activity.activity_type_id
-    )
-    return _build_activity_response(activity, field_defs)
+    return _build_activity_response(activity)
 
 
 @activity_router.post(
@@ -453,7 +385,7 @@ def create_activity(
         data.dimension_value_ids,
         accessible_dv_ids=accessible_dv_ids,
     )
-    return _build_activity_response(activity, all_field_defs)
+    return _build_activity_response(activity)
 
 
 @activity_router.put(
@@ -488,10 +420,7 @@ def update_activity(
 
     service = ActivityService(db)
     updated = service.update(activity.id, data.model_dump(exclude_none=True))
-    field_defs = _collect_field_defs(
-        db, current_user.organization_id, updated.activity_type_id
-    )
-    return _build_activity_response(updated, field_defs)
+    return _build_activity_response(updated)
 
 
 @activity_router.delete(
@@ -510,24 +439,6 @@ def delete_activity(
 # --- Activity Participants ---
 
 
-def _resolve_participant_name(db, participant_type, participant_id):
-    """Look up participant name based on type."""
-    if participant_type == "entity":
-        from app.modules.entity.model import Entity
-        from app.modules.entity.routes import _resolve_meta_value
-
-        entity = db.query(Entity).filter_by(id=participant_id).first()
-        return _resolve_meta_value(entity.meta or {}, "name") or None if entity else None
-    elif participant_type == "user":
-        from app.modules.auth.model import User as UserModel
-
-        user = UserModel
-        u = db.query(user).filter_by(id=participant_id).first()
-        if u:
-            return f"{u.first_name} {u.last_name}".strip()
-    return None
-
-
 @activity_router.get(
     "/{activity_id}/participants",
     dependencies=[Depends(require_permissions("activity:view"))],
@@ -540,7 +451,6 @@ def get_participants(
     participants = service.list_by_activity(activity.id)
     results = []
     for p in participants:
-        name = _resolve_participant_name(db, p.participant_type, p.participant_id)
         resp = ParticipantResponse(
             id=str(p.id),
             updated_at=p.updated_at,
@@ -550,7 +460,6 @@ def get_participants(
             section_key=p.section_key,
             status=p.status,
             meta=p.meta,
-            participant_name=name,
         )
         results.append(resp.dump())
     return results

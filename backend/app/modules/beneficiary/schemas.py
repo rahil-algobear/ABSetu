@@ -33,8 +33,5 @@ class EnrollmentUpdate(BaseModel):
 class EnrollmentResponse(BaseResponseSchema):
     organization_id: str
     entity_id: str
-    admission_date: str | None = None
-    release_date: str | None = None
     meta: dict[str, Any] | None = None
-    entity_name: str | None = None
     dimensions: list[DimensionInfo] = []

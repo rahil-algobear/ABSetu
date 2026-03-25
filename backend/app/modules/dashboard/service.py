@@ -13,7 +13,6 @@ from app.common.helpers.dimension_scoping import (
     group_dvs_by_dimension,
 )
 from app.modules.activity.model import Activity, ActivityType, ActivityParticipant
-from app.modules.activity.routes import _resolve_generated_title, _collect_field_defs
 from app.modules.entity.model import Entity, EntityType
 from app.modules.beneficiary.model import Enrollment
 from app.modules.auth.model import User
@@ -296,15 +295,6 @@ class DashboardService:
             .all()
         )
 
-        # Load field defs for title resolution
-        field_defs_by_type: dict[str, dict] = {}
-        for a in recent_rows:
-            key = str(a.activity_type_id) if a.activity_type_id else None
-            if key and key not in field_defs_by_type:
-                field_defs_by_type[key] = _collect_field_defs(
-                    self.db, organization_id, a.activity_type_id
-                )
-
         recent_activities = []
         for a in recent_rows:
             participant_count = (
@@ -315,19 +305,11 @@ class DashboardService:
             )
             type_name = a.activity_type.name if a.activity_type else None
 
-            # Resolve title: generated from dimensions first, then meta
-            from app.modules.entity.routes import _resolve_meta_value
-            defs = field_defs_by_type.get(str(a.activity_type_id)) if a.activity_type_id else None
-            a_meta = a.meta or {}
-            title = _resolve_generated_title(a, defs or {}) or _resolve_meta_value(a_meta, "title") or None
-
             recent_activities.append(
                 RecentActivity(
                     id=str(a.id),
-                    date=str(_resolve_meta_value(a_meta, "start_date") or _resolve_meta_value(a_meta, "date") or a.created_at),
-                    title=title,
+                    date=str(a.created_at),
                     type_name=type_name,
-                    notes=_resolve_meta_value(a_meta, "notes") or None,
                     participant_count=participant_count,
                 )
             )

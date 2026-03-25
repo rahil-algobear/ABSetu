@@ -128,8 +128,6 @@ export interface Entity {
   id: string;
   organization_id: string;
   entity_type_id: string;
-  case_number: string | null;
-  name: string;
   meta: Record<string, unknown> | null;
   entity_type_name: string | null;
   entity_type_key: string | null;
@@ -156,10 +154,6 @@ export interface Activity {
   id: string;
   organization_id: string;
   activity_type_id: string | null;
-  title: string | null;
-  start_date: string;
-  end_date: string | null;
-  notes: string | null;
   created_by: string | null;
   meta: Record<string, unknown> | null;
   activity_type_name: string | null;
@@ -177,7 +171,6 @@ export interface ActivityParticipant {
   section_key: string;
   status: string | null;
   meta: Record<string, unknown> | null;
-  participant_name: string | null;
   updated_at: string | null;
 }
 
@@ -302,9 +295,7 @@ export interface TimeSeriesPoint {
 export interface RecentActivity {
   id: string;
   date: string;
-  title: string | null;
   type_name: string | null;
-  notes: string | null;
   participant_count: number;
 }
 
@@ -333,10 +324,7 @@ export interface Enrollment {
   id: string;
   organization_id: string;
   entity_id: string;
-  admission_date: string;
-  release_date: string | null;
   meta: Record<string, unknown> | null;
-  entity_name: string | null;
   dimensions: DimensionInfo[];
   updated_at: string | null;
 }

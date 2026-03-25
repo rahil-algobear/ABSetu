@@ -103,7 +103,7 @@ function EntityTypeEntitiesContent() {
     if (col.field_type === "static") {
       switch (col.key) {
         case "case_number":
-          return entity.case_number || "—";
+          return (entity.meta?.case_number as string) || "—";
         case "enrollment_count":
           return entity.enrollment_count;
         case "activity_count":

@@ -52,10 +52,6 @@ class ActivityUpdate(BaseModel):
 class ActivityResponse(BaseResponseSchema):
     organization_id: str
     activity_type_id: str | None = None
-    title: str | None = None
-    start_date: str | None = None
-    end_date: str | None = None
-    notes: str | None = None
     created_by: str | None = None
     meta: dict[str, Any] | None = None
     activity_type_name: str | None = None
@@ -85,4 +81,3 @@ class ParticipantResponse(BaseResponseSchema):
     section_key: str
     status: str | None = None
     meta: dict[str, Any] | None = None
-    participant_name: str | None = None

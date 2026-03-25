@@ -34,20 +34,6 @@ entity_type_router = APIRouter(prefix="/entity-types")
 entity_router = APIRouter(prefix="/entities")
 
 
-def _resolve_meta_value(meta: dict, base_key: str, default="") -> str:
-    """Resolve a meta value by base key, handling prefixed keys (e.g. a3x9_name)."""
-    import re
-
-    val = meta.get(base_key)
-    if val:
-        return str(val)
-    escaped = re.escape(base_key)
-    for k, v in meta.items():
-        if v and re.match(rf"^[a-z0-9]{{4}}_{escaped}$", k):
-            return str(v)
-    return default
-
-
 def _build_entity_response(e, enrollment_count: int = 0, activity_count: int = 0) -> dict:
     meta = e.meta or {}
     dim_infos = []
@@ -69,8 +55,6 @@ def _build_entity_response(e, enrollment_count: int = 0, activity_count: int = 0
         updated_at=e.updated_at,
         organization_id=str(e.organization_id),
         entity_type_id=str(e.entity_type_id),
-        case_number=_resolve_meta_value(meta, "case_number", default=""),
-        name=_resolve_meta_value(meta, "name"),
         meta=meta,
         entity_type_name=e.entity_type.name if e.entity_type else None,
         entity_type_key=e.entity_type.key if e.entity_type else None,
