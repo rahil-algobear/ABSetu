@@ -73,6 +73,8 @@ export default function EntityDetailPage() {
 
   const [showCreate, setShowCreate] = useState(false);
   const [editingEnrollment, setEditingEnrollment] = useState<Enrollment | null>(null);
+  const [editingDetails, setEditingDetails] = useState(false);
+  const [detailMetaValues, setDetailMetaValues] = useState<Record<string, unknown>>({});
 
   const { data: entity, isLoading } = useQuery({
     queryKey: ["entity", id],
@@ -123,6 +125,35 @@ export default function EntityDetailPage() {
 
   const canEnroll = entity?.entity_type_config?.can_enroll !== false;
 
+  const editDisabledKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const f of metaFields) {
+      if (f.stage === "create") keys.add(f.key);
+    }
+    return keys;
+  }, [metaFields]);
+
+  const updateDetailsMutation = useMutation({
+    mutationFn: (meta: Record<string, unknown>) =>
+      entityApi.update(id, { meta }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["entity", id] });
+      setEditingDetails(false);
+      toast.success("Details updated");
+    },
+    onError: () => toast.error("Failed to update details"),
+  });
+
+  const openEditDetails = () => {
+    setDetailMetaValues(entity?.meta || {});
+    setEditingDetails(true);
+  };
+
+  const handleSaveDetails = (e: React.FormEvent) => {
+    e.preventDefault();
+    updateDetailsMutation.mutate(detailMetaValues);
+  };
+
   if (isLoading) return <PageLayout><PageContent><p>Loading...</p></PageContent></PageLayout>;
   if (!entity) return <PageLayout><PageContent><p>Not found</p></PageContent></PageLayout>;
 
@@ -154,16 +185,45 @@ export default function EntityDetailPage() {
         </div>
       )}
 
-      {entity.meta && Object.keys(entity.meta).length > 0 && (
+      {metaFields.length > 0 && (
         <Card className="mb-4">
           <CardHeader>
-            <CardTitle className="text-lg">Details</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg">Details</CardTitle>
+              {!editingDetails && (
+                <Can permission="entity:update">
+                  <button onClick={openEditDetails} className="text-gray-400 hover:text-purple-600">
+                    <Pencil className="h-4 w-4" />
+                  </button>
+                </Can>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
-            <MetaFieldDisplay
-              fields={metaFields}
-              values={entity.meta}
-            />
+            {editingDetails ? (
+              <form onSubmit={handleSaveDetails} className="space-y-3">
+                <DynamicMetaForm
+                  fields={metaFields.filter((f) => f.visible !== false)}
+                  values={detailMetaValues}
+                  onChange={setDetailMetaValues}
+                  disabledKeys={editDisabledKeys}
+                />
+                <div className="flex gap-2 pt-2">
+                  <Button type="submit" disabled={updateDetailsMutation.isPending}>
+                    Save
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => setEditingDetails(false)}>
+                    Cancel
+                  </Button>
+                </div>
+              </form>
+            ) : (
+              <MetaFieldDisplay
+                fields={metaFields}
+                values={entity.meta}
+                showEmpty
+              />
+            )}
           </CardContent>
         </Card>
       )}
@@ -486,13 +546,17 @@ function EnrollmentForm({
         })}
 
         <DynamicMetaForm
-          fields={metaFields.filter((f) => {
-            if (f.visible === false) return false;
-            if (isEdit) return f.stage !== "create";
-            return f.stage !== "record";
-          })}
+          fields={metaFields.filter((f) => f.visible !== false)}
           values={metaValues}
           onChange={setMetaValues}
+          disabledKeys={(() => {
+            const keys = new Set<string>();
+            for (const f of metaFields) {
+              if (isEdit && f.stage === "create") keys.add(f.key);
+              if (!isEdit && f.stage === "record") keys.add(f.key);
+            }
+            return keys;
+          })()}
         />
 
         <div className="flex gap-2">
