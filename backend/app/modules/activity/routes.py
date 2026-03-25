@@ -159,13 +159,13 @@ def _collect_field_defs(
 
 
 def _find_field_by_base_key(field_defs: dict[str, dict], base_key: str) -> dict | None:
-    """Find a field definition by its base key, handling prefixed or suffixed keys."""
+    """Find a field definition by its base key, handling prefixed keys (e.g. a3x9_title)."""
     import re
     if base_key in field_defs:
         return field_defs[base_key]
     escaped = re.escape(base_key)
     for k, v in field_defs.items():
-        if re.match(rf"^([a-z0-9]{{4}}_{escaped}|{escaped}_[a-z0-9]{{4}})$", k):
+        if re.match(rf"^[a-z0-9]{{4}}_{escaped}$", k):
             return v
     return None
 

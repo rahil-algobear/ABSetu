@@ -35,7 +35,7 @@ entity_router = APIRouter(prefix="/entities")
 
 
 def _resolve_meta_value(meta: dict, base_key: str, default="") -> str:
-    """Resolve a meta value by base key, handling prefixed (a3x9_name) or suffixed (name_psw7) keys."""
+    """Resolve a meta value by base key, handling prefixed keys (e.g. a3x9_name)."""
     import re
 
     val = meta.get(base_key)
@@ -43,7 +43,7 @@ def _resolve_meta_value(meta: dict, base_key: str, default="") -> str:
         return str(val)
     escaped = re.escape(base_key)
     for k, v in meta.items():
-        if v and re.match(rf"^([a-z0-9]{{4}}_{escaped}|{escaped}_[a-z0-9]{{4}})$", k):
+        if v and re.match(rf"^[a-z0-9]{{4}}_{escaped}$", k):
             return str(v)
     return default
 

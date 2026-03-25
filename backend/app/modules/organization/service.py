@@ -94,17 +94,13 @@ class MetaFieldSchemaService:
         rows = self.get_all_schemas(org_id)
         return [{"row": row, "fields": row.fields} for row in rows]
 
-    # Matches keys with a 4-char random prefix (new format: psw7_name)
     _PREFIX_PATTERN = re.compile(r"^[a-z0-9]{4}_")
-    # Matches keys with a 4-char random suffix (old format: name_psw7)
-    _SUFFIX_PATTERN = re.compile(r"_[a-z0-9]{4}$")
 
     @classmethod
     def _ensure_field_keys(cls, fields: list[dict]) -> list[dict]:
         """Ensure every field has a unique key with a random 4-char prefix.
 
-        Keys with an existing prefix (e.g. psw7_name) or legacy suffix
-        (e.g. name_psw7) are left as-is. New fields get a prefix added.
+        Keys with an existing prefix (e.g. psw7_name) are left as-is.
         Format: {4-char random}_{descriptive_base}  (e.g. a3x9_name)
         """
         import random
@@ -115,8 +111,8 @@ class MetaFieldSchemaService:
         for f in fields:
             f = dict(f)
             key = f.get("key") or ""
-            # Already has a random prefix (new format) or legacy suffix — keep it
-            if key and (cls._PREFIX_PATTERN.search(key) or cls._SUFFIX_PATTERN.search(key)):
+            # Already has a random prefix — keep it
+            if key and cls._PREFIX_PATTERN.search(key):
                 result.append(f)
                 continue
             # Generate a descriptive base from the field
