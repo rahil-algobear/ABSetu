@@ -5,7 +5,7 @@ Entity and EntityType services
 import uuid
 from datetime import datetime
 
-from sqlalchemy import func
+from sqlalchemy import cast, func, String
 from sqlalchemy.orm import Session
 
 from app.common.helpers.meta_normalize import normalize_meta_datetimes
@@ -145,7 +145,6 @@ class EntityService:
     ) -> dict:
         """Sort keys available for entity list, optionally including meta fields from list config."""
         config = {
-            "name": Entity.meta["name"].astext,
             "case_number": Entity.meta["case_number"].astext,
             "created_at": Entity.created_at,
         }
@@ -212,9 +211,9 @@ class EntityService:
         """Paginated list with search, filter, sort support."""
         query = self._build_base_query(org_id, accessible_dv_ids)
 
-        # Search on name and case_number in meta
+        # Search across all meta values (handles suffixed keys like name_psw7)
         query = apply_search(
-            query, params.search, [Entity.meta["name"].astext, Entity.meta["case_number"].astext]
+            query, params.search, [cast(Entity.meta, String)]
         )
 
         # Build filter/sort keys from list config

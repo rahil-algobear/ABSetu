@@ -501,9 +501,10 @@ def _resolve_participant_name(db, participant_type, participant_id):
     """Look up participant name based on type."""
     if participant_type == "entity":
         from app.modules.entity.model import Entity
+        from app.modules.entity.routes import _resolve_meta_value
 
         entity = db.query(Entity).filter_by(id=participant_id).first()
-        return (entity.meta or {}).get("name") if entity else None
+        return _resolve_meta_value(entity.meta or {}, "name") or None if entity else None
     elif participant_type == "user":
         from app.modules.auth.model import User as UserModel
 

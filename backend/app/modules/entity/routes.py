@@ -34,6 +34,19 @@ entity_type_router = APIRouter(prefix="/entity-types")
 entity_router = APIRouter(prefix="/entities")
 
 
+def _resolve_meta_value(meta: dict, base_key: str, default="") -> str:
+    """Resolve a meta value by base key, handling suffixed keys (e.g. name_psw7)."""
+    import re
+
+    val = meta.get(base_key)
+    if val:
+        return str(val)
+    for k, v in meta.items():
+        if re.match(rf"^{re.escape(base_key)}_[a-z0-9]{{4,}}$", k) and v:
+            return str(v)
+    return default
+
+
 def _build_entity_response(e, enrollment_count: int = 0, activity_count: int = 0) -> dict:
     meta = e.meta or {}
     dim_infos = []
@@ -55,8 +68,8 @@ def _build_entity_response(e, enrollment_count: int = 0, activity_count: int = 0
         updated_at=e.updated_at,
         organization_id=str(e.organization_id),
         entity_type_id=str(e.entity_type_id),
-        case_number=meta.get("case_number"),
-        name=meta.get("name", ""),
+        case_number=_resolve_meta_value(meta, "case_number", default=""),
+        name=_resolve_meta_value(meta, "name"),
         meta=meta,
         entity_type_name=e.entity_type.name if e.entity_type else None,
         entity_type_key=e.entity_type.key if e.entity_type else None,

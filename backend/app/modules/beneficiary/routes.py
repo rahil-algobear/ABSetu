@@ -17,6 +17,7 @@ from app.modules.beneficiary.schemas import (
     EnrollmentUpdate,
 )
 from app.modules.beneficiary.service import EnrollmentService
+from app.modules.entity.routes import _resolve_meta_value
 
 router = APIRouter(tags=["enrollments"])
 
@@ -47,7 +48,7 @@ def _build_enrollment_response(e) -> dict:
         admission_date=meta.get("admission_date"),
         release_date=meta.get("release_date"),
         meta=meta,
-        entity_name=(entity_meta or {}).get("name") if entity_meta else None,
+        entity_name=_resolve_meta_value(entity_meta or {}, "name") or None if entity_meta else None,
         dimensions=dim_infos,
     ).dump()
 
