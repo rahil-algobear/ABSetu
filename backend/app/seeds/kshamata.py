@@ -433,6 +433,22 @@ SESSION_PARTICIPANT_FIELDS = [
 ]
 
 
+# ---------------------------------------------------------------------------
+# Meta Field Schemas — participant fields for Physical Health intervention
+# These fields appear when recording participant data for sessions
+# with Activity Type = Session, Dimension = Intervention,
+# Dimension Value = "Physical Health"
+# ---------------------------------------------------------------------------
+PHYSICAL_HEALTH_PARTICIPANT_FIELDS = [
+    {"label": "Weight of the Woman", "type": "number", "required": False, "stage": "record", "sort_order": 0},
+    {"label": "Menstruation", "type": "text", "required": False, "stage": "record", "sort_order": 1},
+    {"label": "H.B.", "type": "number", "required": False, "stage": "record", "sort_order": 2},
+    {"label": "Protein/Iron/Cal", "type": "text", "required": False, "stage": "record", "sort_order": 3},
+    {"label": "Health Issues", "type": "text", "required": False, "stage": "record", "sort_order": 4},
+    {"label": "Psychiatric Consultation", "type": "text", "required": False, "stage": "record", "sort_order": 5},
+]
+
+
 def _make_intervention_code(name: str) -> str:
     """Convert intervention name to a slugified dimension value code."""
     import re
@@ -761,6 +777,22 @@ def seed():
             activity_type_id=sessions_type.id,
         )
         print(f"  Ensured session meta field schema ({len(session_fields)} fields)")
+
+        # 7b-ii. Participant fields for Physical Health intervention
+        physical_health_dv = intervention_map.get("Physical Health")
+        if physical_health_dv:
+            meta_service.update_schema(
+                org.id,
+                "participant",
+                PHYSICAL_HEALTH_PARTICIPANT_FIELDS,
+                activity_type_id=sessions_type.id,
+                dimension_value_id=physical_health_dv.id,
+                dimension_id=intervention_dim.id,
+            )
+            print(
+                f"  Ensured Physical Health participant fields "
+                f"({len(PHYSICAL_HEALTH_PARTICIPANT_FIELDS)} fields)"
+            )
 
         # 7c. List config — Beneficiary
         from app.modules.organization.service import ListConfigService
