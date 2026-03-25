@@ -16,9 +16,10 @@ export function findSchema(
   return schemas.find((s) => {
     if (s.scope.type !== criteria.type) return false;
     if ((s.scope.entity_type_id || null) !== (criteria.entity_type_id || null)) return false;
-    if ((s.scope.dimension_id || null) !== (criteria.dimension_id || null)) return false;
     if ((s.scope.activity_type_id || null) !== (criteria.activity_type_id || null)) return false;
     if ((s.scope.dimension_value_id || null) !== (criteria.dimension_value_id || null)) return false;
+    // dimension_id is informational — only match if explicitly provided in criteria
+    if (criteria.dimension_id && (s.scope.dimension_id || null) !== criteria.dimension_id) return false;
     return true;
   });
 }
