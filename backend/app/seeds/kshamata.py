@@ -802,7 +802,7 @@ def seed():
         bene_static = list_service._static_defaults(beneficiary_scope)
         # Desired columns in order, with overrides
         BENE_LIST_SPEC = [
-            ("Name", {"sortable": True}),
+            ("Name", {"sortable": True, "searchable": True}),
             ("Nationality", {"filterable": True, "sortable": True}),
             ("Contact No.", {}),
             ("Current Address", {}),
@@ -820,7 +820,7 @@ def seed():
             # Insert case_number right after Name
             if label == "Name" and "case_number" in bene_static_by_key:
                 cn = bene_static_by_key.pop("case_number")
-                bene_cols.append({**cn, "sort_order": len(bene_cols)})
+                bene_cols.append({**cn, "sort_order": len(bene_cols), "searchable": True, "search_supported": True})
         # Append remaining static columns after meta columns
         for s in bene_static_by_key.values():
             bene_cols.append({**s, "sort_order": len(bene_cols)})
@@ -832,7 +832,7 @@ def seed():
         fac_catalog = {c["label"]: c for c in list_service._all_meta_columns(org.id, facilitator_scope)}
         fac_static = list_service._static_defaults(facilitator_scope)
         FAC_LIST_SPEC = [
-            ("Name", {"sortable": True}),
+            ("Name", {"sortable": True, "searchable": True}),
         ]
         fac_cols = []
         for i, (label, overrides) in enumerate(FAC_LIST_SPEC):
@@ -850,7 +850,7 @@ def seed():
         sess_static = list_service._static_defaults(session_scope)
         SESSION_LIST_SPEC = [
             ("Date", {"filterable": True, "sortable": True}),
-            ("Intervention", {"filterable": True}),
+            ("Intervention", {"filterable": True, "searchable": True}),
             ("Location", {"filterable": True}),
             ("Programme", {"filterable": True}),
             ("Project", {"filterable": True}),
