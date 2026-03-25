@@ -124,9 +124,7 @@ export function DateTimeInput({
           <DatePicker
             selected={selected}
             onChange={handleChange}
-            showTimeSelect={showTime}
-            timeIntervals={15}
-            timeFormat="h:mm aa"
+            showTimeInput={showTime}
             dateFormat={showTime ? "dd-MMM-yyyy h:mm aa" : "dd-MMM-yyyy"}
             minDate={minDate ?? undefined}
             maxDate={maxDate ?? undefined}
