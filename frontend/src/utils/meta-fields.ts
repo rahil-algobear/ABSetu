@@ -192,6 +192,8 @@ export function collectParticipantFields(
  * Template format: field keys wrapped in curly braces, e.g.
  *   "{a3x9_first_name} {b2y8_last_name}"
  *
+ * For dimension fields, values aren't in meta — pass them via extraValues.
+ *
  * Falls back to:
  * 1. First field's value if no template is set
  * 2. The provided fallback string
@@ -201,10 +203,13 @@ export function resolveTitle(
   titleTemplate: string | null | undefined,
   fields: MetaFieldDefinition[],
   fallback = "",
+  extraValues?: Record<string, string>,
 ): string {
   if (titleTemplate) {
     const result = titleTemplate
       .replace(/\{(\w+)\}/g, (_, key) => {
+        // Check extraValues first (dimension values etc.)
+        if (extraValues?.[key]) return extraValues[key];
         const val = meta?.[key];
         if (val === undefined || val === null || val === "") return "";
         return String(val);
@@ -215,12 +220,34 @@ export function resolveTitle(
 
   // Fallback: use the first field's value
   if (fields.length > 0 && meta) {
-    const firstVal = meta[fields[0].key];
+    const firstKey = fields[0].key;
+    if (extraValues?.[firstKey]) return extraValues[firstKey];
+    const firstVal = meta[firstKey];
     if (firstVal !== undefined && firstVal !== null && firstVal !== "") {
       return String(firstVal);
     }
   }
 
   return fallback;
+}
+
+/**
+ * Build a map of field key → dimension value name from a dimensions array and field definitions.
+ * Used to pass dimension values into resolveTitle as extraValues.
+ */
+export function buildDimensionValueMap(
+  dimensions: { dimension_key: string; value_name: string }[],
+  fields: MetaFieldDefinition[],
+  dimensionList: { id: string; key: string }[],
+): Record<string, string> {
+  const map: Record<string, string> = {};
+  for (const field of fields) {
+    if (field.type !== "dimension" || !field.dimension_id) continue;
+    const dim = dimensionList.find((d) => d.id === field.dimension_id);
+    if (!dim) continue;
+    const dimInfo = dimensions.find((d) => d.dimension_key === dim.key);
+    if (dimInfo) map[field.key] = dimInfo.value_name;
+  }
+  return map;
 }
 

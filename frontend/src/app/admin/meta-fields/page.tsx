@@ -782,7 +782,7 @@ export default function MetaFieldsPage() {
           : [];
         // Available fields for title (only visible text-ish fields)
         const titleCandidates = schemaFields.filter(
-          (f) => f.visible !== false && ["text", "number", "date", "select"].includes(f.type)
+          (f) => f.visible !== false && ["text", "number", "date", "select", "dimension"].includes(f.type)
         );
 
         return (
@@ -794,7 +794,7 @@ export default function MetaFieldsPage() {
               </span>
             </label>
             {titleCandidates.length === 0 ? (
-              <p className="text-xs text-gray-400">Add text fields first, then select which ones form the title.</p>
+              <p className="text-xs text-gray-400">Add fields first, then select which ones form the title.</p>
             ) : (
               <div className="flex flex-wrap gap-2 items-center">
                 {selectedKeys.map((key: string, idx: number) => {
@@ -965,7 +965,7 @@ export default function MetaFieldsPage() {
         const titleCandidates = allActivityFields.filter((f) => {
           if (seenKeys.has(f.key)) return false;
           seenKeys.add(f.key);
-          return f.visible !== false && ["text", "number", "date", "select"].includes(f.type);
+          return f.visible !== false && ["text", "number", "date", "select", "dimension"].includes(f.type);
         });
 
         return (
