@@ -811,13 +811,18 @@ def seed():
             ("Age", {}),
             ("Education", {}),
         ]
+        bene_static_by_key = {s["key"]: s for s in bene_static}
         bene_cols = []
         for i, (label, overrides) in enumerate(BENE_LIST_SPEC):
             col = bene_catalog.get(label)
             if col:
                 bene_cols.append({**col, "sort_order": i, **overrides})
-        # Append static columns after meta columns
-        for s in bene_static:
+            # Insert case_number right after Name
+            if label == "Name" and "case_number" in bene_static_by_key:
+                cn = bene_static_by_key.pop("case_number")
+                bene_cols.append({**cn, "sort_order": len(bene_cols)})
+        # Append remaining static columns after meta columns
+        for s in bene_static_by_key.values():
             bene_cols.append({**s, "sort_order": len(bene_cols)})
         list_service.update_config(org.id, beneficiary_scope, bene_cols)
         print(f"  Seeded beneficiary list config ({len(bene_cols)} columns)")
