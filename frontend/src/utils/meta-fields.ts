@@ -1,7 +1,13 @@
 import { MetaFieldDefinition, MetaFieldSchemaItem } from "@/types";
 
 /**
- * Find a single schema item matching exact scope criteria.
+ * Find a single schema item matching scope criteria.
+ *
+ * Each scope field in criteria is compared if present; fields not specified
+ * in criteria are not required to match. This allows:
+ * - { dimension_value_id } → matches schemas with that value (regardless of dimension_id)
+ * - { dimension_id } → matches schemas scoped to all values of that dimension
+ * - { dimension_id, dimension_value_id } → matches schemas with both
  */
 export function findSchema(
   schemas: MetaFieldSchemaItem[],
@@ -18,8 +24,7 @@ export function findSchema(
     if ((s.scope.entity_type_id || null) !== (criteria.entity_type_id || null)) return false;
     if ((s.scope.activity_type_id || null) !== (criteria.activity_type_id || null)) return false;
     if ((s.scope.dimension_value_id || null) !== (criteria.dimension_value_id || null)) return false;
-    // dimension_id is informational — only match if explicitly provided in criteria
-    if (criteria.dimension_id && (s.scope.dimension_id || null) !== criteria.dimension_id) return false;
+    if ((s.scope.dimension_id || null) !== (criteria.dimension_id || null)) return false;
     return true;
   });
 }
@@ -52,8 +57,36 @@ function dedupeByKey(fields: MetaFieldDefinition[]): MetaFieldDefinition[] {
 }
 
 /**
+ * Build a map of dimension_value_id → dimension_id by looking at schemas.
+ */
+function buildDvToDimMap(schemas: MetaFieldSchemaItem[]): Record<string, string> {
+  const map: Record<string, string> = {};
+  for (const s of schemas) {
+    if (s.scope.dimension_value_id && s.scope.dimension_id) {
+      map[s.scope.dimension_value_id] = s.scope.dimension_id;
+    }
+  }
+  return map;
+}
+
+/**
+ * Extract unique dimension IDs from dimension value IDs.
+ */
+function resolveDimensionIds(
+  dvToDim: Record<string, string>,
+  dimensionValueIds: string[],
+): string[] {
+  const dimIds = new Set<string>();
+  for (const dvId of dimensionValueIds) {
+    const dimId = dvToDim[dvId];
+    if (dimId) dimIds.add(dimId);
+  }
+  return Array.from(dimIds);
+}
+
+/**
  * Collect all applicable activity meta fields for a given activity type + dimension values.
- * Returns fields from: type-only, dv-only, and type+dv scopes.
+ * Returns fields from: type-only, dv-only, dim-only, and type+dv scopes.
  * Fields are deduplicated by key — more specific scopes override broader ones.
  */
 export function collectActivityFields(
@@ -62,6 +95,7 @@ export function collectActivityFields(
   dimensionValueIds: string[],
 ): MetaFieldDefinition[] {
   const fields: MetaFieldDefinition[] = [];
+  const dvToDim = buildDvToDimMap(schemas);
 
   // Base scope: all activities (no activity_type, no dimension_value)
   fields.push(...getFieldsForScope(schemas, { type: "activity" }));
@@ -70,13 +104,29 @@ export function collectActivityFields(
     fields.push(...getFieldsForScope(schemas, { type: "activity", activity_type_id: activityTypeId }));
   }
 
+  // Dimension-level scopes (all values of a dimension)
+  const dimIds = resolveDimensionIds(dvToDim, dimensionValueIds);
+  for (const dimId of dimIds) {
+    fields.push(...getFieldsForScope(schemas, { type: "activity", dimension_id: dimId }));
+    if (activityTypeId) {
+      fields.push(...getFieldsForScope(schemas, {
+        type: "activity",
+        activity_type_id: activityTypeId,
+        dimension_id: dimId,
+      }));
+    }
+  }
+
+  // Dimension value specific scopes
   for (const dvId of dimensionValueIds) {
-    fields.push(...getFieldsForScope(schemas, { type: "activity", dimension_value_id: dvId }));
+    const dimId = dvToDim[dvId] || null;
+    fields.push(...getFieldsForScope(schemas, { type: "activity", dimension_value_id: dvId, dimension_id: dimId }));
     if (activityTypeId) {
       fields.push(...getFieldsForScope(schemas, {
         type: "activity",
         activity_type_id: activityTypeId,
         dimension_value_id: dvId,
+        dimension_id: dimId,
       }));
     }
   }
@@ -96,6 +146,7 @@ export function collectParticipantFields(
 ): MetaFieldDefinition[] {
   const fields: MetaFieldDefinition[] = [];
   const base = { type: "participant" as const, entity_type_id: entityTypeId };
+  const dvToDim = buildDvToDimMap(schemas);
 
   // Base: all activity types, all dimension values
   fields.push(...getFieldsForScope(schemas, base));
@@ -105,14 +156,29 @@ export function collectParticipantFields(
     fields.push(...getFieldsForScope(schemas, { ...base, activity_type_id: activityTypeId }));
   }
 
+  // Dimension-level scopes (all values of a dimension)
+  const dimIds = resolveDimensionIds(dvToDim, dimensionValueIds);
+  for (const dimId of dimIds) {
+    fields.push(...getFieldsForScope(schemas, { ...base, dimension_id: dimId }));
+    if (activityTypeId) {
+      fields.push(...getFieldsForScope(schemas, {
+        ...base,
+        activity_type_id: activityTypeId,
+        dimension_id: dimId,
+      }));
+    }
+  }
+
   // Dimension value specific
   for (const dvId of dimensionValueIds) {
-    fields.push(...getFieldsForScope(schemas, { ...base, dimension_value_id: dvId }));
+    const dimId = dvToDim[dvId] || null;
+    fields.push(...getFieldsForScope(schemas, { ...base, dimension_value_id: dvId, dimension_id: dimId }));
     if (activityTypeId) {
       fields.push(...getFieldsForScope(schemas, {
         ...base,
         activity_type_id: activityTypeId,
         dimension_value_id: dvId,
+        dimension_id: dimId,
       }));
     }
   }
