@@ -382,17 +382,13 @@ export default function ActivityDetailPage() {
                     </div>
                   );
                 }
-
-                return (
-                  <div key={`view-field-${field.key}`}>
-                    <MetaFieldDisplay
-                      fields={[field]}
-                      values={activity.meta}
-                      showEmpty
-                    />
-                  </div>
-                );
+                return null;
               })}
+              <MetaFieldDisplay
+                fields={detailFields.filter((f) => f.type !== "dimension")}
+                values={activity.meta}
+                showEmpty
+              />
             </div>
           )}
         </CardContent>
