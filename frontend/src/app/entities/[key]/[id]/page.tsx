@@ -164,16 +164,11 @@ export default function EntityDetailPage() {
 
   return (
     <PageLayout>
-      <PageHeader title={entityTitle} />
+      <PageHeader
+        title={entityTitle}
+        description={[entity.entity_type_name, entity.code].filter(Boolean).join(" - ")}
+      />
       <PageContent>
-      <div className="flex gap-1 items-center mb-2">
-        {entity.code && (
-          <span className="text-gray-500">{entity.code}</span>
-        )}
-        {entity.entity_type_name && (
-          <Badge variant="secondary">{entity.entity_type_name}</Badge>
-        )}
-      </div>
 
       {entity.dimensions?.length > 0 && (
         <div className="flex gap-1 mb-4">
