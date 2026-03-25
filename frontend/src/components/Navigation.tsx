@@ -297,7 +297,7 @@ function NavigationContent() {
 
   // People dropdown: one item per entity type
   const peopleItems = entityTypes.map((et) => ({
-    href: `/admin/entities/${et.key}`,
+    href: `/entities/${et.key}`,
     label: et.name,
     icon: Users,
     permission: "entity:view",

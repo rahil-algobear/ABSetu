@@ -67,8 +67,7 @@ function getFilteredValues(
 }
 
 export default function EntityDetailPage() {
-  const params = useParams();
-  const id = params.id as string;
+  const { id } = useParams<{ key: string; id: string }>();
   const queryClient = useQueryClient();
 
 
