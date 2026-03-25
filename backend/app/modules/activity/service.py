@@ -193,15 +193,20 @@ class ActivityService:
             {"scope_type": "activity", "activity_type_id": at_id} for at_id in at_ids
         ]
 
-        # Search on searchable meta fields
+        # Search on searchable meta + dimension fields
         from app.common.helpers.filter_definitions import (
+            build_dimension_search_columns,
             build_meta_field_filter_config,
             build_meta_field_search_columns,
         )
+        from app.modules.dimension.model import ActivityDimension
 
         search_columns = build_meta_field_search_columns(
             self.db, org_id, scopes, Activity.meta, searchable_keys
         )
+        search_columns.extend(build_dimension_search_columns(
+            self.db, org_id, ActivityDimension, Activity.id, searchable_keys
+        ))
         query = apply_search(query, params.search, search_columns)
 
         # Filters (static + dimension + meta from list config)

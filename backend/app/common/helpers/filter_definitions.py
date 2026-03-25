@@ -6,7 +6,7 @@ Each function returns a list of dicts ready for the frontend or config for the b
 import uuid
 from typing import Any, TypedDict
 
-from sqlalchemy import Numeric
+from sqlalchemy import Numeric, func
 from sqlalchemy.orm import Session
 
 
@@ -246,6 +246,49 @@ def build_meta_field_search_columns(
         if allowed_keys is not None and meta_key not in allowed_keys:
             continue
         columns.append(meta_column[field["key"]].astext)
+    return columns
+
+
+def build_dimension_search_columns(
+    db: Session,
+    org_id: uuid.UUID,
+    assoc_model: Any,
+    parent_pk: Any,
+    allowed_keys: set[str] | None = None,
+) -> list[Any]:
+    """
+    Build searchable column expressions for dimensions.
+
+    Creates a scalar subquery that aggregates dimension value names
+    for each parent record, suitable for passing to apply_search().
+
+    Args:
+        assoc_model: The association model (EntityDimension or ActivityDimension)
+        parent_pk: The parent model's primary key column (Entity.id or Activity.id)
+        allowed_keys: If provided, only include dimensions with dim:{id} in this set
+    """
+    from app.modules.dimension.model import Dimension, DimensionValue
+
+    dims = db.query(Dimension).filter_by(organization_id=org_id).all()
+    columns: list[Any] = []
+    for dim in dims:
+        dim_key = f"dim:{dim.id}"
+        if allowed_keys is not None and dim_key not in allowed_keys:
+            continue
+        # Scalar subquery: get the dimension value name for this dimension on each record
+        subq = (
+            db.query(DimensionValue.name)
+            .join(assoc_model, assoc_model.dimension_value_id == DimensionValue.id)
+            .filter(
+                assoc_model.entity_id == parent_pk
+                if hasattr(assoc_model, "entity_id")
+                else assoc_model.activity_id == parent_pk,
+                DimensionValue.dimension_id == dim.id,
+            )
+            .correlate_except(assoc_model, DimensionValue)
+            .scalar_subquery()
+        )
+        columns.append(func.coalesce(subq, ""))
     return columns
 
 

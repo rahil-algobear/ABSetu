@@ -225,17 +225,23 @@ class EntityService:
         ]
         scopes = [{"scope_type": "entity", "entity_type_id": et_id} for et_id in et_ids]
 
-        # Search on searchable meta fields
+        # Search on searchable meta + dimension fields
         from app.common.helpers.filter_definitions import (
+            build_dimension_search_columns,
             build_meta_field_filter_config,
             build_meta_field_search_columns,
         )
+        from app.modules.dimension.model import EntityDimension
 
         search_columns = build_meta_field_search_columns(
             self.db, org_id, scopes, Entity.meta, searchable_keys
         )
-        # Always include case_number in search
-        search_columns.append(Entity.meta["case_number"].astext)
+        search_columns.extend(build_dimension_search_columns(
+            self.db, org_id, EntityDimension, Entity.id, searchable_keys
+        ))
+        # Always include case_number in search if searchable or no config
+        if searchable_keys is None or "case_number" in searchable_keys:
+            search_columns.append(Entity.meta["case_number"].astext)
         query = apply_search(query, params.search, search_columns)
 
         # Filters (static + dimension + meta from list config)

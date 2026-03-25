@@ -312,7 +312,7 @@ class ListConfigService:
                 "text", "number", "date", "datetime",
                 "select", "multiselect", "boolean", "dimension",
             ),
-            "search_supported": ftype in ("text", "number", "select"),
+            "search_supported": ftype in ("text", "number", "select", "dimension"),
         }
         if ftype == "dimension" and f.get("dimension_id"):
             from app.modules.dimension.model import Dimension
@@ -349,7 +349,7 @@ class ListConfigService:
             if et and (et.config or {}).get("case_number_enabled"):
                 cols.append(self._static_col(
                     "case_number", "Case Number", len(cols),
-                    sortable=True,
+                    sortable=True, search_supported=True,
                 ))
             cols.append(self._static_col("enrollment_count", "Enrollments", len(cols)))
             cols.append(self._static_col("activity_count", "Activities", len(cols)))
