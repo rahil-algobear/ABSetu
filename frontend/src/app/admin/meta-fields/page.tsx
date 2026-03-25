@@ -357,9 +357,6 @@ export default function MetaFieldsPage() {
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    // On edit, keep existing key. On create, omit key — the backend
-    // auto-assigns a unique key with a random suffix via _ensure_field_keys.
-    const key = editingIndex !== null ? fieldForm.key : "";
     const options =
       fieldForm.type === "select" || fieldForm.type === "multiselect"
         ? optionsText.split("\n").map((o) => o.trim()).filter(Boolean)
@@ -369,9 +366,10 @@ export default function MetaFieldsPage() {
       !(Array.isArray(fieldForm.default) && fieldForm.default.length === 0)
       ? fieldForm.default
       : undefined;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const field: MetaFieldDefinition = {
       ...fieldForm,
-      key,
+      key: editingIndex !== null ? fieldForm.key : fieldForm.key,
       options,
       default: defaultVal,
       dimension_id: fieldForm.type === "dimension" ? fieldForm.dimension_id : undefined,
@@ -380,6 +378,10 @@ export default function MetaFieldsPage() {
         ? fieldForm.config
         : undefined,
     };
+    // On create, omit key — the backend auto-assigns via _ensure_field_keys
+    if (editingIndex === null) {
+      delete (field as Partial<MetaFieldDefinition>).key;
+    }
 
     if (activeSection === "activity" || activeSection === "participant") {
       const newScope = buildScopeFromModal();
