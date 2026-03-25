@@ -282,9 +282,10 @@ export default function ActivityDetailPage() {
   if (!activity) return <PageLayout><PageContent><p>Not found</p></PageContent></PageLayout>;
 
   const activityTitle = activity.title || (activity.dimensions.length > 0 ? activity.dimensions[0].value_name : "Activity");
+  const typeName = activity.activity_type_name || "Activity";
   const activitySubtitle = activity.dimensions.length > 1
-    ? activity.dimensions.slice(1).map((d) => d.value_name).join(" · ")
-    : activity.activity_type_name || undefined;
+    ? `${typeName} - ${activity.dimensions.slice(1).map((d) => d.value_name).join(" · ")}`
+    : typeName;
 
   return (
     <PageLayout>
