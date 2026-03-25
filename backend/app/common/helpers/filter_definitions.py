@@ -6,7 +6,7 @@ Each function returns a list of dicts ready for the frontend or config for the b
 import uuid
 from typing import Any, TypedDict
 
-from sqlalchemy import Numeric, func
+from sqlalchemy import Numeric, func, select
 from sqlalchemy.orm import Session
 
 
@@ -276,15 +276,11 @@ def build_dimension_search_columns(
         if allowed_keys is not None and dim_key not in allowed_keys:
             continue
         # Scalar subquery: get the dimension value name for this dimension on each record
+        fk_col = assoc_model.entity_id if hasattr(assoc_model, "entity_id") else assoc_model.activity_id
         subq = (
-            db.query(DimensionValue.name)
+            select(DimensionValue.name)
             .join(assoc_model, assoc_model.dimension_value_id == DimensionValue.id)
-            .filter(
-                assoc_model.entity_id == parent_pk
-                if hasattr(assoc_model, "entity_id")
-                else assoc_model.activity_id == parent_pk,
-                DimensionValue.dimension_id == dim.id,
-            )
+            .where(fk_col == parent_pk, DimensionValue.dimension_id == dim.id)
             .correlate_except(assoc_model, DimensionValue)
             .scalar_subquery()
         )
