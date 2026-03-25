@@ -337,14 +337,23 @@ class ListConfigService:
     def _static_defaults(self, scope: str) -> list[dict]:
         """Built-in columns that are always present."""
         if scope.startswith("entity:"):
-            return [
-                self._static_col("enrollment_count", "Enrollments", 0),
-                self._static_col("activity_count", "Activities", 1),
-                self._static_col(
-                    "created_at", "Created", 2,
-                    sortable=True, filterable=True, filter_supported=True,
-                ),
-            ]
+            cols = []
+            # Include case_number if the entity type has it enabled
+            type_id = scope.split(":", 1)[1]
+            from app.modules.entity.model import EntityType
+            et = self.db.query(EntityType).filter_by(id=type_id).first()
+            if et and (et.config or {}).get("case_number_enabled"):
+                cols.append(self._static_col(
+                    "case_number", "Case Number", len(cols),
+                    sortable=True,
+                ))
+            cols.append(self._static_col("enrollment_count", "Enrollments", len(cols)))
+            cols.append(self._static_col("activity_count", "Activities", len(cols)))
+            cols.append(self._static_col(
+                "created_at", "Created", len(cols),
+                sortable=True, filterable=True, filter_supported=True,
+            ))
+            return cols
         elif scope.startswith("activity:"):
             return [
                 self._static_col("participant_count", "Participants", 0),
