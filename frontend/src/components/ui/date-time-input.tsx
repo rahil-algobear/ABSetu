@@ -135,6 +135,10 @@ export function DateTimeInput({
             customInput={<CustomInput showTime={showTime} />}
             popperPlacement="bottom-start"
             showPopperArrow={false}
+            showYearDropdown
+            showMonthDropdown
+            scrollableYearDropdown
+            yearDropdownItemNumber={100}
           />
         </div>
         {allowTime && (
