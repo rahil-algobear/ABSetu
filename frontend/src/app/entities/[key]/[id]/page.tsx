@@ -129,7 +129,7 @@ export default function EntityDetailPage() {
   const firstFieldValue = metaFields.length > 0 && entity.meta
     ? String(entity.meta[metaFields[0].key] ?? "")
     : "";
-  const entityTitle = firstFieldValue || entity.name || "Entity";
+  const entityTitle = firstFieldValue || "Entity";
 
   return (
     <PageLayout>
