@@ -40,8 +40,20 @@ export function getFieldsForScope(
 }
 
 /**
+ * Deduplicate fields by key, keeping the last occurrence (more specific scope wins).
+ */
+function dedupeByKey(fields: MetaFieldDefinition[]): MetaFieldDefinition[] {
+  const seen = new Map<string, MetaFieldDefinition>();
+  for (const f of fields) {
+    seen.set(f.key, f);
+  }
+  return Array.from(seen.values());
+}
+
+/**
  * Collect all applicable activity meta fields for a given activity type + dimension values.
  * Returns fields from: type-only, dv-only, and type+dv scopes.
+ * Fields are deduplicated by key — more specific scopes override broader ones.
  */
 export function collectActivityFields(
   schemas: MetaFieldSchemaItem[],
@@ -68,9 +80,8 @@ export function collectActivityFields(
     }
   }
 
-  // Sort by sort_order
-  fields.sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
-  return fields;
+  // Deduplicate by key (more specific scope wins) and sort by sort_order
+  return dedupeByKey(fields).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
 }
 
 /**
@@ -105,5 +116,5 @@ export function collectParticipantFields(
     }
   }
 
-  return fields;
+  return dedupeByKey(fields);
 }
