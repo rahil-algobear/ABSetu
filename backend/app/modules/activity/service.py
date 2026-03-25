@@ -111,9 +111,6 @@ class ActivityService:
     ) -> dict:
         """Sort keys available for activity list, optionally including meta fields from list config."""
         config = {
-            "title": Activity.meta["title"].astext,
-            "start_date": Activity.meta["start_date"].astext,
-            "end_date": Activity.meta["end_date"].astext,
             "created_at": Activity.created_at,
         }
         if org_id and sortable_keys:

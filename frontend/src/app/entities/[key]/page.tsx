@@ -123,7 +123,7 @@ function EntityTypeEntitiesContent() {
     if (Array.isArray(val)) return val.join(", ");
     if (typeof val === "boolean") return val ? "Yes" : "No";
     // Render name as a link
-    if (metaKey === "name" || col.label === "Name") {
+    if (col.label === "Name") {
       return (
         <Link
           href={`/entities/${entityTypeKey}/${entity.id}`}
@@ -264,7 +264,7 @@ function EntityTypeEntitiesContent() {
                   {columns.map((col) => (
                     <TableCell
                       key={col.key}
-                      className={col.key === "name" ? "font-medium" : col.key === "created_at" ? "text-gray-500" : ""}
+                      className={col.label === "Name" ? "font-medium" : col.key === "created_at" ? "text-gray-500" : ""}
                     >
                       {renderCellValue(e, col)}
                     </TableCell>

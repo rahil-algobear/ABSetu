@@ -158,9 +158,20 @@ def _collect_field_defs(
     return all_field_defs
 
 
+def _find_field_by_base_key(field_defs: dict[str, dict], base_key: str) -> dict | None:
+    """Find a field definition by its base key, handling suffixed keys."""
+    import re
+    if base_key in field_defs:
+        return field_defs[base_key]
+    for k, v in field_defs.items():
+        if re.match(rf"^{re.escape(base_key)}_[a-z0-9]{{4,}}$", k):
+            return v
+    return None
+
+
 def _resolve_generated_title(activity, field_defs: dict[str, dict]) -> str | None:
     """Compose a generated title from dimension values based on title field config."""
-    title_def = field_defs.get("title")
+    title_def = _find_field_by_base_key(field_defs, "title")
     if not title_def:
         return None
     config = title_def.get("config") or {}
@@ -200,7 +211,8 @@ def _build_activity_response(a, field_defs: dict[str, dict] | None = None) -> di
     activity_type_name = a.activity_type.name if a.activity_type else None
 
     # Resolve title: generated from dimensions, or from meta
-    title = _resolve_generated_title(a, field_defs or {}) or meta.get("title")
+    from app.modules.entity.routes import _resolve_meta_value
+    title = _resolve_generated_title(a, field_defs or {}) or _resolve_meta_value(meta, "title") or None
 
     return ActivityResponse(
         id=str(a.id),
@@ -209,9 +221,9 @@ def _build_activity_response(a, field_defs: dict[str, dict] | None = None) -> di
         organization_id=str(a.organization_id),
         activity_type_id=str(a.activity_type_id) if a.activity_type_id else None,
         title=title,
-        start_date=meta.get("start_date", ""),
-        end_date=meta.get("end_date"),
-        notes=meta.get("notes"),
+        start_date=_resolve_meta_value(meta, "start_date") or _resolve_meta_value(meta, "date") or None,
+        end_date=_resolve_meta_value(meta, "end_date") or None,
+        notes=_resolve_meta_value(meta, "notes") or None,
         created_by=str(a.created_by) if a.created_by else None,
         meta=meta,
         activity_type_name=activity_type_name,
