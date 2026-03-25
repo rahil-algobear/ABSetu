@@ -305,14 +305,19 @@ function EntityTypeEntitiesContent() {
       >
         <form onSubmit={handleSubmit} className="space-y-3">
           <DynamicMetaForm
-            fields={metaFields.filter((f) => f.visible !== false)}
+            fields={metaFields.filter((f) => {
+              if (f.visible === false) return false;
+              // "edit only" fields should be hidden on create
+              if (!editing && f.stage === "record") return false;
+              return true;
+            })}
             values={metaValues}
             onChange={setMetaValues}
             disabledKeys={(() => {
               const keys = new Set<string>();
               for (const f of metaFields) {
+                // "create only" fields are visible but disabled on edit
                 if (editing && f.stage === "create") keys.add(f.key);
-                if (!editing && f.stage === "record") keys.add(f.key);
               }
               return keys;
             })()}
