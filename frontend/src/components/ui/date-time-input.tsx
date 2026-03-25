@@ -125,7 +125,7 @@ export function DateTimeInput({
             selected={selected}
             onChange={handleChange}
             showTimeSelect={showTime}
-            timeIntervals={15}
+            timeIntervals={5}
             timeFormat="h:mm aa"
             dateFormat={showTime ? "dd-MMM-yyyy h:mm aa" : "dd-MMM-yyyy"}
             minDate={minDate ?? undefined}
