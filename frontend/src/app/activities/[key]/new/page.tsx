@@ -10,7 +10,6 @@ import {
   dimensionValueLinkApi,
   entityApi,
   entityTypeApi,
-  listConfigApi,
   metaFieldSchemaApi,
   userApi,
 } from "@/services/api";
@@ -22,7 +21,7 @@ import {
   MetaFieldDefinition,
   MetaFieldSchemaItem,
 } from "@/types";
-import { collectActivityFields } from "@/utils/meta-fields";
+import { collectActivityFields, resolveTitle, getTitleTemplate, getFieldsForScope } from "@/utils/meta-fields";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -161,20 +160,17 @@ export default function NewActivityPage() {
     queryFn: async () => {
       const result: Record<string, { id: string; name: string }[]> = {};
       for (const typeId of entitySourceIds) {
-        const [entities, columns] = await Promise.all([
-          entityApi.list(typeId),
-          listConfigApi.get(`entity:${typeId}`),
-        ]);
-        const firstCol = columns.find((c) => c.visible && c.key.startsWith("meta:"));
-        const metaKey = firstCol?.key.replace(/^meta:/, "");
+        const entities = await entityApi.list(typeId);
+        const titleTemplate = getTitleTemplate(allMetaSchemas, { type: "entity", entity_type_id: typeId });
+        const fields = getFieldsForScope(allMetaSchemas, { type: "entity", entity_type_id: typeId });
         result[typeId] = entities.map((e) => ({
           id: e.id,
-          name: metaKey ? String((e.meta || {})[metaKey] || "") : "",
+          name: resolveTitle(e.meta, titleTemplate, fields),
         }));
       }
       return result;
     },
-    enabled: entitySourceIds.length > 0,
+    enabled: entitySourceIds.length > 0 && allMetaSchemas.length > 0,
   });
 
   const { data: createUsers = [] } = useQuery({

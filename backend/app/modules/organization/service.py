@@ -151,11 +151,13 @@ class MetaFieldSchemaService:
         activity_type_id: uuid.UUID | None = None,
         dimension_value_id: uuid.UUID | None = None,
         dimension_id: uuid.UUID | None = None,
-    ) -> list[dict]:
+        title_template: str | None = None,
+    ) -> MetaFieldSchema:
         """Create or update a meta field schema by structured scope.
 
         All fields are user-defined — no system field restrictions.
         Automatically ensures all field keys have unique random suffixes.
+        Returns the full MetaFieldSchema row.
         """
         fields = self._ensure_field_keys(fields)
         row = (
@@ -172,6 +174,7 @@ class MetaFieldSchemaService:
         )
         if row:
             row.fields = fields
+            row.title_template = title_template
         else:
             row = MetaFieldSchema(
                 organization_id=org_id,
@@ -181,10 +184,12 @@ class MetaFieldSchemaService:
                 dimension_value_id=dimension_value_id,
                 dimension_id=dimension_id,
                 fields=fields,
+                title_template=title_template,
             )
             self.db.add(row)
         self.db.commit()
-        return fields
+        self.db.refresh(row)
+        return row
 
     def get_participant_schemas(
         self,

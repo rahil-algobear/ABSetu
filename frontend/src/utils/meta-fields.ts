@@ -185,3 +185,58 @@ export function collectParticipantFields(
 
   return dedupeByKey(fields);
 }
+
+/**
+ * Resolve a display title from a meta object using a title template.
+ *
+ * Template format: field keys wrapped in curly braces, e.g.
+ *   "{a3x9_first_name} {b2y8_last_name}"
+ *
+ * Falls back to:
+ * 1. First field's value if no template is set
+ * 2. The provided fallback string
+ */
+export function resolveTitle(
+  meta: Record<string, unknown> | null | undefined,
+  titleTemplate: string | null | undefined,
+  fields: MetaFieldDefinition[],
+  fallback = "",
+): string {
+  if (titleTemplate) {
+    const result = titleTemplate
+      .replace(/\{(\w+)\}/g, (_, key) => {
+        const val = meta?.[key];
+        if (val === undefined || val === null || val === "") return "";
+        return String(val);
+      })
+      .trim();
+    if (result) return result;
+  }
+
+  // Fallback: use the first field's value
+  if (fields.length > 0 && meta) {
+    const firstVal = meta[fields[0].key];
+    if (firstVal !== undefined && firstVal !== null && firstVal !== "") {
+      return String(firstVal);
+    }
+  }
+
+  return fallback;
+}
+
+/**
+ * Get the title template for a given scope from loaded schemas.
+ */
+export function getTitleTemplate(
+  schemas: MetaFieldSchemaItem[],
+  criteria: {
+    type: string;
+    entity_type_id?: string | null;
+    activity_type_id?: string | null;
+    dimension_id?: string | null;
+    dimension_value_id?: string | null;
+  },
+): string | null {
+  const schema = findSchema(schemas, criteria);
+  return schema?.title_template ?? null;
+}

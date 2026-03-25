@@ -293,8 +293,8 @@ export default function MetaFieldsPage() {
   };
 
   const updateMutation = useMutation({
-    mutationFn: ({ scope, newFields }: { scope: MetaFieldScope; newFields: MetaFieldDefinition[] }) => {
-      return metaFieldSchemaApi.update(scope, newFields);
+    mutationFn: ({ scope, newFields, titleTemplate }: { scope: MetaFieldScope; newFields: MetaFieldDefinition[]; titleTemplate?: string | null }) => {
+      return metaFieldSchemaApi.update(scope, newFields, titleTemplate);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["meta-field-schemas"] });
@@ -305,8 +305,14 @@ export default function MetaFieldsPage() {
     onError: () => toast.error("Failed to update"),
   });
 
-  const saveFields = (scope: MetaFieldScope, newFields: MetaFieldDefinition[]) => {
-    updateMutation.mutate({ scope, newFields });
+  const saveFields = (scope: MetaFieldScope, newFields: MetaFieldDefinition[], titleTemplate?: string | null) => {
+    updateMutation.mutate({ scope, newFields, titleTemplate });
+  };
+
+  const saveTitleTemplate = (scope: MetaFieldScope, titleTemplate: string | null) => {
+    const schema = findSchema(allSchemas, scope);
+    const fields = schema?.fields || [];
+    updateMutation.mutate({ scope, newFields: fields, titleTemplate });
   };
 
   const openAdd = () => {
@@ -757,6 +763,89 @@ export default function MetaFieldsPage() {
         )}
       </div>
 
+      {/* Title template picker for entity types */}
+      {activeSection === "entity" && currentScope && (() => {
+        const schema = findSchema(allSchemas, currentScope);
+        const schemaFields = schema?.fields || [];
+        const currentTemplate = schema?.title_template || "";
+        // Parse current template to get selected field keys
+        const selectedKeys = currentTemplate
+          ? (currentTemplate.match(/\{(\w+)\}/g) || []).map((m: string) => m.slice(1, -1))
+          : [];
+        // Available fields for title (only visible text-ish fields)
+        const titleCandidates = schemaFields.filter(
+          (f) => f.visible !== false && ["text", "number", "date", "select"].includes(f.type)
+        );
+
+        return (
+          <div className="mb-4 p-3 bg-gray-50 border rounded-lg">
+            <label className="text-sm font-medium text-gray-700 block mb-2">
+              Title fields
+              <span className="text-xs text-gray-400 font-normal ml-1">
+                (used as display name everywhere)
+              </span>
+            </label>
+            {titleCandidates.length === 0 ? (
+              <p className="text-xs text-gray-400">Add text fields first, then select which ones form the title.</p>
+            ) : (
+              <div className="flex flex-wrap gap-2 items-center">
+                {selectedKeys.map((key: string, idx: number) => {
+                  const field = schemaFields.find((f) => f.key === key);
+                  if (!field) return null;
+                  return (
+                    <span
+                      key={key}
+                      className="inline-flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-700 rounded-md text-sm"
+                    >
+                      {idx > 0 && <span className="text-purple-400 mr-0.5">+</span>}
+                      {field.label}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newKeys = selectedKeys.filter((k: string) => k !== key);
+                          const newTemplate = newKeys.length > 0
+                            ? newKeys.map((k: string) => `{${k}}`).join(" ")
+                            : null;
+                          saveTitleTemplate(currentScope, newTemplate);
+                        }}
+                        className="text-purple-400 hover:text-purple-700 ml-0.5"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  );
+                })}
+                {/* Add field dropdown */}
+                {titleCandidates.filter((f) => !selectedKeys.includes(f.key)).length > 0 && (
+                  <select
+                    className="border rounded-md px-2 py-1 text-sm text-gray-500"
+                    value=""
+                    onChange={(e) => {
+                      if (!e.target.value) return;
+                      const newKeys = [...selectedKeys, e.target.value];
+                      const newTemplate = newKeys.map((k: string) => `{${k}}`).join(" ");
+                      saveTitleTemplate(currentScope, newTemplate);
+                    }}
+                  >
+                    <option value="">{selectedKeys.length === 0 ? "Select title field..." : "+ Add field"}</option>
+                    {titleCandidates
+                      .filter((f) => !selectedKeys.includes(f.key))
+                      .map((f) => (
+                        <option key={f.key} value={f.key}>{f.label}</option>
+                      ))}
+                  </select>
+                )}
+                {selectedKeys.length === 0 && (
+                  <span className="text-xs text-gray-400 ml-1">
+                    First field will be used as default
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
       {/* Fields table for entity/dimension/other (single-scope) */}
       {!isActivityOrParticipant && currentScope && (
         <>
@@ -854,6 +943,102 @@ export default function MetaFieldsPage() {
           )}
         </>
       )}
+
+      {/* Title template picker for activity types */}
+      {activeSection === "activity" && (() => {
+        // Use the most specific applicable scope: filtered activity type, or base "all activities"
+        const titleScope: MetaFieldScope = activityFilterTypeId
+          ? { type: "activity", activity_type_id: activityFilterTypeId }
+          : { type: "activity" };
+        const schema = findSchema(allSchemas, titleScope);
+        const schemaFields = schema?.fields || [];
+        const currentTemplate = schema?.title_template || "";
+        const selectedKeys = currentTemplate
+          ? (currentTemplate.match(/\{(\w+)\}/g) || []).map((m: string) => m.slice(1, -1))
+          : [];
+        // All fields across all activity scopes for title candidates
+        const allActivityFields = activityRows.map((r) => r.field);
+        const seenKeys = new Set<string>();
+        const titleCandidates = allActivityFields.filter((f) => {
+          if (seenKeys.has(f.key)) return false;
+          seenKeys.add(f.key);
+          return f.visible !== false && ["text", "number", "date", "select"].includes(f.type);
+        });
+
+        return (
+          <div className="mb-4 p-3 bg-gray-50 border rounded-lg">
+            <label className="text-sm font-medium text-gray-700 block mb-2">
+              Title fields
+              {activityFilterTypeId && (
+                <span className="text-xs text-gray-400 font-normal ml-1">
+                  for {activityTypes.find((a) => a.id === activityFilterTypeId)?.name}
+                </span>
+              )}
+              {!activityFilterTypeId && (
+                <span className="text-xs text-gray-400 font-normal ml-1">
+                  (all activity types)
+                </span>
+              )}
+            </label>
+            {titleCandidates.length === 0 ? (
+              <p className="text-xs text-gray-400">Add text fields first, then select which ones form the title.</p>
+            ) : (
+              <div className="flex flex-wrap gap-2 items-center">
+                {selectedKeys.map((key: string, idx: number) => {
+                  const field = allActivityFields.find((f) => f.key === key);
+                  if (!field) return null;
+                  return (
+                    <span
+                      key={key}
+                      className="inline-flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-700 rounded-md text-sm"
+                    >
+                      {idx > 0 && <span className="text-purple-400 mr-0.5">+</span>}
+                      {field.label}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newKeys = selectedKeys.filter((k: string) => k !== key);
+                          const newTemplate = newKeys.length > 0
+                            ? newKeys.map((k: string) => `{${k}}`).join(" ")
+                            : null;
+                          saveTitleTemplate(titleScope, newTemplate);
+                        }}
+                        className="text-purple-400 hover:text-purple-700 ml-0.5"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  );
+                })}
+                {titleCandidates.filter((f) => !selectedKeys.includes(f.key)).length > 0 && (
+                  <select
+                    className="border rounded-md px-2 py-1 text-sm text-gray-500"
+                    value=""
+                    onChange={(e) => {
+                      if (!e.target.value) return;
+                      const newKeys = [...selectedKeys, e.target.value];
+                      const newTemplate = newKeys.map((k: string) => `{${k}}`).join(" ");
+                      saveTitleTemplate(titleScope, newTemplate);
+                    }}
+                  >
+                    <option value="">{selectedKeys.length === 0 ? "Select title field..." : "+ Add field"}</option>
+                    {titleCandidates
+                      .filter((f) => !selectedKeys.includes(f.key))
+                      .map((f) => (
+                        <option key={f.key} value={f.key}>{f.label}</option>
+                      ))}
+                  </select>
+                )}
+                {selectedKeys.length === 0 && (
+                  <span className="text-xs text-gray-400 ml-1">
+                    Dimensions or type name will be used as default
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Grouped flat table for activity/participant */}
       {isActivityOrParticipant && (

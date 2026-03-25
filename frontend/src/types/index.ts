@@ -220,6 +220,7 @@ export interface MetaFieldSchemaScope {
 export interface MetaFieldSchemaItem {
   scope: MetaFieldSchemaScope;
   fields: MetaFieldDefinition[];
+  title_template?: string | null;
 }
 
 // --- List Configuration ---

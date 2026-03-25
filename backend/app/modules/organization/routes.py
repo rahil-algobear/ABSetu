@@ -150,6 +150,7 @@ def _schema_to_response(row, fields=None) -> dict:
             dimension_value_id=str(row.dimension_value_id) if row.dimension_value_id else None,
         ),
         fields=fields if fields is not None else row.fields,
+        title_template=row.title_template,
     ).model_dump()
 
 
@@ -183,11 +184,13 @@ def update_meta_field_schema_structured(
     resolved = _resolve_scope(data.scope, current_user.organization_id, db)
     service = MetaFieldSchemaService(db)
     fields_dicts = [f.model_dump(exclude_none=True) for f in data.fields]
-    return service.update_schema(
+    row = service.update_schema(
         current_user.organization_id,
         fields=fields_dicts,
+        title_template=data.title_template,
         **resolved,
     )
+    return _schema_to_response(row)
 
 
 # --- List Config ---

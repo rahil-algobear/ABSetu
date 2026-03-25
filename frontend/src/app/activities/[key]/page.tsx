@@ -104,12 +104,6 @@ function ActivityTypeListContent() {
   const totalCount = response?.count || 0;
   const totalPages = Math.ceil(totalCount / listParams.limit);
 
-  const getActivityTitle = (a: Activity) => {
-    if (a.title) return a.title;
-    if (a.dimensions.length > 0) return a.dimensions[0].value_name;
-    return typeName;
-  };
-
   // Helper to render a cell value for a given column config
   const renderCellValue = (activity: Activity, col: ListColumnConfig) => {
     // Static built-in columns
