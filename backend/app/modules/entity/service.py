@@ -5,7 +5,7 @@ Entity and EntityType services
 import uuid
 from datetime import datetime
 
-from sqlalchemy import cast, func, String
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.common.helpers.meta_normalize import normalize_meta_datetimes
@@ -211,28 +211,37 @@ class EntityService:
         """Paginated list with search, filter, sort support."""
         query = self._build_base_query(org_id, accessible_dv_ids)
 
-        # Search across all meta values (handles suffixed keys like name_psw7)
-        query = apply_search(
-            query, params.search, [cast(Entity.meta, String)]
-        )
-
-        # Build filter/sort keys from list config
+        # Build filter/sort/search keys from list config
         filterable_keys = None
         sortable_keys = None
+        searchable_keys = None
         if list_columns:
             filterable_keys = {c["key"] for c in list_columns if c.get("filterable")}
             sortable_keys = {c["key"] for c in list_columns if c.get("sortable")}
+            searchable_keys = {c["key"] for c in list_columns if c.get("searchable")}
+
+        et_ids = [
+            et.id for et in self.db.query(EntityType).filter_by(organization_id=org_id).all()
+        ]
+        scopes = [{"scope_type": "entity", "entity_type_id": et_id} for et_id in et_ids]
+
+        # Search on searchable meta fields
+        from app.common.helpers.filter_definitions import (
+            build_meta_field_filter_config,
+            build_meta_field_search_columns,
+        )
+
+        search_columns = build_meta_field_search_columns(
+            self.db, org_id, scopes, Entity.meta, searchable_keys
+        )
+        # Always include case_number in search
+        search_columns.append(Entity.meta["case_number"].astext)
+        query = apply_search(query, params.search, search_columns)
 
         # Filters (static + dimension + meta from list config)
         filter_config = self.get_filter_config()
         filter_config.update(self.get_dimension_filter_config(org_id))
         if filterable_keys:
-            from app.common.helpers.filter_definitions import build_meta_field_filter_config
-
-            et_ids = [
-                et.id for et in self.db.query(EntityType).filter_by(organization_id=org_id).all()
-            ]
-            scopes = [{"scope_type": "entity", "entity_type_id": et_id} for et_id in et_ids]
             filter_config.update(
                 build_meta_field_filter_config(
                     self.db,

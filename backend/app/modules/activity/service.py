@@ -177,28 +177,37 @@ class ActivityService:
         """Paginated list with search, filter, sort support."""
         query = self._build_base_query(org_id, accessible_dv_ids)
 
-        # Search on title in meta
-        query = apply_search(query, params.search, [Activity.meta["title"].astext])
-
-        # Build filter/sort keys from list config
+        # Build filter/sort/search keys from list config
         filterable_keys = None
         sortable_keys = None
+        searchable_keys = None
         if list_columns:
             filterable_keys = {c["key"] for c in list_columns if c.get("filterable")}
             sortable_keys = {c["key"] for c in list_columns if c.get("sortable")}
+            searchable_keys = {c["key"] for c in list_columns if c.get("searchable")}
+
+        at_ids = [
+            at.id for at in self.db.query(ActivityType).filter_by(organization_id=org_id).all()
+        ]
+        scopes = [{"scope_type": "activity"}] + [
+            {"scope_type": "activity", "activity_type_id": at_id} for at_id in at_ids
+        ]
+
+        # Search on searchable meta fields
+        from app.common.helpers.filter_definitions import (
+            build_meta_field_filter_config,
+            build_meta_field_search_columns,
+        )
+
+        search_columns = build_meta_field_search_columns(
+            self.db, org_id, scopes, Activity.meta, searchable_keys
+        )
+        query = apply_search(query, params.search, search_columns)
 
         # Filters (static + dimension + meta from list config)
         filter_config = self.get_filter_config()
         filter_config.update(self.get_dimension_filter_config(org_id))
         if filterable_keys:
-            from app.common.helpers.filter_definitions import build_meta_field_filter_config
-
-            at_ids = [
-                at.id for at in self.db.query(ActivityType).filter_by(organization_id=org_id).all()
-            ]
-            scopes = [{"scope_type": "activity"}] + [
-                {"scope_type": "activity", "activity_type_id": at_id} for at_id in at_ids
-            ]
             filter_config.update(
                 build_meta_field_filter_config(
                     self.db,

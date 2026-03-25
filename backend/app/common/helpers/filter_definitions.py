@@ -228,6 +228,27 @@ def build_meta_field_sort_config(
     return config
 
 
+def build_meta_field_search_columns(
+    db: Session,
+    org_id: uuid.UUID,
+    scopes: list[MetaFieldScope],
+    meta_column: Any,
+    allowed_keys: set[str] | None = None,
+) -> list[Any]:
+    """
+    Build a list of SQLAlchemy column expressions for searchable meta fields.
+
+    Returns columns suitable for passing to apply_search().
+    If allowed_keys provided, only include those meta field keys.
+    """
+    columns: list[Any] = []
+    for meta_key, field in _collect_fields(db, org_id, scopes):
+        if allowed_keys is not None and meta_key not in allowed_keys:
+            continue
+        columns.append(meta_column[field["key"]].astext)
+    return columns
+
+
 def build_dimension_filter_config(
     db: Session,
     org_id: uuid.UUID,

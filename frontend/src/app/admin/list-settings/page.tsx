@@ -191,6 +191,10 @@ export default function ListSettingsPage() {
     return !!col.filter_supported;
   };
 
+  const canToggleSearchable = (col: ListColumnConfig) => {
+    return !!col.search_supported;
+  };
+
   const isStaticColumn = (col: ListColumnConfig) => col.field_type === "static";
 
   return (
@@ -268,6 +272,7 @@ export default function ListSettingsPage() {
                       <TableHead>Column</TableHead>
                       <TableHead>Type</TableHead>
                       <TableHead className="text-center">Visible</TableHead>
+                      <TableHead className="text-center">Searchable</TableHead>
                       <TableHead className="text-center">Filterable</TableHead>
                       <TableHead className="text-center">Sortable</TableHead>
                       <TableHead className="w-12">{""}</TableHead>
@@ -307,6 +312,13 @@ export default function ListSettingsPage() {
                           <Switch
                             checked={col.visible}
                             onCheckedChange={(v) => updateColumn(idx, { visible: v })}
+                          />
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Switch
+                            checked={col.searchable}
+                            onCheckedChange={(v) => updateColumn(idx, { searchable: v })}
+                            disabled={!canToggleSearchable(col)}
                           />
                         </TableCell>
                         <TableCell className="text-center">

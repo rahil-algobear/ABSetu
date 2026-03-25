@@ -238,9 +238,11 @@ export interface ListColumnConfig {
   visible: boolean;
   filterable: boolean;
   sortable: boolean;
+  searchable: boolean;
   sort_order: number;
   dimension_key?: string;
   filter_supported?: boolean;
+  search_supported?: boolean;
 }
 
 export interface ListConfigSettings {

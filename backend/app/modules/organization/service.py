@@ -306,11 +306,13 @@ class ListConfigService:
             "visible": True,
             "filterable": ftype == "dimension",
             "sortable": False,
+            "searchable": ftype == "text",
             "sort_order": order,
             "filter_supported": ftype in (
                 "text", "number", "date", "datetime",
                 "select", "multiselect", "boolean", "dimension",
             ),
+            "search_supported": ftype in ("text", "number", "select"),
         }
         if ftype == "dimension" and f.get("dimension_id"):
             from app.modules.dimension.model import Dimension
@@ -328,8 +330,10 @@ class ListConfigService:
             "visible": True,
             "filterable": kwargs.get("filterable", False),
             "sortable": kwargs.get("sortable", False),
+            "searchable": kwargs.get("searchable", False),
             "sort_order": order,
             "filter_supported": kwargs.get("filter_supported", False),
+            "search_supported": kwargs.get("search_supported", False),
         }
 
     # ── static (built-in) defaults ──────────────────────────────
@@ -400,7 +404,7 @@ class ListConfigService:
 
     # ── merge logic ─────────────────────────────────────────────
 
-    _STRUCTURAL_PROPS = {"field_type", "label", "dimension_key", "filter_supported"}
+    _STRUCTURAL_PROPS = {"field_type", "label", "dimension_key", "filter_supported", "search_supported"}
 
     @classmethod
     def _merge_saved(
