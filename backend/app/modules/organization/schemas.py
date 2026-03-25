@@ -126,7 +126,6 @@ class MetaFieldScope(BaseModel):
 class MetaFieldSchemaUpdate(BaseModel):
     scope: MetaFieldScope
     fields: list[FieldDefinition]
-    title_template: str | None = None
 
 
 class MetaFieldSchemaResponse(BaseModel):
@@ -134,4 +133,3 @@ class MetaFieldSchemaResponse(BaseModel):
 
     scope: MetaFieldScope
     fields: list[FieldDefinition]
-    title_template: str | None = None

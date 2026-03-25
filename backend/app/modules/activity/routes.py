@@ -186,6 +186,9 @@ def _build_activity_response(a, field_defs: dict[str, dict] | None = None) -> di
         created_by=str(a.created_by) if a.created_by else None,
         meta=meta,
         activity_type_name=activity_type_name,
+        activity_type_title_template=(
+            a.activity_type.title_template if a.activity_type else None
+        ),
         dimensions=dim_infos,
     ).dump()
 

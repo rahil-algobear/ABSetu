@@ -4,7 +4,6 @@ Organization models
 
 from sqlalchemy import Column, ForeignKey, Index, String, UniqueConstraint, VARCHAR, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.types import Text
 from sqlalchemy.orm import relationship
 
 from app.common.models.base_model import BaseModel
@@ -63,7 +62,6 @@ class MetaFieldSchema(BaseModel):
         nullable=True,
     )
     fields = Column(JSONB, nullable=False, default=list)
-    title_template = Column(Text, nullable=True)
 
     organization = relationship("Organization", back_populates="meta_field_schemas")
 

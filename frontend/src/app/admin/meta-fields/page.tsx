@@ -293,8 +293,8 @@ export default function MetaFieldsPage() {
   };
 
   const updateMutation = useMutation({
-    mutationFn: ({ scope, newFields, titleTemplate }: { scope: MetaFieldScope; newFields: MetaFieldDefinition[]; titleTemplate?: string | null }) => {
-      return metaFieldSchemaApi.update(scope, newFields, titleTemplate);
+    mutationFn: ({ scope, newFields }: { scope: MetaFieldScope; newFields: MetaFieldDefinition[] }) => {
+      return metaFieldSchemaApi.update(scope, newFields);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["meta-field-schemas"] });
@@ -305,14 +305,22 @@ export default function MetaFieldsPage() {
     onError: () => toast.error("Failed to update"),
   });
 
-  const saveFields = (scope: MetaFieldScope, newFields: MetaFieldDefinition[], titleTemplate?: string | null) => {
-    updateMutation.mutate({ scope, newFields, titleTemplate });
+  const saveFields = (scope: MetaFieldScope, newFields: MetaFieldDefinition[]) => {
+    updateMutation.mutate({ scope, newFields });
   };
 
-  const saveTitleTemplate = (scope: MetaFieldScope, titleTemplate: string | null) => {
-    const schema = findSchema(allSchemas, scope);
-    const fields = schema?.fields || [];
-    updateMutation.mutate({ scope, newFields: fields, titleTemplate });
+  const saveEntityTitleTemplate = (entityTypeId: string, titleTemplate: string | null) => {
+    entityTypeApi.update(entityTypeId, { title_template: titleTemplate }).then(() => {
+      queryClient.invalidateQueries({ queryKey: ["entity-types"] });
+      toast.success("Title template updated");
+    }).catch(() => toast.error("Failed to update title template"));
+  };
+
+  const saveActivityTitleTemplate = (activityTypeId: string, titleTemplate: string | null) => {
+    activityTypeApi.update(activityTypeId, { title_template: titleTemplate }).then(() => {
+      queryClient.invalidateQueries({ queryKey: ["activity-types"] });
+      toast.success("Title template updated");
+    }).catch(() => toast.error("Failed to update title template"));
   };
 
   const openAdd = () => {
@@ -764,10 +772,10 @@ export default function MetaFieldsPage() {
       </div>
 
       {/* Title template picker for entity types */}
-      {activeSection === "entity" && currentScope && (() => {
-        const schema = findSchema(allSchemas, currentScope);
-        const schemaFields = schema?.fields || [];
-        const currentTemplate = schema?.title_template || "";
+      {activeSection === "entity" && currentScope && activeKey && (() => {
+        const entityType = entityTypesList.find((et) => et.id === activeKey);
+        const schemaFields = fields;
+        const currentTemplate = entityType?.title_template || "";
         // Parse current template to get selected field keys
         const selectedKeys = currentTemplate
           ? (currentTemplate.match(/\{(\w+)\}/g) || []).map((m: string) => m.slice(1, -1))
@@ -806,7 +814,7 @@ export default function MetaFieldsPage() {
                           const newTemplate = newKeys.length > 0
                             ? newKeys.map((k: string) => `{${k}}`).join(" ")
                             : null;
-                          saveTitleTemplate(currentScope, newTemplate);
+                          saveEntityTitleTemplate(activeKey, newTemplate);
                         }}
                         className="text-purple-400 hover:text-purple-700 ml-0.5"
                       >
@@ -824,7 +832,7 @@ export default function MetaFieldsPage() {
                       if (!e.target.value) return;
                       const newKeys = [...selectedKeys, e.target.value];
                       const newTemplate = newKeys.map((k: string) => `{${k}}`).join(" ");
-                      saveTitleTemplate(currentScope, newTemplate);
+                      saveEntityTitleTemplate(activeKey, newTemplate);
                     }}
                   >
                     <option value="">{selectedKeys.length === 0 ? "Select title field..." : "+ Add field"}</option>
@@ -944,15 +952,10 @@ export default function MetaFieldsPage() {
         </>
       )}
 
-      {/* Title template picker for activity types */}
-      {activeSection === "activity" && (() => {
-        // Use the most specific applicable scope: filtered activity type, or base "all activities"
-        const titleScope: MetaFieldScope = activityFilterTypeId
-          ? { type: "activity", activity_type_id: activityFilterTypeId }
-          : { type: "activity" };
-        const schema = findSchema(allSchemas, titleScope);
-        const schemaFields = schema?.fields || [];
-        const currentTemplate = schema?.title_template || "";
+      {/* Title template picker for activity types (only when a type is selected) */}
+      {activeSection === "activity" && activityFilterTypeId && (() => {
+        const activityType = activityTypes.find((a) => a.id === activityFilterTypeId);
+        const currentTemplate = activityType?.title_template || "";
         const selectedKeys = currentTemplate
           ? (currentTemplate.match(/\{(\w+)\}/g) || []).map((m: string) => m.slice(1, -1))
           : [];
@@ -969,16 +972,9 @@ export default function MetaFieldsPage() {
           <div className="mb-4 p-3 bg-gray-50 border rounded-lg">
             <label className="text-sm font-medium text-gray-700 block mb-2">
               Title fields
-              {activityFilterTypeId && (
-                <span className="text-xs text-gray-400 font-normal ml-1">
-                  for {activityTypes.find((a) => a.id === activityFilterTypeId)?.name}
-                </span>
-              )}
-              {!activityFilterTypeId && (
-                <span className="text-xs text-gray-400 font-normal ml-1">
-                  (all activity types)
-                </span>
-              )}
+              <span className="text-xs text-gray-400 font-normal ml-1">
+                for {activityType?.name}
+              </span>
             </label>
             {titleCandidates.length === 0 ? (
               <p className="text-xs text-gray-400">Add text fields first, then select which ones form the title.</p>
@@ -1001,7 +997,7 @@ export default function MetaFieldsPage() {
                           const newTemplate = newKeys.length > 0
                             ? newKeys.map((k: string) => `{${k}}`).join(" ")
                             : null;
-                          saveTitleTemplate(titleScope, newTemplate);
+                          saveActivityTitleTemplate(activityFilterTypeId, newTemplate);
                         }}
                         className="text-purple-400 hover:text-purple-700 ml-0.5"
                       >
@@ -1018,7 +1014,7 @@ export default function MetaFieldsPage() {
                       if (!e.target.value) return;
                       const newKeys = [...selectedKeys, e.target.value];
                       const newTemplate = newKeys.map((k: string) => `{${k}}`).join(" ");
-                      saveTitleTemplate(titleScope, newTemplate);
+                      saveActivityTitleTemplate(activityFilterTypeId, newTemplate);
                     }}
                   >
                     <option value="">{selectedKeys.length === 0 ? "Select title field..." : "+ Add field"}</option>

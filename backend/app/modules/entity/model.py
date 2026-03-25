@@ -2,7 +2,7 @@
 Entity models: EntityType, Entity, CodeCounter
 """
 
-from sqlalchemy import Column, ForeignKey, Index, Integer, String, UniqueConstraint, text
+from sqlalchemy import Column, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 
@@ -22,6 +22,7 @@ class EntityType(BaseModel):
     key = Column(String, nullable=False)
     config = Column(JSONB, nullable=True, default=dict)
     sort_order = Column(Integer, nullable=False, default=0)
+    title_template = Column(Text, nullable=True)
 
     organization = relationship("Organization", back_populates="entity_types")
     entities = relationship("Entity", back_populates="entity_type", lazy="dynamic")

@@ -22,7 +22,7 @@ import {
   MetaFieldDefinition,
   MetaFieldSchemaItem,
 } from "@/types";
-import { getFieldsForScope, resolveTitle, getTitleTemplate } from "@/utils/meta-fields";
+import { getFieldsForScope, resolveTitle, collectActivityFields } from "@/utils/meta-fields";
 
 import { Can } from "@/components/Auth/Permissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -157,8 +157,7 @@ export default function EntityDetailPage() {
   if (isLoading) return <PageLayout><PageContent><p>Loading...</p></PageContent></PageLayout>;
   if (!entity) return <PageLayout><PageContent><p>Not found</p></PageContent></PageLayout>;
 
-  const entityTitleTemplate = getTitleTemplate(allSchemas, { type: "entity", entity_type_id: entity.entity_type_id });
-  const entityTitle = resolveTitle(entity.meta, entityTitleTemplate, metaFields, "Entity");
+  const entityTitle = resolveTitle(entity.meta, entity.entity_type_title_template, metaFields, "Entity");
 
   return (
     <PageLayout>
@@ -346,8 +345,10 @@ export default function EntityDetailPage() {
                     <div className="min-w-0">
                       <div className="text-sm font-medium">
                         {(() => {
-                          const atTemplate = getTitleTemplate(allSchemas, { type: "activity", activity_type_id: a.activity_type_id || undefined });
-                          const atFields = getFieldsForScope(allSchemas, { type: "activity", activity_type_id: a.activity_type_id || undefined });
+                          const at = activityTypes.find((t) => t.id === a.activity_type_id);
+                          const atTemplate = at?.title_template || null;
+                          const dvIds = (a.dimensions || []).map((d) => d.value_id);
+                          const atFields = collectActivityFields(allSchemas, a.activity_type_id || null, dvIds);
                           const title = resolveTitle(a.meta, atTemplate, atFields);
                           return title || (a.dimensions?.length > 0 ? a.dimensions[0].value_name : a.activity_type_name || "Activity");
                         })()}

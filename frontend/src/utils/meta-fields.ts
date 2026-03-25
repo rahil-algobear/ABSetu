@@ -224,19 +224,3 @@ export function resolveTitle(
   return fallback;
 }
 
-/**
- * Get the title template for a given scope from loaded schemas.
- */
-export function getTitleTemplate(
-  schemas: MetaFieldSchemaItem[],
-  criteria: {
-    type: string;
-    entity_type_id?: string | null;
-    activity_type_id?: string | null;
-    dimension_id?: string | null;
-    dimension_value_id?: string | null;
-  },
-): string | null {
-  const schema = findSchema(schemas, criteria);
-  return schema?.title_template ?? null;
-}

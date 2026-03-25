@@ -21,7 +21,7 @@ import {
   MetaFieldDefinition,
   MetaFieldSchemaItem,
 } from "@/types";
-import { collectActivityFields, resolveTitle, getTitleTemplate, getFieldsForScope } from "@/utils/meta-fields";
+import { collectActivityFields, resolveTitle, getFieldsForScope } from "@/utils/meta-fields";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -161,11 +161,10 @@ export default function NewActivityPage() {
       const result: Record<string, { id: string; name: string }[]> = {};
       for (const typeId of entitySourceIds) {
         const entities = await entityApi.list(typeId);
-        const titleTemplate = getTitleTemplate(allMetaSchemas, { type: "entity", entity_type_id: typeId });
         const fields = getFieldsForScope(allMetaSchemas, { type: "entity", entity_type_id: typeId });
         result[typeId] = entities.map((e) => ({
           id: e.id,
-          name: resolveTitle(e.meta, titleTemplate, fields),
+          name: resolveTitle(e.meta, e.entity_type_title_template, fields),
         }));
       }
       return result;

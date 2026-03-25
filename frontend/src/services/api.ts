@@ -106,10 +106,10 @@ export const metaFieldSchemaApi = {
     const response = await authAxios.get<MetaFieldSchemaItem[]>('/organization/meta-field-schemas');
     return response.data;
   },
-  update: async (scope: MetaFieldScope, fields: MetaFieldDefinition[], titleTemplate?: string | null): Promise<MetaFieldSchemaItem> => {
-    const response = await authAxios.put<MetaFieldSchemaItem>(
+  update: async (scope: MetaFieldScope, fields: MetaFieldDefinition[]): Promise<MetaFieldDefinition[]> => {
+    const response = await authAxios.put<MetaFieldDefinition[]>(
       '/organization/meta-field-schemas',
-      { scope, fields, title_template: titleTemplate ?? null }
+      { scope, fields }
     );
     return response.data;
   },
@@ -196,7 +196,7 @@ export const entityTypeApi = {
     const response = await authAxios.post<EntityType>('/entity-types/', data);
     return response.data;
   },
-  update: async (id: string, data: { name?: string; config?: Record<string, unknown>; sort_order?: number }): Promise<EntityType> => {
+  update: async (id: string, data: { name?: string; config?: Record<string, unknown>; sort_order?: number; title_template?: string | null }): Promise<EntityType> => {
     const response = await authAxios.put<EntityType>(`/entity-types/${id}`, data);
     return response.data;
   },
@@ -281,7 +281,7 @@ export const activityTypeApi = {
     const response = await authAxios.post<ActivityType>('/activity-types/', data);
     return response.data;
   },
-  update: async (id: string, data: { name?: string; sort_order?: number }): Promise<ActivityType> => {
+  update: async (id: string, data: { name?: string; sort_order?: number; title_template?: string | null }): Promise<ActivityType> => {
     const response = await authAxios.put<ActivityType>(`/activity-types/${id}`, data);
     return response.data;
   },
