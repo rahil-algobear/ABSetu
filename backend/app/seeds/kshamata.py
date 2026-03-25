@@ -449,6 +449,15 @@ PHYSICAL_HEALTH_PARTICIPANT_FIELDS = [
 ]
 
 
+# ---------------------------------------------------------------------------
+# Meta Field Schemas — enrollment custom fields
+# ---------------------------------------------------------------------------
+ENROLLMENT_CUSTOM_FIELDS = [
+    {"label": "Date of Admission", "type": "date", "required": True, "visible": True, "stage": "both", "sort_order": 0},
+    {"label": "Date of Release", "type": "date", "required": False, "visible": True, "stage": "both", "sort_order": 1},
+]
+
+
 def _make_intervention_code(name: str) -> str:
     """Convert intervention name to a slugified dimension value code."""
     import re
@@ -794,6 +803,12 @@ def seed():
                 f"  Ensured Physical Health participant fields "
                 f"({len(PHYSICAL_HEALTH_PARTICIPANT_FIELDS)} fields)"
             )
+
+        # 7b-iii. Enrollment custom fields
+        meta_service.update_schema(
+            org.id, "enrollment", ENROLLMENT_CUSTOM_FIELDS,
+        )
+        print(f"  Ensured enrollment meta field schema ({len(ENROLLMENT_CUSTOM_FIELDS)} fields)")
 
         # 7c. List config — Beneficiary
         from app.modules.organization.service import ListConfigService
