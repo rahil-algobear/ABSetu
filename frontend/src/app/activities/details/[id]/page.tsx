@@ -17,9 +17,10 @@ import {
   MetaFieldSchemaItem,
 } from "@/types";
 import { collectActivityFields, collectParticipantFields } from "@/utils/meta-fields";
+import { formatDate, formatDateTime } from "@/utils/date";
 import { Can } from "@/components/Auth/Permissions";
 
-import { DynamicMetaForm, MetaFieldDisplay } from "@/components/DynamicMetaForm";
+import { DynamicMetaForm } from "@/components/DynamicMetaForm";
 import { SearchSelectParticipants } from "@/components/SearchSelectParticipants";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -382,13 +383,37 @@ export default function ActivityDetailPage() {
                     </div>
                   );
                 }
-                return null;
+
+                const val = (activity.meta || {})[field.key];
+                const isEmpty = val === undefined || val === null || val === "";
+                return (
+                  <div key={`view-field-${field.key}`}>
+                    <p className="text-xs text-gray-500">{field.label}</p>
+                    <p className={`text-sm ${isEmpty ? "text-gray-300 italic" : "font-medium"}`}>
+                      {isEmpty
+                        ? "Not set"
+                        : field.type === "boolean"
+                          ? val ? "Yes" : "No"
+                          : field.type === "date" && typeof val === "string"
+                            ? formatDate(val)
+                            : field.type === "datetime" && typeof val === "string"
+                              ? formatDateTime(val)
+                              : Array.isArray(val)
+                                ? val.join(", ")
+                                : String(val)}
+                    </p>
+                  </div>
+                );
               })}
-              <MetaFieldDisplay
-                fields={detailFields.filter((f) => f.type !== "dimension")}
-                values={activity.meta}
-                showEmpty
-              />
+              {/* Show any meta values not in the schema */}
+              {Object.entries(activity.meta || {})
+                .filter(([key]) => !detailFields.some((f) => f.key === key))
+                .map(([key, val]) => (
+                  <div key={`extra-${key}`}>
+                    <p className="text-xs text-gray-500 capitalize">{key.replace(/_/g, " ")}</p>
+                    <p className="text-sm font-medium">{String(val)}</p>
+                  </div>
+                ))}
             </div>
           )}
         </CardContent>
