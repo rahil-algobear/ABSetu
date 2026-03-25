@@ -147,7 +147,7 @@ function ActivityTypeListContent() {
         title={pluralize(typeName)}
         actions={
           <Can permission="activity:create">
-            <Button size="sm" onClick={() => router.push(`/activities/new?type=${typeKey}`)}>
+            <Button size="sm" onClick={() => router.push(`/activities/${typeKey}/new`)}>
               <Plus className="h-4 w-4 mr-1" />
               New {typeName}
             </Button>
@@ -196,7 +196,7 @@ function ActivityTypeListContent() {
                   {activities.map((a) => (
                     <TableRow
                       key={a.id}
-                      onClick={() => router.push(`/activities/details/${a.id}`)}
+                      onClick={() => router.push(`/activities/${typeKey}/${a.id}`)}
                     >
                       {columns.map((col) => (
                         <TableCell

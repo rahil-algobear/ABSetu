@@ -32,8 +32,7 @@ import { Trash2, Pencil, Users } from "lucide-react";
 import toast from "react-hot-toast";
 
 export default function ActivityDetailPage() {
-  const params = useParams();
-  const id = params.id as string;
+  const { key: typeKey, id } = useParams<{ key: string; id: string }>();
   const router = useRouter();
   const queryClient = useQueryClient();
 
@@ -174,7 +173,7 @@ export default function ActivityDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["activities"] });
       toast.success("Activity deleted");
-      router.push("/activities");
+      router.push(`/activities/${typeKey}`);
     },
     onError: () => toast.error("Failed to delete activity"),
   });

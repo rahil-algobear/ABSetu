@@ -282,7 +282,7 @@ export default function EntityDetailPage() {
                 {filteredActivities.map((a) => (
                   <Link
                     key={a.id}
-                    href={`/activities/details/${a.id}`}
+                    href={`/activities/${activityTypes.find((at) => at.id === a.activity_type_id)?.key || "unknown"}/${a.id}`}
                     className="flex items-center justify-between p-2 border rounded hover:bg-gray-50 transition-colors"
                   >
                     <div className="min-w-0">
