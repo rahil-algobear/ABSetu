@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { PageLayout } from "@/components/ui/page-layout";
 import { usePermissions } from "@/components/Auth/Permissions";
-import { dimensionApi, entityTypeApi } from "@/services/api";
+import { dimensionApi } from "@/services/api";
 import {
   Layers,
   ClipboardList,
@@ -31,12 +31,6 @@ export default function AdminLayout({
     staleTime: 5 * 60 * 1000,
   });
 
-  const { data: entityTypes = [] } = useQuery({
-    queryKey: ["entity-types"],
-    queryFn: entityTypeApi.list,
-    staleTime: 5 * 60 * 1000,
-  });
-
   // Build tabs for permission checking
   const dimensionTabs = dimensions.map((d) => ({
     href: `/admin/dimensions/${d.key}`,
@@ -45,16 +39,8 @@ export default function AdminLayout({
     permission: "dimension:view",
   }));
 
-  const entityTypeTabs = entityTypes.map((et) => ({
-    href: `/admin/entities/${et.key}`,
-    label: et.name,
-    icon: Users,
-    permission: "entity:view",
-  }));
-
   const mastersTabs = [
     ...dimensionTabs,
-    ...entityTypeTabs,
     { href: "/admin/users", label: "Users", icon: Users, permission: "user:view" },
   ];
 

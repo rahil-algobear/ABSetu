@@ -1,7 +1,7 @@
 "use client";
 
-import { Suspense, useState, useMemo, useCallback } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useState, useMemo, useCallback } from "react";
+import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   activityApi,
@@ -66,11 +66,10 @@ function getFilteredValues(
   );
 }
 
-function NewActivityPageContent() {
+export default function NewActivityPage() {
   const queryClient = useQueryClient();
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const typeKey = searchParams.get("type");
+  const { key: typeKey } = useParams<{ key: string }>();
   const { dimensionValueIds: userDimensionValueIds } = usePermissions();
 
   const { data: activityTypes = [] } = useQuery({
@@ -431,13 +430,5 @@ function NewActivityPageContent() {
       </Card>
       </PageContent>
     </PageLayout>
-  );
-}
-
-export default function NewActivityPage() {
-  return (
-    <Suspense fallback={<PageLayout><PageContent><p className="text-gray-500">Loading...</p></PageContent></PageLayout>}>
-      <NewActivityPageContent />
-    </Suspense>
   );
 }

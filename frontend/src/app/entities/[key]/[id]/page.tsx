@@ -67,8 +67,7 @@ function getFilteredValues(
 }
 
 export default function EntityDetailPage() {
-  const params = useParams();
-  const id = params.id as string;
+  const { id } = useParams<{ key: string; id: string }>();
   const queryClient = useQueryClient();
 
 
@@ -127,9 +126,14 @@ export default function EntityDetailPage() {
   if (isLoading) return <PageLayout><PageContent><p>Loading...</p></PageContent></PageLayout>;
   if (!entity) return <PageLayout><PageContent><p>Not found</p></PageContent></PageLayout>;
 
+  const firstFieldValue = metaFields.length > 0 && entity.meta
+    ? String(entity.meta[metaFields[0].key] ?? "")
+    : "";
+  const entityTitle = firstFieldValue || "Entity";
+
   return (
     <PageLayout>
-      <PageHeader title={entity.name} />
+      <PageHeader title={entityTitle} />
       <PageContent>
       <div className="flex gap-1 items-center mb-2">
         {entity.case_number && (
@@ -282,7 +286,7 @@ export default function EntityDetailPage() {
                 {filteredActivities.map((a) => (
                   <Link
                     key={a.id}
-                    href={`/activities/details/${a.id}`}
+                    href={`/activities/${activityTypes.find((at) => at.id === a.activity_type_id)?.key || "unknown"}/${a.id}`}
                     className="flex items-center justify-between p-2 border rounded hover:bg-gray-50 transition-colors"
                   >
                     <div className="min-w-0">

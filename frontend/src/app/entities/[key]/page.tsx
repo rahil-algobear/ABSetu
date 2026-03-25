@@ -13,6 +13,7 @@ import type { FilterDefinition } from "@/components/ui/filter-modal";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { DynamicMetaForm } from "@/components/DynamicMetaForm";
+import { PageLayout } from "@/components/ui/page-layout";
 import { PageHeader } from "@/components/ui/page-header";
 import { ListToolbar } from "@/components/ui/list-toolbar";
 import { Pagination } from "@/components/ui/pagination";
@@ -202,7 +203,7 @@ function EntityTypeEntitiesContent() {
   const typeName = entityType?.name || "Entity";
 
   return (
-    <>
+    <PageLayout>
       <PageHeader
         title={typeName}
         actions={
@@ -315,13 +316,13 @@ function EntityTypeEntitiesContent() {
         </form>
       </Dialog>
       </PageContent>
-    </>
+    </PageLayout>
   );
 }
 
 export default function EntityTypeEntitiesPage() {
   return (
-    <Suspense fallback={<p className="text-gray-500 text-sm p-4">Loading...</p>}>
+    <Suspense fallback={<PageLayout><PageContent><p className="text-gray-500 text-sm">Loading...</p></PageContent></PageLayout>}>
       <EntityTypeEntitiesContent />
     </Suspense>
   );

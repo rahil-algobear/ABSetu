@@ -297,7 +297,7 @@ function NavigationContent() {
 
   // People dropdown: one item per entity type
   const peopleItems = entityTypes.map((et) => ({
-    href: `/admin/entities/${et.key}`,
+    href: `/entities/${et.key}`,
     label: et.name,
     icon: Users,
     permission: "entity:view",
@@ -436,7 +436,7 @@ function NavigationContent() {
 
                 {/* Activity types as top-level links */}
                 {activityTypeLinks.map((item) => {
-                  const active = pathname === `/activities/${item.key}`;
+                  const active = pathname.startsWith(`/activities/${item.key}`);
                   return (
                     <Can key={item.href} permission={item.permission}>
                       <Link
@@ -527,7 +527,7 @@ function NavigationContent() {
             {/* Activity types as top-level links */}
             {activityTypeLinks.map((item) => {
               if (!can(item.permission)) return null;
-              const active = pathname === `/activities/${item.key}`;
+              const active = pathname.startsWith(`/activities/${item.key}`);
               return (
                 <Link
                   key={item.href}
