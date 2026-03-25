@@ -16,7 +16,7 @@ import {
   MetaFieldDefinition,
   MetaFieldSchemaItem,
 } from "@/types";
-import { collectActivityFields, collectParticipantFields, resolveTitle, getFieldsForScope, buildDimensionValueMap } from "@/utils/meta-fields";
+import { collectActivityFields, collectParticipantFields } from "@/utils/meta-fields";
 import { formatDate, formatDateTime } from "@/utils/date";
 import { Can } from "@/components/Auth/Permissions";
 
@@ -118,10 +118,9 @@ export default function ActivityDetailPage() {
       const result: Record<string, { id: string; name: string }[]> = {};
       for (const typeId of entitySourceIds) {
         const entities = await entityApi.list(typeId);
-        const fields = getFieldsForScope(allMetaSchemas, { type: "entity", entity_type_id: typeId });
         result[typeId] = entities.map((e) => ({
           id: e.id,
-          name: resolveTitle(e.meta, e.entity_type_title_template, fields),
+          name: (e.meta?._title as string) || "",
         }));
       }
       return result;
@@ -297,8 +296,7 @@ export default function ActivityDetailPage() {
   if (isLoading) return <PageLayout><PageContent><p>Loading...</p></PageContent></PageLayout>;
   if (!activity) return <PageLayout><PageContent><p>Not found</p></PageContent></PageLayout>;
 
-  const dimValueMap = buildDimensionValueMap(activity.dimensions, allFields, dimensions);
-  const activityTitle = resolveTitle(activity.meta, activity.activity_type_title_template, detailFields, "", dimValueMap)
+  const activityTitle = (activity.meta?._title as string)
     || (activity.dimensions.length > 0 ? activity.dimensions[0].value_name : "Activity");
   const typeName = activity.activity_type_name || "Activity";
   const activitySubtitle = activity.dimensions.length > 0

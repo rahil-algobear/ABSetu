@@ -23,6 +23,7 @@ from app.modules.dimension.model import EntityDimension
 from app.modules.enrollment.model import Enrollment
 from app.modules.entity.model import Entity, EntityType
 from app.modules.organization.model import Organization
+from app.common.helpers.title_resolver import compute_title
 
 
 class EntityTypeService:
@@ -320,6 +321,7 @@ class EntityService:
 
         code = self._generate_code(org)
         meta = normalize_meta_datetimes(dict(data.get("meta") or {}))
+        meta = compute_title(entity_type.title_template, meta)
 
         entity = Entity(
             organization_id=org_id,
@@ -349,7 +351,12 @@ class EntityService:
         incoming_meta = data.get("meta") or {}
         existing_meta.update(incoming_meta)
 
-        entity.meta = normalize_meta_datetimes(existing_meta)
+        meta = normalize_meta_datetimes(existing_meta)
+        meta = compute_title(
+            entity.entity_type.title_template if entity.entity_type else None,
+            meta,
+        )
+        entity.meta = meta
         self.db.commit()
         self.db.refresh(entity)
         return entity

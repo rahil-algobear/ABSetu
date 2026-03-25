@@ -22,7 +22,7 @@ import {
   MetaFieldDefinition,
   MetaFieldSchemaItem,
 } from "@/types";
-import { getFieldsForScope, resolveTitle, collectActivityFields } from "@/utils/meta-fields";
+import { getFieldsForScope } from "@/utils/meta-fields";
 
 import { Can } from "@/components/Auth/Permissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -157,7 +157,7 @@ export default function EntityDetailPage() {
   if (isLoading) return <PageLayout><PageContent><p>Loading...</p></PageContent></PageLayout>;
   if (!entity) return <PageLayout><PageContent><p>Not found</p></PageContent></PageLayout>;
 
-  const entityTitle = resolveTitle(entity.meta, entity.entity_type_title_template, metaFields, "Entity");
+  const entityTitle = (entity.meta?._title as string) || "Entity";
 
   return (
     <PageLayout>
@@ -344,14 +344,7 @@ export default function EntityDetailPage() {
                   >
                     <div className="min-w-0">
                       <div className="text-sm font-medium">
-                        {(() => {
-                          const at = activityTypes.find((t) => t.id === a.activity_type_id);
-                          const atTemplate = at?.title_template || null;
-                          const dvIds = (a.dimensions || []).map((d) => d.value_id);
-                          const atFields = collectActivityFields(allSchemas, a.activity_type_id || null, dvIds);
-                          const title = resolveTitle(a.meta, atTemplate, atFields);
-                          return title || (a.dimensions?.length > 0 ? a.dimensions[0].value_name : a.activity_type_name || "Activity");
-                        })()}
+                        {(a.meta?._title as string) || a.activity_type_name || "Activity"}
                       </div>
                       {a.dimensions?.length > 0 && (
                         <div className="flex gap-1 mt-1 flex-wrap">

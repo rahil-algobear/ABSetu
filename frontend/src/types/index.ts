@@ -133,7 +133,6 @@ export interface Entity {
   entity_type_name: string | null;
   entity_type_key: string | null;
   entity_type_config: Record<string, unknown> | null;
-  entity_type_title_template: string | null;
   dimensions: DimensionInfo[];
   created_at: string | null;
   updated_at: string | null;
@@ -160,7 +159,6 @@ export interface Activity {
   created_by: string | null;
   meta: Record<string, unknown> | null;
   activity_type_name: string | null;
-  activity_type_title_template: string | null;
   dimensions: DimensionInfo[];
   participant_count: number;
   created_at: string | null;

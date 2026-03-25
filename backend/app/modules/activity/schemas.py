@@ -57,7 +57,6 @@ class ActivityResponse(BaseResponseSchema):
     created_by: str | None = None
     meta: dict[str, Any] | None = None
     activity_type_name: str | None = None
-    activity_type_title_template: str | None = None
     dimensions: list[DimensionInfo] = []
     participant_count: int = 0
 
