@@ -36,7 +36,7 @@ import {
 } from "@/components/ui/page-table";
 import { PageHeader } from "@/components/ui/page-header";
 import { PageContent } from "@/components/ui/page-content";
-import { Plus, Pencil, Trash2, ChevronUp, ChevronDown } from "lucide-react";
+import { Plus, Pencil, Trash2, ChevronUp, ChevronDown, X } from "lucide-react";
 import toast from "react-hot-toast";
 
 
