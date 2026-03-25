@@ -60,7 +60,6 @@ export interface Organization {
   id: string;
   name: string;
   code: string;
-  case_number_format: string;
   logo_url: string | null;
   meta: Record<string, unknown> | null;
   updated_at: string | null;
@@ -128,6 +127,7 @@ export interface Entity {
   id: string;
   organization_id: string;
   entity_type_id: string;
+  code: string | null;
   meta: Record<string, unknown> | null;
   entity_type_name: string | null;
   entity_type_key: string | null;

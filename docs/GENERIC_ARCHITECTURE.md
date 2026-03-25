@@ -737,28 +737,27 @@ Unique constraint: `(organization_id, key)`
 **Config schema:**
 ```json
 {
-  "case_number_enabled": true,
-  "case_number_format": "{ORG_CODE}-{SERIAL}",
   "can_enroll": true
 }
 ```
 
-- `case_number_enabled` — only some entity types need auto-generated case numbers (beneficiaries yes, facilitators no)
 - `can_enroll` — whether entities of this type can be enrolled in programmes
 
+All entities get an auto-generated `code` in the format `{ORG_CODE}-{YY}-{SERIAL}` (e.g., "KSHAMATA-26-001").
+
 **Kshamata example:**
-| name | key | case_number_enabled | can_enroll |
-|------|-----|---------------------|------------|
-| Beneficiary | beneficiary | true | true |
-| Facilitator | facilitator | false | false |
+| name | key | can_enroll |
+|------|-----|------------|
+| Beneficiary | beneficiary | true |
+| Facilitator | facilitator | false |
 
 **Multi-stakeholder NGO example:**
-| name | key | case_number_enabled | can_enroll |
-|------|-----|---------------------|------------|
-| Child | child | true | true |
-| Caregiver | caregiver | true | true |
-| Volunteer | volunteer | false | false |
-| Referral Source | referral_source | false | false |
+| name | key | can_enroll |
+|------|-----|------------|
+| Child | child | true |
+| Caregiver | caregiver | true |
+| Volunteer | volunteer | false |
+| Referral Source | referral_source | false |
 
 #### `entities`
 
@@ -769,7 +768,7 @@ All people tracked by the org, regardless of type.
 | `id` | UUID | PK |
 | `organization_id` | UUID | FK → organizations, NOT NULL |
 | `entity_type_id` | UUID | FK → entity_types, NOT NULL |
-| `case_number` | String | Auto-generated (if type has case_number_enabled), unique within org |
+| `code` | String | Auto-generated (`{ORG_CODE}-{YY}-{SERIAL}`), unique within org |
 | `name` | String | Required |
 | `meta` | JSONB | Custom fields (scoped per entity_type via form field schemas using `entity:{key}`) |
 | `created_at` | Timestamp | From BaseModel |

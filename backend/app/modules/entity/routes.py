@@ -55,6 +55,7 @@ def _build_entity_response(e, enrollment_count: int = 0, activity_count: int = 0
         updated_at=e.updated_at,
         organization_id=str(e.organization_id),
         entity_type_id=str(e.entity_type_id),
+        code=e.code,
         meta=meta,
         entity_type_name=e.entity_type.name if e.entity_type else None,
         entity_type_key=e.entity_type.key if e.entity_type else None,
@@ -243,7 +244,7 @@ def get_entity_filters(
         scope_prefix="entity",
         meta_scopes=meta_scopes,
         date_filters=[{"key": "created_at", "label": "Created Date"}],
-        default_sortable_keys=["name", "case_number", "created_at"],
+        default_sortable_keys=["name", "code", "created_at"],
     )
 
 

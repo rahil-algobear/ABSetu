@@ -76,7 +76,7 @@ These are backed by real database columns for performance but configured identic
 | Key | Type | Column |
 |-----|------|--------|
 | `name` | text | `Entity.name` |
-| `case_number` | text | `Entity.case_number` |
+| `code` | text | `Entity.code` |
 
 **Activity system fields:**
 | Key | Type | Column |
@@ -100,7 +100,7 @@ SYSTEM_FIELD_MAP = {
     },
     "entity": {
         "name": Entity.name,
-        "case_number": Entity.case_number,
+        "code": Entity.code,
     },
 }
 
@@ -169,12 +169,12 @@ Stays as-is. It's a view-layer concern (which columns to show in list views) and
 
 ### Decision 1: System fields stay as real DB columns
 
-**Decision:** Keep `title`, `start_date`, `end_date`, `notes`, `name`, `case_number` as dedicated database columns. Do NOT move them to JSONB.
+**Decision:** Keep `title`, `start_date`, `end_date`, `notes`, `name`, `code` as dedicated database columns. Do NOT move them to JSONB.
 
 **Rationale:**
 - **Performance:** `start_date` is used in virtually every activity query — range filters, sorting, calendar views, dashboard aggregations. A B-tree index gives `O(log n)` lookups. JSONB extraction (`meta->>'start_date'`) can't use standard indexes and range queries on extracted values are slower even with expression indexes.
 - **Type safety at DB level:** `start_date` is `TIMESTAMP WITH TIME ZONE` — Postgres enforces this. In JSONB it's a string relying on application-level validation.
-- **Referential integrity:** `case_number` has uniqueness constraints per org. Trivial with a real column + partial unique index. Fragile with JSONB functional indexes.
+- **Referential integrity:** `code` has uniqueness constraints per org. Trivial with a real column + partial unique index. Fragile with JSONB functional indexes.
 - **Mapping layer is simple:** A small dict mapping system field keys to column references. The admin UI treats all fields identically.
 
 **Precedent:** Shopify uses this exact pattern — `title`, `price`, `vendor` are columns; everything else is metafields. The API presents them uniformly.

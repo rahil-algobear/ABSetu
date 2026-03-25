@@ -8,8 +8,6 @@ from datetime import datetime
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.common.helpers.meta_normalize import normalize_meta_datetimes
-
 from app.common.exceptions import NotFoundError, ValidationError
 from app.common.helpers.dimension_scoping import (
     apply_dimension_access_scoping,
@@ -17,14 +15,14 @@ from app.common.helpers.dimension_scoping import (
 )
 from app.common.helpers.filter_definitions import build_dimension_filter_config
 from app.common.helpers.list_query import apply_filters, apply_search, apply_sort, paginate
+from app.common.helpers.meta_normalize import normalize_meta_datetimes
 from app.common.helpers.slugify import slugify
 from app.common.schemas.list_params import ListParams
 from app.modules.activity.model import ActivityParticipant
-from app.modules.enrollment.model import Enrollment
 from app.modules.dimension.model import EntityDimension
+from app.modules.enrollment.model import Enrollment
 from app.modules.entity.model import Entity, EntityType
 from app.modules.organization.model import Organization
-
 
 
 class EntityTypeService:
@@ -80,25 +78,43 @@ class EntityService:
     def __init__(self, db: Session):
         self.db = db
 
-    def _generate_case_number(self, org: Organization, entity_type: EntityType) -> str | None:
-        """Generate a case number if the entity type has case_number_enabled."""
-        config = entity_type.config or {}
-        if not config.get("case_number_enabled", False):
-            return None
+    def _generate_code(self, org: Organization) -> str:
+        """Generate entity code: {ORG_CODE}-{YY}-{SERIAL}.
 
-        fmt = org.case_number_format or "{ORG_CODE}-{SERIAL}"
+        Uses the code_counters table with SELECT FOR UPDATE for atomic serial
+        generation. The serial resets per org per year.
+        """
+        from app.modules.entity.model import CodeCounter
+
         year_2 = datetime.now().strftime("%y")
-        year_4 = datetime.now().strftime("%Y")
 
-        count = self.db.query(Entity).filter_by(organization_id=org.id).count()
-        serial = str(count + 1).zfill(3)
-
-        return (
-            fmt.replace("{ORG_CODE}", org.code)
-            .replace("{YY}", year_2)
-            .replace("{YYYY}", year_4)
-            .replace("{SERIAL}", serial)
+        # Upsert + lock the counter row
+        counter = (
+            self.db.query(CodeCounter)
+            .filter_by(organization_id=org.id, year=year_2)
+            .with_for_update()
+            .first()
         )
+        if not counter:
+            counter = CodeCounter(
+                organization_id=org.id,
+                year=year_2,
+                last_serial=0,
+            )
+            self.db.add(counter)
+            self.db.flush()
+            # Re-lock after insert
+            counter = (
+                self.db.query(CodeCounter)
+                .filter_by(organization_id=org.id, year=year_2)
+                .with_for_update()
+                .first()
+            )
+
+        counter.last_serial += 1
+        serial = str(counter.last_serial).zfill(3)
+
+        return f"{org.code}-{year_2}-{serial}"
 
     def _build_base_query(
         self,
@@ -145,7 +161,7 @@ class EntityService:
     ) -> dict:
         """Sort keys available for entity list, optionally including meta fields from list config."""
         config = {
-            "case_number": Entity.meta["case_number"].astext,
+            "code": Entity.code,
             "created_at": Entity.created_at,
         }
         if org_id and sortable_keys:
@@ -220,9 +236,7 @@ class EntityService:
             sortable_keys = {c["key"] for c in list_columns if c.get("sortable")}
             searchable_keys = {c["key"] for c in list_columns if c.get("searchable")}
 
-        et_ids = [
-            et.id for et in self.db.query(EntityType).filter_by(organization_id=org_id).all()
-        ]
+        et_ids = [et.id for et in self.db.query(EntityType).filter_by(organization_id=org_id).all()]
         scopes = [{"scope_type": "entity", "entity_type_id": et_id} for et_id in et_ids]
 
         # Search on searchable meta + dimension fields
@@ -236,12 +250,14 @@ class EntityService:
         search_columns = build_meta_field_search_columns(
             self.db, org_id, scopes, Entity.meta, searchable_keys
         )
-        search_columns.extend(build_dimension_search_columns(
-            self.db, org_id, EntityDimension, Entity.id, searchable_keys
-        ))
-        # Always include case_number in search if searchable or no config
-        if searchable_keys is None or "case_number" in searchable_keys:
-            search_columns.append(Entity.meta["case_number"].astext)
+        search_columns.extend(
+            build_dimension_search_columns(
+                self.db, org_id, EntityDimension, Entity.id, searchable_keys
+            )
+        )
+        # Always include code in search if searchable or no config
+        if searchable_keys is None or "code" in searchable_keys:
+            search_columns.append(Entity.code)
         query = apply_search(query, params.search, search_columns)
 
         # Filters (static + dimension + meta from list config)
@@ -302,14 +318,13 @@ class EntityService:
         if not entity_type:
             raise ValidationError("Entity type not found in this organization")
 
-        case_number = self._generate_case_number(org, entity_type)
+        code = self._generate_code(org)
         meta = normalize_meta_datetimes(dict(data.get("meta") or {}))
-        if case_number:
-            meta["case_number"] = case_number
 
         entity = Entity(
             organization_id=org_id,
             entity_type_id=entity_type.id,
+            code=code,
             meta=meta,
         )
         self.db.add(entity)

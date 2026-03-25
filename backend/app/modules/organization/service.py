@@ -8,8 +8,12 @@ import uuid
 from sqlalchemy.orm import Session
 
 from app.common.exceptions import NotFoundError, ValidationError
-from app.modules.organization.model import ListConfig, MetaFieldSchema, USER_ENTITY_SENTINEL
-from app.modules.organization.model import Organization
+from app.modules.organization.model import (
+    USER_ENTITY_SENTINEL,
+    ListConfig,
+    MetaFieldSchema,
+    Organization,
+)
 
 
 class OrganizationService:
@@ -258,9 +262,14 @@ class ListConfigService:
         props refreshed, stale keys dropped) but new meta-field columns
         are NOT auto-added — the admin must add them explicitly.
         """
-        row = self.db.query(ListConfig).filter_by(
-            organization_id=org_id, scope=scope,
-        ).first()
+        row = (
+            self.db.query(ListConfig)
+            .filter_by(
+                organization_id=org_id,
+                scope=scope,
+            )
+            .first()
+        )
         static = self._static_defaults(scope)
         if not row:
             return static
@@ -280,9 +289,14 @@ class ListConfigService:
 
     def update_config(self, org_id: uuid.UUID, scope: str, columns: list[dict]) -> list[dict]:
         """Save list config."""
-        row = self.db.query(ListConfig).filter_by(
-            organization_id=org_id, scope=scope,
-        ).first()
+        row = (
+            self.db.query(ListConfig)
+            .filter_by(
+                organization_id=org_id,
+                scope=scope,
+            )
+            .first()
+        )
         if row:
             row.columns = columns
         else:
@@ -309,14 +323,22 @@ class ListConfigService:
             "sortable": False,
             "searchable": ftype == "text",
             "sort_order": order,
-            "filter_supported": ftype in (
-                "text", "number", "date", "datetime",
-                "select", "multiselect", "boolean", "dimension",
+            "filter_supported": ftype
+            in (
+                "text",
+                "number",
+                "date",
+                "datetime",
+                "select",
+                "multiselect",
+                "boolean",
+                "dimension",
             ),
             "search_supported": ftype in ("text", "number", "select", "dimension"),
         }
         if ftype == "dimension" and f.get("dimension_id"):
             from app.modules.dimension.model import Dimension
+
             dim = self.db.query(Dimension).filter_by(id=f["dimension_id"]).first()
             if dim:
                 col["dimension_key"] = dim.key
@@ -343,28 +365,38 @@ class ListConfigService:
         """Built-in columns that are always present."""
         if scope.startswith("entity:"):
             cols = []
-            # Include case_number if the entity type has it enabled
-            type_id = scope.split(":", 1)[1]
-            from app.modules.entity.model import EntityType
-            et = self.db.query(EntityType).filter_by(id=type_id).first()
-            if et and (et.config or {}).get("case_number_enabled"):
-                cols.append(self._static_col(
-                    "case_number", "Case Number", len(cols),
-                    sortable=True, search_supported=True,
-                ))
+            cols.append(
+                self._static_col(
+                    "code",
+                    "Code",
+                    len(cols),
+                    sortable=True,
+                    searchable=True,
+                    search_supported=True,
+                )
+            )
             cols.append(self._static_col("enrollment_count", "Enrollments", len(cols)))
             cols.append(self._static_col("activity_count", "Activities", len(cols)))
-            cols.append(self._static_col(
-                "created_at", "Created", len(cols),
-                sortable=True, filterable=True, filter_supported=True,
-            ))
+            cols.append(
+                self._static_col(
+                    "created_at",
+                    "Created",
+                    len(cols),
+                    sortable=True,
+                    filterable=True,
+                    filter_supported=True,
+                )
+            )
             return cols
         elif scope.startswith("activity:"):
             return [
                 self._static_col("participant_count", "Participants", 0),
                 self._static_col(
-                    "created_at", "Created", 1,
-                    sortable=True, filter_supported=True,
+                    "created_at",
+                    "Created",
+                    1,
+                    sortable=True,
+                    filter_supported=True,
                 ),
             ]
         return []
@@ -379,7 +411,9 @@ class ListConfigService:
         if scope.startswith("entity:"):
             type_id = uuid.UUID(scope.split(":", 1)[1])
             fields = meta_service.get_schema_by_scope(
-                org_id, "entity", entity_type_id=type_id,
+                org_id,
+                "entity",
+                entity_type_id=type_id,
             )
         elif scope.startswith("activity:"):
             type_id = uuid.UUID(scope.split(":", 1)[1])
@@ -389,7 +423,9 @@ class ListConfigService:
                     seen_keys.add(f["key"])
                     fields.append(f)
             for f in meta_service.get_schema_by_scope(
-                org_id, "activity", activity_type_id=type_id,
+                org_id,
+                "activity",
+                activity_type_id=type_id,
             ):
                 if f["key"] not in seen_keys:
                     seen_keys.add(f["key"])
@@ -405,7 +441,13 @@ class ListConfigService:
 
     # ── merge logic ─────────────────────────────────────────────
 
-    _STRUCTURAL_PROPS = {"field_type", "label", "dimension_key", "filter_supported", "search_supported"}
+    _STRUCTURAL_PROPS = {
+        "field_type",
+        "label",
+        "dimension_key",
+        "filter_supported",
+        "search_supported",
+    }
 
     @classmethod
     def _merge_saved(

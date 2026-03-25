@@ -1,5 +1,5 @@
 """
-Entity models: EntityType, Entity
+Entity models: EntityType, Entity, CodeCounter
 """
 
 from sqlalchemy import Column, ForeignKey, Index, Integer, String, UniqueConstraint, text
@@ -44,6 +44,7 @@ class Entity(BaseModel):
         nullable=False,
         index=True,
     )
+    code = Column(String, nullable=True)
     meta = Column(JSONB, nullable=True, default=dict)
 
     organization = relationship("Organization", back_populates="entities")
@@ -58,10 +59,24 @@ class Entity(BaseModel):
 
     __table_args__ = (
         Index(
-            "uq_entity_case_number",
+            "uq_entity_code",
             "organization_id",
-            text("(meta->>'case_number')"),
+            "code",
             unique=True,
-            postgresql_where=text("meta->>'case_number' IS NOT NULL"),
+            postgresql_where=text("code IS NOT NULL"),
         ),
     )
+
+
+class CodeCounter(BaseModel):
+    __tablename__ = "code_counters"
+
+    organization_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    year = Column(String(2), nullable=False)
+    last_serial = Column(Integer, nullable=False, default=0)
+
+    __table_args__ = (UniqueConstraint("organization_id", "year", name="uq_code_counter_org_year"),)

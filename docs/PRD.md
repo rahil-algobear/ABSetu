@@ -19,16 +19,9 @@ The top-level tenant. All data is scoped to an organization.
 | id | UUID | Primary key |
 | name | String | Required |
 | code | String | Unique, short code (e.g., "KBMH") |
-| case_number_format | String | Template for beneficiary case numbers (e.g., `{ORG_CODE}-{SERIAL}`) |
 | meta | JSONB | Org-specific custom fields |
 
-**Case Number Format Tokens:**
-- `{ORG_CODE}` — organization code
-- `{YY}` — 2-digit year
-- `{YYYY}` — 4-digit year
-- `{SERIAL}` — auto-incrementing number (per org, per year)
-
-Default format if not set: `{ORG_CODE}-{SERIAL}`
+Entity codes are auto-generated in the format `{ORG_CODE}-{YY}-{SERIAL}` (e.g., "KBMH-26-001"). The serial resets per org per year.
 
 ---
 
@@ -131,7 +124,7 @@ The person being served by the NGO.
 |---|---|---|
 | id | UUID | Primary key |
 | organization_id | UUID | FK to Organization |
-| case_number | String | Auto-generated, unique within org |
+| code | String | Auto-generated (e.g., "KBMH-26-001"), unique within org |
 | name | String | Required — the only guaranteed core field |
 | meta | JSONB | All other fields are org-defined (age, education, nationality, address, etc.) |
 

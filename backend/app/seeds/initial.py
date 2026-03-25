@@ -10,15 +10,15 @@ import logging
 import sys
 
 from app.core.database import SessionLocal
-from app.modules.organization.model import Organization
-from app.modules.role.model import Permission, Role, RolePermission
+from app.modules.activity.model import Activity, ActivityType  # noqa: F401
 from app.modules.auth.model import User
 
 # Import all models so SQLAlchemy can resolve relationship strings
 from app.modules.dimension.model import Dimension, DimensionValue  # noqa: F401
-from app.modules.activity.model import ActivityType, Activity  # noqa: F401
-from app.modules.entity.model import Entity, EntityType  # noqa: F401
 from app.modules.enrollment.model import Enrollment  # noqa: F401
+from app.modules.entity.model import Entity, EntityType  # noqa: F401
+from app.modules.organization.model import Organization
+from app.modules.role.model import Permission, Role, RolePermission
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +71,6 @@ def seed():
             org = Organization(
                 name="ABSetu",
                 code="ABSETU",
-                case_number_format="{ORG_CODE}-{YY}-{SERIAL}",
             )
             db.add(org)
             db.flush()

@@ -167,8 +167,8 @@ export default function EntityDetailPage() {
       <PageHeader title={entityTitle} />
       <PageContent>
       <div className="flex gap-1 items-center mb-2">
-        {entity.meta?.case_number && (
-          <span className="text-gray-500">{String(entity.meta.case_number)}</span>
+        {entity.code && (
+          <span className="text-gray-500">{entity.code}</span>
         )}
         {entity.entity_type_name && (
           <Badge variant="secondary">{entity.entity_type_name}</Badge>

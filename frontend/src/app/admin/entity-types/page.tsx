@@ -26,7 +26,7 @@ export default function EntityTypesPage() {
   const queryClient = useQueryClient();
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<EntityType | null>(null);
-  const [form, setForm] = useState({ name: "", case_number_enabled: false, can_enroll: false });
+  const [form, setForm] = useState({ name: "", can_enroll: false });
 
   const { data: entityTypes = [], isLoading } = useQuery({
     queryKey: ["entity-types"],
@@ -65,7 +65,7 @@ export default function EntityTypesPage() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ name: "", case_number_enabled: false, can_enroll: false });
+    setForm({ name: "", can_enroll: false });
     setModalOpen(true);
   };
 
@@ -74,7 +74,6 @@ export default function EntityTypesPage() {
     const config = (item.config || {}) as Record<string, boolean>;
     setForm({
       name: item.name,
-      case_number_enabled: config.case_number_enabled || false,
       can_enroll: config.can_enroll || false,
     });
     setModalOpen(true);
@@ -88,7 +87,6 @@ export default function EntityTypesPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const config = {
-      case_number_enabled: form.case_number_enabled,
       can_enroll: form.can_enroll,
     };
     if (editing) {
@@ -125,7 +123,6 @@ export default function EntityTypesPage() {
           <TableHeader>
             <TableRow>
               <TableHead>Name</TableHead>
-              <TableHead>Case Numbers</TableHead>
               <TableHead>Enrollable</TableHead>
               <TableHead className="w-20 text-center">Actions</TableHead>
             </TableRow>
@@ -136,7 +133,6 @@ export default function EntityTypesPage() {
               return (
                 <TableRow key={et.id}>
                   <TableCell>{et.name}</TableCell>
-                  <TableCell>{config.case_number_enabled ? "Yes" : "No"}</TableCell>
                   <TableCell>{config.can_enroll ? "Yes" : "No"}</TableCell>
                   <TableCell>
                     <Can permission="entity_type:manage">
@@ -181,15 +177,6 @@ export default function EntityTypesPage() {
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               required
             />
-          </div>
-          <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="case_number_enabled"
-              checked={form.case_number_enabled}
-              onChange={(e) => setForm({ ...form, case_number_enabled: e.target.checked })}
-            />
-            <Label htmlFor="case_number_enabled">Enable case numbers</Label>
           </div>
           <div className="flex items-center gap-2">
             <input

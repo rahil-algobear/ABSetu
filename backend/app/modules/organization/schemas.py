@@ -11,13 +11,28 @@ from app.common.schemas.base_response import BaseResponseSchema
 # --- Field Definition ---
 
 FIELD_TYPES = Literal[
-    "text", "number", "date", "datetime", "select", "multiselect", "boolean",
-    "dimension", "entity_list", "user_list",
+    "text",
+    "number",
+    "date",
+    "datetime",
+    "select",
+    "multiselect",
+    "boolean",
+    "dimension",
+    "entity_list",
+    "user_list",
 ]
 
 DISPLAY_TYPES = Literal[
-    "input", "dropdown", "radio", "checklist", "textarea", "date", "datetime",
-    "search_select", "multi_select",
+    "input",
+    "dropdown",
+    "radio",
+    "checklist",
+    "textarea",
+    "date",
+    "datetime",
+    "search_select",
+    "multi_select",
 ]
 
 STAGE_TYPES = Literal["create", "record", "both"]
@@ -50,7 +65,10 @@ class FieldDefinition(BaseModel):
     def validate_options(self):
         if self.type in ("select", "multiselect") and not self.options:
             raise ValueError(f"options are required for {self.type} fields")
-        if self.type not in ("select", "multiselect", "dimension", "entity_list", "user_list") and self.options:
+        if (
+            self.type not in ("select", "multiselect", "dimension", "entity_list", "user_list")
+            and self.options
+        ):
             raise ValueError(f"options are not allowed for {self.type} fields")
         return self
 
@@ -66,7 +84,6 @@ class FieldDefinition(BaseModel):
 class OrganizationCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     code: str = Field(..., min_length=1, max_length=50)
-    case_number_format: str = Field(default="{ORG_CODE}-{SERIAL}")
     logo_url: str | None = Field(None, max_length=2048)
     meta: dict[str, Any] | None = None
 
@@ -74,7 +91,6 @@ class OrganizationCreate(BaseModel):
 class OrganizationUpdate(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=200)
     code: str | None = Field(None, min_length=1, max_length=50)
-    case_number_format: str | None = None
     logo_url: str | None = Field(None, max_length=2048)
     meta: dict[str, Any] | None = None
 
@@ -82,7 +98,6 @@ class OrganizationUpdate(BaseModel):
 class OrganizationResponse(BaseResponseSchema):
     name: str
     code: str
-    case_number_format: str
     logo_url: str | None = None
     meta: dict[str, Any] | None = None
 

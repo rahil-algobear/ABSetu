@@ -17,7 +17,7 @@ def apply_search(query: Query, search_term: str | None, columns: list) -> Query:
     Apply ILIKE search across multiple columns (OR).
 
     columns: list of SQLAlchemy column expressions
-        e.g. [Entity.name, Entity.case_number]
+        e.g. [Entity.code, Entity.name]
     """
     if not search_term or not search_term.strip():
         return query

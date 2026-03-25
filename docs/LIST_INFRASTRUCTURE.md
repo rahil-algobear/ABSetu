@@ -105,7 +105,7 @@ def apply_sort(query, model, sort_by, sort_order, sort_config, default_sort):
     sort_config example:
     {
         "name": Entity.name,
-        "case_number": Entity.case_number,
+        "code": Entity.code,
         "created_at": Entity.created_at,
         "meta:age": Entity.meta['age'].astext.cast(Integer),
     }
@@ -123,7 +123,7 @@ Each function takes a query and returns a query — they compose. A typical serv
 ```python
 def list_entities(self, org_id, params: ListParams, accessible_dv_ids, filter_config, sort_config):
     query = self._build_base_query(org_id, accessible_dv_ids)
-    query = apply_search(query, Entity, params.search, [Entity.name, Entity.case_number])
+    query = apply_search(query, Entity, params.search, [Entity.name, Entity.code])
     query = apply_filters(query, Entity, params.filters, filter_config)
     query = apply_sort(query, Entity, params.sort_by, params.sort_order, sort_config, Entity.created_at.desc())
     items, total = paginate(query, params.page, params.limit)
@@ -416,7 +416,7 @@ export default function EntitiesPage() {
   const listParams = useListParams({
     defaultSortBy: "created_at",
     defaultSortOrder: "desc",
-    allowedSortKeys: ["name", "case_number", "created_at", ...dynamicSortKeys],
+    allowedSortKeys: ["name", "code", "created_at", ...dynamicSortKeys],
   });
 
   // 3. Fetch paginated data
@@ -444,7 +444,7 @@ export default function EntitiesPage() {
         <TableHeader>
           <TableRow>
             <SortableTableHead label="Name" sortKey="name" ... />
-            <SortableTableHead label="Case #" sortKey="case_number" ... />
+            <SortableTableHead label="Code" sortKey="code" ... />
             <TableHead>Type</TableHead>
             <SortableTableHead label="Created" sortKey="created_at" ... />
           </TableRow>
@@ -565,6 +565,6 @@ Update the existing meta field admin page (`/admin/meta-fields`) to show `is_fil
 
 2. **Cards vs Table**: Table-only on both mobile and desktop. Horizontal scroll on mobile for wider tables.
 
-3. **Search scope**: Start with core columns only (name, case_number). Add meta field search later if needed.
+3. **Search scope**: Start with core columns only (name, code). Add meta field search later if needed.
 
 4. **Filter chip limit**: Show all filter chips for now. Revisit if UX becomes cluttered.

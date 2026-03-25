@@ -18,7 +18,6 @@ class Organization(BaseModel):
 
     name = Column(String, nullable=False)
     code = Column(String, nullable=False, unique=True)
-    case_number_format = Column(String, nullable=False, default="{ORG_CODE}-{SERIAL}")
     logo_url = Column(VARCHAR(2048), nullable=True)
     meta = Column(JSONB, nullable=True, default=dict)
 

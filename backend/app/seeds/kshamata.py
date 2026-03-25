@@ -13,17 +13,16 @@ Usage:
 import logging
 import sys
 
-from app.core.database import SessionLocal
-from app.modules.organization.model import ListConfig, MetaFieldSchema, Organization
-from app.modules.dimension.model import Dimension, DimensionValue, DimensionValueLink
-from app.modules.activity.model import ActivityType
-from app.modules.entity.model import EntityType
-from app.modules.auth.model import User
-from app.modules.role.model import Permission, Role, RolePermission
 from app.common.helpers.slugify import slugify
-from app.modules.entity.model import Entity  # noqa: F401
+from app.core.database import SessionLocal
+from app.modules.activity.model import Activity, ActivityParticipant, ActivityType  # noqa: F401
+from app.modules.auth.model import User
+from app.modules.dimension.model import Dimension, DimensionValue, DimensionValueLink
 from app.modules.enrollment.model import Enrollment  # noqa: F401
-from app.modules.activity.model import Activity, ActivityParticipant  # noqa: F401
+from app.modules.entity.model import Entity  # noqa: F401
+from app.modules.entity.model import EntityType
+from app.modules.organization.model import ListConfig, MetaFieldSchema, Organization
+from app.modules.role.model import Permission, Role, RolePermission
 
 logger = logging.getLogger(__name__)
 
@@ -46,12 +45,12 @@ ORG_LOGO_URL = "https://kshamata.org/wp-content/uploads/2022/06/revised-logo.png
 ENTITY_TYPES = [
     {
         "name": "Beneficiary",
-        "config": {"case_number_enabled": True, "can_enroll": True},
+        "config": {"can_enroll": True},
         "sort_order": 0,
     },
     {
         "name": "Facilitator",
-        "config": {"case_number_enabled": False, "can_enroll": False},
+        "config": {"can_enroll": False},
         "sort_order": 1,
     },
 ]
@@ -388,7 +387,12 @@ PROGRAMME_INTERVENTIONS = {
 # ---------------------------------------------------------------------------
 BENEFICIARY_CUSTOM_FIELDS = [
     {"label": "Name", "type": "text", "required": True},
-    {"label": "Nationality", "type": "select", "required": False, "options": ["Indian", "Bangladeshi"]},
+    {
+        "label": "Nationality",
+        "type": "select",
+        "required": False,
+        "options": ["Indian", "Bangladeshi"],
+    },
     {"label": "Contact No.", "type": "text", "required": False},
     {"label": "Current Address", "type": "text", "required": False},
     {"label": "Native Place", "type": "text", "required": False},
@@ -440,12 +444,42 @@ SESSION_PARTICIPANT_FIELDS = [
 # Dimension Value = "Physical Health"
 # ---------------------------------------------------------------------------
 PHYSICAL_HEALTH_PARTICIPANT_FIELDS = [
-    {"label": "Weight of the Woman", "type": "number", "required": False, "stage": "record", "sort_order": 0},
-    {"label": "Menstruation", "type": "text", "required": False, "stage": "record", "sort_order": 1},
+    {
+        "label": "Weight of the Woman",
+        "type": "number",
+        "required": False,
+        "stage": "record",
+        "sort_order": 0,
+    },
+    {
+        "label": "Menstruation",
+        "type": "text",
+        "required": False,
+        "stage": "record",
+        "sort_order": 1,
+    },
     {"label": "H.B.", "type": "number", "required": False, "stage": "record", "sort_order": 2},
-    {"label": "Protein/Iron/Cal", "type": "text", "required": False, "stage": "record", "sort_order": 3},
-    {"label": "Health Issues", "type": "text", "required": False, "stage": "record", "sort_order": 4},
-    {"label": "Psychiatric Consultation", "type": "text", "required": False, "stage": "record", "sort_order": 5},
+    {
+        "label": "Protein/Iron/Cal",
+        "type": "text",
+        "required": False,
+        "stage": "record",
+        "sort_order": 3,
+    },
+    {
+        "label": "Health Issues",
+        "type": "text",
+        "required": False,
+        "stage": "record",
+        "sort_order": 4,
+    },
+    {
+        "label": "Psychiatric Consultation",
+        "type": "text",
+        "required": False,
+        "stage": "record",
+        "sort_order": 5,
+    },
 ]
 
 
@@ -453,8 +487,22 @@ PHYSICAL_HEALTH_PARTICIPANT_FIELDS = [
 # Meta Field Schemas — enrollment custom fields
 # ---------------------------------------------------------------------------
 ENROLLMENT_CUSTOM_FIELDS = [
-    {"label": "Date of Admission", "type": "date", "required": True, "visible": True, "stage": "both", "sort_order": 0},
-    {"label": "Date of Release", "type": "date", "required": False, "visible": True, "stage": "both", "sort_order": 1},
+    {
+        "label": "Date of Admission",
+        "type": "date",
+        "required": True,
+        "visible": True,
+        "stage": "both",
+        "sort_order": 0,
+    },
+    {
+        "label": "Date of Release",
+        "type": "date",
+        "required": False,
+        "visible": True,
+        "stage": "both",
+        "sort_order": 1,
+    },
 ]
 
 
@@ -623,7 +671,6 @@ def seed():
             org = Organization(
                 name=ORG_NAME,
                 code=ORG_CODE,
-                case_number_format="{ORG_CODE}-{YY}-{SERIAL}",
                 logo_url=ORG_LOGO_URL,
                 meta={},
             )
@@ -660,9 +707,12 @@ def seed():
         # 2b. Meta Field Schemas — Beneficiary custom fields
         beneficiary_et = entity_type_map["Beneficiary"]
         from app.modules.organization.service import MetaFieldSchemaService
+
         meta_service = MetaFieldSchemaService(db)
         meta_service.update_schema(
-            org.id, "entity", BENEFICIARY_CUSTOM_FIELDS,
+            org.id,
+            "entity",
+            BENEFICIARY_CUSTOM_FIELDS,
             entity_type_id=beneficiary_et.id,
         )
         print(f"  Ensured beneficiary meta field schema ({len(BENEFICIARY_CUSTOM_FIELDS)} fields)")
@@ -670,7 +720,9 @@ def seed():
         # 2c. Meta Field Schemas — Facilitator custom fields
         facilitator_et = entity_type_map["Facilitator"]
         meta_service.update_schema(
-            org.id, "entity", FACILITATOR_CUSTOM_FIELDS,
+            org.id,
+            "entity",
+            FACILITATOR_CUSTOM_FIELDS,
             entity_type_id=facilitator_et.id,
         )
         print(f"  Ensured facilitator meta field schema ({len(FACILITATOR_CUSTOM_FIELDS)} fields)")
@@ -761,14 +813,16 @@ def seed():
         session_fields = list(SESSION_META_FIELDS)  # start with date etc.
         for dim_name, required, sort_order in SESSION_DIMENSION_FIELDS:
             dim_id = dim_name_to_id[dim_name]
-            session_fields.append({
-                "label": dim_name,
-                "type": "dimension",
-                "dimension_id": dim_id,
-                "required": required,
-                "stage": "create",
-                "sort_order": sort_order,
-            })
+            session_fields.append(
+                {
+                    "label": dim_name,
+                    "type": "dimension",
+                    "dimension_id": dim_id,
+                    "required": required,
+                    "stage": "create",
+                    "sort_order": sort_order,
+                }
+            )
         for field_type, et_name, label, sort_order in SESSION_PARTICIPANT_FIELDS:
             field_def = {
                 "label": label,
@@ -782,7 +836,9 @@ def seed():
                 field_def["entity_type_id"] = str(entity_type_map[et_name].id)
             session_fields.append(field_def)
         meta_service.update_schema(
-            org.id, "activity", session_fields,
+            org.id,
+            "activity",
+            session_fields,
             activity_type_id=sessions_type.id,
         )
         print(f"  Ensured session meta field schema ({len(session_fields)} fields)")
@@ -806,15 +862,20 @@ def seed():
 
         # 7b-iii. Enrollment custom fields
         meta_service.update_schema(
-            org.id, "enrollment", ENROLLMENT_CUSTOM_FIELDS,
+            org.id,
+            "enrollment",
+            ENROLLMENT_CUSTOM_FIELDS,
         )
         print(f"  Ensured enrollment meta field schema ({len(ENROLLMENT_CUSTOM_FIELDS)} fields)")
 
         # 7c. List config — Beneficiary
         from app.modules.organization.service import ListConfigService
+
         list_service = ListConfigService(db)
         beneficiary_scope = f"entity:{beneficiary_et.id}"
-        bene_catalog = {c["label"]: c for c in list_service._all_meta_columns(org.id, beneficiary_scope)}
+        bene_catalog = {
+            c["label"]: c for c in list_service._all_meta_columns(org.id, beneficiary_scope)
+        }
         bene_static = list_service._static_defaults(beneficiary_scope)
         # Desired columns in order, with overrides
         BENE_LIST_SPEC = [
@@ -833,10 +894,17 @@ def seed():
             col = bene_catalog.get(label)
             if col:
                 bene_cols.append({**col, "sort_order": i, **overrides})
-            # Insert case_number right after Name
-            if label == "Name" and "case_number" in bene_static_by_key:
-                cn = bene_static_by_key.pop("case_number")
-                bene_cols.append({**cn, "sort_order": len(bene_cols), "searchable": True, "search_supported": True})
+            # Insert code right after Name
+            if label == "Name" and "code" in bene_static_by_key:
+                cn = bene_static_by_key.pop("code")
+                bene_cols.append(
+                    {
+                        **cn,
+                        "sort_order": len(bene_cols),
+                        "searchable": True,
+                        "search_supported": True,
+                    }
+                )
         # Append remaining static columns after meta columns
         for s in bene_static_by_key.values():
             bene_cols.append({**s, "sort_order": len(bene_cols)})
@@ -845,7 +913,9 @@ def seed():
 
         # 7c-ii. List config — Facilitator
         facilitator_scope = f"entity:{facilitator_et.id}"
-        fac_catalog = {c["label"]: c for c in list_service._all_meta_columns(org.id, facilitator_scope)}
+        fac_catalog = {
+            c["label"]: c for c in list_service._all_meta_columns(org.id, facilitator_scope)
+        }
         fac_static = list_service._static_defaults(facilitator_scope)
         FAC_LIST_SPEC = [
             ("Name", {"sortable": True, "searchable": True}),
@@ -863,7 +933,9 @@ def seed():
 
         # 7d. List config — Session activities
         session_scope = f"activity:{sessions_type.id}"
-        sess_catalog = {c["label"]: c for c in list_service._all_meta_columns(org.id, session_scope)}
+        sess_catalog = {
+            c["label"]: c for c in list_service._all_meta_columns(org.id, session_scope)
+        }
         sess_static = list_service._static_defaults(session_scope)
         SESSION_LIST_SPEC = [
             ("Date", {"filterable": True, "sortable": True}),
