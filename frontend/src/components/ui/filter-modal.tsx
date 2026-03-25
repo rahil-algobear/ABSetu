@@ -234,6 +234,7 @@ export function FilterModal({
                     }
                     onChange={(val) => handleDateChange(def.key, "start", val)}
                     allowTime={def.type === "datetime_range"}
+                    showLabel={false}
                   />
                   <span className="text-gray-400">to</span>
                   <DateTimeInput
@@ -244,6 +245,7 @@ export function FilterModal({
                     }
                     onChange={(val) => handleDateChange(def.key, "end", val)}
                     allowTime={def.type === "datetime_range"}
+                    showLabel={false}
                   />
                 </div>
               )}

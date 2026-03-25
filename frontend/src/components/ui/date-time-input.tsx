@@ -18,6 +18,8 @@ interface DateTimeInputProps {
   disabled?: boolean;
   /** Show the time toggle. Defaults to true. Set false for date-only fields. */
   allowTime?: boolean;
+  /** Show the formatted date label below the input. Defaults to true. */
+  showLabel?: boolean;
 }
 
 /** Parse an ISO date/datetime string to a Date, or null if empty/invalid. */
@@ -71,6 +73,7 @@ export function DateTimeInput({
   className,
   disabled,
   allowTime = true,
+  showLabel = true,
 }: DateTimeInputProps) {
   // Show time toggle if value has a non-midnight time component.
   // Midnight is ambiguous (could be date-only or explicit midnight), but
@@ -151,7 +154,7 @@ export function DateTimeInput({
           </button>
         )}
       </div>
-      {selected && (
+      {showLabel && selected && (
         <p className="text-xs text-gray-500 mt-1">
           {showTime
             ? format(selected, "dd-MMM-yyyy 'at' h:mm a")
