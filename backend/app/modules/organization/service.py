@@ -2,6 +2,7 @@
 Organization services
 """
 
+import re
 import uuid
 
 from sqlalchemy.orm import Session
@@ -93,16 +94,20 @@ class MetaFieldSchemaService:
         rows = self.get_all_schemas(org_id)
         return [{"row": row, "fields": row.fields} for row in rows]
 
-    @staticmethod
-    def _ensure_field_keys(fields: list[dict]) -> list[dict]:
-        """Ensure every field has a unique key with a random 4-char suffix.
+    # Matches keys with a 4-char random prefix (new format: psw7_name)
+    _PREFIX_PATTERN = re.compile(r"^[a-z0-9]{4}_")
+    # Matches keys with a 4-char random suffix (old format: name_psw7)
+    _SUFFIX_PATTERN = re.compile(r"_[a-z0-9]{4}$")
 
-        Fields that already have a suffixed key (containing '_' followed by
-        4+ alphanumeric chars at the end) are left as-is. New or legacy
-        fields get a suffix appended.
+    @classmethod
+    def _ensure_field_keys(cls, fields: list[dict]) -> list[dict]:
+        """Ensure every field has a unique key with a random 4-char prefix.
+
+        Keys with an existing prefix (e.g. psw7_name) or legacy suffix
+        (e.g. name_psw7) are left as-is. New fields get a prefix added.
+        Format: {4-char random}_{descriptive_base}  (e.g. a3x9_name)
         """
         import random
-        import re
         import string
 
         existing_keys = {f.get("key") for f in fields if f.get("key")}
@@ -110,11 +115,11 @@ class MetaFieldSchemaService:
         for f in fields:
             f = dict(f)
             key = f.get("key") or ""
-            # Check if key already has a random suffix (e.g. name_a3x9)
-            if key and re.search(r"_[a-z0-9]{4,}$", key):
+            # Already has a random prefix (new format) or legacy suffix — keep it
+            if key and (cls._PREFIX_PATTERN.search(key) or cls._SUFFIX_PATTERN.search(key)):
                 result.append(f)
                 continue
-            # Generate a new unique key
+            # Generate a descriptive base from the field
             if f.get("type") == "dimension" and f.get("dimension_id"):
                 base = "dim"
             elif f.get("type") == "entity_list" and f.get("entity_type_id"):
@@ -122,14 +127,14 @@ class MetaFieldSchemaService:
             elif f.get("type") == "user_list":
                 base = "ul"
             elif key:
-                base = re.sub(r"[^a-z0-9_]", "", key.lower().replace(" ", "_"))
+                base = re.compile(r"[^a-z0-9_]").sub("", key.lower().replace(" ", "_"))
             else:
                 label = f.get("label", "field")
-                base = re.sub(r"[^a-z0-9_]", "", label.lower().replace(" ", "_"))
-            # Generate suffix and ensure uniqueness
+                base = re.compile(r"[^a-z0-9_]").sub("", label.lower().replace(" ", "_"))
+            # Generate prefix and ensure uniqueness
             for _ in range(100):
-                suffix = "".join(random.choices(string.ascii_lowercase + string.digits, k=4))
-                new_key = f"{base}_{suffix}"
+                prefix = "".join(random.choices(string.ascii_lowercase + string.digits, k=4))
+                new_key = f"{prefix}_{base}"
                 if new_key not in existing_keys:
                     break
             f["key"] = new_key
