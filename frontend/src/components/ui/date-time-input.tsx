@@ -73,7 +73,7 @@ export function DateTimeInput({
   className,
   disabled,
   allowTime = true,
-  showLabel = true,
+  showLabel = false,
 }: DateTimeInputProps) {
   // Show time toggle if value has a non-midnight time component.
   // Midnight is ambiguous (could be date-only or explicit midnight), but
