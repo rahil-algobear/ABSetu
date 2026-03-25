@@ -10,6 +10,7 @@ import {
   dimensionValueLinkApi,
   entityApi,
   entityTypeApi,
+  listConfigApi,
   metaFieldSchemaApi,
   userApi,
 } from "@/services/api";
@@ -21,7 +22,7 @@ import {
   MetaFieldDefinition,
   MetaFieldSchemaItem,
 } from "@/types";
-import { collectActivityFields, getFieldsForScope } from "@/utils/meta-fields";
+import { collectActivityFields } from "@/utils/meta-fields";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -160,12 +161,15 @@ export default function NewActivityPage() {
     queryFn: async () => {
       const result: Record<string, { id: string; name: string }[]> = {};
       for (const typeId of entitySourceIds) {
-        const entities = await entityApi.list(typeId);
-        const fields = getFieldsForScope(allMetaSchemas, { type: "entity", entity_type_id: typeId });
-        const nameField = fields.find((f) => f.label === "Name");
+        const [entities, columns] = await Promise.all([
+          entityApi.list(typeId),
+          listConfigApi.get(`entity:${typeId}`),
+        ]);
+        const firstCol = columns.find((c) => c.visible && c.key.startsWith("meta:"));
+        const metaKey = firstCol?.key.replace(/^meta:/, "");
         result[typeId] = entities.map((e) => ({
           id: e.id,
-          name: nameField ? String((e.meta || {})[nameField.key] || "") : "",
+          name: metaKey ? String((e.meta || {})[metaKey] || "") : "",
         }));
       }
       return result;

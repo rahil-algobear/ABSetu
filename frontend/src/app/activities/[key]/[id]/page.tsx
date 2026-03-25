@@ -8,6 +8,7 @@ import {
   dimensionApi,
   entityApi,
   entityTypeApi,
+  listConfigApi,
   metaFieldSchemaApi,
   userApi,
 } from "@/services/api";
@@ -16,7 +17,7 @@ import {
   MetaFieldDefinition,
   MetaFieldSchemaItem,
 } from "@/types";
-import { collectActivityFields, collectParticipantFields, getFieldsForScope } from "@/utils/meta-fields";
+import { collectActivityFields, collectParticipantFields } from "@/utils/meta-fields";
 import { formatDate, formatDateTime } from "@/utils/date";
 import { Can } from "@/components/Auth/Permissions";
 
@@ -117,12 +118,16 @@ export default function ActivityDetailPage() {
     queryFn: async () => {
       const result: Record<string, { id: string; name: string }[]> = {};
       for (const typeId of entitySourceIds) {
-        const entities = await entityApi.list(typeId);
-        const fields = getFieldsForScope(allMetaSchemas, { type: "entity", entity_type_id: typeId });
-        const nameField = fields.find((f) => f.label === "Name");
+        const [entities, columns] = await Promise.all([
+          entityApi.list(typeId),
+          listConfigApi.get(`entity:${typeId}`),
+        ]);
+        // Use first visible column to derive display name
+        const firstCol = columns.find((c) => c.visible && c.key.startsWith("meta:"));
+        const metaKey = firstCol?.key.replace(/^meta:/, "");
         result[typeId] = entities.map((e) => ({
           id: e.id,
-          name: nameField ? String((e.meta || {})[nameField.key] || "") : "",
+          name: metaKey ? String((e.meta || {})[metaKey] || "") : "",
         }));
       }
       return result;
