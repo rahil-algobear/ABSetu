@@ -1,5 +1,5 @@
 """
-Enrollment service (legacy beneficiary module — Beneficiary replaced by Entity)
+Enrollment service
 """
 
 import uuid
@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.common.exceptions import NotFoundError, ValidationError
 from app.common.helpers.meta_normalize import normalize_meta_datetimes
-from app.modules.beneficiary.model import Enrollment
+from app.modules.enrollment.model import Enrollment
 from app.modules.dimension.model import EnrollmentDimension
 from app.modules.entity.model import Entity
 

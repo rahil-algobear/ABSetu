@@ -14,7 +14,7 @@ from app.common.helpers.dimension_scoping import (
 )
 from app.modules.activity.model import Activity, ActivityType, ActivityParticipant
 from app.modules.entity.model import Entity, EntityType
-from app.modules.beneficiary.model import Enrollment
+from app.modules.enrollment.model import Enrollment
 from app.modules.auth.model import User
 from app.modules.dimension.model import ActivityDimension, DimensionValue, EntityDimension
 from app.modules.dashboard.schemas import (

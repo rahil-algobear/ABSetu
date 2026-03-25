@@ -20,7 +20,7 @@ from app.common.helpers.list_query import apply_filters, apply_search, apply_sor
 from app.common.helpers.slugify import slugify
 from app.common.schemas.list_params import ListParams
 from app.modules.activity.model import ActivityParticipant
-from app.modules.beneficiary.model import Enrollment
+from app.modules.enrollment.model import Enrollment
 from app.modules.dimension.model import EntityDimension
 from app.modules.entity.model import Entity, EntityType
 from app.modules.organization.model import Organization

@@ -176,7 +176,7 @@ from app.modules.role.routes import router as role_router
 from app.modules.dimension.routes import router as dimension_router
 from app.modules.activity.routes import router as activity_router
 from app.modules.entity.routes import router as entity_router
-from app.modules.beneficiary.routes import router as enrollment_router
+from app.modules.enrollment.routes import router as enrollment_router
 from app.modules.dashboard.routes import router as dashboard_router
 
 app.include_router(auth_router, prefix="/api", tags=["auth"])

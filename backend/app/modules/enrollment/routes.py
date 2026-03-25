@@ -1,5 +1,5 @@
 """
-Enrollment routes (legacy beneficiary module — Beneficiary replaced by Entity)
+Enrollment routes
 """
 
 import uuid
@@ -10,13 +10,13 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.common.dependencies import get_current_user, require_permissions
 from app.modules.auth.model import User
-from app.modules.beneficiary.schemas import (
+from app.modules.enrollment.schemas import (
     DimensionInfo,
     EnrollmentCreate,
     EnrollmentResponse,
     EnrollmentUpdate,
 )
-from app.modules.beneficiary.service import EnrollmentService
+from app.modules.enrollment.service import EnrollmentService
 
 router = APIRouter(tags=["enrollments"])
 

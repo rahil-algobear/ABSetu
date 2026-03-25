@@ -21,5 +21,5 @@ from app.modules.activity.model import (  # noqa: F401
     ActivityType,
 )
 from app.modules.entity.model import Entity, EntityType  # noqa: F401
-from app.modules.beneficiary.model import Enrollment  # noqa: F401
+from app.modules.enrollment.model import Enrollment  # noqa: F401
 from app.modules.role.model import Permission, Role, RolePermission  # noqa: F401

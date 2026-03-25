@@ -1,5 +1,5 @@
 """
-Enrollment schemas (legacy beneficiary module — Beneficiary replaced by Entity)
+Enrollment schemas
 """
 
 from typing import Any

@@ -1,5 +1,5 @@
 """
-Enrollment model (legacy beneficiary module — Beneficiary replaced by Entity)
+Enrollment model
 """
 
 from sqlalchemy import Column, ForeignKey

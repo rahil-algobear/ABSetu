@@ -22,7 +22,7 @@ from app.modules.auth.model import User
 from app.modules.role.model import Permission, Role, RolePermission
 from app.common.helpers.slugify import slugify
 from app.modules.entity.model import Entity  # noqa: F401
-from app.modules.beneficiary.model import Enrollment  # noqa: F401
+from app.modules.enrollment.model import Enrollment  # noqa: F401
 from app.modules.activity.model import Activity, ActivityParticipant  # noqa: F401
 
 logger = logging.getLogger(__name__)
