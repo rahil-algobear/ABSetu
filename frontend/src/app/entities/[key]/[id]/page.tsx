@@ -192,9 +192,10 @@ export default function EntityDetailPage() {
               <CardTitle className="text-lg">Details</CardTitle>
               {!editingDetails && (
                 <Can permission="entity:edit">
-                  <button onClick={openEditDetails} className="text-gray-400 hover:text-purple-600">
-                    <Pencil className="h-4 w-4" />
-                  </button>
+                  <Button size="sm" variant="outline" onClick={openEditDetails}>
+                    <Pencil className="h-3.5 w-3.5 mr-1" />
+                    Edit
+                  </Button>
                 </Can>
               )}
             </div>
