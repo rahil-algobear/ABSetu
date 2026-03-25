@@ -306,6 +306,14 @@ function EntityTypeEntitiesContent() {
             fields={metaFields.filter((f) => f.visible !== false)}
             values={metaValues}
             onChange={setMetaValues}
+            disabledKeys={(() => {
+              const keys = new Set<string>();
+              for (const f of metaFields) {
+                if (editing && f.stage === "create") keys.add(f.key);
+                if (!editing && f.stage === "record") keys.add(f.key);
+              }
+              return keys;
+            })()}
           />
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={closeModal}>

@@ -67,7 +67,7 @@ const emptyField: MetaFieldDefinition = {
   config: undefined,
 };
 
-type SectionKind = "entity" | "dimension" | "other" | "activity" | "participant";
+type SectionKind = "entity" | "dimension" | "enrollment" | "activity" | "participant";
 
 interface ScopeGroup {
   schema: MetaFieldSchemaItem;
@@ -143,11 +143,11 @@ export default function MetaFieldsPage() {
   // Current scope for entity/dimension/other tabs
   const currentScope = useMemo((): MetaFieldScope | null => {
     if (activeSection === "activity" || activeSection === "participant") return null;
+    if (activeSection === "enrollment") return { type: "enrollment" };
     if (!activeKey) return null;
     switch (activeSection) {
       case "entity": return { type: "entity", entity_type_id: activeKey };
       case "dimension": return { type: "dimension", dimension_id: activeKey };
-      case "other": return { type: activeKey };
       default: return null;
     }
   }, [activeSection, activeKey]);
@@ -168,8 +168,8 @@ export default function MetaFieldsPage() {
       case "dimension":
         setActiveKey(dimensions[0]?.id || "");
         break;
-      case "other":
-        setActiveKey("enrollment");
+      case "enrollment":
+        setActiveKey("");
         break;
       case "activity":
         setActivityFilterTypeId("");
@@ -502,7 +502,7 @@ export default function MetaFieldsPage() {
     switch (activeSection) {
       case "entity": return entityTypesList.find((et) => et.id === activeKey)?.name || activeKey;
       case "dimension": return dimensions.find((d) => d.id === activeKey)?.name || activeKey;
-      case "other": return "Enrollments";
+      case "enrollment": return "Enrollments";
       default: return "";
     }
   }, [activeSection, activeKey, entityTypesList, dimensions]);
@@ -511,7 +511,7 @@ export default function MetaFieldsPage() {
   const sections: { key: SectionKind; label: string }[] = [
     { key: "entity", label: "Entity types" },
     { key: "dimension", label: "Dimensions" },
-    { key: "other", label: "Other" },
+    { key: "enrollment", label: "Enrollments" },
     { key: "activity", label: "Activity fields" },
     { key: "participant", label: "Participant fields" },
   ];
@@ -601,30 +601,6 @@ export default function MetaFieldsPage() {
           </div>
         )}
 
-        {activeSection === "other" && (
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {[
-              { key: "enrollment", label: "Enrollments" },
-            ].map((item) => (
-              <button
-                key={item.key}
-                onClick={() => setActiveKey(item.key)}
-                className={`px-3 py-1 text-sm rounded-md whitespace-nowrap transition-colors ${
-                  activeKey === item.key
-                    ? "bg-purple-50 text-purple-700 border border-purple-200 font-medium"
-                    : "bg-white text-gray-600 border border-gray-200 hover:border-gray-300"
-                }`}
-              >
-                {item.label}
-                {countFieldsForScope({ type: item.key }) > 0 && (
-                  <span className="ml-1 text-xs text-gray-400">
-                    ({countFieldsForScope({ type: item.key })})
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-        )}
 
         {/* Activity tab: view filter dropdowns */}
         {activeSection === "activity" && (
@@ -810,6 +786,7 @@ export default function MetaFieldsPage() {
                   <TableHead>Default</TableHead>
                   <TableHead>Options</TableHead>
                   <TableHead>Visible</TableHead>
+                  <TableHead>Editable On</TableHead>
                   <TableHead className="w-20 text-center">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -854,6 +831,11 @@ export default function MetaFieldsPage() {
                       {field.options?.length ? field.options.join(", ") : "\u2014"}
                     </TableCell>
                     <TableCell>{field.visible !== false ? "Yes" : "No"}</TableCell>
+                    <TableCell className="text-sm text-gray-500">
+                      {field.stage === "create" ? "Create only"
+                        : field.stage === "record" ? "Edit only"
+                        : "Both"}
+                    </TableCell>
                     <TableCell>
                       <div className="flex items-center justify-center gap-2">
                         <button onClick={() => openEdit(index)} className="text-gray-400 hover:text-purple-600">
