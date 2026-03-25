@@ -849,6 +849,7 @@ def seed():
         fac_static = list_service._static_defaults(facilitator_scope)
         FAC_LIST_SPEC = [
             ("Name", {"sortable": True, "searchable": True}),
+            ("Contact No.", {}),
         ]
         fac_cols = []
         for i, (label, overrides) in enumerate(FAC_LIST_SPEC):
