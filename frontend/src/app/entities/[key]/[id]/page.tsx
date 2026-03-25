@@ -126,9 +126,14 @@ export default function EntityDetailPage() {
   if (isLoading) return <PageLayout><PageContent><p>Loading...</p></PageContent></PageLayout>;
   if (!entity) return <PageLayout><PageContent><p>Not found</p></PageContent></PageLayout>;
 
+  const firstFieldValue = metaFields.length > 0 && entity.meta
+    ? String(entity.meta[metaFields[0].key] ?? "")
+    : "";
+  const entityTitle = firstFieldValue || entity.name || "Entity";
+
   return (
     <PageLayout>
-      <PageHeader title={entity.name} />
+      <PageHeader title={entityTitle} />
       <PageContent>
       <div className="flex gap-1 items-center mb-2">
         {entity.case_number && (
