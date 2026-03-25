@@ -486,7 +486,11 @@ function EnrollmentForm({
         })}
 
         <DynamicMetaForm
-          fields={metaFields}
+          fields={metaFields.filter((f) => {
+            if (f.visible === false) return false;
+            if (isEdit) return f.stage !== "create";
+            return f.stage !== "record";
+          })}
           values={metaValues}
           onChange={setMetaValues}
         />

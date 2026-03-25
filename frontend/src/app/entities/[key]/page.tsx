@@ -303,7 +303,11 @@ function EntityTypeEntitiesContent() {
       >
         <form onSubmit={handleSubmit} className="space-y-3">
           <DynamicMetaForm
-            fields={metaFields.filter((f) => f.visible !== false)}
+            fields={metaFields.filter((f) => {
+              if (f.visible === false) return false;
+              if (editing) return f.stage !== "create";
+              return f.stage !== "record";
+            })}
             values={metaValues}
             onChange={setMetaValues}
           />

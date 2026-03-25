@@ -218,7 +218,11 @@ export default function DimensionValuesPage() {
             />
           </div>
           <DynamicMetaForm
-            fields={metaFields}
+            fields={metaFields.filter((f) => {
+              if (f.visible === false) return false;
+              if (editingValue) return f.stage !== "create";
+              return f.stage !== "record";
+            })}
             values={metaValues}
             onChange={setMetaValues}
           />
