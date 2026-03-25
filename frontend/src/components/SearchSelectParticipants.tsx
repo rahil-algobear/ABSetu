@@ -84,7 +84,7 @@ export function SearchSelectParticipants({
       ]);
       setShowCreateDialog(false);
       setNewEntityMeta({});
-      toast.success(`${entityTypeName} created and added`);
+      toast.success(`${entityTypeName} created and selected — save to confirm`);
     },
     onError: () => toast.error(`Failed to create ${entityTypeName.toLowerCase()}`),
   });
@@ -276,6 +276,7 @@ export function SearchSelectParticipants({
           <form
             onSubmit={(e) => {
               e.preventDefault();
+              e.stopPropagation();
               const meta = Object.keys(newEntityMeta).length > 0 ? newEntityMeta : undefined;
               createEntityMutation.mutate({
                 entity_type_id: entityTypeId,
