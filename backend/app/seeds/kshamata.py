@@ -778,7 +778,7 @@ def seed():
         )
         print(f"  Ensured session meta field schema ({len(session_fields)} fields)")
 
-        # 7b-ii. Participant fields for Physical Health intervention
+        # 7b-ii. Participant fields for Physical Health intervention (Beneficiary only)
         physical_health_dv = intervention_map.get("Physical Health")
         if physical_health_dv:
             meta_service.update_schema(
@@ -786,6 +786,7 @@ def seed():
                 "participant",
                 PHYSICAL_HEALTH_PARTICIPANT_FIELDS,
                 activity_type_id=sessions_type.id,
+                entity_type_id=beneficiary_et.id,
                 dimension_value_id=physical_health_dv.id,
                 dimension_id=intervention_dim.id,
             )
