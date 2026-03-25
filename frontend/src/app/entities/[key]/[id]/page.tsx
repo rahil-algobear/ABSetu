@@ -191,7 +191,7 @@ export default function EntityDetailPage() {
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg">Details</CardTitle>
               {!editingDetails && (
-                <Can permission="entity:update">
+                <Can permission="entity:edit">
                   <button onClick={openEditDetails} className="text-gray-400 hover:text-purple-600">
                     <Pencil className="h-4 w-4" />
                   </button>
