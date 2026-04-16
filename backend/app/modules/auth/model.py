@@ -42,7 +42,11 @@ class User(BaseModel):
 class OTP(BaseModel):
     __tablename__ = "otps"
 
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    user_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
     otp_code = Column(String, nullable=False)
 
 
