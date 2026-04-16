@@ -128,11 +128,22 @@ def delete_dimension(
 )
 def list_dimension_values(
     dimension_id: uuid.UUID,
+    include_all: bool = Query(False),
     current_user: User = Depends(get_current_user),
     accessible_dv_ids: list[uuid.UUID] | None = Depends(get_accessible_dimension_value_ids),
     db: Session = Depends(get_db),
 ):
-    """List values for a dimension, scoped by user's dimension access."""
+    """List values for a dimension, scoped by the user's dimension access.
+
+    By default, if the user has dimension access mappings for THIS dimension,
+    only those values are returned. Users with no mappings for this dimension
+    are unrestricted and see all values.
+
+    Pass ``include_all=true`` to bypass scoping and return the full set — used
+    by admin-only context views such as the dimension matrix. Honored only for
+    users with ``dimension:manage`` permission so it cannot be used as a
+    backdoor by restricted users.
+    """
     # Verify dimension belongs to org
     dim_service = DimensionService(db)
     dim_service.get_by_id(dimension_id, current_user.organization_id)
@@ -140,16 +151,19 @@ def list_dimension_values(
     service = DimensionValueService(db)
     values = service.list_by_dimension(dimension_id)
 
-    # TODO: Re-enable per-dimension access scoping once we decide how
-    # the dimension matrix should handle restricted users seeing the
-    # full org structure for context.
-    # if accessible_dv_ids is not None:
-    #     accessible_set = set(accessible_dv_ids)
-    #     restricted_for_dim = any(
-    #         v.id in accessible_set for v in values
-    #     )
-    #     if restricted_for_dim:
-    #         values = [v for v in values if v.id in accessible_set]
+    # Per-dimension access scoping: if the user has UserDimension rows pointing
+    # at any value of THIS dimension, restrict to those. If they have no rows
+    # for this dimension, they have unrestricted access to it (see
+    # UserDimensionAccessService for the full rule).
+    user_is_manager = any(
+        rp.permission and rp.permission.key == "dimension:manage"
+        for rp in (current_user.role.role_permissions if current_user.role else [])
+    )
+    if not (include_all and user_is_manager) and accessible_dv_ids is not None:
+        accessible_set = set(accessible_dv_ids)
+        restricted_for_dim = any(v.id in accessible_set for v in values)
+        if restricted_for_dim:
+            values = [v for v in values if v.id in accessible_set]
 
     results = []
     for v in values:

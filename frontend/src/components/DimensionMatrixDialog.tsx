@@ -88,7 +88,7 @@ export function DimensionMatrixDialog({
       const result: Record<string, DimensionValue[]> = {};
       await Promise.all(
         dimensions.map(async (dim) => {
-          result[dim.id] = await dimensionApi.listValues(dim.id);
+          result[dim.id] = await dimensionApi.listValues(dim.id, true);
         })
       );
       return result;

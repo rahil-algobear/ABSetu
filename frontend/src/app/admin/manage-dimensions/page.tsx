@@ -184,7 +184,7 @@ function DimensionRow({
 }) {
   const { data: values = [] } = useQuery({
     queryKey: ["dimension-values", dimension.id],
-    queryFn: () => dimensionApi.listValues(dimension.id),
+    queryFn: () => dimensionApi.listValues(dimension.id, true),
     staleTime: 5 * 60 * 1000,
   });
 

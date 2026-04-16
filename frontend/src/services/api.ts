@@ -139,8 +139,15 @@ export const dimensionApi = {
     return response.data;
   },
   // Dimension values
-  listValues: async (dimensionId: string): Promise<DimensionValue[]> => {
-    const response = await authAxios.get<DimensionValue[]>(`/dimensions/${dimensionId}/values`);
+  //
+  // By default, the backend scopes the returned values to what the current
+  // user can access (per their UserDimension mappings). Admin-only context
+  // views (e.g. the dimension matrix) can pass `includeAll=true` to bypass
+  // this — the backend enforces that only users with `dimension:manage`
+  // actually receive the full set.
+  listValues: async (dimensionId: string, includeAll?: boolean): Promise<DimensionValue[]> => {
+    const params = includeAll ? { include_all: true } : {};
+    const response = await authAxios.get<DimensionValue[]>(`/dimensions/${dimensionId}/values`, { params });
     return response.data;
   },
   createValue: async (dimensionId: string, data: { name: string; sort_order?: number; meta?: Record<string, unknown> }): Promise<DimensionValue> => {
