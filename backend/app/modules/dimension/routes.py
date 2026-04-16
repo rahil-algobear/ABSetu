@@ -11,6 +11,7 @@ from app.core.database import get_db
 from app.common.dependencies import (
     get_accessible_dimension_value_ids,
     get_current_user,
+    get_user_permissions,
     require_permissions,
 )
 from app.modules.auth.model import User
@@ -148,22 +149,15 @@ def list_dimension_values(
     dim_service = DimensionService(db)
     dim_service.get_by_id(dimension_id, current_user.organization_id)
 
-    service = DimensionValueService(db)
-    values = service.list_by_dimension(dimension_id)
+    # Per-dimension access scoping is handled by DimensionValueService when we
+    # pass accessible_dv_ids. Pass None to bypass — but only honour the
+    # include_all bypass for users with dimension:manage so a restricted user
+    # cannot flip the flag themselves.
+    bypass_scoping = include_all and "dimension:manage" in get_user_permissions(current_user)
+    scope_ids = None if bypass_scoping else accessible_dv_ids
 
-    # Per-dimension access scoping: if the user has UserDimension rows pointing
-    # at any value of THIS dimension, restrict to those. If they have no rows
-    # for this dimension, they have unrestricted access to it (see
-    # UserDimensionAccessService for the full rule).
-    user_is_manager = any(
-        rp.permission and rp.permission.key == "dimension:manage"
-        for rp in (current_user.role.role_permissions if current_user.role else [])
-    )
-    if not (include_all and user_is_manager) and accessible_dv_ids is not None:
-        accessible_set = set(accessible_dv_ids)
-        restricted_for_dim = any(v.id in accessible_set for v in values)
-        if restricted_for_dim:
-            values = [v for v in values if v.id in accessible_set]
+    service = DimensionValueService(db)
+    values = service.list_by_dimension(dimension_id, accessible_dv_ids=scope_ids)
 
     results = []
     for v in values:

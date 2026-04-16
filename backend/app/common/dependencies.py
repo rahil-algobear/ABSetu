@@ -69,7 +69,7 @@ def get_current_user(
         raise UnauthorizedError(f"Token verification failed: {str(e)}")
 
 
-def _get_user_permissions(user) -> set[str]:
+def get_user_permissions(user) -> set[str]:
     """
     Extract permission keys from a user's role.
     Returns a set of permission key strings.
@@ -96,7 +96,7 @@ def require_permissions(*required_keys: str) -> Callable:
     """
 
     def _checker(current_user=Depends(get_current_user)):
-        user_permissions = _get_user_permissions(current_user)
+        user_permissions = get_user_permissions(current_user)
         missing = set(required_keys) - user_permissions
         if missing:
             raise ForbiddenError(f"Missing required permissions: {', '.join(sorted(missing))}")
