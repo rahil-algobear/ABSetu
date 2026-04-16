@@ -8,7 +8,7 @@ from typing import Callable
 import jwt
 from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.core.database import get_db
 from app.common.exceptions import ForbiddenError, UnauthorizedError
@@ -53,6 +53,11 @@ def get_current_user(
 
         user = (
             db.query(User)
+            .options(
+                joinedload(User.center_access),
+                joinedload(User.programme_access),
+                joinedload(User.session_template_access),
+            )
             .filter(User.id == uuid.UUID(user_id))
             .first()
         )
