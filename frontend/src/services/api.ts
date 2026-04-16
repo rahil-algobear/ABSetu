@@ -138,16 +138,11 @@ export const dimensionApi = {
     const response = await authAxios.delete(`/dimensions/${id}`);
     return response.data;
   },
-  // Dimension values
-  //
-  // By default, the backend scopes the returned values to what the current
-  // user can access (per their UserDimension mappings). Admin-only context
-  // views (e.g. the dimension matrix) can pass `includeAll=true` to bypass
-  // this — the backend enforces that only users with `dimension:manage`
-  // actually receive the full set.
-  listValues: async (dimensionId: string, includeAll?: boolean): Promise<DimensionValue[]> => {
-    const params = includeAll ? { include_all: true } : {};
-    const response = await authAxios.get<DimensionValue[]>(`/dimensions/${dimensionId}/values`, { params });
+  // Dimension values — backend always scopes to the current user's
+  // UserDimension access (no override). Admins have no mappings so they see
+  // everything; restricted users see only what they're allowed to.
+  listValues: async (dimensionId: string): Promise<DimensionValue[]> => {
+    const response = await authAxios.get<DimensionValue[]>(`/dimensions/${dimensionId}/values`);
     return response.data;
   },
   createValue: async (dimensionId: string, data: { name: string; sort_order?: number; meta?: Record<string, unknown> }): Promise<DimensionValue> => {

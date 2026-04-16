@@ -30,14 +30,14 @@ export default function DimensionLinkingPage() {
   const effectiveDim2 = dim2Id || dimensions[1]?.id || "";
 
   const { data: values1 = [] } = useQuery<DimensionValue[]>({
-    queryKey: ["dimension-values", effectiveDim1, "all"],
-    queryFn: () => dimensionApi.listValues(effectiveDim1, true),
+    queryKey: ["dimension-values", effectiveDim1],
+    queryFn: () => dimensionApi.listValues(effectiveDim1),
     enabled: !!effectiveDim1,
   });
 
   const { data: values2 = [] } = useQuery<DimensionValue[]>({
-    queryKey: ["dimension-values", effectiveDim2, "all"],
-    queryFn: () => dimensionApi.listValues(effectiveDim2, true),
+    queryKey: ["dimension-values", effectiveDim2],
+    queryFn: () => dimensionApi.listValues(effectiveDim2),
     enabled: !!effectiveDim2,
   });
 

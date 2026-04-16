@@ -151,7 +151,7 @@ export default function UsersPage() {
     queryKey: ["all-dimension-values", dimensions.map((d) => d.id).join(",")],
     queryFn: async () => {
       const results = await Promise.all(
-        dimensions.map((d) => dimensionApi.listValues(d.id, true))
+        dimensions.map((d) => dimensionApi.listValues(d.id))
       );
       return results.flat();
     },

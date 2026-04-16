@@ -47,7 +47,7 @@ export default function DimensionValuesPage() {
 
   const { data: values = [], isLoading } = useQuery<DimensionValue[]>({
     queryKey: ["dimension-values", dimension?.id],
-    queryFn: () => dimensionApi.listValues(dimension!.id, true),
+    queryFn: () => dimensionApi.listValues(dimension!.id),
     enabled: !!dimension,
   });
 

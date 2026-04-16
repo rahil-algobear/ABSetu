@@ -11,7 +11,6 @@ from app.core.database import get_db
 from app.common.dependencies import (
     get_accessible_dimension_value_ids,
     get_current_user,
-    get_user_permissions,
     require_permissions,
 )
 from app.modules.auth.model import User
@@ -129,35 +128,25 @@ def delete_dimension(
 )
 def list_dimension_values(
     dimension_id: uuid.UUID,
-    include_all: bool = Query(False),
     current_user: User = Depends(get_current_user),
     accessible_dv_ids: list[uuid.UUID] | None = Depends(get_accessible_dimension_value_ids),
     db: Session = Depends(get_db),
 ):
-    """List values for a dimension, scoped by the user's dimension access.
+    """List values for a dimension, always scoped by the user's dimension access.
 
-    By default, if the user has dimension access mappings for THIS dimension,
-    only those values are returned. Users with no mappings for this dimension
-    are unrestricted and see all values.
-
-    Pass ``include_all=true`` to bypass scoping and return the full set — used
-    by admin-only context views such as the dimension matrix. Honored only for
-    users with ``dimension:manage`` permission so it cannot be used as a
-    backdoor by restricted users.
+    If the user has UserDimension rows pointing at THIS dimension, only those
+    values are returned. If they have no rows for this dimension, they're
+    unrestricted on it and see all values. Admins managing the system have no
+    UserDimension rows, so they see everything by default — no bypass needed.
     """
     # Verify dimension belongs to org
     dim_service = DimensionService(db)
     dim_service.get_by_id(dimension_id, current_user.organization_id)
 
-    # Per-dimension access scoping is handled by DimensionValueService when we
-    # pass accessible_dv_ids. Pass None to bypass — but only honour the
-    # include_all bypass for users with dimension:manage so a restricted user
-    # cannot flip the flag themselves.
-    bypass_scoping = include_all and "dimension:manage" in get_user_permissions(current_user)
-    scope_ids = None if bypass_scoping else accessible_dv_ids
-
     service = DimensionValueService(db)
-    values = service.list_by_dimension(dimension_id, accessible_dv_ids=scope_ids)
+    values = service.list_by_dimension(
+        dimension_id, accessible_dv_ids=accessible_dv_ids
+    )
 
     results = []
     for v in values:
