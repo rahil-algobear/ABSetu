@@ -37,21 +37,41 @@ import { useDimensionAutoSelect } from "@/hooks/useDimensionAutoSelect";
 import toast from "react-hot-toast";
 
 /**
- * Given a set of dimension value links and the currently selected dimension value IDs,
- * return the filtered list of allowed values for a target dimension.
+ * Compute the eligible options for a single dimension dropdown on the activity
+ * creation form. Combines two filters:
+ *
+ * 1. User dimension access (per-dimension rule): if the user has UserDimension
+ *    mappings that include any value of THIS dimension, restrict to those.
+ *    No mappings for this dimension → no restriction (matches the backend
+ *    rule in UserDimensionAccessService).
+ * 2. Cross-dimension links: narrow further to values that pair with the
+ *    current selections in other dimensions.
+ *
+ * The backend re-validates submissions in UserDimensionAccessService.
+ * validate_dimension_values, so this is purely a UX filter.
  */
 function getFilteredValues(
   targetDimValues: DimensionValue[],
   selectedByDim: Record<string, string>,
   targetDimId: string,
   dimensionValueLinks: DimensionValueLink[],
+  userDimensionValueIds: string[],
 ): DimensionValue[] {
+  let scoped = targetDimValues;
+  if (userDimensionValueIds.length > 0) {
+    const userSet = new Set(userDimensionValueIds);
+    const allowedForDim = targetDimValues.filter((dv) => userSet.has(dv.id));
+    if (allowedForDim.length > 0) {
+      scoped = allowedForDim;
+    }
+  }
+
   const otherSelections = Object.entries(selectedByDim)
     .filter(([dimId, dvId]) => dimId !== targetDimId && dvId)
     .map(([, dvId]) => dvId);
 
   if (otherSelections.length === 0) {
-    return targetDimValues;
+    return scoped;
   }
 
   const linkPairs = new Set<string>();
@@ -60,7 +80,7 @@ function getFilteredValues(
     linkPairs.add(`${link.dimension_value_id_2}:${link.dimension_value_id_1}`);
   }
 
-  return targetDimValues.filter((dv) =>
+  return scoped.filter((dv) =>
     otherSelections.every(
       (selectedId) => linkPairs.has(`${dv.id}:${selectedId}`)
     )
@@ -269,7 +289,8 @@ export default function NewActivityPage() {
           dimValues,
           selectedByDim,
           dim.id,
-          dimensionValueLinks
+          dimensionValueLinks,
+          userDimensionValueIds,
         );
         const currentSelection =
           formData.dimension_value_ids.find((id) =>

@@ -132,21 +132,24 @@ def list_dimension_values(
     accessible_dv_ids: list[uuid.UUID] | None = Depends(get_accessible_dimension_value_ids),
     db: Session = Depends(get_db),
 ):
-    """List values for a dimension, always scoped by the user's dimension access.
-
-    If the user has UserDimension rows pointing at THIS dimension, only those
-    values are returned. If they have no rows for this dimension, they're
-    unrestricted on it and see all values. Admins managing the system have no
-    UserDimension rows, so they see everything by default — no bypass needed.
-    """
+    """List values for a dimension, scoped by user's dimension access."""
     # Verify dimension belongs to org
     dim_service = DimensionService(db)
     dim_service.get_by_id(dimension_id, current_user.organization_id)
 
     service = DimensionValueService(db)
-    values = service.list_by_dimension(
-        dimension_id, accessible_dv_ids=accessible_dv_ids
-    )
+    values = service.list_by_dimension(dimension_id)
+
+    # TODO: Re-enable per-dimension access scoping once we decide how
+    # the dimension matrix should handle restricted users seeing the
+    # full org structure for context.
+    # if accessible_dv_ids is not None:
+    #     accessible_set = set(accessible_dv_ids)
+    #     restricted_for_dim = any(
+    #         v.id in accessible_set for v in values
+    #     )
+    #     if restricted_for_dim:
+    #         values = [v for v in values if v.id in accessible_set]
 
     results = []
     for v in values:

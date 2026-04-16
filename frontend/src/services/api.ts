@@ -138,9 +138,7 @@ export const dimensionApi = {
     const response = await authAxios.delete(`/dimensions/${id}`);
     return response.data;
   },
-  // Dimension values — backend always scopes to the current user's
-  // UserDimension access (no override). Admins have no mappings so they see
-  // everything; restricted users see only what they're allowed to.
+  // Dimension values
   listValues: async (dimensionId: string): Promise<DimensionValue[]> => {
     const response = await authAxios.get<DimensionValue[]>(`/dimensions/${dimensionId}/values`);
     return response.data;
