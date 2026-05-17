@@ -112,6 +112,7 @@ export interface EntityType {
   key: string;
   config: Record<string, unknown> | null;
   sort_order: number;
+  title_template: string | null;
   updated_at: string | null;
 }
 
@@ -147,6 +148,7 @@ export interface ActivityType {
   name: string;
   key: string;
   sort_order: number;
+  title_template: string | null;
   updated_at: string | null;
 }
 

@@ -18,8 +18,8 @@ from app.common.helpers.list_query import apply_filters, apply_search, apply_sor
 from app.common.helpers.slugify import slugify
 from app.common.schemas.list_params import ListParams
 from app.modules.activity.model import Activity, ActivityParticipant, ActivityType
-from app.modules.dimension.model import ActivityDimension, DimensionValue
-
+from app.modules.dimension.model import ActivityDimension, Dimension, DimensionValue
+from app.common.helpers.title_resolver import compute_title
 
 
 class ActivityTypeService:
@@ -288,9 +288,28 @@ class ActivityService:
             dim = ActivityDimension(activity_id=activity.id, dimension_value_id=uuid.UUID(dv_id))
             self.db.add(dim)
 
+        # Compute _title from the activity type's template
+        if activity.activity_type_id and at and at.title_template:
+            self.db.flush()
+            self.db.refresh(activity)
+            dvs = [ad.dimension_value for ad in (activity.dimensions or []) if ad.dimension_value]
+            field_defs = self._get_field_defs(activity.organization_id, activity.activity_type_id)
+            dim_list = self.db.query(Dimension).filter_by(organization_id=org_id).all()
+            meta = compute_title(at.title_template, dict(meta), dvs, field_defs, dim_list)
+            activity.meta = meta
+
         self.db.commit()
         self.db.refresh(activity)
         return self.get_by_id(activity.id)
+
+    def _get_field_defs(self, org_id: uuid.UUID, activity_type_id: uuid.UUID) -> list[dict]:
+        """Collect all meta field definitions for an activity type."""
+        from app.modules.organization.service import MetaFieldSchemaService
+        svc = MetaFieldSchemaService(self.db)
+        fields: list[dict] = []
+        fields.extend(svc.get_schema_by_scope(org_id, "activity"))
+        fields.extend(svc.get_schema_by_scope(org_id, "activity", activity_type_id=activity_type_id))
+        return fields
 
     def update(self, activity_id: uuid.UUID, data: dict) -> Activity:
         activity = self.get_by_id(activity_id)
@@ -300,7 +319,17 @@ class ActivityService:
         incoming_meta = data.get("meta") or {}
         existing_meta.update(incoming_meta)
 
-        activity.meta = normalize_meta_datetimes(existing_meta)
+        meta = normalize_meta_datetimes(existing_meta)
+
+        # Compute _title
+        at = activity.activity_type
+        if at and at.title_template:
+            dvs = [ad.dimension_value for ad in (activity.dimensions or []) if ad.dimension_value]
+            field_defs = self._get_field_defs(activity.organization_id, activity.activity_type_id)
+            dim_list = self.db.query(Dimension).filter_by(organization_id=activity.organization_id).all()
+            meta = compute_title(at.title_template, meta, dvs, field_defs, dim_list)
+
+        activity.meta = meta
         self.db.commit()
         self.db.refresh(activity)
         return self.get_by_id(activity.id)
@@ -371,5 +400,4 @@ class ActivityParticipantService:
         for p in participants:
             self.db.refresh(p)
         return participants
-
 

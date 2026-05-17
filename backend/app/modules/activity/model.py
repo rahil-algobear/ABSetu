@@ -2,7 +2,7 @@
 Activity models: ActivityType, Activity, ActivityParticipant
 """
 
-from sqlalchemy import Column, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Column, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 
@@ -21,6 +21,7 @@ class ActivityType(BaseModel):
     name = Column(String, nullable=False)
     key = Column(String, nullable=False)
     sort_order = Column(Integer, nullable=False, default=0)
+    title_template = Column(Text, nullable=True)
 
     organization = relationship("Organization", back_populates="activity_types")
 

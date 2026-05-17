@@ -10,7 +10,6 @@ import {
   dimensionValueLinkApi,
   entityApi,
   entityTypeApi,
-  listConfigApi,
   metaFieldSchemaApi,
   userApi,
 } from "@/services/api";
@@ -161,15 +160,10 @@ export default function NewActivityPage() {
     queryFn: async () => {
       const result: Record<string, { id: string; name: string }[]> = {};
       for (const typeId of entitySourceIds) {
-        const [entities, columns] = await Promise.all([
-          entityApi.list(typeId),
-          listConfigApi.get(`entity:${typeId}`),
-        ]);
-        const firstCol = columns.find((c) => c.visible && c.key.startsWith("meta:"));
-        const metaKey = firstCol?.key.replace(/^meta:/, "");
+        const entities = await entityApi.list(typeId);
         result[typeId] = entities.map((e) => ({
           id: e.id,
-          name: metaKey ? String((e.meta || {})[metaKey] || "") : "",
+          name: (e.meta?._title as string) || "",
         }));
       }
       return result;

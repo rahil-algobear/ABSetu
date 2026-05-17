@@ -21,6 +21,7 @@ class EntityTypeUpdate(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=200)
     config: dict[str, Any] | None = None
     sort_order: int | None = None
+    title_template: str | None = None
 
 
 class EntityTypeResponse(BaseResponseSchema):
@@ -29,6 +30,7 @@ class EntityTypeResponse(BaseResponseSchema):
     key: str
     config: dict[str, Any] | None = None
     sort_order: int = 0
+    title_template: str | None = None
 
 
 # --- Entity ---

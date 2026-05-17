@@ -157,10 +157,7 @@ export default function EntityDetailPage() {
   if (isLoading) return <PageLayout><PageContent><p>Loading...</p></PageContent></PageLayout>;
   if (!entity) return <PageLayout><PageContent><p>Not found</p></PageContent></PageLayout>;
 
-  const firstFieldValue = metaFields.length > 0 && entity.meta
-    ? String(entity.meta[metaFields[0].key] ?? "")
-    : "";
-  const entityTitle = firstFieldValue || "Entity";
+  const entityTitle = (entity.meta?._title as string) || "Entity";
 
   return (
     <PageLayout>
@@ -347,23 +344,16 @@ export default function EntityDetailPage() {
                   >
                     <div className="min-w-0">
                       <div className="text-sm font-medium">
-                        {a.dimensions?.length > 0 ? a.dimensions[0].value_name : a.activity_type_name || "Activity"}
-                      </div>
-                      <div className="text-xs text-gray-500 mt-0.5">
-                        {formatDate(a.start_date)}
-                        {a.end_date && a.end_date !== a.start_date && ` – ${formatDate(a.end_date)}`}
+                        {(a.meta?._title as string) || a.activity_type_name || "Activity"}
                       </div>
                       {a.dimensions?.length > 0 && (
                         <div className="flex gap-1 mt-1 flex-wrap">
-                          {(a.title ? a.dimensions : a.dimensions.slice(1)).map((dim) => (
+                          {a.dimensions.map((dim) => (
                             <Badge key={dim.value_id} variant="secondary" className="text-xs">
                               {dim.value_name}
                             </Badge>
                           ))}
                         </div>
-                      )}
-                      {a.notes && (
-                        <p className="text-xs text-gray-500 mt-1 truncate max-w-[300px]">{a.notes}</p>
                       )}
                     </div>
                     <ChevronRight className="h-4 w-4 text-gray-400 shrink-0 ml-2" />

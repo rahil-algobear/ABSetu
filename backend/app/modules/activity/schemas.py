@@ -19,6 +19,7 @@ class ActivityTypeCreate(BaseModel):
 class ActivityTypeUpdate(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=200)
     sort_order: int | None = None
+    title_template: str | None = None
 
 
 class ActivityTypeResponse(BaseResponseSchema):
@@ -26,6 +27,7 @@ class ActivityTypeResponse(BaseResponseSchema):
     name: str
     key: str
     sort_order: int = 0
+    title_template: str | None = None
 
 
 # --- Activity ---

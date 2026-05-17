@@ -8,7 +8,6 @@ import {
   dimensionApi,
   entityApi,
   entityTypeApi,
-  listConfigApi,
   metaFieldSchemaApi,
   userApi,
 } from "@/services/api";
@@ -118,16 +117,10 @@ export default function ActivityDetailPage() {
     queryFn: async () => {
       const result: Record<string, { id: string; name: string }[]> = {};
       for (const typeId of entitySourceIds) {
-        const [entities, columns] = await Promise.all([
-          entityApi.list(typeId),
-          listConfigApi.get(`entity:${typeId}`),
-        ]);
-        // Use first visible column to derive display name
-        const firstCol = columns.find((c) => c.visible && c.key.startsWith("meta:"));
-        const metaKey = firstCol?.key.replace(/^meta:/, "");
+        const entities = await entityApi.list(typeId);
         result[typeId] = entities.map((e) => ({
           id: e.id,
-          name: metaKey ? String((e.meta || {})[metaKey] || "") : "",
+          name: (e.meta?._title as string) || "",
         }));
       }
       return result;
@@ -303,10 +296,11 @@ export default function ActivityDetailPage() {
   if (isLoading) return <PageLayout><PageContent><p>Loading...</p></PageContent></PageLayout>;
   if (!activity) return <PageLayout><PageContent><p>Not found</p></PageContent></PageLayout>;
 
-  const activityTitle = activity.dimensions.length > 0 ? activity.dimensions[0].value_name : "Activity";
+  const activityTitle = (activity.meta?._title as string)
+    || (activity.dimensions.length > 0 ? activity.dimensions[0].value_name : "Activity");
   const typeName = activity.activity_type_name || "Activity";
-  const activitySubtitle = activity.dimensions.length > 1
-    ? `${typeName} - ${activity.dimensions.slice(1).map((d) => d.value_name).join(" · ")}`
+  const activitySubtitle = activity.dimensions.length > 0
+    ? `${typeName} - ${activity.dimensions.map((d) => d.value_name).join(" · ")}`
     : typeName;
 
   return (
