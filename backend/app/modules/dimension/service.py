@@ -247,6 +247,13 @@ class UserDimensionAccessService:
         Only rejects values from dimensions where the user HAS assignments
         but the specific value is not in their allowed set.
         """
+        # TODO: empty submission short-circuits all checks. A restricted user
+        # can create an activity untagged on a restricted dimension and lose
+        # visibility of it — activity listing uses include_untagged=False
+        # (see dimension_scoping.py), so the record shows up only for admins.
+        # Deferred pending a UX decision: should "optional on the activity
+        # type" override "restricted for this user", or does restriction
+        # imply required?
         if accessible_dv_ids is None or not submitted_dv_ids:
             return
 
