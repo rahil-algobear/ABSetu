@@ -3,6 +3,14 @@
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useMemo, useCallback, useRef, useEffect, useState } from "react";
 import type { FilterDefinition } from "@/components/ui/filter-modal";
+import {
+  buildSlugMappings,
+  keyRealToSlug,
+  keySlugToReal,
+  valueRealToSlug,
+  valueSlugToReal,
+  type SlugMappings,
+} from "@/utils/listSlugs";
 
 export interface FilterValue {
   key: string; // real key e.g. "entity_type_id", "dim:uuid", "meta:age"
@@ -51,49 +59,6 @@ interface UseListParamsReturn {
   };
 }
 
-// --- Slug utilities ---
-
-function slugify(str: string): string {
-  return str
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
-}
-
-interface SlugMappings {
-  keySlugToReal: Map<string, string>;
-  keyRealToSlug: Map<string, string>;
-  valueSlugToReal: Map<string, Map<string, string>>;
-  valueRealToSlug: Map<string, Map<string, string>>;
-}
-
-function buildSlugMappings(defs: FilterDefinition[]): SlugMappings {
-  const keySlugToReal = new Map<string, string>();
-  const keyRealToSlug = new Map<string, string>();
-  const valueSlugToReal = new Map<string, Map<string, string>>();
-  const valueRealToSlug = new Map<string, Map<string, string>>();
-
-  for (const def of defs) {
-    const ks = slugify(def.label);
-    keySlugToReal.set(ks, def.key);
-    keyRealToSlug.set(def.key, ks);
-
-    if (def.options) {
-      const vsToR = new Map<string, string>();
-      const vrToS = new Map<string, string>();
-      for (const opt of def.options) {
-        const vs = slugify(opt.label);
-        vsToR.set(vs, opt.value);
-        vrToS.set(opt.value, vs);
-      }
-      valueSlugToReal.set(def.key, vsToR);
-      valueRealToSlug.set(def.key, vrToS);
-    }
-  }
-
-  return { keySlugToReal, keyRealToSlug, valueSlugToReal, valueRealToSlug };
-}
-
 /**
  * URL param ordering:
  * 1. search
@@ -123,18 +88,16 @@ function buildOrderedUrl(
 
   // 2. Filters — use slugs for readable URLs
   for (const f of params.filters) {
-    const keySlug = slugMappings?.keyRealToSlug.get(f.key) || f.key;
-    const valMap = slugMappings?.valueRealToSlug.get(f.key);
+    const keySlug = keyRealToSlug(f.key, slugMappings);
     const vals = Array.isArray(f.value) ? f.value : [f.value];
     for (const v of vals) {
-      const valSlug = valMap?.get(v) || v;
-      sp.append(`filter_${keySlug}`, valSlug);
+      sp.append(`filter_${keySlug}`, valueRealToSlug(f.key, v, slugMappings));
     }
   }
 
-  // 3. Sort (omit defaults)
+  // 3. Sort (omit defaults) — also slugified
   if (params.sortBy) {
-    sp.set("sort_by", params.sortBy);
+    sp.set("sort_by", keyRealToSlug(params.sortBy, slugMappings));
   }
   if (params.sortOrder && params.sortOrder !== defaults.sortOrder) {
     sp.set("sort_order", params.sortOrder);
@@ -185,6 +148,11 @@ export function useListParams(
   // Whether filter definitions are expected but still loading
   const defsLoading = !!options.filterDefinitions && options.filterDefinitions.length === 0;
 
+  const realKeySet = useMemo(
+    () => new Set(options.filterDefinitions?.map((d) => d.key) || []),
+    [options.filterDefinitions],
+  );
+
   const activeFilters = useMemo((): FilterValue[] => {
     // Wait for filter definitions before parsing URL params — avoids sending
     // slug keys to the API and rendering merged chips before we can resolve them.
@@ -192,26 +160,15 @@ export function useListParams(
 
     // Collect all values per filter key (supports repeated params)
     const filterMap = new Map<string, string[]>();
-    const realKeySet = new Set(options.filterDefinitions?.map((d) => d.key) || []);
 
     searchParams.forEach((rawValue, paramKey) => {
       if (!paramKey.startsWith("filter_")) return;
       const urlKey = paramKey.slice(7);
 
-      // Resolve key: direct match on real key first, then slug match
-      let realKey: string;
-      if (realKeySet.has(urlKey)) {
-        realKey = urlKey;
-      } else if (slugMappings?.keySlugToReal.has(urlKey)) {
-        realKey = slugMappings.keySlugToReal.get(urlKey)!;
-      } else {
-        // No match — skip invalid param
-        return;
-      }
+      const realKey = keySlugToReal(urlKey, slugMappings, realKeySet);
+      if (!realKey) return;
 
-      // Resolve value: slug → real when mapping available
-      const valMap = slugMappings?.valueSlugToReal.get(realKey);
-      const realValue = valMap?.get(rawValue) || rawValue;
+      const realValue = valueSlugToReal(realKey, rawValue, slugMappings);
 
       const arr = filterMap.get(realKey) || [];
       arr.push(realValue);
@@ -237,9 +194,16 @@ export function useListParams(
         displayValue,
       };
     });
-  }, [searchParams, slugMappings, options.filterDefinitions, defsLoading]);
+  }, [searchParams, slugMappings, options.filterDefinitions, defsLoading, realKeySet]);
 
-  const sortBy = searchParams.get("sort_by") || defaultSortBy;
+  // sort_by may also be slugged; wait for defs before resolving so we never
+  // send an unresolved slug to the API.
+  const sortBy = useMemo(() => {
+    const raw = searchParams.get("sort_by");
+    if (!raw) return defaultSortBy;
+    if (defsLoading) return defaultSortBy;
+    return keySlugToReal(raw, slugMappings, realKeySet) ?? raw;
+  }, [searchParams, slugMappings, defsLoading, realKeySet, defaultSortBy]);
   const sortOrder = (searchParams.get("sort_order") || defaultSortOrder) as "asc" | "desc";
   const page = parseInt(searchParams.get("page") || "1", 10) || 1;
   const limit = parseInt(searchParams.get("show") || String(defaultLimit), 10) || defaultLimit;
