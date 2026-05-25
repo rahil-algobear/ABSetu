@@ -45,6 +45,11 @@ class Entity(BaseModel):
         index=True,
     )
     code = Column(String, nullable=True)
+    created_by = Column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     meta = Column(JSONB, nullable=True, default=dict)
 
     organization = relationship("Organization", back_populates="entities")

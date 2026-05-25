@@ -128,6 +128,8 @@ export interface Entity {
   organization_id: string;
   entity_type_id: string;
   code: string | null;
+  created_by: string | null;
+  created_by_name: string | null;
   meta: Record<string, unknown> | null;
   entity_type_name: string | null;
   entity_type_key: string | null;

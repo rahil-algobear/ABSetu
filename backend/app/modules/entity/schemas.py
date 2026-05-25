@@ -57,6 +57,8 @@ class EntityResponse(BaseResponseSchema):
     entity_type_id: str
     code: str | None = None
     created_at: str | None = None
+    created_by: str | None = None
+    created_by_name: str | None = None
     meta: dict[str, Any] | None = None
     entity_type_name: str | None = None
     entity_type_key: str | None = None

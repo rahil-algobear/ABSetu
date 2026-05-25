@@ -19,6 +19,7 @@ from app.common.helpers.meta_normalize import normalize_meta_datetimes
 from app.common.helpers.slugify import slugify
 from app.common.schemas.list_params import ListParams
 from app.modules.activity.model import ActivityParticipant
+from app.modules.auth.model import User
 from app.modules.dimension.model import EntityDimension
 from app.modules.enrollment.model import Enrollment
 from app.modules.entity.model import Entity, EntityType
@@ -116,6 +117,16 @@ class EntityService:
 
         return f"{org.code}-{year_2}-{serial}"
 
+    @staticmethod
+    def _created_by_name_subquery(db: Session):
+        """Scalar subquery resolving Entity.created_by -> 'First Last'."""
+        return (
+            db.query(func.concat(User.first_name, " ", User.last_name))
+            .filter(User.id == Entity.created_by)
+            .correlate(Entity)
+            .scalar_subquery()
+        )
+
     def _build_base_query(
         self,
         org_id: uuid.UUID,
@@ -137,8 +148,9 @@ class EntityService:
             .correlate(Entity)
             .scalar_subquery()
         )
+        created_by_name = self._created_by_name_subquery(self.db)
 
-        query = self.db.query(Entity, enrollment_count, activity_count).filter_by(
+        query = self.db.query(Entity, enrollment_count, activity_count, created_by_name).filter_by(
             organization_id=org_id
         )
 
@@ -163,6 +175,7 @@ class EntityService:
         config = {
             "code": Entity.code,
             "created_at": Entity.created_at,
+            "created_by": self._created_by_name_subquery(self.db),
         }
         if org_id and sortable_keys:
             meta_sort_keys = {k for k in sortable_keys if k.startswith("meta:")}
@@ -191,6 +204,7 @@ class EntityService:
         return {
             "entity_type_id": {"type": "exact", "column": Entity.entity_type_id},
             "created_at": {"type": "date_range", "column": Entity.created_at},
+            "created_by": {"type": "exact", "column": Entity.created_by},
         }
 
     def get_dimension_filter_config(self, org_id: uuid.UUID) -> dict:
@@ -299,6 +313,7 @@ class EntityService:
         data: dict,
         dimension_value_ids: list[str] | None = None,
         accessible_dv_ids: list[uuid.UUID] | None = None,
+        created_by: uuid.UUID | None = None,
     ) -> Entity:
         from app.modules.dimension.service import UserDimensionAccessService
 
@@ -325,6 +340,7 @@ class EntityService:
             organization_id=org_id,
             entity_type_id=entity_type.id,
             code=code,
+            created_by=created_by,
             meta=meta,
         )
         self.db.add(entity)

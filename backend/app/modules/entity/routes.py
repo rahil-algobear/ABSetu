@@ -34,7 +34,12 @@ entity_type_router = APIRouter(prefix="/entity-types")
 entity_router = APIRouter(prefix="/entities")
 
 
-def _build_entity_response(e, enrollment_count: int = 0, activity_count: int = 0) -> dict:
+def _build_entity_response(
+    e,
+    enrollment_count: int = 0,
+    activity_count: int = 0,
+    created_by_name: str | None = None,
+) -> dict:
     meta = e.meta or {}
     dim_infos = []
     for d in e.dimensions or []:
@@ -56,6 +61,8 @@ def _build_entity_response(e, enrollment_count: int = 0, activity_count: int = 0
         organization_id=str(e.organization_id),
         entity_type_id=str(e.entity_type_id),
         code=e.code,
+        created_by=str(e.created_by) if e.created_by else None,
+        created_by_name=created_by_name,
         meta=meta,
         entity_type_name=e.entity_type.name if e.entity_type else None,
         entity_type_key=e.entity_type.key if e.entity_type else None,
@@ -199,8 +206,8 @@ def list_entities(
         list_columns=list_columns,
     )
     data = [
-        _build_entity_response(entity, enrollment_count, activity_count)
-        for entity, enrollment_count, activity_count in rows
+        _build_entity_response(entity, enrollment_count, activity_count, created_by_name)
+        for entity, enrollment_count, activity_count, created_by_name in rows
     ]
     return PaginatedResponse(count=total, data=data)
 
@@ -235,6 +242,17 @@ def get_entity_filters(
     else:
         meta_scopes = [{"scope_type": "entity", "entity_type_id": et.id} for et in entity_types]
 
+    # Created-by user dropdown — gated by list config in the helper
+    org_users = db.query(User).filter_by(organization_id=org_id).all()
+    created_by_filter = {
+        "key": "created_by",
+        "label": "Created By",
+        "type": "select",
+        "options": [
+            {"value": str(u.id), "label": f"{u.first_name} {u.last_name}"} for u in org_users
+        ],
+    }
+
     return build_list_filter_response(
         db,
         org_id,
@@ -245,6 +263,7 @@ def get_entity_filters(
         meta_scopes=meta_scopes,
         date_filters=[{"key": "created_at", "label": "Created Date"}],
         default_sortable_keys=["name", "code", "created_at"],
+        extra_filters=[created_by_filter],
     )
 
 
@@ -276,6 +295,7 @@ def create_entity(
         data.model_dump(exclude={"dimension_value_ids"}),
         dimension_value_ids=data.dimension_value_ids,
         accessible_dv_ids=accessible_dv_ids,
+        created_by=current_user.id,
     )
     return _build_entity_response(entity)
 

@@ -387,6 +387,16 @@ class ListConfigService:
                     filter_supported=True,
                 )
             )
+            cols.append(
+                self._static_col(
+                    "created_by",
+                    "Created By",
+                    len(cols),
+                    sortable=True,
+                    filterable=True,
+                    filter_supported=True,
+                )
+            )
             return cols
         elif scope.startswith("activity:"):
             return [

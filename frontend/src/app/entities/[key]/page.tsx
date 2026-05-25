@@ -110,6 +110,8 @@ function EntityTypeEntitiesContent() {
           return entity.activity_count;
         case "created_at":
           return formatDate(entity.created_at, DATE_FORMATS.DISPLAY);
+        case "created_by":
+          return entity.created_by_name || "—";
         default:
           return "—";
       }
