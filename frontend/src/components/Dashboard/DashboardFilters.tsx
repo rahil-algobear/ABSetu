@@ -46,7 +46,7 @@ export function DashboardFiltersBar({
   // Load values for expanded dimension
   const { data: dimValues } = useQuery({
     queryKey: ["dimension-values", expandedDimId],
-    queryFn: () => dimensionApi.listValues(expandedDimId!),
+    queryFn: () => dimensionApi.listAccessibleValues(expandedDimId!),
     staleTime: 5 * 60 * 1000,
     enabled: !!expandedDimId,
   });

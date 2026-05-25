@@ -122,35 +122,7 @@ def delete_dimension(
 # --- Dimension Values ---
 
 
-@dimension_router.get(
-    "/{dimension_id}/values",
-    dependencies=[Depends(require_permissions("dimension:view"))],
-)
-def list_dimension_values(
-    dimension_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
-    accessible_dv_ids: list[uuid.UUID] | None = Depends(get_accessible_dimension_value_ids),
-    db: Session = Depends(get_db),
-):
-    """List values for a dimension, scoped by user's dimension access."""
-    # Verify dimension belongs to org
-    dim_service = DimensionService(db)
-    dim_service.get_by_id(dimension_id, current_user.organization_id)
-
-    service = DimensionValueService(db)
-    values = service.list_by_dimension(dimension_id)
-
-    # TODO: Re-enable per-dimension access scoping once we decide how
-    # the dimension matrix should handle restricted users seeing the
-    # full org structure for context.
-    # if accessible_dv_ids is not None:
-    #     accessible_set = set(accessible_dv_ids)
-    #     restricted_for_dim = any(
-    #         v.id in accessible_set for v in values
-    #     )
-    #     if restricted_for_dim:
-    #         values = [v for v in values if v.id in accessible_set]
-
+def _serialize_dimension_values(values) -> list[dict]:
     results = []
     for v in values:
         resp = DimensionValueResponse(
@@ -167,6 +139,53 @@ def list_dimension_values(
         )
         results.append(resp.dump())
     return results
+
+
+@dimension_router.get(
+    "/{dimension_id}/values",
+    dependencies=[Depends(require_permissions("dimension:view"))],
+)
+def list_dimension_values(
+    dimension_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """List ALL values for a dimension (unscoped).
+
+    Intended for admin/management surfaces — the dimension matrix, user
+    access editor, meta-field editors — where the full org structure is
+    needed for context. Do NOT call this from form dropdowns; use the
+    `/values/accessible` route instead.
+    """
+    dim_service = DimensionService(db)
+    dim_service.get_by_id(dimension_id, current_user.organization_id)
+
+    service = DimensionValueService(db)
+    values = service.list_by_dimension(dimension_id)
+    return _serialize_dimension_values(values)
+
+
+@dimension_router.get(
+    "/{dimension_id}/values/accessible",
+    dependencies=[Depends(require_permissions("dimension:view"))],
+)
+def list_accessible_dimension_values(
+    dimension_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    accessible_dv_ids: list[uuid.UUID] | None = Depends(get_accessible_dimension_value_ids),
+    db: Session = Depends(get_db),
+):
+    """List values for a dimension, scoped by the caller's dimension access.
+
+    Use this for form dropdowns and filter pickers — anywhere a non-admin
+    user picks a dimension value to tag a record with or filter on.
+    """
+    dim_service = DimensionService(db)
+    dim_service.get_by_id(dimension_id, current_user.organization_id)
+
+    service = DimensionValueService(db)
+    values = service.list_by_dimension(dimension_id, accessible_dv_ids=accessible_dv_ids)
+    return _serialize_dimension_values(values)
 
 
 @dimension_router.post(

@@ -138,9 +138,19 @@ export const dimensionApi = {
     const response = await authAxios.delete(`/dimensions/${id}`);
     return response.data;
   },
-  // Dimension values
+  // Dimension values — full list (admin/matrix UIs only). Do NOT use for
+  // form dropdowns or filter pickers; use listAccessibleValues instead so
+  // restricted users only see values they actually have access to.
   listValues: async (dimensionId: string): Promise<DimensionValue[]> => {
     const response = await authAxios.get<DimensionValue[]>(`/dimensions/${dimensionId}/values`);
+    return response.data;
+  },
+  // Dimension values scoped to the caller's access. Use for any form
+  // dropdown or filter where the user is picking a value to tag/filter on.
+  listAccessibleValues: async (dimensionId: string): Promise<DimensionValue[]> => {
+    const response = await authAxios.get<DimensionValue[]>(
+      `/dimensions/${dimensionId}/values/accessible`
+    );
     return response.data;
   },
   createValue: async (dimensionId: string, data: { name: string; sort_order?: number; meta?: Record<string, unknown> }): Promise<DimensionValue> => {

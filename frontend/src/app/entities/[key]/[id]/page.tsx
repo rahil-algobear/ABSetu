@@ -405,7 +405,7 @@ function EnrollmentForm({
     queryKey: ["all-dimension-values", dimensions.map((d) => d.id).join(",")],
     queryFn: async () => {
       const results = await Promise.all(
-        dimensions.map((d) => dimensionApi.listValues(d.id))
+        dimensions.map((d) => dimensionApi.listAccessibleValues(d.id))
       );
       return results.flat();
     },
