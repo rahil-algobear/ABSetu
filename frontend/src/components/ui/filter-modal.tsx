@@ -94,9 +94,15 @@ export function FilterModal({
   };
 
   const handleApply = () => {
+    // Iterate localFilters in insertion order so chips reflect the user's
+    // selection sequence. Object key order is preserved across spread updates,
+    // so changing an existing filter's value keeps its position; first-time
+    // selections append to the end.
     const filters: FilterValue[] = [];
-    for (const def of filterDefinitions) {
-      const val = localFilters[def.key];
+    for (const key of Object.keys(localFilters)) {
+      const def = filterDefinitions.find((d) => d.key === key);
+      if (!def) continue;
+      const val = localFilters[key];
       if (!val || (Array.isArray(val) && val.length === 0)) continue;
 
       let displayValue = "";
