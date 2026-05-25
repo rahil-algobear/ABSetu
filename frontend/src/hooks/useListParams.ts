@@ -10,6 +10,7 @@ import {
   valueRealToSlug,
   valueSlugToReal,
   type SlugMappings,
+  type SlugSource,
 } from "@/utils/listSlugs";
 
 export interface FilterValue {
@@ -23,8 +24,13 @@ interface UseListParamsOptions {
   defaultSortBy?: string;
   defaultSortOrder?: "asc" | "desc";
   defaultLimit?: number;
-  /** When provided, URL params use human-readable slugs instead of raw keys/UUIDs */
+  /** Filter modal definitions — drive slug mapping for filter_* keys and values. */
   filterDefinitions?: FilterDefinition[];
+  /**
+   * All visible list columns — drives slug mapping for sort_by, covering
+   * sortable-only fields that don't appear in filterDefinitions.
+   */
+  columns?: SlugSource[];
 }
 
 interface UseListParamsReturn {
@@ -136,21 +142,32 @@ export function useListParams(
     setLocalSearch(searchParams.get("search") || "");
   }, [searchParams]);
 
-  // Build slug mappings from filter definitions
+  // Build slug mappings from filter defs + visible columns. Filter defs go
+  // first so their option-value mappings win on key collisions.
   const slugMappings = useMemo((): SlugMappings | null => {
-    if (!options.filterDefinitions?.length) return null;
-    return buildSlugMappings(options.filterDefinitions);
-  }, [options.filterDefinitions]);
+    const filters = options.filterDefinitions || [];
+    const cols = options.columns || [];
+    if (!filters.length && !cols.length) return null;
+    return buildSlugMappings(filters, cols);
+  }, [options.filterDefinitions, options.columns]);
 
   // Parse current state from URL
   const search = searchParams.get("search") || "";
 
-  // Whether filter definitions are expected but still loading
-  const defsLoading = !!options.filterDefinitions && options.filterDefinitions.length === 0;
+  // Whether slug sources are expected but still loading. We treat either
+  // source being explicitly passed-but-empty as "still loading" so we don't
+  // resolve URL slugs against an empty mapping.
+  const defsLoading =
+    (!!options.filterDefinitions && options.filterDefinitions.length === 0) ||
+    (!!options.columns && options.columns.length === 0);
 
   const realKeySet = useMemo(
-    () => new Set(options.filterDefinitions?.map((d) => d.key) || []),
-    [options.filterDefinitions],
+    () =>
+      new Set([
+        ...(options.filterDefinitions?.map((d) => d.key) || []),
+        ...(options.columns?.map((c) => c.key) || []),
+      ]),
+    [options.filterDefinitions, options.columns],
   );
 
   const activeFilters = useMemo((): FilterValue[] => {

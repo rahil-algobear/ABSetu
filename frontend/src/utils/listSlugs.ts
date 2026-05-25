@@ -1,5 +1,3 @@
-import type { FilterDefinition } from "@/components/ui/filter-modal";
-
 /**
  * Translates between backend column keys (e.g. "meta:3bg7_date") and
  * human-readable URL slugs (e.g. "session-date").
@@ -15,6 +13,17 @@ export interface SlugMappings {
   valueRealToSlug: Map<string, Map<string, string>>;
 }
 
+/**
+ * Minimal shape a slug source must provide. Both FilterDefinition (filter modal)
+ * and ListColumnConfig (visible list columns) satisfy it — letting us slugify
+ * fields that are sort-only as well as filter-only.
+ */
+export interface SlugSource {
+  key: string;
+  label: string;
+  options?: { value: string; label: string }[];
+}
+
 export function slugify(str: string): string {
   return str
     .toLowerCase()
@@ -22,27 +31,38 @@ export function slugify(str: string): string {
     .replace(/^-|-$/g, "");
 }
 
-export function buildSlugMappings(defs: FilterDefinition[]): SlugMappings {
+/**
+ * Build slug mappings from one or more source lists. Earlier sources take
+ * precedence on key collisions, so pass the richer source (e.g. filter defs
+ * with options) first.
+ */
+export function buildSlugMappings(...sources: SlugSource[][]): SlugMappings {
   const keySlugToReal = new Map<string, string>();
   const keyRealToSlug = new Map<string, string>();
   const valueSlugToReal = new Map<string, Map<string, string>>();
   const valueRealToSlug = new Map<string, Map<string, string>>();
+  const seenRealKeys = new Set<string>();
 
-  for (const def of defs) {
-    const ks = slugify(def.label);
-    keySlugToReal.set(ks, def.key);
-    keyRealToSlug.set(def.key, ks);
+  for (const list of sources) {
+    for (const def of list) {
+      if (seenRealKeys.has(def.key)) continue;
+      seenRealKeys.add(def.key);
 
-    if (def.options) {
-      const vsToR = new Map<string, string>();
-      const vrToS = new Map<string, string>();
-      for (const opt of def.options) {
-        const vs = slugify(opt.label);
-        vsToR.set(vs, opt.value);
-        vrToS.set(opt.value, vs);
+      const ks = slugify(def.label);
+      keySlugToReal.set(ks, def.key);
+      keyRealToSlug.set(def.key, ks);
+
+      if (def.options) {
+        const vsToR = new Map<string, string>();
+        const vrToS = new Map<string, string>();
+        for (const opt of def.options) {
+          const vs = slugify(opt.label);
+          vsToR.set(vs, opt.value);
+          vrToS.set(opt.value, vs);
+        }
+        valueSlugToReal.set(def.key, vsToR);
+        valueRealToSlug.set(def.key, vrToS);
       }
-      valueSlugToReal.set(def.key, vsToR);
-      valueRealToSlug.set(def.key, vrToS);
     }
   }
 

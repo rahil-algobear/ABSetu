@@ -75,11 +75,13 @@ function EntityTypeEntitiesContent() {
     return allFilterDefs.filter((f) => f.key !== "entity_type_id");
   }, [allFilterDefs]);
 
-  // List params from URL — uses filter definitions for slug mapping
+  // List params from URL — uses filter defs + columns for slug mapping
+  // (columns cover sortable-only fields that aren't in filter defs).
   const listParams = useListParams({
     defaultSortBy: "created_at",
     defaultSortOrder: "desc",
     filterDefinitions: allFilterDefs,
+    columns,
   });
 
   // Paginated entity list — scoped to entity type
