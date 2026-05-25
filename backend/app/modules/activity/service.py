@@ -244,7 +244,7 @@ class ActivityService:
             params.sort_by,
             params.sort_order,
             self.get_sort_config(org_id, sortable_keys),
-            Activity.meta["start_date"].astext.desc(),
+            Activity.created_at.desc(),
         )
 
         # Paginate

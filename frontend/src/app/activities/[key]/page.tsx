@@ -84,7 +84,7 @@ function ActivityTypeListContent() {
 
   // List params from URL — uses filter definitions for slug mapping
   const listParams = useListParams({
-    defaultSortBy: "start_date",
+    defaultSortBy: "created_at",
     defaultSortOrder: "desc",
     filterDefinitions: allFilterDefs,
   });
