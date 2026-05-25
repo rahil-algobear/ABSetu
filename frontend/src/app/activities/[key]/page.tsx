@@ -119,6 +119,8 @@ function ActivityTypeListContent() {
           return activity.participant_count;
         case "created_at":
           return formatDate(activity.created_at, DATE_FORMATS.DISPLAY);
+        case "created_by":
+          return activity.created_by_name || "—";
         default:
           return "—";
       }

@@ -53,6 +53,7 @@ class ActivityResponse(BaseResponseSchema):
     organization_id: str
     activity_type_id: str | None = None
     created_by: str | None = None
+    created_by_name: str | None = None
     meta: dict[str, Any] | None = None
     activity_type_name: str | None = None
     dimensions: list[DimensionInfo] = []

@@ -398,6 +398,14 @@ class ListConfigService:
                     sortable=True,
                     filter_supported=True,
                 ),
+                self._static_col(
+                    "created_by",
+                    "Created By",
+                    2,
+                    sortable=True,
+                    filterable=True,
+                    filter_supported=True,
+                ),
             ]
         return []
 

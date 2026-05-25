@@ -155,6 +155,7 @@ export interface Activity {
   organization_id: string;
   activity_type_id: string | null;
   created_by: string | null;
+  created_by_name: string | null;
   meta: Record<string, unknown> | null;
   activity_type_name: string | null;
   dimensions: DimensionInfo[];

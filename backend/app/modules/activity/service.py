@@ -8,18 +8,18 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.common.exceptions import NotFoundError, ValidationError
-from app.common.helpers.meta_normalize import normalize_meta_datetimes
 from app.common.helpers.dimension_scoping import (
     apply_dimension_access_scoping,
     group_dvs_by_dimension,
 )
 from app.common.helpers.filter_definitions import build_dimension_filter_config
 from app.common.helpers.list_query import apply_filters, apply_search, apply_sort, paginate
+from app.common.helpers.meta_normalize import normalize_meta_datetimes
 from app.common.helpers.slugify import slugify
 from app.common.schemas.list_params import ListParams
 from app.modules.activity.model import Activity, ActivityParticipant, ActivityType
+from app.modules.auth.model import User
 from app.modules.dimension.model import ActivityDimension, DimensionValue
-
 
 
 class ActivityTypeService:
@@ -78,6 +78,16 @@ class ActivityService:
     def __init__(self, db: Session):
         self.db = db
 
+    @staticmethod
+    def _created_by_name_subquery(db: Session):
+        """Scalar subquery resolving Activity.created_by -> 'First Last'."""
+        return (
+            db.query(func.concat(User.first_name, " ", User.last_name))
+            .filter(User.id == Activity.created_by)
+            .correlate(Activity)
+            .scalar_subquery()
+        )
+
     def _build_base_query(
         self,
         org_id: uuid.UUID,
@@ -90,8 +100,11 @@ class ActivityService:
             .correlate(Activity)
             .scalar_subquery()
         )
+        created_by_name = self._created_by_name_subquery(self.db)
 
-        query = self.db.query(Activity, participant_count).filter_by(organization_id=org_id)
+        query = self.db.query(Activity, participant_count, created_by_name).filter_by(
+            organization_id=org_id
+        )
 
         if accessible_dv_ids:
             restricted_dims = group_dvs_by_dimension(self.db, accessible_dv_ids)
@@ -112,6 +125,7 @@ class ActivityService:
         """Sort keys available for activity list, optionally including meta fields from list config."""
         config = {
             "created_at": Activity.created_at,
+            "created_by": self._created_by_name_subquery(self.db),
         }
         if org_id and sortable_keys:
             meta_sort_keys = {k for k in sortable_keys if k.startswith("meta:")}
@@ -152,6 +166,7 @@ class ActivityService:
                 "meta_column": Activity.meta,
             },
             "created_at": {"type": "datetime_range", "column": Activity.created_at},
+            "created_by": {"type": "exact", "column": Activity.created_by},
         }
 
     def get_dimension_filter_config(self, org_id: uuid.UUID) -> dict:
@@ -201,9 +216,11 @@ class ActivityService:
         search_columns = build_meta_field_search_columns(
             self.db, org_id, scopes, Activity.meta, searchable_keys
         )
-        search_columns.extend(build_dimension_search_columns(
-            self.db, org_id, ActivityDimension, Activity.id, searchable_keys
-        ))
+        search_columns.extend(
+            build_dimension_search_columns(
+                self.db, org_id, ActivityDimension, Activity.id, searchable_keys
+            )
+        )
         query = apply_search(query, params.search, search_columns)
 
         # Filters (static + dimension + meta from list config)
@@ -371,5 +388,3 @@ class ActivityParticipantService:
         for p in participants:
             self.db.refresh(p)
         return participants
-
-

@@ -276,7 +276,9 @@ def build_dimension_search_columns(
         if allowed_keys is not None and dim_key not in allowed_keys:
             continue
         # Scalar subquery: get the dimension value name for this dimension on each record
-        fk_col = assoc_model.entity_id if hasattr(assoc_model, "entity_id") else assoc_model.activity_id
+        fk_col = (
+            assoc_model.entity_id if hasattr(assoc_model, "entity_id") else assoc_model.activity_id
+        )
         subq = (
             select(DimensionValue.name)
             .join(assoc_model, assoc_model.dimension_value_id == DimensionValue.id)
@@ -326,6 +328,7 @@ def build_list_filter_response(
     meta_scopes: list[MetaFieldScope],
     date_filters: list[dict],
     default_sortable_keys: list[str],
+    extra_filters: list[dict] | None = None,
 ) -> dict:
     """
     Build the complete /filters endpoint response.
@@ -384,6 +387,11 @@ def build_list_filter_response(
                     "type": df.get("type", "date_range"),
                 }
             )
+
+    # Extra pre-built filters (e.g. user dropdowns), gated by list config
+    for ef in extra_filters or []:
+        if filterable_keys is None or ef["key"] in filterable_keys:
+            field_filters.append(ef)
 
     # Sort field filters to match list config column order
     if columns:

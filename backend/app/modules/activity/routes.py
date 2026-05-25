@@ -144,21 +144,23 @@ def _collect_field_defs(
         ):
             all_field_defs[fd["key"]] = fd
     # Dimension-value scopes
-    for dv_id in (dimension_value_ids or []):
-        for fd in meta_service.get_schema_by_scope(
-            org_id, "activity", dimension_value_id=dv_id
-        ):
+    for dv_id in dimension_value_ids or []:
+        for fd in meta_service.get_schema_by_scope(org_id, "activity", dimension_value_id=dv_id):
             all_field_defs[fd["key"]] = fd
         if activity_type_id:
             for fd in meta_service.get_schema_by_scope(
-                org_id, "activity",
-                activity_type_id=activity_type_id, dimension_value_id=dv_id,
+                org_id,
+                "activity",
+                activity_type_id=activity_type_id,
+                dimension_value_id=dv_id,
             ):
                 all_field_defs[fd["key"]] = fd
     return all_field_defs
 
 
-def _build_activity_response(a, field_defs: dict[str, dict] | None = None) -> dict:
+def _build_activity_response(
+    a, field_defs: dict[str, dict] | None = None, created_by_name: str | None = None
+) -> dict:
     """Build ActivityResponse dict from an Activity model instance."""
     meta = a.meta or {}
     dim_infos = []
@@ -184,6 +186,7 @@ def _build_activity_response(a, field_defs: dict[str, dict] | None = None) -> di
         organization_id=str(a.organization_id),
         activity_type_id=str(a.activity_type_id) if a.activity_type_id else None,
         created_by=str(a.created_by) if a.created_by else None,
+        created_by_name=created_by_name,
         meta=meta,
         activity_type_name=activity_type_name,
         dimensions=dim_infos,
@@ -243,8 +246,8 @@ def list_activities(
     )
 
     data = []
-    for activity, participant_count in rows:
-        resp = _build_activity_response(activity)
+    for activity, participant_count, created_by_name in rows:
+        resp = _build_activity_response(activity, created_by_name=created_by_name)
         resp["participant_count"] = participant_count or 0
         data.append(resp)
 
@@ -284,6 +287,17 @@ def get_activity_filters(
             {"scope_type": "activity", "activity_type_id": at.id} for at in activity_types
         )
 
+    # Created-by user dropdown — gated by list config in the helper
+    org_users = db.query(User).filter_by(organization_id=org_id).all()
+    created_by_filter = {
+        "key": "created_by",
+        "label": "Created By",
+        "type": "select",
+        "options": [
+            {"value": str(u.id), "label": f"{u.first_name} {u.last_name}"} for u in org_users
+        ],
+    }
+
     return build_list_filter_response(
         db,
         org_id,
@@ -296,6 +310,7 @@ def get_activity_filters(
             {"key": "created_at", "label": "Created Date"},
         ],
         default_sortable_keys=["created_at"],
+        extra_filters=[created_by_filter],
     )
 
 
@@ -341,9 +356,7 @@ def create_activity(
     dv_uuids = [uuid.UUID(v) for v in (data.dimension_value_ids or [])]
 
     # Collect all field definitions from meta schemas
-    all_field_defs = _collect_field_defs(
-        db, current_user.organization_id, type_uuid, dv_uuids
-    )
+    all_field_defs = _collect_field_defs(db, current_user.organization_id, type_uuid, dv_uuids)
 
     submitted_meta = data.meta or {}
 
@@ -351,11 +364,7 @@ def create_activity(
     # Resolve which dimension IDs are covered by submitted values
     submitted_dim_ids = set()
     if data.dimension_value_ids:
-        dvs = (
-            db.query(DimensionValue.dimension_id)
-            .filter(DimensionValue.id.in_(dv_uuids))
-            .all()
-        )
+        dvs = db.query(DimensionValue.dimension_id).filter(DimensionValue.id.in_(dv_uuids)).all()
         submitted_dim_ids = {str(row[0]) for row in dvs}
 
     for fd in all_field_defs.values():
