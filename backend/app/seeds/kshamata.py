@@ -861,9 +861,11 @@ def seed():
         new_links += _ensure_dimension_value_links(
             db, org, project_interventions, project_map, intervention_map
         )
-        # Sub-Intervention ↔ Intervention (parent) and ↔ Programme:TRANSFORMATION.
-        # Cascading in the activity form intersects link rules, so an Outreach
-        # user picking Life Skill Education won't see Karrate etc.
+        # Sub-Intervention ↔ Intervention (parent), Programme:TRANSFORMATION,
+        # and Location:THANE. Cascading in the activity form ANDs across every
+        # selected dimension that has *any* link rule with the target, so
+        # Sub-Intervention needs an explicit link rule for each cascading axis
+        # it should appear under — currently Intervention, Programme, Location.
         new_links += _ensure_dimension_value_links(
             db, org, SUB_INTERVENTIONS, intervention_map, sub_intervention_map
         )
@@ -872,6 +874,13 @@ def seed():
             org,
             {"TRANSFORMATION": sub_intervention_names},
             programme_map,
+            sub_intervention_map,
+        )
+        new_links += _ensure_dimension_value_links(
+            db,
+            org,
+            {"THANE": sub_intervention_names},
+            location_map,
             sub_intervention_map,
         )
         print(f"  Ensured dimension value links ({new_links} new)")
@@ -1125,11 +1134,10 @@ def seed():
 
         # Summary
         total_loc_intervention_links = sum(len(v) for v in LOCATION_INTERVENTIONS.values())
-        total_sub_intervention_links = sum(
-            len(v) for v in SUB_INTERVENTIONS.values()
-        ) + len(  # one link per sub-intervention to Programme:TRANSFORMATION
-            [s for subs in SUB_INTERVENTIONS.values() for s in subs]
-        )
+        total_sub_intervention_count = sum(len(v) for v in SUB_INTERVENTIONS.values())
+        # Per sub-intervention: one link to parent Intervention, one to
+        # Programme:TRANSFORMATION, one to Location:THANE.
+        total_sub_intervention_links = total_sub_intervention_count * 3
         total_links = (
             sum(len(v) for v in PROGRAMME_PROJECTS.values())
             + sum(len(v) for v in PROJECT_LOCATIONS.values())
@@ -1137,7 +1145,6 @@ def seed():
             + total_loc_intervention_links
             + total_sub_intervention_links
         )
-        total_sub_interventions = sum(len(v) for v in SUB_INTERVENTIONS.values())
         print("\nKshamata seed completed successfully!")
         print(f"  Organisation        : {ORG_NAME}")
         print(f"  Entity Types        : {len(ENTITY_TYPES)}")
@@ -1151,13 +1158,13 @@ def seed():
         print(f"  Projects            : {len(PROJECTS)}")
         print(f"  Locations           : {len(LOCATIONS)}")
         print(f"  Interventions       : {len(INTERVENTIONS)}")
-        print(f"  Sub-Interventions   : {total_sub_interventions}")
+        print(f"  Sub-Interventions   : {total_sub_intervention_count}")
         print(f"  Dimension Links     : {total_links} combos")
         print(f"    Programme<>Project          : {sum(len(v) for v in PROGRAMME_PROJECTS.values())}")
         print(f"    Project<>Location           : {sum(len(v) for v in PROJECT_LOCATIONS.values())}")
         print(f"    Programme<>Location         : {sum(len(v) for v in PROGRAMME_LOCATIONS.values())}")
         print(f"    Location<>Intervention      : {total_loc_intervention_links}")
-        print(f"    Intervention<>SubIntervention + Programme<>SubIntervention : {total_sub_intervention_links}")
+        print(f"    SubIntervention<>(Intervention+Programme+Location) : {total_sub_intervention_links}")
 
     except Exception as e:
         db.rollback()
