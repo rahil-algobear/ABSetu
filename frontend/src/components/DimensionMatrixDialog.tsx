@@ -64,6 +64,7 @@ export function DimensionMatrixDialog({
   );
 
   const [dimensionOrder, setDimensionOrder] = useState<string[]>([]);
+  const [hiddenDimIds, setHiddenDimIds] = useState<Set<string>>(new Set());
 
   const orderedColumnDims = useMemo(() => {
     if (columnDimensions.length === 0) return [];
@@ -74,6 +75,20 @@ export function DimensionMatrixDialog({
     }
     return validOrder.map((id) => columnDimensions.find((d) => d.id === id)!);
   }, [columnDimensions, dimensionOrder]);
+
+  const visibleColumnDims = useMemo(
+    () => orderedColumnDims.filter((d) => !hiddenDimIds.has(d.id)),
+    [orderedColumnDims, hiddenDimIds]
+  );
+
+  const toggleDimVisibility = useCallback((dimId: string) => {
+    setHiddenDimIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(dimId)) next.delete(dimId);
+      else next.add(dimId);
+      return next;
+    });
+  }, []);
 
   // Reset column order when row dimension changes
   const prevRowDimRef = useRef(effectiveRowDimId);
@@ -119,8 +134,14 @@ export function DimensionMatrixDialog({
 
   // Build leaf columns and header rows
   const { headerRows, leafColumns } = useMemo(() => {
-    if (orderedColumnDims.length === 0 || rowDvs.length === 0) {
+    if (rowDvs.length === 0) {
       return { headerRows: [], leafColumns: [] };
+    }
+    if (visibleColumnDims.length === 0) {
+      return {
+        headerRows: [],
+        leafColumns: [{ path: [], rowValues: rowDvs }],
+      };
     }
 
     // Find row dimension values connected to ALL non-null ancestor column values
@@ -142,7 +163,7 @@ export function DimensionMatrixDialog({
       pathSoFar: (DimensionValue | null)[],
       ancestorDvIds: string[]
     ): LeafColumn[] {
-      if (dimIndex >= orderedColumnDims.length) {
+      if (dimIndex >= visibleColumnDims.length) {
         const vals = findRowValues(ancestorDvIds);
         if (vals.length > 0) {
           return [{ path: [...pathSoFar], rowValues: vals }];
@@ -153,7 +174,7 @@ export function DimensionMatrixDialog({
         return [];
       }
 
-      const dim = orderedColumnDims[dimIndex];
+      const dim = visibleColumnDims[dimIndex];
       const dvs = allDvsByDim[dim.id] || [];
 
       const matchingDvs = ancestorDvIds.length === 0
@@ -181,17 +202,17 @@ export function DimensionMatrixDialog({
       const matchingDvIdSet = new Set(matchingDvs.map((d) => d.id));
       for (
         let gapTarget = dimIndex + 1;
-        gapTarget < orderedColumnDims.length;
+        gapTarget < visibleColumnDims.length;
         gapTarget++
       ) {
         const skippedDvIds = new Set(matchingDvIdSet);
         for (let s = dimIndex + 1; s < gapTarget; s++) {
-          for (const sdv of allDvsByDim[orderedColumnDims[s].id] || []) {
+          for (const sdv of allDvsByDim[visibleColumnDims[s].id] || []) {
             skippedDvIds.add(sdv.id);
           }
         }
 
-        const targetDvs = allDvsByDim[orderedColumnDims[gapTarget].id] || [];
+        const targetDvs = allDvsByDim[visibleColumnDims[gapTarget].id] || [];
         const orphans = targetDvs.filter((tdv) => {
           if (ancestorDvIds.length > 0) {
             const conn = linkMap.get(tdv.id);
@@ -225,7 +246,7 @@ export function DimensionMatrixDialog({
       // Gap-only leaf if nothing found
       if (results.length === 0 && ancestorDvIds.length > 0) {
         const gapPath = [...pathSoFar];
-        for (let g = dimIndex; g < orderedColumnDims.length; g++)
+        for (let g = dimIndex; g < visibleColumnDims.length; g++)
           gapPath.push(null);
         const vals = findRowValues(ancestorDvIds);
         results.push({ path: gapPath, rowValues: vals });
@@ -238,7 +259,7 @@ export function DimensionMatrixDialog({
 
     // Build header rows
     const rows: HeaderCell[][] = [];
-    for (let dimIndex = 0; dimIndex < orderedColumnDims.length; dimIndex++) {
+    for (let dimIndex = 0; dimIndex < visibleColumnDims.length; dimIndex++) {
       const row: HeaderCell[] = [];
       let col = 0;
       while (col < leaves.length) {
@@ -268,7 +289,7 @@ export function DimensionMatrixDialog({
     }
 
     return { headerRows: rows, leafColumns: leaves };
-  }, [orderedColumnDims, allDvsByDim, rowDvs, linkMap]);
+  }, [visibleColumnDims, allDvsByDim, rowDvs, linkMap]);
 
   // Drag and drop for dimension chip reordering
   const dragItem = useRef<number | null>(null);
@@ -368,10 +389,12 @@ export function DimensionMatrixDialog({
                   {orderedColumnDims.length > 0 && (
                     <div>
                       <p className="text-xs text-gray-500 mb-2">
-                        Drag to reorder column hierarchy:
+                        Drag to reorder column hierarchy. Click a chip to show/hide.
                       </p>
                       <div className="flex flex-wrap gap-2">
-                        {orderedColumnDims.map((dim, index) => (
+                        {orderedColumnDims.map((dim, index) => {
+                          const isHidden = hiddenDimIds.has(dim.id);
+                          return (
                           <div
                             key={dim.id}
                             draggable
@@ -379,12 +402,18 @@ export function DimensionMatrixDialog({
                             onDragEnter={() => handleDragEnter(index)}
                             onDragEnd={handleDragEnd}
                             onDragOver={(e) => e.preventDefault()}
-                            className="flex items-center gap-1 px-3 py-1.5 bg-white border border-gray-200 rounded-full text-sm font-medium text-gray-700 cursor-grab active:cursor-grabbing shadow-sm hover:shadow-md transition-shadow select-none"
+                            onClick={() => toggleDimVisibility(dim.id)}
+                            className={`flex items-center gap-1 px-3 py-1.5 border rounded-full text-sm font-medium cursor-grab active:cursor-grabbing shadow-sm hover:shadow-md transition-all select-none ${
+                              isHidden
+                                ? "bg-transparent border-dashed border-gray-300 text-gray-400"
+                                : "bg-white border-gray-200 text-gray-700"
+                            }`}
                           >
-                            <GripVertical className="h-3 w-3 text-gray-400" />
+                            <GripVertical className={`h-3 w-3 ${isHidden ? "text-gray-300" : "text-gray-400"}`} />
                             {dim.name}
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   )}
@@ -409,7 +438,7 @@ export function DimensionMatrixDialog({
                           {headerRows.map((row, rowIndex) => (
                             <tr key={rowIndex}>
                               <th className="px-3 py-2 text-left font-medium text-gray-500 bg-gray-50 border border-gray-200 whitespace-nowrap sticky left-0 z-10">
-                                {orderedColumnDims[rowIndex] ? orderedColumnDims[rowIndex].name : ""}
+                                {visibleColumnDims[rowIndex] ? visibleColumnDims[rowIndex].name : ""}
                               </th>
                               {row.map((cell) => (
                                 <th
