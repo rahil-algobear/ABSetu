@@ -2,7 +2,7 @@
 Dimension models: Dimension, DimensionValue, DimensionValueLink, UserDimension
 """
 
-from sqlalchemy import Column, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, UniqueConstraint, true
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 
@@ -21,6 +21,11 @@ class Dimension(BaseModel):
     name = Column(String, nullable=False)
     key = Column(String, nullable=False)
     sort_order = Column(Integer, nullable=False, default=0)
+    # When true, this dimension is used for access control and may
+    # participate in DimensionValueLink rules. When false it behaves
+    # as a free-form tag axis: still attachable to entities/activities,
+    # but not assignable via UserDimension or referenced by links.
+    is_dimension = Column(Boolean, nullable=False, default=True, server_default=true())
 
     organization = relationship("Organization", back_populates="dimensions")
     values = relationship(

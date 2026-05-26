@@ -141,10 +141,14 @@ export default function UsersPage() {
     queryFn: roleApi.list,
   });
 
-  const { data: dimensions = [] } = useQuery<Dimension[]>({
+  const { data: allDimensions = [] } = useQuery<Dimension[]>({
     queryKey: ["dimensions"],
     queryFn: dimensionApi.list,
   });
+
+  // Only access-control dimensions are assignable to users; tag-like
+  // axes are excluded from the access editor and table columns.
+  const dimensions = allDimensions.filter((d) => d.is_dimension);
 
   // Load all dimension values
   const { data: allDimensionValues = [] } = useQuery<DimensionValue[]>({

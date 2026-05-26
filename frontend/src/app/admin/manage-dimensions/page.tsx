@@ -29,7 +29,7 @@ export default function ManageDimensionsPage() {
   const queryClient = useQueryClient();
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Dimension | null>(null);
-  const [form, setForm] = useState({ name: "" });
+  const [form, setForm] = useState({ name: "", is_dimension: true });
 
   const { data: dimensions = [], isLoading } = useQuery<Dimension[]>({
     queryKey: ["dimensions"],
@@ -49,7 +49,7 @@ export default function ManageDimensionsPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: { name: string } }) =>
+    mutationFn: ({ id, data }: { id: string; data: { name: string; is_dimension: boolean } }) =>
       dimensionApi.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["dimensions"] });
@@ -70,13 +70,13 @@ export default function ManageDimensionsPage() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ name: "" });
+    setForm({ name: "", is_dimension: true });
     setModalOpen(true);
   };
 
   const openEdit = (dim: Dimension) => {
     setEditing(dim);
-    setForm({ name: dim.name });
+    setForm({ name: dim.name, is_dimension: dim.is_dimension });
     setModalOpen(true);
   };
 
@@ -88,9 +88,12 @@ export default function ManageDimensionsPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (editing) {
-      updateMutation.mutate({ id: editing.id, data: { name: form.name } });
+      updateMutation.mutate({
+        id: editing.id,
+        data: { name: form.name, is_dimension: form.is_dimension },
+      });
     } else {
-      createMutation.mutate({ name: form.name });
+      createMutation.mutate({ name: form.name, is_dimension: form.is_dimension });
     }
   };
 
@@ -120,6 +123,7 @@ export default function ManageDimensionsPage() {
             <TableRow>
               <TableHead>Name</TableHead>
               <TableHead>Values</TableHead>
+              <TableHead>Access Control</TableHead>
               {canManage && <TableHead className="w-20 text-center">Actions</TableHead>}
             </TableRow>
           </TableHeader>
@@ -157,6 +161,23 @@ export default function ManageDimensionsPage() {
               required
             />
           </div>
+          <div className="flex items-start gap-2 pt-1">
+            <input
+              id="dim-is-dimension"
+              type="checkbox"
+              className="mt-1 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+              checked={form.is_dimension}
+              onChange={(e) => setForm({ ...form, is_dimension: e.target.checked })}
+            />
+            <div>
+              <Label htmlFor="dim-is-dimension" className="cursor-pointer">
+                Use for access control
+              </Label>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Lets you scope users by this dimension&apos;s values and include it in dimension linking rules. Uncheck for free-form tag axes used only for categorization or reporting.
+              </p>
+            </div>
+          </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={closeModal}>
               Cancel
@@ -192,6 +213,17 @@ function DimensionRow({
     <TableRow>
       <TableCell className="font-medium">{dimension.name}</TableCell>
       <TableCell className="text-gray-500">{values.length}</TableCell>
+      <TableCell>
+        {dimension.is_dimension ? (
+          <span className="inline-flex items-center rounded-full bg-purple-50 px-2 py-0.5 text-xs font-medium text-purple-700">
+            Yes
+          </span>
+        ) : (
+          <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+            No (tag)
+          </span>
+        )}
+      </TableCell>
       {showActions && (
         <TableCell>
           <div className="flex items-center justify-center gap-2">

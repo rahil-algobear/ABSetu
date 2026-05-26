@@ -73,6 +73,7 @@ export interface Dimension {
   name: string;
   key: string;
   sort_order: number;
+  is_dimension: boolean;
   updated_at: string | null;
 }
 

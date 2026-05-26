@@ -14,11 +14,13 @@ from app.common.schemas.base_response import BaseResponseSchema
 class DimensionCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     sort_order: int = 0
+    is_dimension: bool = True
 
 
 class DimensionUpdate(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=200)
     sort_order: int | None = None
+    is_dimension: bool | None = None
 
 
 class DimensionResponse(BaseResponseSchema):
@@ -26,6 +28,7 @@ class DimensionResponse(BaseResponseSchema):
     name: str
     key: str
     sort_order: int = 0
+    is_dimension: bool = True
 
 
 # --- DimensionValue ---

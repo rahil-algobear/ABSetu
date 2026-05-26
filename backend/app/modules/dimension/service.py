@@ -153,11 +153,33 @@ class DimensionValueLinkService:
             )
         return query.all()
 
+    def _assert_link_eligible(self, dv_ids: list[uuid.UUID]) -> None:
+        """Reject any value whose parent dimension has is_dimension=false.
+
+        Tag-like dimensions (is_dimension=false) cannot participate in
+        DimensionValueLink rules — link rules are only meaningful for
+        governed, low-cardinality structural axes.
+        """
+        rows = (
+            self.db.query(DimensionValue.id, Dimension.is_dimension, Dimension.name)
+            .join(Dimension, DimensionValue.dimension_id == Dimension.id)
+            .filter(DimensionValue.id.in_(dv_ids))
+            .all()
+        )
+        for _dv_id, is_dim, dim_name in rows:
+            if not is_dim:
+                raise ValidationError(
+                    f"Dimension '{dim_name}' is not used for access control and "
+                    "cannot participate in dimension value links."
+                )
+
     def create(
         self, org_id: uuid.UUID, dv_id_1: uuid.UUID, dv_id_2: uuid.UUID
     ) -> DimensionValueLink:
         if str(dv_id_1) > str(dv_id_2):
             dv_id_1, dv_id_2 = dv_id_2, dv_id_1
+
+        self._assert_link_eligible([dv_id_1, dv_id_2])
 
         existing = (
             self.db.query(DimensionValueLink)
@@ -195,6 +217,14 @@ class DimensionValueLinkService:
         pairs: list[tuple[uuid.UUID, uuid.UUID]],
     ) -> list[DimensionValueLink]:
         """Sync dimension value links: add missing, remove stale."""
+        for dim_id in (dimension_id_1, dimension_id_2):
+            dim = self.db.query(Dimension).filter_by(id=dim_id).first()
+            if dim and not dim.is_dimension:
+                raise ValidationError(
+                    f"Dimension '{dim.name}' is not used for access control and "
+                    "cannot participate in dimension value links."
+                )
+
         normalized = set()
         for a, b in pairs:
             if str(a) > str(b):
@@ -337,7 +367,25 @@ class UserDimensionAccessService:
     def update_access(
         self, user_id: uuid.UUID, dimension_value_ids: list[uuid.UUID]
     ) -> list[UserDimension]:
-        """Bulk-replace a user's dimension access."""
+        """Bulk-replace a user's dimension access.
+
+        Only values belonging to access-control dimensions (is_dimension=true)
+        may be assigned. Tag-like axes are silently ineligible.
+        """
+        if dimension_value_ids:
+            ineligible = (
+                self.db.query(Dimension.name)
+                .join(DimensionValue, DimensionValue.dimension_id == Dimension.id)
+                .filter(DimensionValue.id.in_(dimension_value_ids))
+                .filter(Dimension.is_dimension.is_(False))
+                .first()
+            )
+            if ineligible:
+                raise ValidationError(
+                    f"Dimension '{ineligible[0]}' is not used for access control "
+                    "and cannot be assigned to a user."
+                )
+
         self.db.query(UserDimension).filter_by(user_id=user_id).delete()
         for dv_id in dimension_value_ids:
             self.db.add(UserDimension(user_id=user_id, dimension_value_id=dv_id))

@@ -523,12 +523,15 @@ def _ensure_dimension(db, org, key, name, sort_order):
             name=name,
             key=key,
             sort_order=sort_order,
+            is_dimension=True,
         )
         db.add(dim)
         db.flush()
     else:
         if name and dim.name != name:
             dim.name = name
+        if not dim.is_dimension:
+            dim.is_dimension = True
         db.flush()
     print(f"  Ensured dimension: {dim.name}")
     return dim
