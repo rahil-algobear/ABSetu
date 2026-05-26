@@ -237,8 +237,22 @@ class UserDimensionAccessService:
         return self.db.query(UserDimension).filter_by(user_id=user_id).all()
 
     def get_access_value_ids(self, user_id: uuid.UUID) -> list[uuid.UUID]:
-        rows = self.get_access(user_id)
-        return [r.dimension_value_id for r in rows]
+        # Filter out values whose parent dimension no longer has
+        # controls_access=true. If an admin flips a dimension from
+        # access-control to tag-like, existing UserDimension rows for
+        # its values stop granting/restricting access — they're dead
+        # data until cleaned up. This keeps reads consistent with the
+        # write guard in update_access without destroying admin intent
+        # (flipping the dimension back restores the restriction).
+        rows = (
+            self.db.query(UserDimension.dimension_value_id)
+            .join(DimensionValue, DimensionValue.id == UserDimension.dimension_value_id)
+            .join(Dimension, Dimension.id == DimensionValue.dimension_id)
+            .filter(UserDimension.user_id == user_id)
+            .filter(Dimension.controls_access.is_(True))
+            .all()
+        )
+        return [r[0] for r in rows]
 
     def validate_dimension_values(
         self,
