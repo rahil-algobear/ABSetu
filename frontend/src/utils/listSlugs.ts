@@ -31,6 +31,27 @@ export function slugify(str: string): string {
     .replace(/^-|-$/g, "");
 }
 
+// URL prefixes that mirror the backend's real-key shape (dim:..., meta:...).
+// Static columns (no colon in their real key) stay bare. "field" rather than
+// "meta" so the URL matches frontend vocabulary, not DB schema names.
+const DIM_PREFIX = "dim";
+const FIELD_PREFIX = "field";
+
+/**
+ * Compute the URL slug for a real key, prefixing by source type so
+ * dimensions, user-defined fields, and static columns can never collide.
+ *
+ *   dim:abc-uuid     + "Centre"   -> "dim-centre"
+ *   meta:3bg7_centre + "Centre"   -> "field-centre"
+ *   created_at       + "Created"  -> "created"
+ */
+function slugForKey(realKey: string, label: string): string {
+  const base = slugify(label);
+  if (realKey.startsWith("dim:")) return `${DIM_PREFIX}-${base}`;
+  if (realKey.startsWith("meta:")) return `${FIELD_PREFIX}-${base}`;
+  return base;
+}
+
 /**
  * Build slug mappings from one or more source lists. Earlier sources take
  * precedence on key collisions, so pass the richer source (e.g. filter defs
@@ -48,7 +69,7 @@ export function buildSlugMappings(...sources: SlugSource[][]): SlugMappings {
       if (seenRealKeys.has(def.key)) continue;
       seenRealKeys.add(def.key);
 
-      const ks = slugify(def.label);
+      const ks = slugForKey(def.key, def.label);
       keySlugToReal.set(ks, def.key);
       keyRealToSlug.set(def.key, ks);
 
