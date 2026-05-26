@@ -174,7 +174,7 @@ export default function ManageDimensionsPage() {
                 Use for access control
               </Label>
               <p className="text-xs text-gray-500 mt-0.5">
-                Lets you scope users by this dimension&apos;s values. Uncheck for free-form tag axes used only for categorization or reporting.
+                Lets you use this dimension for giving users selective access within your organisation.
               </p>
             </div>
           </div>
