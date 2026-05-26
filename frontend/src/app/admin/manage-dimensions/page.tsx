@@ -29,7 +29,7 @@ export default function ManageDimensionsPage() {
   const queryClient = useQueryClient();
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Dimension | null>(null);
-  const [form, setForm] = useState({ name: "", is_dimension: true });
+  const [form, setForm] = useState({ name: "", controls_access: true });
 
   const { data: dimensions = [], isLoading } = useQuery<Dimension[]>({
     queryKey: ["dimensions"],
@@ -49,7 +49,7 @@ export default function ManageDimensionsPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: { name: string; is_dimension: boolean } }) =>
+    mutationFn: ({ id, data }: { id: string; data: { name: string; controls_access: boolean } }) =>
       dimensionApi.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["dimensions"] });
@@ -70,13 +70,13 @@ export default function ManageDimensionsPage() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ name: "", is_dimension: true });
+    setForm({ name: "", controls_access: true });
     setModalOpen(true);
   };
 
   const openEdit = (dim: Dimension) => {
     setEditing(dim);
-    setForm({ name: dim.name, is_dimension: dim.is_dimension });
+    setForm({ name: dim.name, controls_access: dim.controls_access });
     setModalOpen(true);
   };
 
@@ -90,10 +90,10 @@ export default function ManageDimensionsPage() {
     if (editing) {
       updateMutation.mutate({
         id: editing.id,
-        data: { name: form.name, is_dimension: form.is_dimension },
+        data: { name: form.name, controls_access: form.controls_access },
       });
     } else {
-      createMutation.mutate({ name: form.name, is_dimension: form.is_dimension });
+      createMutation.mutate({ name: form.name, controls_access: form.controls_access });
     }
   };
 
@@ -163,18 +163,18 @@ export default function ManageDimensionsPage() {
           </div>
           <div className="flex items-start gap-2 pt-1">
             <input
-              id="dim-is-dimension"
+              id="dim-controls-access"
               type="checkbox"
               className="mt-1 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
-              checked={form.is_dimension}
-              onChange={(e) => setForm({ ...form, is_dimension: e.target.checked })}
+              checked={form.controls_access}
+              onChange={(e) => setForm({ ...form, controls_access: e.target.checked })}
             />
             <div>
-              <Label htmlFor="dim-is-dimension" className="cursor-pointer">
+              <Label htmlFor="dim-controls-access" className="cursor-pointer">
                 Use for access control
               </Label>
               <p className="text-xs text-gray-500 mt-0.5">
-                Lets you scope users by this dimension&apos;s values and include it in dimension linking rules. Uncheck for free-form tag axes used only for categorization or reporting.
+                Lets you scope users by this dimension&apos;s values. Uncheck for free-form tag axes used only for categorization or reporting.
               </p>
             </div>
           </div>
@@ -214,7 +214,7 @@ function DimensionRow({
       <TableCell className="font-medium">{dimension.name}</TableCell>
       <TableCell className="text-gray-500">{values.length}</TableCell>
       <TableCell>
-        {dimension.is_dimension ? (
+        {dimension.controls_access ? (
           <span className="inline-flex items-center rounded-full bg-purple-50 px-2 py-0.5 text-xs font-medium text-purple-700">
             Yes
           </span>

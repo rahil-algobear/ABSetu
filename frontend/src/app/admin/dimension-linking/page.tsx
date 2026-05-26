@@ -16,13 +16,10 @@ export default function DimensionLinkingPage() {
   const queryClient = useQueryClient();
   const { can } = usePermissions();
   const canManage = can("dimension:manage");
-  const { data: allDimensions = [] } = useQuery<Dimension[]>({
+  const { data: dimensions = [] } = useQuery<Dimension[]>({
     queryKey: ["dimensions"],
     queryFn: dimensionApi.list,
   });
-
-  // Only access-control dimensions can participate in link rules.
-  const dimensions = allDimensions.filter((d) => d.is_dimension);
 
   const [matrixOpen, setMatrixOpen] = useState(false);
   const [dim1Id, setDim1Id] = useState<string>("");
@@ -110,7 +107,7 @@ export default function DimensionLinkingPage() {
   if (dimensions.length < 2) {
     return (
       <p className="text-gray-500 text-sm">
-        You need at least 2 access-control dimensions to define dimension links.
+        You need at least 2 dimensions to define dimension links.
       </p>
     );
   }

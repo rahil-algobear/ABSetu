@@ -126,7 +126,7 @@ export const dimensionApi = {
     const response = await authAxios.get<Dimension>(`/dimensions/${id}`);
     return response.data;
   },
-  create: async (data: { name: string; key?: string; sort_order?: number; is_dimension?: boolean }): Promise<Dimension> => {
+  create: async (data: { name: string; key?: string; sort_order?: number; controls_access?: boolean }): Promise<Dimension> => {
     const response = await authAxios.post<Dimension>('/dimensions/', data);
     return response.data;
   },

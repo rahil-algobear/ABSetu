@@ -148,7 +148,7 @@ export default function UsersPage() {
 
   // Only access-control dimensions are assignable to users; tag-like
   // axes are excluded from the access editor and table columns.
-  const dimensions = allDimensions.filter((d) => d.is_dimension);
+  const dimensions = allDimensions.filter((d) => d.controls_access);
 
   // Load all dimension values
   const { data: allDimensionValues = [] } = useQuery<DimensionValue[]>({
