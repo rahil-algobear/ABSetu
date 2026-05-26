@@ -114,7 +114,7 @@ INTERVENTIONS = [
     "Job Readiness",
     "Vocational Skill Training",
     "Digital Literacy",
-    "Basic Literacy - Languages & Calculations",
+    "Basic Literacy",
     "Financial Literacy",
     "Counselling",
     # Post Institutions
@@ -126,11 +126,9 @@ INTERVENTIONS = [
     "Monthly Meeting with Women Participants",
     # Community
     "Micro Business Training",
-    "Institute Visits - Super 50",
+    "Institute Visits",
     "Physical Health & Nutrition",
-    "Vocational Skill Training - Stitching, Mehandi",
     "Self Help Group",
-    "Job Placement - Boxer",
     "Day Care",
     "SHG",
     # Transformation Programme
@@ -138,12 +136,37 @@ INTERVENTIONS = [
     "Mental Health",
     "Education",
     "Skill Building",
-    "Job Readiness - Sessions / Visits",
     "Visits",
     "External Training",
     "Mentoring",
     "Job / OJT Placement",
 ]
+
+# ---------------------------------------------------------------------------
+# Dimension: Sub-Intervention (Transformation Programme only, for now)
+# Free-form tag axis — controls_access=False. Each sub-intervention links to
+# its parent Intervention and to Programme:Transformation.
+# ---------------------------------------------------------------------------
+SUB_INTERVENTIONS = {
+    "Mental Health": ["IC", "GC", "DMT", "Yoga", "Sound T. Meditation 2"],
+    "Life Skill Education": [
+        "Karrate",
+        "Vachashuddhi",
+        "Basic",
+        "Core",
+        "Advanced",
+        "Exposure",
+    ],
+    "Education": [
+        "Formal",
+        "Spoken English",
+        "Maths",
+        "Computer",
+        "MSCIT",
+        "Financial Literacy",
+    ],
+    "Skill Building": ["Tailoring", "Jewelry", "Exhibition"],
+}
 
 # ---------------------------------------------------------------------------
 # Dimension Value Links
@@ -213,14 +236,14 @@ LOCATION_INTERVENTIONS = {
         "Job Readiness",
         "Vocational Skill Training",
         "Digital Literacy",
-        "Basic Literacy - Languages & Calculations",
+        "Basic Literacy",
         "Financial Literacy",
     ],
     "KASTURBA": [
         "Life Skill Education",
         "Job Readiness",
         "Vocational Skill Training",
-        "Basic Literacy - Languages & Calculations",
+        "Basic Literacy",
         "Financial Literacy",
         "Counselling",
     ],
@@ -228,20 +251,20 @@ LOCATION_INTERVENTIONS = {
         "Life Skill Education",
         "Job Readiness",
         "Vocational Skill Training",
-        "Basic Literacy - Languages & Calculations",
+        "Basic Literacy",
         "Financial Literacy",
         "Counselling",
     ],
     "ULHASNAGAR_MH": [
         "Life Skill Education",
         "Vocational Skill Training",
-        "Basic Literacy - Languages & Calculations",
+        "Basic Literacy",
         "Digital Literacy",
     ],
     "BHIWANDI_MH": [
         "Life Skill Education",
         "Vocational Skill Training",
-        "Basic Literacy - Languages & Calculations",
+        "Basic Literacy",
         "Digital Literacy",
     ],
     "BKN": [
@@ -254,7 +277,7 @@ LOCATION_INTERVENTIONS = {
         "Life Skill Education",
         "Job Readiness",
         "Vocational Skill Training",
-        "Basic Literacy - Languages & Calculations",
+        "Basic Literacy",
         "Financial Literacy",
     ],
     "MAHARASHTRA": [
@@ -269,18 +292,18 @@ LOCATION_INTERVENTIONS = {
         "Life Skill Education",
         "Job Readiness",
         "Micro Business Training",
-        "Basic Literacy - Languages & Calculations",
+        "Basic Literacy",
         "Financial Literacy",
         "Digital Literacy",
         "Physical Health & Nutrition",
         "Counselling",
-        "Vocational Skill Training - Stitching, Mehandi",
+        "Vocational Skill Training",
         "Home Visits",
         "Institution Visits",
         "Workplace Visits",
         "Monthly Meeting with Women Participants",
         "Self Help Group",
-        "Job Placement - Boxer",
+        "Job Placement",
         "Day Care",
     ],
     "KAMATHIPURA": [
@@ -288,7 +311,7 @@ LOCATION_INTERVENTIONS = {
         "Job Readiness",
         "Financial Literacy",
         "Micro Business Training",
-        "Institute Visits - Super 50",
+        "Institute Visits",
         "Job Placement",
         "Workplace Visits",
         "SHG",
@@ -298,7 +321,7 @@ LOCATION_INTERVENTIONS = {
         "Job Readiness",
         "Financial Literacy",
         "Micro Business Training",
-        "Institute Visits - Super 50",
+        "Institute Visits",
         "Job Placement",
         "Workplace Visits",
         "SHG",
@@ -307,18 +330,18 @@ LOCATION_INTERVENTIONS = {
         "Life Skill Education",
         "Job Readiness",
         "Micro Business Training",
-        "Basic Literacy - Languages & Calculations",
+        "Basic Literacy",
         "Financial Literacy",
         "Digital Literacy",
         "Physical Health & Nutrition",
         "Counselling",
-        "Vocational Skill Training - Stitching, Mehandi",
+        "Vocational Skill Training",
         "Home Visits",
         "Institution Visits",
         "Workplace Visits",
         "Monthly Meeting with Women Participants",
         "Self Help Group",
-        "Job Placement - Boxer",
+        "Job Placement",
         "Day Care",
     ],
     "THANE": [
@@ -327,7 +350,7 @@ LOCATION_INTERVENTIONS = {
         "Life Skill Education",
         "Education",
         "Skill Building",
-        "Job Readiness - Sessions / Visits",
+        "Job Readiness",
         "Visits",
         "External Training",
         "Mentoring",
@@ -346,7 +369,7 @@ PROGRAMME_INTERVENTIONS = {
         "Job Readiness",
         "Vocational Skill Training",
         "Digital Literacy",
-        "Basic Literacy - Languages & Calculations",
+        "Basic Literacy",
         "Financial Literacy",
         "Counselling",
         # Post Institutions
@@ -358,11 +381,9 @@ PROGRAMME_INTERVENTIONS = {
         "Monthly Meeting with Women Participants",
         # Community
         "Micro Business Training",
-        "Institute Visits - Super 50",
+        "Institute Visits",
         "Physical Health & Nutrition",
-        "Vocational Skill Training - Stitching, Mehandi",
         "Self Help Group",
-        "Job Placement - Boxer",
         "Day Care",
         "SHG",
     ],
@@ -372,7 +393,7 @@ PROGRAMME_INTERVENTIONS = {
         "Life Skill Education",
         "Education",
         "Skill Building",
-        "Job Readiness - Sessions / Visits",
+        "Job Readiness",
         "Visits",
         "External Training",
         "Mentoring",
@@ -426,6 +447,7 @@ SESSION_DIMENSION_FIELDS = [
     ("Location", True, 2),
     ("Intervention", False, 3),
     ("Project", False, 4),
+    ("Sub-Intervention", False, 5),
 ]
 
 # Participant fields added to Session scope (edit only, search_select)
@@ -564,6 +586,34 @@ def _ensure_values(db, org, dimension, values_list):
         value_map[seed_key] = dv
     print(f"  Ensured {len(values_list)} {dimension.name.lower()} values")
     return value_map
+
+
+def _ensure_sub_intervention_dimension(db, org):
+    """Like _ensure_dimension, but creates with controls_access=False."""
+    key, name, sort_order = "sub_intervention", "Sub-Intervention", 4
+    dim = db.query(Dimension).filter_by(organization_id=org.id, key=key).first()
+    if not dim:
+        dim = Dimension(
+            organization_id=org.id,
+            name=name,
+            key=key,
+            sort_order=sort_order,
+            controls_access=False,
+        )
+        db.add(dim)
+        db.flush()
+    else:
+        if dim.name != name:
+            dim.name = name
+        if dim.sort_order != sort_order:
+            dim.sort_order = sort_order
+        # Sub-Intervention is a free-form tag axis; keep it that way even
+        # if someone toggled the flag on the row manually.
+        if dim.controls_access:
+            dim.controls_access = False
+        db.flush()
+    print(f"  Ensured dimension: {dim.name}")
+    return dim
 
 
 def _ensure_intervention_values(db, org, dimension, names):
@@ -766,6 +816,7 @@ def seed():
         project_dim = _ensure_dimension(db, org, "project", "Project", 1)
         location_dim = _ensure_dimension(db, org, "location", "Location", 2)
         intervention_dim = _ensure_dimension(db, org, "intervention", "Intervention", 3)
+        sub_intervention_dim = _ensure_sub_intervention_dimension(db, org)
 
         # 5. Dimension values
         programme_map = _ensure_values(db, org, programme_dim, PROGRAMMES)
@@ -774,6 +825,12 @@ def seed():
 
         # 6. Intervention dimension values (regular dimension values, no ActivityType)
         intervention_map = _ensure_intervention_values(db, org, intervention_dim, INTERVENTIONS)
+        sub_intervention_names = [
+            sub for subs in SUB_INTERVENTIONS.values() for sub in subs
+        ]
+        sub_intervention_map = _ensure_intervention_values(
+            db, org, sub_intervention_dim, sub_intervention_names
+        )
 
         # 7. Dimension Value Links
         new_links = 0
@@ -804,6 +861,19 @@ def seed():
         new_links += _ensure_dimension_value_links(
             db, org, project_interventions, project_map, intervention_map
         )
+        # Sub-Intervention ↔ Intervention (parent) and ↔ Programme:TRANSFORMATION.
+        # Cascading in the activity form intersects link rules, so an Outreach
+        # user picking Life Skill Education won't see Karrate etc.
+        new_links += _ensure_dimension_value_links(
+            db, org, SUB_INTERVENTIONS, intervention_map, sub_intervention_map
+        )
+        new_links += _ensure_dimension_value_links(
+            db,
+            org,
+            {"TRANSFORMATION": sub_intervention_names},
+            programme_map,
+            sub_intervention_map,
+        )
         print(f"  Ensured dimension value links ({new_links} new)")
 
         # 7b. Build and seed Session meta field schema (now that dimensions + entity types exist)
@@ -812,6 +882,7 @@ def seed():
             "Project": str(project_dim.id),
             "Location": str(location_dim.id),
             "Intervention": str(intervention_dim.id),
+            "Sub-Intervention": str(sub_intervention_dim.id),
         }
         session_fields = list(SESSION_META_FIELDS)  # start with date etc.
         for dim_name, required, sort_order in SESSION_DIMENSION_FIELDS:
@@ -1054,27 +1125,39 @@ def seed():
 
         # Summary
         total_loc_intervention_links = sum(len(v) for v in LOCATION_INTERVENTIONS.values())
+        total_sub_intervention_links = sum(
+            len(v) for v in SUB_INTERVENTIONS.values()
+        ) + len(  # one link per sub-intervention to Programme:TRANSFORMATION
+            [s for subs in SUB_INTERVENTIONS.values() for s in subs]
+        )
         total_links = (
             sum(len(v) for v in PROGRAMME_PROJECTS.values())
             + sum(len(v) for v in PROJECT_LOCATIONS.values())
             + sum(len(v) for v in PROGRAMME_LOCATIONS.values())
             + total_loc_intervention_links
+            + total_sub_intervention_links
         )
+        total_sub_interventions = sum(len(v) for v in SUB_INTERVENTIONS.values())
         print("\nKshamata seed completed successfully!")
         print(f"  Organisation        : {ORG_NAME}")
         print(f"  Entity Types        : {len(ENTITY_TYPES)}")
         print(f"  Activity Types : 1 (Sessions)")
         print(f"  Roles               : 2 (Admin [system], Team Member [default])")
-        print(f"  Dimensions          : 4 (Programme, Project, Location, Intervention)")
+        print(
+            f"  Dimensions          : 5 (Programme, Project, Location, "
+            f"Intervention, Sub-Intervention)"
+        )
         print(f"  Programmes          : {len(PROGRAMMES)}")
         print(f"  Projects            : {len(PROJECTS)}")
         print(f"  Locations           : {len(LOCATIONS)}")
         print(f"  Interventions       : {len(INTERVENTIONS)}")
+        print(f"  Sub-Interventions   : {total_sub_interventions}")
         print(f"  Dimension Links     : {total_links} combos")
-        print(f"    Programme<>Project      : {sum(len(v) for v in PROGRAMME_PROJECTS.values())}")
-        print(f"    Project<>Location       : {sum(len(v) for v in PROJECT_LOCATIONS.values())}")
-        print(f"    Programme<>Location     : {sum(len(v) for v in PROGRAMME_LOCATIONS.values())}")
-        print(f"    Location<>Intervention  : {total_loc_intervention_links}")
+        print(f"    Programme<>Project          : {sum(len(v) for v in PROGRAMME_PROJECTS.values())}")
+        print(f"    Project<>Location           : {sum(len(v) for v in PROJECT_LOCATIONS.values())}")
+        print(f"    Programme<>Location         : {sum(len(v) for v in PROGRAMME_LOCATIONS.values())}")
+        print(f"    Location<>Intervention      : {total_loc_intervention_links}")
+        print(f"    Intervention<>SubIntervention + Programme<>SubIntervention : {total_sub_intervention_links}")
 
     except Exception as e:
         db.rollback()
