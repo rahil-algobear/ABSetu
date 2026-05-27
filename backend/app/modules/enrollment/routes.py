@@ -78,6 +78,7 @@ def _build_enrollment_response(e) -> dict:
         organization_id=str(e.organization_id),
         entity_id=str(e.entity_id),
         meta=meta,
+        is_active=e.is_active,
         dimensions=dim_infos,
     ).dump()
 
@@ -176,6 +177,20 @@ def update_enrollment(
         data.model_dump(exclude_none=True),
     )
     return _build_enrollment_response(enrollment)
+
+
+@enrollment_router.delete(
+    "/{enrollment_id}",
+    dependencies=[Depends(require_permissions("enrollment:manage"))],
+)
+def delete_enrollment(
+    enrollment_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    service = EnrollmentService(db)
+    service.delete(enrollment_id, current_user.organization_id)
+    return {"message": "Enrollment deleted"}
 
 
 @enrollment_router.put(

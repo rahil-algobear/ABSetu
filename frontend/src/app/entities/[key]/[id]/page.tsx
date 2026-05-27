@@ -32,8 +32,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DynamicMetaForm, MetaFieldDisplay } from "@/components/DynamicMetaForm";
+import { Dialog } from "@/components/ui/dialog";
 import { PageHeader } from "@/components/ui/page-header";
-import { Plus, Pencil, X, ChevronRight } from "lucide-react";
+import { Plus, Pencil, Trash2, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import { formatDate, formatDateTime } from "@/utils/date";
@@ -72,7 +73,10 @@ export default function EntityDetailPage() {
 
 
   const [showCreate, setShowCreate] = useState(false);
-  const [editingEnrollment, setEditingEnrollment] = useState<Enrollment | null>(null);
+  const [enrollmentAction, setEnrollmentAction] = useState<
+    { enrollment: Enrollment; initialIsActive?: boolean } | null
+  >(null);
+  const [enrollmentTab, setEnrollmentTab] = useState<"active" | "ended" | "all">("active");
   const [editingDetails, setEditingDetails] = useState(false);
   const [detailMetaValues, setDetailMetaValues] = useState<Record<string, unknown>>({});
 
@@ -138,6 +142,17 @@ export default function EntityDetailPage() {
       toast.success("Details updated");
     },
     onError: () => toast.error("Failed to update details"),
+  });
+
+  const deleteEnrollmentMutation = useMutation({
+    mutationFn: (enrollmentId: string) => enrollmentApi.delete(enrollmentId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["enrollments-entity", id] });
+      toast.success("Enrollment deleted");
+    },
+    onError: (err: { response?: { data?: { message?: string } } }) => {
+      toast.error(err.response?.data?.message || "Failed to delete enrollment");
+    },
   });
 
   const openEditDetails = () => {
@@ -226,7 +241,7 @@ export default function EntityDetailPage() {
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg">Enrollments</CardTitle>
               <Can permission="enrollment:manage">
-                {!showCreate && !editingEnrollment && (
+                {!showCreate && !enrollmentAction && (
                   <Button size="sm" onClick={() => setShowCreate(true)}>
                     <Plus className="h-4 w-4 mr-1" />
                     Add
@@ -236,7 +251,11 @@ export default function EntityDetailPage() {
             </div>
           </CardHeader>
           <CardContent>
-            {showCreate && (
+            <Dialog
+              open={showCreate}
+              onClose={() => setShowCreate(false)}
+              title="New Enrollment"
+            >
               <EnrollmentForm
                 entityId={id}
                 entityTypeId={entity.entity_type_id}
@@ -247,29 +266,64 @@ export default function EntityDetailPage() {
                 }}
                 onCancel={() => setShowCreate(false)}
               />
-            )}
+            </Dialog>
 
-            {editingEnrollment && (
-              <EnrollmentForm
-                entityId={id}
-                entityTypeId={entity.entity_type_id}
-                enrollment={editingEnrollment}
-                allSchemas={allSchemas}
-                onSuccess={() => {
-                  setEditingEnrollment(null);
-                  queryClient.invalidateQueries({ queryKey: ["enrollments-entity", id] });
-                }}
-                onCancel={() => setEditingEnrollment(null)}
-              />
-            )}
+            <Dialog
+              open={!!enrollmentAction}
+              onClose={() => setEnrollmentAction(null)}
+              title="Edit Enrollment"
+            >
+              {enrollmentAction && (
+                <EnrollmentForm
+                  entityId={id}
+                  entityTypeId={entity.entity_type_id}
+                  enrollment={enrollmentAction.enrollment}
+                  initialIsActive={enrollmentAction.initialIsActive}
+                  allSchemas={allSchemas}
+                  onSuccess={() => {
+                    setEnrollmentAction(null);
+                    queryClient.invalidateQueries({ queryKey: ["enrollments-entity", id] });
+                  }}
+                  onCancel={() => setEnrollmentAction(null)}
+                />
+              )}
+            </Dialog>
 
-            {!showCreate && !editingEnrollment && (
-              <>
+            <>
                 {enrollments.length === 0 ? (
                   <p className="text-gray-500 text-sm">No enrollments</p>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
-                    {enrollments.map((e) => {
+                  <>
+                    <div className="flex gap-2 -mt-1 mb-4">
+                      {(
+                        [
+                          { key: "active" as const, label: "Active", count: enrollments.filter((e) => e.is_active).length },
+                          { key: "ended" as const, label: "Inactive", count: enrollments.filter((e) => !e.is_active).length },
+                          { key: "all" as const, label: "All", count: enrollments.length },
+                        ]
+                      ).map((tab) => (
+                        <button
+                          key={tab.key}
+                          onClick={() => setEnrollmentTab(tab.key)}
+                          className={`px-3 py-1.5 text-sm rounded-full whitespace-nowrap transition-colors ${
+                            enrollmentTab === tab.key
+                              ? "bg-purple-100 text-purple-700 font-medium"
+                              : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                          }`}
+                        >
+                          {tab.label}
+                          <span className="ml-1 text-xs opacity-70">({tab.count})</span>
+                        </button>
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-2">
+                      {enrollments
+                        .filter((e) => {
+                          if (enrollmentTab === "active") return e.is_active;
+                          if (enrollmentTab === "ended") return !e.is_active;
+                          return true;
+                        })
+                        .map((e) => {
                       const dimensionPairs = (e.dimensions || []).map((dim) => ({
                         label: dim.dimension_name,
                         value: dim.value_name,
@@ -295,12 +349,41 @@ export default function EntityDetailPage() {
                           return { label: f.label, value: formatted };
                         });
                       const allPairs = [...dimensionPairs, ...fieldPairs];
+                      const isActive = e.is_active;
                       return (
                         <div
                           key={e.id}
-                          className="flex items-start justify-between p-3 border rounded gap-3"
+                          className={`flex flex-col p-3 border rounded gap-2 ${
+                            isActive ? "" : "opacity-60"
+                          }`}
                         >
-                          <div className="flex-1 min-w-0 space-y-1 text-sm">
+                          <div className="flex items-center justify-between gap-3">
+                            <Badge
+                              variant={isActive ? "default" : "secondary"}
+                              className="text-xs"
+                            >
+                              {isActive ? "Active" : "Inactive"}
+                            </Badge>
+                            <Can permission="enrollment:manage">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="text-gray-400 hover:text-red-600 hover:bg-red-50"
+                                onClick={() => {
+                                  if (
+                                    confirm(
+                                      "Delete this enrollment? This can't be undone.",
+                                    )
+                                  ) {
+                                    deleteEnrollmentMutation.mutate(e.id);
+                                  }
+                                }}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </Can>
+                          </div>
+                          <div className="space-y-1 text-sm">
                             {allPairs.map((p, i) => (
                               <div key={`${p.label}-${i}`}>
                                 <span className="text-gray-500">{p.label}:</span>{" "}
@@ -309,21 +392,53 @@ export default function EntityDetailPage() {
                             ))}
                           </div>
                           <Can permission="enrollment:manage">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => setEditingEnrollment(e)}
-                            >
-                              <Pencil className="h-3.5 w-3.5" />
-                            </Button>
+                            <div className="flex items-center gap-2">
+                              {isActive ? (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="flex-1 text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                                  onClick={() =>
+                                    setEnrollmentAction({
+                                      enrollment: e,
+                                      initialIsActive: false,
+                                    })
+                                  }
+                                >
+                                  End enrollment
+                                </Button>
+                              ) : (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="flex-1"
+                                  onClick={() =>
+                                    setEnrollmentAction({
+                                      enrollment: e,
+                                      initialIsActive: true,
+                                    })
+                                  }
+                                >
+                                  Start again
+                                </Button>
+                              )}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="flex-1"
+                                onClick={() => setEnrollmentAction({ enrollment: e })}
+                              >
+                                Edit
+                              </Button>
+                            </div>
                           </Can>
                         </div>
                       );
                     })}
-                  </div>
+                    </div>
+                  </>
                 )}
               </>
-            )}
           </CardContent>
         </Card>
       )}
@@ -400,6 +515,7 @@ function EnrollmentForm({
   entityId,
   entityTypeId,
   enrollment,
+  initialIsActive,
   allSchemas,
   onSuccess,
   onCancel,
@@ -407,11 +523,15 @@ function EnrollmentForm({
   entityId: string;
   entityTypeId: string;
   enrollment?: Enrollment;
+  initialIsActive?: boolean;
   allSchemas: MetaFieldSchemaItem[];
   onSuccess: () => void;
   onCancel: () => void;
 }) {
   const isEdit = !!enrollment;
+  const [isActive, setIsActive] = useState<boolean>(
+    initialIsActive ?? enrollment?.is_active ?? true,
+  );
 
   const { data: dimensions = [] } = useQuery<Dimension[]>({
     queryKey: ["dimensions"],
@@ -484,7 +604,9 @@ function EnrollmentForm({
       toast.success("Enrollment created");
       onSuccess();
     },
-    onError: () => toast.error("Failed to create enrollment"),
+    onError: (err: { response?: { data?: { message?: string } } }) => {
+      toast.error(err.response?.data?.message || "Failed to create enrollment");
+    },
   });
 
   const updateMutation = useMutation({
@@ -497,7 +619,9 @@ function EnrollmentForm({
       toast.success("Enrollment updated");
       onSuccess();
     },
-    onError: () => toast.error("Failed to update enrollment"),
+    onError: (err: { response?: { data?: { message?: string } } }) => {
+      toast.error(err.response?.data?.message || "Failed to update enrollment");
+    },
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -529,7 +653,7 @@ function EnrollmentForm({
     if (isEdit && enrollment) {
       updateMutation.mutate({
         id: enrollment.id,
-        updates: { meta },
+        updates: { meta, is_active: isActive },
         tagIds: dimensionValueIds,
       });
     } else {
@@ -537,6 +661,7 @@ function EnrollmentForm({
         entity_id: entityId,
         meta,
         dimension_value_ids: dimensionValueIds,
+        is_active: isActive,
       });
     }
   };
@@ -560,6 +685,7 @@ function EnrollmentForm({
         dimensionValueIds.find((dvId) =>
           dimValues.some((dv) => dv.id === dvId),
         ) || "";
+      const isFieldDisabled = createDisabledKeys.has(field.key);
       return (
         <div key={`dim-${field.key}`}>
           <label className="text-sm font-medium">
@@ -567,7 +693,7 @@ function EnrollmentForm({
             {field.required && <span className="text-red-500 ml-0.5">*</span>}
           </label>
           <select
-            className="w-full mt-1 border rounded-md p-2 text-sm"
+            className="w-full mt-1 border rounded-md p-2 text-sm disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
             value={currentSelection}
             onChange={(e) => {
               const newId = e.target.value;
@@ -577,6 +703,7 @@ function EnrollmentForm({
               setDimensionValueIds(newId ? [...otherIds, newId] : otherIds);
             }}
             required={field.required}
+            disabled={isFieldDisabled}
           >
             <option value="">Select {field.label}...</option>
             {filtered.map((dv) => (
@@ -601,35 +728,55 @@ function EnrollmentForm({
   };
 
   return (
-    <div className="border rounded p-3 mb-3 bg-gray-50">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="font-medium text-sm">
-          {isEdit ? "Edit Enrollment" : "New Enrollment"}
-        </h3>
-        <Button size="sm" variant="ghost" onClick={onCancel}>
-          <X className="h-4 w-4" />
+    <form onSubmit={handleSubmit} className="space-y-3">
+      {formFields.length === 0 ? (
+        <p className="text-sm text-gray-500">
+          No fields have been configured for enrollments. Please ask your admin to set them up in Form Fields under Admin settings.
+        </p>
+      ) : (
+        formFields.map(renderField)
+      )}
+
+      {formFields.length > 0 && (
+        <div>
+          <label className="block text-sm font-medium">Status</label>
+          <div className="inline-flex mt-1 rounded-md border overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setIsActive(false)}
+              className={`px-3 py-1.5 text-sm transition-colors ${
+                !isActive
+                  ? "bg-gray-600 text-white"
+                  : "bg-white text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              Inactive
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsActive(true)}
+              className={`px-3 py-1.5 text-sm transition-colors border-l ${
+                isActive
+                  ? "bg-purple-600 text-white"
+                  : "bg-white text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              Active
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="flex gap-2 pt-2">
+        {formFields.length > 0 && (
+          <Button type="submit" disabled={isPending}>
+            {isEdit ? "Save" : "Create"}
+          </Button>
+        )}
+        <Button type="button" variant="outline" onClick={onCancel}>
+          Cancel
         </Button>
       </div>
-      <form onSubmit={handleSubmit} className="space-y-3">
-        {formFields.length === 0 ? (
-          <p className="text-sm text-gray-500">
-            No fields have been configured for enrollments. Please ask your admin to set them up in Form Fields under Admin settings.
-          </p>
-        ) : (
-          formFields.map(renderField)
-        )}
-
-        <div className="flex gap-2">
-          {formFields.length > 0 && (
-            <Button type="submit" disabled={isPending}>
-              {isEdit ? "Save" : "Create"}
-            </Button>
-          )}
-          <Button type="button" variant="outline" onClick={onCancel}>
-            Cancel
-          </Button>
-        </div>
-      </form>
-    </div>
+    </form>
   );
 }

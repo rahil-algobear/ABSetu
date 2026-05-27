@@ -22,7 +22,7 @@ class EnrollmentService:
         return (
             self.db.query(Enrollment)
             .filter_by(entity_id=entity_id)
-            .order_by(Enrollment.meta["admission_date"].astext.desc())
+            .order_by(Enrollment.created_at.asc())
             .all()
         )
 
@@ -30,7 +30,7 @@ class EnrollmentService:
         return (
             self.db.query(Enrollment)
             .filter_by(organization_id=org_id)
-            .order_by(Enrollment.meta["admission_date"].astext.desc())
+            .order_by(Enrollment.created_at.asc())
             .all()
         )
 
@@ -58,12 +58,32 @@ class EnrollmentService:
                 f"Entity type '{entity.entity_type.name}' does not support enrollments"
             )
 
+        # Guard against duplicate active enrollments with identical
+        # dimensions (only when dimensions are actually set — an
+        # enrollment with no dimensions is unscoped, so duplicates there
+        # are allowed for organizations that may want them).
+        if dimension_value_ids:
+            incoming_dvs = {uuid.UUID(d) for d in dimension_value_ids}
+            existing_active = (
+                self.db.query(Enrollment)
+                .filter(Enrollment.entity_id == entity.id, Enrollment.is_active.is_(True))
+                .all()
+            )
+            for existing in existing_active:
+                existing_dvs = {d.dimension_value_id for d in (existing.dimensions or [])}
+                if existing_dvs == incoming_dvs:
+                    raise ValidationError(
+                        "An active enrollment already exists for this beneficiary "
+                        "with the same dimensions."
+                    )
+
         meta = normalize_meta_datetimes(dict(data.get("meta") or {}))
 
         enrollment = Enrollment(
             organization_id=org_id,
             entity_id=entity.id,
             meta=meta,
+            is_active=data.get("is_active", True),
         )
         self.db.add(enrollment)
         self.db.flush()
@@ -85,14 +105,30 @@ class EnrollmentService:
             raise NotFoundError("Enrollment not found")
 
         # Merge existing meta with updates
-        existing_meta = dict(enrollment.meta or {})
-        incoming_meta = data.get("meta") or {}
-        existing_meta.update(incoming_meta)
+        if "meta" in data:
+            existing_meta = dict(enrollment.meta or {})
+            incoming_meta = data.get("meta") or {}
+            existing_meta.update(incoming_meta)
+            enrollment.meta = normalize_meta_datetimes(existing_meta)
 
-        enrollment.meta = normalize_meta_datetimes(existing_meta)
+        if "is_active" in data:
+            enrollment.is_active = data["is_active"]
+
         self.db.commit()
         self.db.refresh(enrollment)
         return enrollment
+
+    def delete(self, enrollment_id: uuid.UUID, org_id: uuid.UUID) -> None:
+        enrollment = (
+            self.db.query(Enrollment)
+            .filter_by(id=enrollment_id, organization_id=org_id)
+            .first()
+        )
+        if not enrollment:
+            raise NotFoundError("Enrollment not found")
+        # EnrollmentDimension rows cascade via ondelete="CASCADE".
+        self.db.delete(enrollment)
+        self.db.commit()
 
     def update_dimensions(
         self, enrollment_id: uuid.UUID, dimension_value_ids: list[str]

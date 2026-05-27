@@ -479,6 +479,7 @@ export const enrollmentApi = {
     entity_id: string;
     dimension_value_ids?: string[];
     meta?: Record<string, unknown>;
+    is_active?: boolean;
   }): Promise<Enrollment> => {
     const response = await authAxios.post<Enrollment>('/enrollments/', data);
     return response.data;
@@ -489,6 +490,10 @@ export const enrollmentApi = {
   },
   updateDimensions: async (id: string, dimensionValueIds: string[]): Promise<Enrollment> => {
     const response = await authAxios.put<Enrollment>(`/enrollments/${id}/dimensions`, dimensionValueIds);
+    return response.data;
+  },
+  delete: async (id: string) => {
+    const response = await authAxios.delete(`/enrollments/${id}`);
     return response.data;
   },
 };

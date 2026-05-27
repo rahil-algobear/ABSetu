@@ -331,6 +331,7 @@ export interface Enrollment {
   organization_id: string;
   entity_id: string;
   meta: Record<string, unknown> | null;
+  is_active: boolean;
   dimensions: DimensionInfo[];
   updated_at: string | null;
 }

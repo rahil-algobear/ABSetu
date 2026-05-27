@@ -2,7 +2,7 @@
 Enrollment model
 """
 
-from sqlalchemy import Column, ForeignKey
+from sqlalchemy import Boolean, Column, ForeignKey, true
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 
@@ -25,6 +25,7 @@ class Enrollment(BaseModel):
         index=True,
     )
     meta = Column(JSONB, nullable=True, default=dict)
+    is_active = Column(Boolean, nullable=False, default=True, server_default=true())
 
     entity = relationship("Entity", back_populates="enrollments")
     dimensions = relationship(

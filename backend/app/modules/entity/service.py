@@ -133,9 +133,13 @@ class EntityService:
         accessible_dv_ids: list[uuid.UUID] | None = None,
     ):
         """Build the base entity query with subqueries and dimension access scoping."""
+        # Count only active enrollments — the listing's "Enrollments"
+        # column represents the entity's current engagement. Inactive
+        # (ended / not-yet-started) enrollments live on the entity
+        # detail page where staff can see the full history.
         enrollment_count = (
             self.db.query(func.count(Enrollment.id))
-            .filter(Enrollment.entity_id == Entity.id)
+            .filter(Enrollment.entity_id == Entity.id, Enrollment.is_active.is_(True))
             .correlate(Entity)
             .scalar_subquery()
         )
