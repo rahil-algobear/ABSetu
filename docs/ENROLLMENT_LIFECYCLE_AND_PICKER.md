@@ -343,6 +343,14 @@ mode** + a **3-tab picker** that handles the full lifecycle.
 - `Added` tab uses parent-supplied participant data (no separate
   fetch).
 
+**Search normalization:** searching for `"auto test"` should match
+`"Auto-Test Beneficiary 48"`. Backend search currently does a literal
+ILIKE that gets tripped by hyphens, slashes, etc. Phase 3.1 normalizes
+both the search term and the stored value (strip non-alphanumerics,
+lowercase, then ILIKE) before matching. Applied to the meta field
+search columns used by the picker — narrow scope, no full-text-search
+infrastructure needed yet.
+
 **Pagination & sort per tab:**
 
 | Tab | Pagination | Sort | Rationale |
