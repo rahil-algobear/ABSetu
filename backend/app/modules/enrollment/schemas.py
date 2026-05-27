@@ -10,6 +10,7 @@ from app.common.schemas.base_response import BaseResponseSchema
 
 
 class DimensionInfo(BaseModel):
+    dimension_id: str
     dimension_key: str
     dimension_name: str
     value_id: str

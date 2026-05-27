@@ -119,6 +119,7 @@ export interface EntityType {
 }
 
 export interface DimensionInfo {
+  dimension_id: string;
   dimension_key: string;
   dimension_name: string;
   value_id: string;

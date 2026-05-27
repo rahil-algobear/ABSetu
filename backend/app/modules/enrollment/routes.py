@@ -90,6 +90,7 @@ def _build_enrollment_response(
         if dv and dv.dimension:
             dim_infos.append(
                 DimensionInfo(
+                    dimension_id=str(dv.dimension.id),
                     dimension_key=dv.dimension.key,
                     dimension_name=dv.dimension.name,
                     value_id=str(dv.id),
