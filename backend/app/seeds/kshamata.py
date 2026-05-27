@@ -460,6 +460,23 @@ SESSION_PARTICIPANT_FIELDS = [
 
 
 # ---------------------------------------------------------------------------
+# Meta Field Schemas — enrollment fields (apply to all enrollments)
+# Dimension fields reference UUIDs resolved at seed time.
+# (dimension_name, required, sort_order)
+# ---------------------------------------------------------------------------
+ENROLLMENT_DIMENSION_FIELDS = [
+    ("Programme", True, 0),
+    ("Location", True, 1),
+]
+
+# (label, required, sort_order)
+ENROLLMENT_DATE_FIELDS = [
+    ("Date of Admission", True, 2),
+    ("Date of Release", False, 3),
+]
+
+
+# ---------------------------------------------------------------------------
 # Meta Field Schemas — participant fields for Physical Health intervention
 # These fields appear when recording participant data for sessions
 # with Activity Type = Session, Dimension = Intervention,
@@ -925,6 +942,32 @@ def seed():
             activity_type_id=sessions_type.id,
         )
         print(f"  Ensured session meta field schema ({len(session_fields)} fields)")
+
+        # 7b-i. Enrollment fields (Programme + Location dimensions, admission/release dates)
+        enrollment_fields: list[dict] = []
+        for dim_name, required, sort_order in ENROLLMENT_DIMENSION_FIELDS:
+            enrollment_fields.append(
+                {
+                    "label": dim_name,
+                    "type": "dimension",
+                    "dimension_id": dim_name_to_id[dim_name],
+                    "required": required,
+                    "stage": "create",
+                    "sort_order": sort_order,
+                }
+            )
+        for label, required, sort_order in ENROLLMENT_DATE_FIELDS:
+            enrollment_fields.append(
+                {
+                    "label": label,
+                    "type": "date",
+                    "required": required,
+                    "stage": "both",
+                    "sort_order": sort_order,
+                }
+            )
+        meta_service.update_schema(org.id, "enrollment", enrollment_fields)
+        print(f"  Ensured enrollment meta field schema ({len(enrollment_fields)} fields)")
 
         # 7b-ii. Participant fields for Physical Health intervention (Beneficiary only)
         physical_health_dv = intervention_map.get("Physical Health")

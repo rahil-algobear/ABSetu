@@ -269,7 +269,19 @@ export default function EntityDetailPage() {
                   <p className="text-gray-500 text-sm">No enrollments</p>
                 ) : (
                   <div className="space-y-2">
-                    {enrollments.map((e) => (
+                    {enrollments.map((e) => {
+                      const dateFields = collectEnrollmentFields(
+                        allSchemas,
+                        entity.entity_type_id,
+                        e.dimensions?.map((d) => d.value_id) || [],
+                      ).filter((f) => f.type === "date" && f.visible !== false);
+                      // Optional date fields act as end-of-enrollment markers
+                      // (e.g. "Date of Release"). If any has a value, the
+                      // enrollment is considered released.
+                      const released = dateFields.some(
+                        (f) => !f.required && e.meta?.[f.key],
+                      );
+                      return (
                       <div
                         key={e.id}
                         className="flex justify-between items-center p-2 border rounded"
@@ -282,14 +294,23 @@ export default function EntityDetailPage() {
                               </Badge>
                             ))}
                           </div>
-                          <p className="text-xs text-gray-500">
-                            {formatDate(e.meta?.admission_date as string)}
-                            {e.meta?.release_date ? ` to ${formatDate(e.meta.release_date as string)}` : ""}
-                          </p>
+                          {dateFields.length > 0 && (
+                            <p className="text-xs text-gray-500">
+                              {dateFields
+                                .map((f) => {
+                                  const val = e.meta?.[f.key] as string | undefined;
+                                  return val
+                                    ? `${f.label}: ${formatDate(val)}`
+                                    : null;
+                                })
+                                .filter(Boolean)
+                                .join(" · ")}
+                            </p>
+                          )}
                         </div>
                         <div className="flex items-center gap-2">
-                          <Badge variant={e.meta?.release_date ? "secondary" : "default"}>
-                            {e.meta?.release_date ? "Released" : "Active"}
+                          <Badge variant={released ? "secondary" : "default"}>
+                            {released ? "Released" : "Active"}
                           </Badge>
                           <Can permission="enrollment:manage">
                             <Button
@@ -302,7 +323,8 @@ export default function EntityDetailPage() {
                           </Can>
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </>
