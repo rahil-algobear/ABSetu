@@ -36,7 +36,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Plus, Pencil, X, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
-import { formatDate } from "@/utils/date";
+import { formatDate, formatDateTime } from "@/utils/date";
 
 /**
  * Cascading dimension filter — reused from activities page pattern.
@@ -270,27 +270,62 @@ export default function EntityDetailPage() {
                 ) : (
                   <div className="space-y-2">
                     {enrollments.map((e) => {
-                      const nonDimensionFields = collectEnrollmentFields(
+                      const fieldPairs = collectEnrollmentFields(
                         allSchemas,
                         entity.entity_type_id,
                         e.dimensions?.map((d) => d.value_id) || [],
-                      ).filter((f) => f.type !== "dimension" && f.visible !== false);
+                      )
+                        .filter((f) => f.type !== "dimension" && f.visible !== false)
+                        .map((f) => {
+                          const val = e.meta?.[f.key];
+                          if (val === undefined || val === null || val === "") return null;
+                          let formatted: string;
+                          if (f.type === "boolean") formatted = val ? "Yes" : "No";
+                          else if (f.type === "date" && typeof val === "string")
+                            formatted = formatDate(val);
+                          else if (f.type === "datetime" && typeof val === "string")
+                            formatted = formatDateTime(val);
+                          else if (Array.isArray(val)) formatted = val.join(", ");
+                          else formatted = String(val);
+                          return { label: f.label, value: formatted };
+                        })
+                        .filter(
+                          (p): p is { label: string; value: string } => p !== null,
+                        );
                       return (
                         <div
                           key={e.id}
-                          className="flex justify-between items-start p-2 border rounded gap-2"
+                          className="flex items-start justify-between p-3 border rounded gap-3"
                         >
-                          <div className="flex-1 min-w-0">
+                          <div className="flex-1 min-w-0 space-y-1.5">
                             {e.dimensions && e.dimensions.length > 0 && (
-                              <div className="flex gap-1 mb-2 flex-wrap">
+                              <div className="flex gap-1 flex-wrap">
                                 {e.dimensions.map((dim) => (
-                                  <Badge key={dim.value_id} variant="secondary" className="text-xs">
+                                  <Badge
+                                    key={dim.value_id}
+                                    variant="secondary"
+                                    className="text-xs"
+                                  >
                                     {dim.value_name}
                                   </Badge>
                                 ))}
                               </div>
                             )}
-                            <MetaFieldDisplay fields={nonDimensionFields} values={e.meta} />
+                            {fieldPairs.length > 0 && (
+                              <p className="text-xs text-gray-600 leading-relaxed">
+                                {fieldPairs.map((p, i) => (
+                                  <span key={p.label}>
+                                    {i > 0 && (
+                                      <span className="text-gray-300 mx-1.5">·</span>
+                                    )}
+                                    <span className="text-gray-500">{p.label}:</span>{" "}
+                                    <span className="font-medium text-gray-800">
+                                      {p.value}
+                                    </span>
+                                  </span>
+                                ))}
+                              </p>
+                            )}
                           </div>
                           <Can permission="enrollment:manage">
                             <Button
