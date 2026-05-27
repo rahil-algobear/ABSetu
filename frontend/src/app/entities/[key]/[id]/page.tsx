@@ -373,63 +373,62 @@ export default function EntityDetailPage() {
                               ))}
                             </div>
                             <Can permission="enrollment:manage">
-                              <div className="flex items-center gap-1">
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => setEnrollmentAction({ enrollment: e })}
-                                >
-                                  <Pencil className="h-3.5 w-3.5" />
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="text-gray-400 hover:text-red-600 hover:bg-red-50"
-                                  onClick={() => {
-                                    if (
-                                      confirm(
-                                        "Delete this enrollment? This can't be undone.",
-                                      )
-                                    ) {
-                                      deleteEnrollmentMutation.mutate(e.id);
-                                    }
-                                  }}
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
-                              </div>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="text-gray-400 hover:text-red-600 hover:bg-red-50"
+                                onClick={() => {
+                                  if (
+                                    confirm(
+                                      "Delete this enrollment? This can't be undone.",
+                                    )
+                                  ) {
+                                    deleteEnrollmentMutation.mutate(e.id);
+                                  }
+                                }}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
                             </Can>
                           </div>
                           <Can permission="enrollment:manage">
-                            {isActive ? (
+                            <div className="flex items-center justify-between gap-2">
+                              {isActive ? (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                                  onClick={() =>
+                                    setEnrollmentAction({
+                                      enrollment: e,
+                                      initialIsActive: false,
+                                    })
+                                  }
+                                >
+                                  End enrollment
+                                </Button>
+                              ) : (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() =>
+                                    setEnrollmentAction({
+                                      enrollment: e,
+                                      initialIsActive: true,
+                                    })
+                                  }
+                                >
+                                  Start again
+                                </Button>
+                              )}
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="self-start text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
-                                onClick={() =>
-                                  setEnrollmentAction({
-                                    enrollment: e,
-                                    initialIsActive: false,
-                                  })
-                                }
+                                onClick={() => setEnrollmentAction({ enrollment: e })}
                               >
-                                End enrollment
+                                Edit
                               </Button>
-                            ) : (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="self-start"
-                                onClick={() =>
-                                  setEnrollmentAction({
-                                    enrollment: e,
-                                    initialIsActive: true,
-                                  })
-                                }
-                              >
-                                Start again
-                              </Button>
-                            )}
+                            </div>
                           </Can>
                         </div>
                       );
