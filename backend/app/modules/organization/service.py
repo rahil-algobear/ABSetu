@@ -361,6 +361,18 @@ class ListConfigService:
 
     # ── static (built-in) defaults ──────────────────────────────
 
+    def _entity_type_can_enroll(self, entity_type_id: str) -> bool:
+        """Whether the entity type allows enrollments. Defaults True if the
+        type can't be resolved (defensive — don't silently hide columns)."""
+        from app.modules.entity.model import EntityType
+
+        try:
+            et_uuid = uuid.UUID(entity_type_id)
+        except (ValueError, AttributeError):
+            return True
+        et = self.db.query(EntityType).filter_by(id=et_uuid).first()
+        return et.can_enroll if et else True
+
     def _static_defaults(self, scope: str) -> list[dict]:
         """Built-in columns that are always present."""
         if scope.startswith("entity:"):
@@ -375,7 +387,8 @@ class ListConfigService:
                     search_supported=True,
                 )
             )
-            cols.append(self._static_col("enrollment_count", "Enrollments", len(cols)))
+            if self._entity_type_can_enroll(scope[len("entity:") :]):
+                cols.append(self._static_col("enrollment_count", "Enrollments", len(cols)))
             cols.append(self._static_col("activity_count", "Activities", len(cols)))
             cols.append(
                 self._static_col(
