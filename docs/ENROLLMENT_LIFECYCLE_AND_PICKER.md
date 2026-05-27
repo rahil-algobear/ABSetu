@@ -299,66 +299,117 @@ a clear message instead of silently dropping the request.
 
 ---
 
-## Phase 3.1 — Consolidate participant edit & view states
+## Phase 3.1 — Per-section edit mode + picker restructure
 
 ### What
 
 Today the activity detail page has two modes for participants:
 
-- A **read-only view** with the smart picker button for adds.
-- An **Edit Participants** mode that loads everything into the
-  bulk SearchSelectParticipants form for editing or removal.
+- A **read-only view** with the smart picker button for atomic adds.
+- A **global Edit Participants** mode that loads every section into
+  the bulk SearchSelectParticipants form for editing or removal.
 
-The split was a v1 compromise — the picker handles atomic adds, but
-the bulk-edit mode lingers because it's the only way to remove a
-participant or edit per-participant meta (status, notes). Two modes
-for one section is confusing.
+The all-or-nothing edit mode is heavy and risks clobbering atomic
+adds from the picker. Phase 3.1 replaces it with **per-section edit
+mode** + a **3-tab picker** that handles the full lifecycle.
 
 ### Target shape
 
-One mode. The read-only view becomes the single surface:
+**View mode (per section):**
+- `+ <Type>` button → opens the picker.
+- `Edit` button → enters edit mode for *this section only*.
 
-- **Add** stays as today: the smart picker via the `+` button.
-- **Remove** moves inline — small × per participant row, confirm
-  before firing.
-- **Per-participant meta** (status, attendance, notes) becomes
-  editable inline in the table — same DynamicMetaForm cells, just
-  rendered in-place rather than behind a modal-switch.
+**Section edit mode:**
+- Section becomes the per-row editable table (Name + meta columns
+  + `✕` remove icon per row).
+- Search input at the top of the section — client-side filter over
+  the loaded rows.
+- `Save` / `Cancel` at the bottom — section-scoped bulk save.
+- **No `+ Add` here.** User exits edit mode to add via the picker.
+  Deferred picker-in-edit-mode noted below; ship simpler v1 first.
+- Other sections stay read-only while one section is in edit mode.
 
-The "Edit Participants" button goes away. `SearchSelectParticipants`
-can be retired from the activity detail page entirely (still used by
-the activity create page until Phase 3.2 below extends the picker
-there too).
+**Picker (3 tabs):**
+- `Added (N)` / `Enrolled (N)` / `All (N)` — default `Enrolled`.
+- `Enrolled` is the actionable cohort — currently-enrolled
+  beneficiaries with active enrollment in scope.
+- `Added` shows currently-added participants (informational
+  context; remove still happens via section edit mode).
+- `All` requires search input before showing rows — no top-50
+  default fetch. Empty state: "Type to search…".
+- Counts reflect absolute totals when search is active; the visible
+  list is filtered.
+- Server-side search via existing `entityApi.listPaginated`.
+- `Added` tab uses parent-supplied participant data (no separate
+  fetch).
 
-### Why this matters
+### What's gone
 
-- Removes a confusing UX state (no more "switch into edit mode to
-  remove someone").
-- Eliminates the bulk-save flow's footgun: the existing endpoint
-  `POST /activities/{id}/participants` deletes-and-recreates every
-  participant on save, which would clobber the picker's atomic adds
-  if they raced.
-- Makes the picker the unambiguous source of truth for write actions.
+- The global `Edit Participants` CTA at the top of the participants
+  card.
+- The current `POST /activities/{id}/participants` bulk-replace
+  endpoint — replaced by a section-scoped variant.
+- `SearchSelectParticipants` usage on the activity detail page.
+  (Still in use on the activity create page until Phase 3.2 below.)
 
-### Scope
+### Backend
 
-- New backend endpoint(s) for atomic per-participant remove + meta
-  update (`DELETE` + `PATCH` on a participant row).
-- Refactor the activity detail page's participants section:
-  - Drop the `editingSections` toggle.
-  - Replace `SearchSelectParticipants` usage in this surface.
-  - Inline remove icon + editable meta cells.
-- Leave the activity create page alone for now — it still needs the
-  bulk flow because there's no activity_id yet to call atomic
-  endpoints against. Addressed by **Phase 3.2** (defer): activity
-  create flow → save activity first, then open picker.
+**`PUT /activities/{id}/participants?section_key=<key>`**
+- Replaces just that section's participants with the submitted set.
+- Body: `{ records: [{ participant_id, status?, meta? }] }`.
+- Single transaction; conflicts with concurrent picker adds resolved
+  by last-writer-wins (acceptable for typical NGO scale).
+
+### Frontend
+
+- Each section in the participants card gets an `Edit` button.
+- Section edit mode renders the existing per-row table from
+  SearchSelectParticipants, lifted into the activity page.
+- Search input filters the table client-side.
+- `✕` icon per row marks for removal (local state; flushed on Save).
+- Save calls the section-scoped endpoint, refreshes the participants
+  query, exits edit mode.
 
 ### Open questions
 
-- For editable meta cells with `captureStatus`: optimistic update or
-  wait-for-server? Lean optimistic given the call shape.
-- Permission key for remove — reuse `activity:create`, or split out
-  `activity:participant:remove`? Reuse for v1, split later if NGOs ask.
+- Permission key for the section-scoped bulk endpoint — reuse
+  `activity:create` (consistent with current bulk endpoint), or
+  split out `activity:participant:manage`? Reuse for v1.
+- For meta cells with `capture_status`: lean optimistic update? In
+  edit mode, all changes are local until Save fires — no optimism
+  question. The picker's atomic adds are already optimistic via
+  query invalidation.
+
+### Deferred — Phase 3.2
+
+Make the activity create page route through the picker too. Shape:
+create activity in one step, then participants get added via picker
+against the new id. Retires the bulk-save endpoint entirely.
+
+### Deferred — picker-in-edit-mode
+
+For v1 the `+ <Type>` button is hidden while a section is in edit
+mode. If user needs to add a new participant mid-edit, they
+Save/Cancel first. If user feedback shows this is annoying enough
+to fix:
+
+- Picker stays atomic (fires the backend write immediately).
+- Edit mode subscribes to the participants query; when it refreshes,
+  reconciles server data with the user's pending dirty meta edits
+  (preserve user edits on existing rows; add new server rows with
+  empty meta for the user to fill).
+- Standard "form local state vs. server query" pattern — not hard,
+  just unnecessary scope for v1.
+
+### Deferred — picker placeholder for unsupplied enrollment dims
+
+In the picker's `Enroll & Add` and `Create new` flows, if the
+enrollment form-builder tracks a dimension the activity *doesn't*
+supply, the field currently renders a small italic placeholder
+("configure via the entity detail page") rather than a cascading
+dimension select. Rare in practice (the enrollment usually tracks a
+subset of activity dims, not extras) — fix by building a proper
+inline dimension picker when an org hits the case.
 
 ### Deferred — Phase 3.2
 
