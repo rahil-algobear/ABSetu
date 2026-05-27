@@ -627,6 +627,7 @@ function EnrollmentForm({
         dimensionValueIds.find((dvId) =>
           dimValues.some((dv) => dv.id === dvId),
         ) || "";
+      const isFieldDisabled = createDisabledKeys.has(field.key);
       return (
         <div key={`dim-${field.key}`}>
           <label className="text-sm font-medium">
@@ -634,7 +635,7 @@ function EnrollmentForm({
             {field.required && <span className="text-red-500 ml-0.5">*</span>}
           </label>
           <select
-            className="w-full mt-1 border rounded-md p-2 text-sm"
+            className="w-full mt-1 border rounded-md p-2 text-sm disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
             value={currentSelection}
             onChange={(e) => {
               const newId = e.target.value;
@@ -644,6 +645,7 @@ function EnrollmentForm({
               setDimensionValueIds(newId ? [...otherIds, newId] : otherIds);
             }}
             required={field.required}
+            disabled={isFieldDisabled}
           >
             <option value="">Select {field.label}...</option>
             {filtered.map((dv) => (

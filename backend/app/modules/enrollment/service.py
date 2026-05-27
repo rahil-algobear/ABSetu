@@ -22,7 +22,7 @@ class EnrollmentService:
         return (
             self.db.query(Enrollment)
             .filter_by(entity_id=entity_id)
-            .order_by(Enrollment.meta["admission_date"].astext.desc())
+            .order_by(Enrollment.created_at.asc())
             .all()
         )
 
@@ -30,7 +30,7 @@ class EnrollmentService:
         return (
             self.db.query(Enrollment)
             .filter_by(organization_id=org_id)
-            .order_by(Enrollment.meta["admission_date"].astext.desc())
+            .order_by(Enrollment.created_at.asc())
             .all()
         )
 
