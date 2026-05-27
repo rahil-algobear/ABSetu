@@ -229,6 +229,10 @@ export interface EntityListParams {
   with_enrollment_status_for_activity?: string;
   enrollment_status_filter?: "active_in_scope" | "no_active_in_scope";
   ids?: string;
+  /** Comma-separated entity UUIDs to exclude from results. Used by the
+   *  picker to subtract already-added participants server-side so the
+   *  returned count is the actual remaining-to-add cohort. */
+  exclude_ids?: string;
 }
 
 export interface EntityFilterDefinition {
