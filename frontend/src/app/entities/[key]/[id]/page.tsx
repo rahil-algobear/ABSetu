@@ -739,7 +739,7 @@ function EnrollmentForm({
 
       {formFields.length > 0 && (
         <div>
-          <label className="text-sm font-medium">Status</label>
+          <label className="block text-sm font-medium">Status</label>
           <div className="inline-flex mt-1 rounded-md border overflow-hidden">
             <button
               type="button"
