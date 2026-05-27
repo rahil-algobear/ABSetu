@@ -472,15 +472,18 @@ export default function ActivityDetailPage() {
                 const hasStatus = captureStatus || sectionParticipants.some((p) => p.status);
                 const useTable = hasStatus || metaFields.length > 0;
 
-                // Phase 3 smart picker — show inline "+ Add" when the field
-                // points at an enrollable entity type AND the activity has
-                // dimensions. Other cases continue to rely on the existing
-                // Edit Participants flow (bulk save).
+                // Phase 3 picker — shown for every entity_list / user_list
+                // section. Mode is derived per-section: Smart for
+                // enrollable entity types on a dimensioned activity,
+                // Basic for the rest.
                 const fieldEntityType = field.type === "entity_list"
                   ? entityTypes.find((t) => t.id === field.entity_type_id)
                   : null;
+                const isUserSection = field.type === "user_list";
                 const smartPickerEligible =
-                  !!fieldEntityType?.can_enroll && activity.dimensions.length > 0;
+                  !isUserSection
+                  && !!fieldEntityType?.can_enroll
+                  && activity.dimensions.length > 0;
                 const alreadyAdded = sectionParticipants.map((p) => ({
                   id: p.participant_id,
                   name: getParticipantName(p),
@@ -500,8 +503,11 @@ export default function ActivityDetailPage() {
                         </Badge>
                       </h3>
                       <div className="flex items-center gap-2">
-                        {/* Picker hidden while any section is in edit mode (v1) */}
-                        {smartPickerEligible && fieldEntityType && !anySectionEditing && (
+                        {/* Picker hidden while any section is in edit mode
+                            (v1). Shown for every entity_list / user_list
+                            section — only Smart mode requires the entity
+                            type + activity-dims combo. */}
+                        {!anySectionEditing && (isUserSection || fieldEntityType) && (
                           <Can permission="activity:create">
                             <ParticipantPicker
                               activityId={activity.id}
@@ -512,8 +518,10 @@ export default function ActivityDetailPage() {
                                 value_name: d.value_name,
                               }))}
                               sectionKey={sectionKey}
-                              entityTypeId={fieldEntityType.id}
+                              entityTypeId={fieldEntityType?.id}
                               entityTypeName={getFieldLabel(field)}
+                              participantKind={isUserSection ? "user" : "entity"}
+                              smart={smartPickerEligible}
                               alreadyAdded={alreadyAdded}
                               onAdded={() => {
                                 queryClient.invalidateQueries({

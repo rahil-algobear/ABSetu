@@ -1,22 +1,22 @@
 "use client";
 
 /**
- * Phase 3 smart participant picker. Replaces SearchSelectParticipants for
- * entity_list fields where the entity type is enrollable AND the activity
- * carries dimensions. Calls the atomic /participants/{add|enroll_and_add}
- * endpoints directly — no client-side orchestration.
+ * Phase 3 participant picker. Replaces SearchSelectParticipants for all
+ * entity_list and user_list fields on an activity. Calls the atomic
+ * /participants/{add|enroll_and_add|create_and_add} endpoints directly
+ * — no client-side orchestration.
  *
- * Two row states (Re-enroll deliberately dropped — see doc):
- *  - Active enrollment in scope    → [+ Add]
- *  - No active enrollment in scope → [Enroll & Add]
- *
- * "Enroll & Add" opens an in-component mini enrollment form for required
- * fields. The activity's dimensions are auto-applied (locked at the top
- * of the form as context).
- *
- * "Create new beneficiary" is intentionally deferred to a follow-up — for
- * v1, admins create beneficiaries via the entities listing and pick them
- * here.
+ * Three modes (derived from props):
+ *  - Smart (entity, enrollable, activity has dimensions): 3 tabs
+ *    (Added/Enrolled/All), [+ Add] for active-in-scope rows,
+ *    [Enroll & Add] for rows with no active enrollment in scope,
+ *    plus a [Create new …] CTA.
+ *  - Basic entity (non-enrollable type OR dimensionless activity):
+ *    2 tabs (Added/All), every row gets [+ Add] directly. No enroll
+ *    flow. Create-new is still offered for entity types that support
+ *    it.
+ *  - User (user_list section): 2 tabs (Added/All), direct [+ Add].
+ *    No create-new — admins create users via the user-admin page.
  */
 
 import { useMemo, useState } from "react";
@@ -25,11 +25,13 @@ import {
   activityApi,
   entityApi,
   metaFieldSchemaApi,
+  userApi,
 } from "@/services/api";
 import {
   Entity,
   MetaFieldDefinition,
   MetaFieldSchemaItem,
+  UserListItem,
 } from "@/types";
 import { collectEnrollmentFields, getFieldsForScope } from "@/utils/meta-fields";
 import { Button } from "@/components/ui/button";
@@ -53,12 +55,23 @@ interface AlreadyAddedParticipant {
 
 interface ParticipantPickerProps {
   activityId: string;
-  /** Dimensions the activity is scoped to. The picker matches rows
-   *  against this set and auto-applies them to new enrollments. */
+  /** Dimensions the activity is scoped to. Used to derive scope for
+   *  the Enrolled tab and to auto-apply onto new enrollments. Ignored
+   *  outside Smart mode. */
   activityDimensions: ActivityDimensionValue[];
   sectionKey: string;
-  entityTypeId: string;
+  /** Entity type ID for entity sections. Required when
+   *  participantKind === "entity". Ignored for user sections. */
+  entityTypeId?: string;
+  /** Human label for the trigger button and dialog title
+   *  (e.g. "Beneficiary", "Facilitator", "Users"). */
   entityTypeName: string;
+  /** "entity" → list/search the entity API. "user" → list/search
+   *  the users API. Default "entity". */
+  participantKind?: "entity" | "user";
+  /** True only for Smart mode: entity, enrollable type, activity has
+   *  dimensions. Controls the Enrolled tab + Enroll & Add path. */
+  smart?: boolean;
   /** Currently-added participants in this section. Picker uses these
    *  for the Added tab (no separate fetch needed) and to filter them
    *  out of the Enrolled tab. */
@@ -81,6 +94,8 @@ export function ParticipantPicker({
   sectionKey,
   entityTypeId,
   entityTypeName,
+  participantKind = "entity",
+  smart = true,
   alreadyAdded,
   onAdded,
   triggerLabel,
@@ -88,19 +103,23 @@ export function ParticipantPicker({
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const [tab, setTab] = useState<PickerTab>("enrolled");
+  // Smart mode opens on Enrolled (the most useful list). Non-smart
+  // modes have no Enrolled tab — they default to All so typing the
+  // search box starts working immediately.
+  const [tab, setTab] = useState<PickerTab>(smart ? "enrolled" : "all");
   const [enrollFor, setEnrollFor] = useState<Entity | null>(null);
   const [showCreateNew, setShowCreateNew] = useState(false);
+
+  const isUserKind = participantKind === "user";
 
   const alreadyAddedIds = useMemo(
     () => new Set(alreadyAdded.map((p) => p.id)),
     [alreadyAdded],
   );
 
-  // Enrolled cohort — backend filters to active_in_scope server-side,
-  // so the total count is accurate even at scale (no 500-row cap on
-  // client-side filtering). Limit caps a single response but the total
-  // count field reflects the full filtered set.
+  // --- Smart mode: Enrolled cohort. Skipped for non-smart / user. ---
+  // Backend filters to active_in_scope server-side so the total count
+  // is accurate even at scale (no 500-row cap on client-side filtering).
   const { data: enrolledResp, isLoading: enrolledLoading } = useQuery({
     queryKey: ["picker-enrolled", entityTypeId, activityId],
     queryFn: () =>
@@ -110,14 +129,13 @@ export function ParticipantPicker({
         enrollment_status_filter: "active_in_scope",
         limit: 500,
       }),
-    enabled: open,
+    enabled: open && smart && !isUserKind && !!entityTypeId,
   });
   const enrolledEntities: Entity[] = enrolledResp?.data || [];
   const enrolledTotal = enrolledResp?.count ?? 0;
 
-  // Total count of entities of this type (for the All tab badge,
-  // shown whether or not user is searching). limit=1 because we
-  // only need the count, not the rows.
+  // --- All tab: total count (entity sections only — users come from
+  //     userApi.list() below which already returns everything). ---
   const { data: totalResp } = useQuery({
     queryKey: ["picker-total", entityTypeId],
     queryFn: () =>
@@ -125,24 +143,41 @@ export function ParticipantPicker({
         entity_type_id: entityTypeId,
         limit: 1,
       }),
-    enabled: open,
+    enabled: open && !isUserKind && !!entityTypeId,
   });
-  const allTotal = totalResp?.count ?? 0;
 
-  // Search query — only fires on the All tab when the user has typed.
-  // Backend uses normalize=True so "auto test" matches "Auto-Test 48".
+  // --- All tab: search results. Entity sections paginate via server
+  //     search; user sections client-filter the full user list. ---
   const { data: searchResp, isLoading: searchLoading } = useQuery({
     queryKey: ["picker-search", entityTypeId, activityId, search],
     queryFn: () =>
       entityApi.listPaginated({
         entity_type_id: entityTypeId,
-        with_enrollment_status_for_activity: activityId,
+        // Only include enrollment status in Smart mode — saves the
+        // server work we don't need anywhere else.
+        with_enrollment_status_for_activity: smart ? activityId : undefined,
         search,
         limit: 50,
       }),
-    enabled: open && tab === "all" && search.trim().length > 0,
+    enabled:
+      open &&
+      tab === "all" &&
+      search.trim().length > 0 &&
+      !isUserKind &&
+      !!entityTypeId,
   });
   const searchEntities: Entity[] = searchResp?.data || [];
+
+  // --- User mode: full users list. List is small (org staff), so
+  //     fetching once and client-filtering is fine. ---
+  const { data: allUsers = [], isLoading: usersLoading } = useQuery<UserListItem[]>({
+    queryKey: ["picker-users"],
+    queryFn: userApi.list,
+    enabled: open && isUserKind,
+  });
+  const allUsersTotal = allUsers.length;
+
+  const allTotal = isUserKind ? allUsersTotal : (totalResp?.count ?? 0);
 
   // Client-side filter helper for tabs that aren't search-driven.
   const matchesSearch = (name: string) => {
@@ -156,6 +191,9 @@ export function ParticipantPicker({
     ) as string | undefined;
     return firstStringVal || e.code || e.id;
   };
+
+  const getUserName = (u: UserListItem): string =>
+    `${u.first_name || ""} ${u.last_name || ""}`.trim() || u.mobile_number;
 
   // Per-tab visible rows.
   const addedRows = useMemo(
@@ -175,10 +213,18 @@ export function ParticipantPicker({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [enrolledEntities, alreadyAddedIds, search],
   );
+  const userRows = useMemo(
+    () =>
+      allUsers
+        .filter((u) => matchesSearch(getUserName(u)))
+        .sort((a, b) => getUserName(a).localeCompare(getUserName(b))),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [allUsers, search],
+  );
 
   // Counts — absolute totals (not filtered by the current search).
   // Enrolled = total active_in_scope (from server) minus those already
-  // added. Added = parent-supplied count. All = total entities of type.
+  // added. Added = parent-supplied count. All = total of the source.
   const addedCount = alreadyAdded.length;
   const alreadyAddedInScopeCount = enrolledEntities.filter((e) =>
     alreadyAddedIds.has(e.id),
@@ -194,10 +240,11 @@ export function ParticipantPicker({
   };
 
   const addMutation = useMutation({
-    mutationFn: (entityId: string) =>
+    mutationFn: (participantId: string) =>
       activityApi.pickerAdd(activityId, {
-        entity_id: entityId,
+        entity_id: participantId,
         section_key: sectionKey,
+        participant_type: isUserKind ? "user" : "entity",
       }),
     onSuccess: () => {
       toast.success(`${entityTypeName} added`);
@@ -211,7 +258,7 @@ export function ParticipantPicker({
   const close = () => {
     setOpen(false);
     setSearch("");
-    setTab("enrolled");
+    setTab(smart ? "enrolled" : "all");
     setEnrollFor(null);
   };
 
@@ -246,12 +293,14 @@ export function ParticipantPicker({
               count={addedCount}
               onClick={() => setTab("added")}
             />
-            <TabPill
-              active={tab === "enrolled"}
-              label="Enrolled"
-              count={enrolledCount}
-              onClick={() => setTab("enrolled")}
-            />
+            {smart && (
+              <TabPill
+                active={tab === "enrolled"}
+                label="Enrolled"
+                count={enrolledCount}
+                onClick={() => setTab("enrolled")}
+              />
+            )}
             <TabPill
               active={tab === "all"}
               label="All"
@@ -283,7 +332,7 @@ export function ParticipantPicker({
               )
             )}
 
-            {tab === "enrolled" && (
+            {smart && tab === "enrolled" && (
               enrolledLoading ? (
                 <p className="text-sm text-gray-500 p-3">Loading…</p>
               ) : enrolledRows.length === 0 ? (
@@ -296,8 +345,11 @@ export function ParticipantPicker({
                 enrolledRows.map((e) => (
                   <PickerRow
                     key={e.id}
-                    entity={e}
+                    name={getName(e)}
+                    subtitle={"Enrolled here"}
                     alreadyAdded={false}
+                    canEnrollAndAdd={true}
+                    activeInScope={true}
                     onAdd={() => addMutation.mutate(e.id)}
                     onEnrollAndAdd={() => setEnrollFor(e)}
                     pending={addMutation.isPending}
@@ -306,7 +358,33 @@ export function ParticipantPicker({
               )
             )}
 
-            {tab === "all" && (
+            {tab === "all" && isUserKind && (
+              usersLoading ? (
+                <p className="text-sm text-gray-500 p-3">Loading…</p>
+              ) : userRows.length === 0 ? (
+                <p className="text-sm text-gray-500 p-3">
+                  {search.trim()
+                    ? `No ${entityTypeName.toLowerCase()} match.`
+                    : `No ${entityTypeName.toLowerCase()} available.`}
+                </p>
+              ) : (
+                userRows.map((u) => (
+                  <PickerRow
+                    key={u.id}
+                    name={getUserName(u)}
+                    subtitle={u.role_name || undefined}
+                    alreadyAdded={alreadyAddedIds.has(u.id)}
+                    canEnrollAndAdd={false}
+                    activeInScope={true}
+                    onAdd={() => addMutation.mutate(u.id)}
+                    onEnrollAndAdd={() => {}}
+                    pending={addMutation.isPending}
+                  />
+                ))
+              )
+            )}
+
+            {tab === "all" && !isUserKind && (
               !search.trim() ? (
                 <p className="text-sm text-gray-500 p-3">
                   Type to search {entityTypeName.toLowerCase()}…
@@ -318,35 +396,55 @@ export function ParticipantPicker({
                   No {entityTypeName.toLowerCase()} match.
                 </p>
               ) : (
-                searchEntities.map((e) => (
-                  <PickerRow
-                    key={e.id}
-                    entity={e}
-                    alreadyAdded={alreadyAddedIds.has(e.id)}
-                    onAdd={() => addMutation.mutate(e.id)}
-                    onEnrollAndAdd={() => setEnrollFor(e)}
-                    pending={addMutation.isPending}
-                  />
-                ))
+                searchEntities.map((e) => {
+                  const activeInScope =
+                    smart && e.enrollment_status === "active_in_scope";
+                  return (
+                    <PickerRow
+                      key={e.id}
+                      name={getName(e)}
+                      subtitle={
+                        smart
+                          ? activeInScope
+                            ? "Enrolled here"
+                            : "Not enrolled in scope"
+                          : undefined
+                      }
+                      alreadyAdded={alreadyAddedIds.has(e.id)}
+                      canEnrollAndAdd={smart}
+                      activeInScope={smart ? activeInScope : true}
+                      onAdd={() => addMutation.mutate(e.id)}
+                      onEnrollAndAdd={() => setEnrollFor(e)}
+                      pending={addMutation.isPending}
+                    />
+                  );
+                })
               )
             )}
           </div>
 
-          <div className="pt-2 border-t">
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              onClick={() => setShowCreateNew(true)}
-            >
-              <Plus className="h-4 w-4 mr-1" />
-              Create new {entityTypeName.toLowerCase()}
-            </Button>
-          </div>
+          {/* "Create new …" only for entity sections. Smart sections
+              run create + enrollment together via the combined modal;
+              basic-entity sections defer to the regular entity-create
+              page. User sections never get a create CTA — admins
+              manage users via /admin/users. */}
+          {!isUserKind && smart && entityTypeId && (
+            <div className="pt-2 border-t">
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={() => setShowCreateNew(true)}
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                Create new {entityTypeName.toLowerCase()}
+              </Button>
+            </div>
+          )}
         </div>
       </Dialog>
 
-      {enrollFor && (
+      {enrollFor && smart && (
         <EnrollAndAddModal
           entity={enrollFor}
           activityId={activityId}
@@ -360,7 +458,7 @@ export function ParticipantPicker({
         />
       )}
 
-      {showCreateNew && (
+      {showCreateNew && smart && entityTypeId && (
         <CreateAndAddModal
           activityId={activityId}
           activityDimensions={activityDimensions}
@@ -411,45 +509,45 @@ function TabPill({
 }
 
 function PickerRow({
-  entity,
+  name,
+  subtitle,
   alreadyAdded,
+  canEnrollAndAdd,
+  activeInScope,
   onAdd,
   onEnrollAndAdd,
   pending,
 }: {
-  entity: Entity;
+  name: string;
+  subtitle?: string;
   alreadyAdded: boolean;
+  /** Smart mode entity row → may surface the Enroll & Add button when
+   *  the row isn't active-in-scope. False for non-smart and user rows. */
+  canEnrollAndAdd: boolean;
+  /** In Smart mode, distinguishes the row's available action. Non-smart
+   *  and user rows pass `true` so the direct + Add button shows. */
+  activeInScope: boolean;
   onAdd: () => void;
   onEnrollAndAdd: () => void;
   pending: boolean;
 }) {
-  const displayName =
-    Object.values(entity.meta || {})
-      .find((v) => typeof v === "string" && v) as string | undefined ||
-    entity.code ||
-    entity.id;
-
-  const isActiveInScope = entity.enrollment_status === "active_in_scope";
-
   return (
     <div className="flex items-center justify-between gap-3 px-3 py-2">
       <div className="min-w-0">
-        <div className="text-sm font-medium text-gray-800 truncate">
-          {displayName}
-        </div>
-        <div className="text-xs text-gray-500">
-          {isActiveInScope ? "Enrolled here" : "Not enrolled in scope"}
-        </div>
+        <div className="text-sm font-medium text-gray-800 truncate">{name}</div>
+        {subtitle && (
+          <div className="text-xs text-gray-500 truncate">{subtitle}</div>
+        )}
       </div>
       {alreadyAdded ? (
         <span className="text-xs text-gray-500 px-2">✓ Added</span>
-      ) : isActiveInScope ? (
-        <Button size="sm" variant="outline" onClick={onAdd} disabled={pending}>
-          + Add
-        </Button>
-      ) : (
+      ) : canEnrollAndAdd && !activeInScope ? (
         <Button size="sm" onClick={onEnrollAndAdd} disabled={pending}>
           Enroll &amp; Add
+        </Button>
+      ) : (
+        <Button size="sm" variant="outline" onClick={onAdd} disabled={pending}>
+          + Add
         </Button>
       )}
     </div>

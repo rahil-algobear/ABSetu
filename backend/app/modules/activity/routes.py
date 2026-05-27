@@ -567,7 +567,11 @@ def _participant_response(p) -> dict:
 
 
 def _create_picker_participant(
-    db: Session, activity_id: uuid.UUID, entity_id: uuid.UUID, section_key: str
+    db: Session,
+    activity_id: uuid.UUID,
+    entity_id: uuid.UUID,
+    section_key: str,
+    participant_type: str = "entity",
 ):
     """Common tail of every picker action — creates the ActivityParticipant
     row. Caller is responsible for the surrounding transaction."""
@@ -577,7 +581,7 @@ def _create_picker_participant(
 
     p = ActivityParticipant(
         activity_id=activity_id,
-        participant_type="entity",
+        participant_type=participant_type,
         participant_id=entity_id,
         section_key=section_key,
     )
@@ -586,7 +590,7 @@ def _create_picker_participant(
         db.flush()
     except SAIntegrityError:
         db.rollback()
-        raise ValidationError("This beneficiary is already a participant in this activity.")
+        raise ValidationError("This participant is already in this activity.")
     return p
 
 
@@ -665,55 +669,66 @@ def picker_add(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Smart-picker action: beneficiary already has an active enrollment
-    in scope (verified server-side). Just create the ActivityParticipant.
+    """Add a participant via the picker.
 
-    Used for both Smart mode active-in-scope rows and Basic mode rows
-    (non-enrollable entity types or dimensionless activities) — those
-    just skip the scope verification."""
+    Smart-mode entity rows: beneficiary already has an active enrollment
+    in scope (verified server-side here). Basic-mode entity rows (non-
+    enrollable type or dimensionless activity) and user rows skip the
+    scope check entirely."""
     from app.modules.enrollment.model import Enrollment
 
-    entity_uuid = uuid.UUID(data.entity_id)
-    # Re-derive correctness when activity has dimensions AND the entity
-    # type is enrollable. Otherwise (Basic mode) skip the scope check.
-    activity_dv_ids = {ad.dimension_value_id for ad in (activity.dimensions or [])}
-    if activity_dv_ids:
-        from app.common.helpers.enrollment_scope import enrollment_in_activity_scope
-        from app.modules.entity.model import Entity
+    participant_uuid = uuid.UUID(data.entity_id)
 
-        entity = (
-            db.query(Entity)
-            .filter_by(id=entity_uuid, organization_id=current_user.organization_id)
-            .first()
-        )
-        if not entity:
-            raise ValidationError("Beneficiary not found in this organization.")
-        if entity.entity_type.can_enroll:
-            actives = (
-                db.query(Enrollment)
-                .filter(
-                    Enrollment.entity_id == entity_uuid,
-                    Enrollment.is_active.is_(True),
-                )
-                .all()
-            )
-            in_scope = any(
-                enrollment_in_activity_scope(
-                    db,
-                    current_user.organization_id,
-                    entity.entity_type_id,
-                    {d.dimension_value_id for d in (e.dimensions or [])},
-                    activity_dv_ids,
-                )
-                for e in actives
-            )
-            if not in_scope:
-                raise ValidationError(
-                    "This beneficiary has no active enrollment matching this "
-                    "activity's scope. Use Enroll & Add instead."
-                )
+    # User participants skip all entity/enrollment checks — they're
+    # facilitators/staff, not beneficiaries.
+    if data.participant_type == "entity":
+        # Re-derive correctness when activity has dimensions AND the
+        # entity type is enrollable. Otherwise (Basic mode) skip the
+        # scope check.
+        activity_dv_ids = {ad.dimension_value_id for ad in (activity.dimensions or [])}
+        if activity_dv_ids:
+            from app.common.helpers.enrollment_scope import enrollment_in_activity_scope
+            from app.modules.entity.model import Entity
 
-    p = _create_picker_participant(db, activity.id, entity_uuid, data.section_key)
+            entity = (
+                db.query(Entity)
+                .filter_by(id=participant_uuid, organization_id=current_user.organization_id)
+                .first()
+            )
+            if not entity:
+                raise ValidationError("Beneficiary not found in this organization.")
+            if entity.entity_type.can_enroll:
+                actives = (
+                    db.query(Enrollment)
+                    .filter(
+                        Enrollment.entity_id == participant_uuid,
+                        Enrollment.is_active.is_(True),
+                    )
+                    .all()
+                )
+                in_scope = any(
+                    enrollment_in_activity_scope(
+                        db,
+                        current_user.organization_id,
+                        entity.entity_type_id,
+                        {d.dimension_value_id for d in (e.dimensions or [])},
+                        activity_dv_ids,
+                    )
+                    for e in actives
+                )
+                if not in_scope:
+                    raise ValidationError(
+                        "This beneficiary has no active enrollment matching this "
+                        "activity's scope. Use Enroll & Add instead."
+                    )
+
+    p = _create_picker_participant(
+        db,
+        activity.id,
+        participant_uuid,
+        data.section_key,
+        participant_type=data.participant_type,
+    )
     db.commit()
     db.refresh(p)
     return _participant_response(p)
