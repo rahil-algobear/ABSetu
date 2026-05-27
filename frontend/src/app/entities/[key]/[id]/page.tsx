@@ -123,6 +123,15 @@ export default function EntityDetailPage() {
     [activities, activityTypeFilter]
   );
 
+  const filteredEnrollments = useMemo(
+    () => enrollments.filter((e) => {
+      if (enrollmentTab === "active") return e.is_active;
+      if (enrollmentTab === "ended") return !e.is_active;
+      return true;
+    }),
+    [enrollments, enrollmentTab],
+  );
+
   const canEnroll = entity?.entity_type_can_enroll !== false;
 
   const editDisabledKeys = useMemo(() => {
@@ -316,13 +325,17 @@ export default function EntityDetailPage() {
                         </button>
                       ))}
                     </div>
+                    {filteredEnrollments.length === 0 ? (
+                      <p className="text-gray-500 text-sm">
+                        {enrollmentTab === "active"
+                          ? "No active enrollments."
+                          : enrollmentTab === "ended"
+                            ? "No inactive enrollments."
+                            : "No enrollments."}
+                      </p>
+                    ) : (
                     <div className="grid grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-2">
-                      {enrollments
-                        .filter((e) => {
-                          if (enrollmentTab === "active") return e.is_active;
-                          if (enrollmentTab === "ended") return !e.is_active;
-                          return true;
-                        })
+                      {filteredEnrollments
                         .map((e) => {
                       const dimensionPairs = (e.dimensions || []).map((dim) => ({
                         label: dim.dimension_name,
@@ -436,6 +449,7 @@ export default function EntityDetailPage() {
                       );
                     })}
                     </div>
+                    )}
                   </>
                 )}
               </>
