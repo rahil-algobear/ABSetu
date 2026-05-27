@@ -606,9 +606,10 @@ export default function ActivityDetailPage() {
                   : null;
                 const smartPickerEligible =
                   !!fieldEntityType?.can_enroll && activity.dimensions.length > 0;
-                const alreadyAddedIds = new Set(
-                  sectionParticipants.map((p) => p.participant_id),
-                );
+                const alreadyAdded = sectionParticipants.map((p) => ({
+                  id: p.participant_id,
+                  name: getParticipantName(p),
+                }));
 
                 return (
                   <div key={sectionKey}>
@@ -633,14 +634,11 @@ export default function ActivityDetailPage() {
                             sectionKey={sectionKey}
                             entityTypeId={fieldEntityType.id}
                             entityTypeName={getFieldLabel(field)}
-                            alreadyAddedIds={alreadyAddedIds}
+                            alreadyAdded={alreadyAdded}
                             onAdded={() => {
                               queryClient.invalidateQueries({
                                 queryKey: ["participants", id],
                               });
-                              // New beneficiary (if created via picker) needs
-                              // to land in the entity name-lookup cache, else
-                              // the participant row renders as a UUID.
                               queryClient.invalidateQueries({
                                 queryKey: ["entities-for-sections"],
                               });
