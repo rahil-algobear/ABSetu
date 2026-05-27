@@ -179,6 +179,20 @@ def update_enrollment(
     return _build_enrollment_response(enrollment)
 
 
+@enrollment_router.delete(
+    "/{enrollment_id}",
+    dependencies=[Depends(require_permissions("enrollment:manage"))],
+)
+def delete_enrollment(
+    enrollment_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    service = EnrollmentService(db)
+    service.delete(enrollment_id, current_user.organization_id)
+    return {"message": "Enrollment deleted"}
+
+
 @enrollment_router.put(
     "/{enrollment_id}/dimensions",
     dependencies=[Depends(require_permissions("enrollment:manage"))],

@@ -118,6 +118,18 @@ class EnrollmentService:
         self.db.refresh(enrollment)
         return enrollment
 
+    def delete(self, enrollment_id: uuid.UUID, org_id: uuid.UUID) -> None:
+        enrollment = (
+            self.db.query(Enrollment)
+            .filter_by(id=enrollment_id, organization_id=org_id)
+            .first()
+        )
+        if not enrollment:
+            raise NotFoundError("Enrollment not found")
+        # EnrollmentDimension rows cascade via ondelete="CASCADE".
+        self.db.delete(enrollment)
+        self.db.commit()
+
     def update_dimensions(
         self, enrollment_id: uuid.UUID, dimension_value_ids: list[str]
     ) -> Enrollment:
