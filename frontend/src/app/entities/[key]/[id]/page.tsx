@@ -337,17 +337,30 @@ export default function EntityDetailPage() {
                     <div className="grid grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-2">
                       {filteredEnrollments
                         .map((e) => {
-                      const dimensionPairs = (e.dimensions || []).map((dim) => ({
-                        label: dim.dimension_name,
-                        value: dim.value_name,
-                      }));
-                      const fieldPairs = collectEnrollmentFields(
+                      // Render every configured enrollment field in sort_order,
+                      // pulling dimension values from e.dimensions and
+                      // everything else from e.meta. Keeps card field order
+                      // consistent with what the admin configured in the
+                      // form-builder, instead of dimensions-first + meta-after.
+                      const dimensionValueByDimId = new Map(
+                        (e.dimensions || []).map((d) => [d.dimension_id, d]),
+                      );
+                      const allPairs = collectEnrollmentFields(
                         allSchemas,
                         entity.entity_type_id,
                         e.dimensions?.map((d) => d.value_id) || [],
                       )
-                        .filter((f) => f.type !== "dimension" && f.visible !== false)
+                        .filter((f) => f.visible !== false)
                         .map((f) => {
+                          if (f.type === "dimension") {
+                            const dv = f.dimension_id
+                              ? dimensionValueByDimId.get(f.dimension_id)
+                              : undefined;
+                            return {
+                              label: f.label,
+                              value: dv?.value_name || "—",
+                            };
+                          }
                           const val = e.meta?.[f.key];
                           const isEmpty = val === undefined || val === null || val === "";
                           let formatted: string;
@@ -361,7 +374,6 @@ export default function EntityDetailPage() {
                           else formatted = String(val);
                           return { label: f.label, value: formatted };
                         });
-                      const allPairs = [...dimensionPairs, ...fieldPairs];
                       const isActive = e.is_active;
                       return (
                         <div
