@@ -499,7 +499,7 @@ export default function MetaFieldsPage() {
   // Move a field up/down in the flat (cross-scope) table, then re-normalize
   // all sort_order values so every field gets a unique sequential number.
   const moveFlatRow = (rowIndex: number, direction: "up" | "down") => {
-    const rows = [...(activeSection === "activity" ? activityRows : participantRows)];
+    const rows = [...flatRows];
     const targetRowIndex = direction === "up" ? rowIndex - 1 : rowIndex + 1;
     if (targetRowIndex < 0 || targetRowIndex >= rows.length) return;
 
