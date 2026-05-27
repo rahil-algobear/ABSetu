@@ -65,7 +65,7 @@ export default function EntityTypesPage() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ name: "", can_enroll: true });
+    setForm({ name: "", can_enroll: false });
     setModalOpen(true);
   };
 
@@ -180,7 +180,7 @@ export default function EntityTypesPage() {
               checked={form.can_enroll}
               onChange={(e) => setForm({ ...form, can_enroll: e.target.checked })}
             />
-            <Label htmlFor="can_enroll">Can be enrolled in programmes</Label>
+            <Label htmlFor="can_enroll">Enable Enrolments</Label>
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={closeModal}>
