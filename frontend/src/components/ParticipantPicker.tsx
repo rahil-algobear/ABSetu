@@ -19,7 +19,7 @@
  *    No create-new — admins create users via the user-admin page.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   activityApi,
@@ -109,6 +109,17 @@ export function ParticipantPicker({
   const [tab, setTab] = useState<PickerTab>(smart ? "enrolled" : "all");
   const [enrollFor, setEnrollFor] = useState<Entity | null>(null);
   const [showCreateNew, setShowCreateNew] = useState(false);
+  // All-tab pagination. Reset to 1 whenever the search term changes
+  // — a new query starts a fresh result accumulator.
+  const SEARCH_PAGE_SIZE = 50;
+  const [searchPage, setSearchPage] = useState(1);
+  // Accumulated entity rows across pages of the same search. Pages
+  // beyond the first append to this; a new search resets it.
+  const [searchAccum, setSearchAccum] = useState<Entity[]>([]);
+  useEffect(() => {
+    setSearchPage(1);
+    setSearchAccum([]);
+  }, [search]);
 
   const isUserKind = participantKind === "user";
 
@@ -148,8 +159,11 @@ export function ParticipantPicker({
 
   // --- All tab: search results. Entity sections paginate via server
   //     search; user sections client-filter the full user list. ---
-  const { data: searchResp, isLoading: searchLoading } = useQuery({
-    queryKey: ["picker-search", entityTypeId, activityId, search],
+  // Server returns the page indicated by `page`; we append non-first
+  // pages into `searchAccum` so the user can browse past the 50-row
+  // ceiling without losing earlier results when they hit Load more.
+  const { data: searchResp, isLoading: searchLoading, isFetching: searchFetching } = useQuery({
+    queryKey: ["picker-search", entityTypeId, activityId, search, searchPage],
     queryFn: () =>
       entityApi.listPaginated({
         entity_type_id: entityTypeId,
@@ -157,7 +171,8 @@ export function ParticipantPicker({
         // server work we don't need anywhere else.
         with_enrollment_status_for_activity: smart ? activityId : undefined,
         search,
-        limit: 50,
+        page: searchPage,
+        limit: SEARCH_PAGE_SIZE,
       }),
     enabled:
       open &&
@@ -166,7 +181,26 @@ export function ParticipantPicker({
       !isUserKind &&
       !!entityTypeId,
   });
-  const searchEntities: Entity[] = searchResp?.data || [];
+  useEffect(() => {
+    if (!searchResp) return;
+    if (searchPage === 1) {
+      setSearchAccum(searchResp.data || []);
+    } else {
+      // Dedupe on id in case the server reshuffles between page calls
+      // (e.g. someone just enrolled a beneficiary mid-browse).
+      setSearchAccum((prev) => {
+        const seen = new Set(prev.map((e) => e.id));
+        const next = [...prev];
+        for (const e of searchResp.data || []) {
+          if (!seen.has(e.id)) next.push(e);
+        }
+        return next;
+      });
+    }
+  }, [searchResp, searchPage]);
+  const searchTotal = searchResp?.count ?? 0;
+  const searchEntities: Entity[] = searchAccum;
+  const hasMoreSearch = searchEntities.length < searchTotal;
 
   // --- User mode: full users list. List is small (org staff), so
   //     fetching once and client-filtering is fine. ---
@@ -389,36 +423,55 @@ export function ParticipantPicker({
                 <p className="text-sm text-gray-500 p-3">
                   Type to search {entityTypeName.toLowerCase()}…
                 </p>
-              ) : searchLoading ? (
+              ) : searchLoading && searchEntities.length === 0 ? (
                 <p className="text-sm text-gray-500 p-3">Searching…</p>
               ) : searchEntities.length === 0 ? (
                 <p className="text-sm text-gray-500 p-3">
                   No {entityTypeName.toLowerCase()} match.
                 </p>
               ) : (
-                searchEntities.map((e) => {
-                  const activeInScope =
-                    smart && e.enrollment_status === "active_in_scope";
-                  return (
-                    <PickerRow
-                      key={e.id}
-                      name={getName(e)}
-                      subtitle={
-                        smart
-                          ? activeInScope
-                            ? "Enrolled here"
-                            : "Not enrolled in scope"
-                          : undefined
-                      }
-                      alreadyAdded={alreadyAddedIds.has(e.id)}
-                      canEnrollAndAdd={smart}
-                      activeInScope={smart ? activeInScope : true}
-                      onAdd={() => addMutation.mutate(e.id)}
-                      onEnrollAndAdd={() => setEnrollFor(e)}
-                      pending={addMutation.isPending}
-                    />
-                  );
-                })
+                <>
+                  {searchEntities.map((e) => {
+                    const activeInScope =
+                      smart && e.enrollment_status === "active_in_scope";
+                    return (
+                      <PickerRow
+                        key={e.id}
+                        name={getName(e)}
+                        subtitle={
+                          smart
+                            ? activeInScope
+                              ? "Enrolled here"
+                              : "Not enrolled in scope"
+                            : undefined
+                        }
+                        alreadyAdded={alreadyAddedIds.has(e.id)}
+                        canEnrollAndAdd={smart}
+                        activeInScope={smart ? activeInScope : true}
+                        onAdd={() => addMutation.mutate(e.id)}
+                        onEnrollAndAdd={() => setEnrollFor(e)}
+                        pending={addMutation.isPending}
+                      />
+                    );
+                  })}
+                  {hasMoreSearch && (
+                    <div className="px-3 py-2 flex items-center justify-between gap-3 bg-gray-50">
+                      <span className="text-xs text-gray-500">
+                        Showing {searchEntities.length} of {searchTotal} —
+                        narrow your search or load more.
+                      </span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={searchFetching}
+                        onClick={() => setSearchPage((p) => p + 1)}
+                      >
+                        {searchFetching ? "Loading…" : "Load more"}
+                      </Button>
+                    </div>
+                  )}
+                </>
               )
             )}
           </div>

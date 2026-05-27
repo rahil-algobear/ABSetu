@@ -357,9 +357,11 @@ infrastructure needed yet.
 |---|---|---|---|
 | Added | None — show all | `created_at` ascending (order they were added) | Matches the existing per-row table; small bounded set (a session typically has 5–80 added) |
 | Enrolled | None — show all (lift the existing `limit: 50` cap) | First meta string (name) ascending | Browsable cohort; staff scan for a name; cohort size is bounded by the activity's scope |
-| All | Paginated (server default `limit: 50`) | First meta string ascending | Search-driven; user is looking for a specific person, not scrolling a roster |
+| All | Paginated with explicit Load more (server `limit: 50` per page) | First meta string ascending | Search-driven; user is looking for a specific person, not scrolling a roster. Load more lets them break past the first 50 when a short search term matches many rows |
 
 The `Enrolled` query passes `sort_by=meta:<first_text_field_key>` (the entity type's first meta field, typically a name) so the cohort scans in a useful order rather than created-at-desc. Same applies to `All`.
+
+**Load more (All tab):** when `accumulated.length < total`, render a footer chip `Showing N of M — narrow your search or load more.` with a `Load more` button. Clicking it bumps `searchPage` and appends the next 50 into the accumulator (deduped by id). Changing the search term resets both page and accumulator. We use Load more (not infinite scroll) so the implicit "I've seen everything" affordance survives — search results are usually 1–3 keystrokes away from convergence, not an endless roster.
 
 ### What's gone
 
