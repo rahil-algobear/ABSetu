@@ -52,13 +52,18 @@ class EntityTypeService:
         self.db.refresh(et)
         return et
 
+    # Fields that are nullable in the DB and where an explicit None from
+    # the caller should clear the column (vs. being treated as "no change").
+    _NULLABLE_FIELDS = {"max_active_enrollments"}
+
     def update(self, entity_type_id: uuid.UUID, org_id: uuid.UUID, data: dict) -> EntityType:
         et = self.get_by_id(entity_type_id, org_id)
         if "name" in data and data["name"] is not None:
             data["key"] = slugify(data["name"])
         for key, value in data.items():
-            if value is not None:
-                setattr(et, key, value)
+            if value is None and key not in self._NULLABLE_FIELDS:
+                continue
+            setattr(et, key, value)
         self.db.commit()
         self.db.refresh(et)
         return et

@@ -26,7 +26,11 @@ export default function EntityTypesPage() {
   const queryClient = useQueryClient();
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<EntityType | null>(null);
-  const [form, setForm] = useState({ name: "", can_enroll: true });
+  const [form, setForm] = useState<{
+    name: string;
+    can_enroll: boolean;
+    max_active_enrollments: number | null;
+  }>({ name: "", can_enroll: false, max_active_enrollments: null });
 
   const { data: entityTypes = [], isLoading } = useQuery({
     queryKey: ["entity-types"],
@@ -65,7 +69,7 @@ export default function EntityTypesPage() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ name: "", can_enroll: false });
+    setForm({ name: "", can_enroll: false, max_active_enrollments: null });
     setModalOpen(true);
   };
 
@@ -74,6 +78,7 @@ export default function EntityTypesPage() {
     setForm({
       name: item.name,
       can_enroll: item.can_enroll,
+      max_active_enrollments: item.max_active_enrollments,
     });
     setModalOpen(true);
   };
@@ -85,13 +90,24 @@ export default function EntityTypesPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    // max_active_enrollments only meaningful when enrollments are enabled;
+    // clear it server-side if enrollments are off.
+    const max = form.can_enroll ? form.max_active_enrollments : null;
     if (editing) {
       updateMutation.mutate({
         id: editing.id,
-        data: { name: form.name, can_enroll: form.can_enroll },
+        data: {
+          name: form.name,
+          can_enroll: form.can_enroll,
+          max_active_enrollments: max,
+        },
       });
     } else {
-      createMutation.mutate({ name: form.name, can_enroll: form.can_enroll });
+      createMutation.mutate({
+        name: form.name,
+        can_enroll: form.can_enroll,
+        max_active_enrollments: max,
+      });
     }
   };
 
@@ -182,6 +198,36 @@ export default function EntityTypesPage() {
             />
             <Label htmlFor="can_enroll">Enable Enrollments</Label>
           </div>
+          {form.can_enroll && (
+            <div>
+              <Label htmlFor="max_active_enrollments">
+                Max active enrollments per beneficiary
+              </Label>
+              <select
+                id="max_active_enrollments"
+                className="w-full mt-1 border rounded-md p-2 text-sm"
+                value={form.max_active_enrollments ?? ""}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    max_active_enrollments: e.target.value
+                      ? Number(e.target.value)
+                      : null,
+                  })
+                }
+              >
+                <option value="">Unlimited</option>
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="5">5</option>
+                <option value="10">10</option>
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                Caps the total active enrollments an entity of this type can hold.
+              </p>
+            </div>
+          )}
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={closeModal}>
               Cancel
