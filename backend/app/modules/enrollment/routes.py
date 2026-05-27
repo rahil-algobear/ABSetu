@@ -78,6 +78,7 @@ def _build_enrollment_response(e) -> dict:
         organization_id=str(e.organization_id),
         entity_id=str(e.entity_id),
         meta=meta,
+        is_active=e.is_active,
         dimensions=dim_infos,
     ).dump()
 

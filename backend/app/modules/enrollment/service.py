@@ -85,11 +85,15 @@ class EnrollmentService:
             raise NotFoundError("Enrollment not found")
 
         # Merge existing meta with updates
-        existing_meta = dict(enrollment.meta or {})
-        incoming_meta = data.get("meta") or {}
-        existing_meta.update(incoming_meta)
+        if "meta" in data:
+            existing_meta = dict(enrollment.meta or {})
+            incoming_meta = data.get("meta") or {}
+            existing_meta.update(incoming_meta)
+            enrollment.meta = normalize_meta_datetimes(existing_meta)
 
-        enrollment.meta = normalize_meta_datetimes(existing_meta)
+        if "is_active" in data:
+            enrollment.is_active = data["is_active"]
+
         self.db.commit()
         self.db.refresh(enrollment)
         return enrollment
