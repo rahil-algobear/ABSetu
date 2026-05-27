@@ -64,6 +64,7 @@ class EnrollmentService:
             organization_id=org_id,
             entity_id=entity.id,
             meta=meta,
+            is_active=data.get("is_active", True),
         )
         self.db.add(enrollment)
         self.db.flush()

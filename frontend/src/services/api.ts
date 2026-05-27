@@ -479,6 +479,7 @@ export const enrollmentApi = {
     entity_id: string;
     dimension_value_ids?: string[];
     meta?: Record<string, unknown>;
+    is_active?: boolean;
   }): Promise<Enrollment> => {
     const response = await authAxios.post<Enrollment>('/enrollments/', data);
     return response.data;
