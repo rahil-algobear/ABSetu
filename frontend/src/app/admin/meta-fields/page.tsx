@@ -124,6 +124,11 @@ export default function MetaFieldsPage() {
     queryFn: entityTypeApi.list,
   });
 
+  const enrollableEntityTypes = useMemo(
+    () => entityTypesList.filter((et) => et.can_enroll),
+    [entityTypesList],
+  );
+
   const { data: activityTypes = [] } = useQuery<ActivityType[]>({
     queryKey: ["activity-types"],
     queryFn: activityTypeApi.list,
@@ -663,7 +668,7 @@ export default function MetaFieldsPage() {
                 onChange={(e) => setEnrollmentFilterEntityId(e.target.value)}
               >
                 <option value="">All</option>
-                {entityTypesList.map((et) => (
+                {enrollableEntityTypes.map((et) => (
                   <option key={et.id} value={et.id}>{et.name}</option>
                 ))}
               </select>
@@ -1147,7 +1152,7 @@ export default function MetaFieldsPage() {
                     onChange={(e) => setModalEntityId(e.target.value)}
                   >
                     <option value="">All</option>
-                    {entityTypesList.map((et) => (
+                    {enrollableEntityTypes.map((et) => (
                       <option key={et.id} value={et.id}>{et.name}</option>
                     ))}
                   </select>

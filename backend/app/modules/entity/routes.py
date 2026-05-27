@@ -67,6 +67,7 @@ def _build_entity_response(
         entity_type_name=e.entity_type.name if e.entity_type else None,
         entity_type_key=e.entity_type.key if e.entity_type else None,
         entity_type_config=e.entity_type.config if e.entity_type else None,
+        entity_type_can_enroll=e.entity_type.can_enroll if e.entity_type else True,
         dimensions=dim_infos,
         enrollment_count=enrollment_count,
         activity_count=activity_count,

@@ -28,6 +28,15 @@ class EntityType(BaseModel):
 
     __table_args__ = (UniqueConstraint("organization_id", "key", name="uq_entity_type_org_key"),)
 
+    @property
+    def can_enroll(self) -> bool:
+        """Whether entities of this type can have enrollments.
+
+        Sole source of truth for the enrollability check — read this
+        instead of poking at config["can_enroll"] directly.
+        """
+        return (self.config or {}).get("can_enroll", True) is not False
+
 
 class Entity(BaseModel):
     __tablename__ = "entities"

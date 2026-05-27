@@ -119,7 +119,7 @@ export default function EntityDetailPage() {
     [activities, activityTypeFilter]
   );
 
-  const canEnroll = entity?.entity_type_config?.can_enroll !== false;
+  const canEnroll = entity?.entity_type_can_enroll !== false;
 
   const editDisabledKeys = useMemo(() => {
     const keys = new Set<string>();
