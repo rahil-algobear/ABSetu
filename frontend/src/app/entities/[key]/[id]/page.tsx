@@ -574,7 +574,9 @@ function EnrollmentForm({
       toast.success("Enrollment created");
       onSuccess();
     },
-    onError: () => toast.error("Failed to create enrollment"),
+    onError: (err: { response?: { data?: { message?: string } } }) => {
+      toast.error(err.response?.data?.message || "Failed to create enrollment");
+    },
   });
 
   const updateMutation = useMutation({
@@ -587,7 +589,9 @@ function EnrollmentForm({
       toast.success("Enrollment updated");
       onSuccess();
     },
-    onError: () => toast.error("Failed to update enrollment"),
+    onError: (err: { response?: { data?: { message?: string } } }) => {
+      toast.error(err.response?.data?.message || "Failed to update enrollment");
+    },
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -704,9 +708,9 @@ function EnrollmentForm({
       )}
 
       {formFields.length > 0 && (
-        <div className="flex items-center gap-3">
-          <label className="text-sm font-medium">Status:</label>
-          <div className="inline-flex rounded-md border overflow-hidden">
+        <div>
+          <label className="text-sm font-medium">Status</label>
+          <div className="inline-flex mt-1 rounded-md border overflow-hidden">
             <button
               type="button"
               onClick={() => setIsActive(false)}
