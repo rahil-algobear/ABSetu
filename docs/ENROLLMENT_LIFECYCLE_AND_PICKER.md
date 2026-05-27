@@ -356,7 +356,7 @@ infrastructure needed yet.
 | Tab | Pagination | Sort | Rationale |
 |---|---|---|---|
 | Added | None — show all | `created_at` ascending (order they were added) | Matches the existing per-row table; small bounded set (a session typically has 5–80 added) |
-| Enrolled | None — show all (lift the existing `limit: 50` cap) | First meta string (name) ascending | Browsable cohort; staff scan for a name; cohort size is bounded by the activity's scope |
+| Enrolled | Paginated with Load more (server `limit: 50` per page). Server filters out already-added via `exclude_ids` so `count` = remaining-to-add. | First meta string ascending | Browsable cohort. Avoids the "load 500 rows just to subtract" approach which would still cap out at large org scale (10k+ beneficiaries) |
 | All | Paginated with explicit Load more (server `limit: 50` per page) | First meta string ascending | Search-driven; user is looking for a specific person, not scrolling a roster. Load more lets them break past the first 50 when a short search term matches many rows |
 
 The `Enrolled` query passes `sort_by=meta:<first_text_field_key>` (the entity type's first meta field, typically a name) so the cohort scans in a useful order rather than created-at-desc. Same applies to `All`.

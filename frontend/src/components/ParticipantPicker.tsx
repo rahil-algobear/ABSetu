@@ -109,12 +109,12 @@ export function ParticipantPicker({
   const [tab, setTab] = useState<PickerTab>(smart ? "enrolled" : "all");
   const [enrollFor, setEnrollFor] = useState<Entity | null>(null);
   const [showCreateNew, setShowCreateNew] = useState(false);
-  // All-tab pagination. Reset to 1 whenever the search term changes
-  // — a new query starts a fresh result accumulator.
-  const SEARCH_PAGE_SIZE = 50;
+  // Pagination size — used by both All-tab search and Enrolled tab.
+  const PAGE_SIZE = 50;
+
+  // --- All-tab pagination. Reset to 1 whenever the search term
+  //     changes — a new query starts a fresh result accumulator. ---
   const [searchPage, setSearchPage] = useState(1);
-  // Accumulated entity rows across pages of the same search. Pages
-  // beyond the first append to this; a new search resets it.
   const [searchAccum, setSearchAccum] = useState<Entity[]>([]);
   useEffect(() => {
     setSearchPage(1);
@@ -127,23 +127,68 @@ export function ParticipantPicker({
     () => new Set(alreadyAdded.map((p) => p.id)),
     [alreadyAdded],
   );
+  // Stable comma-joined string keyed off the sorted alreadyAdded ids
+  // so the Enrolled query refetches when participants are added /
+  // removed without churning the key on unrelated re-renders.
+  const alreadyAddedIdsCsv = useMemo(
+    () => [...alreadyAddedIds].sort().join(","),
+    [alreadyAddedIds],
+  );
 
-  // --- Smart mode: Enrolled cohort. Skipped for non-smart / user. ---
-  // Backend filters to active_in_scope server-side so the total count
-  // is accurate even at scale (no 500-row cap on client-side filtering).
-  const { data: enrolledResp, isLoading: enrolledLoading } = useQuery({
-    queryKey: ["picker-enrolled", entityTypeId, activityId],
+  // --- Enrolled tab: active-in-scope cohort MINUS already-added rows,
+  //     paginated. Server applies both filters so `count` is the real
+  //     "remaining to add" total — no client-side subtraction (which
+  //     used to break beyond the first 500 rows on large orgs). ---
+  const [enrolledPage, setEnrolledPage] = useState(1);
+  const [enrolledAccum, setEnrolledAccum] = useState<Entity[]>([]);
+  // Reset accumulator whenever the exclude set changes — adding /
+  // removing a participant shifts which rows are "remaining".
+  useEffect(() => {
+    setEnrolledPage(1);
+    setEnrolledAccum([]);
+  }, [alreadyAddedIdsCsv, activityId, entityTypeId]);
+
+  const {
+    data: enrolledResp,
+    isLoading: enrolledLoading,
+    isFetching: enrolledFetching,
+  } = useQuery({
+    queryKey: [
+      "picker-enrolled",
+      entityTypeId,
+      activityId,
+      alreadyAddedIdsCsv,
+      enrolledPage,
+    ],
     queryFn: () =>
       entityApi.listPaginated({
         entity_type_id: entityTypeId,
         with_enrollment_status_for_activity: activityId,
         enrollment_status_filter: "active_in_scope",
-        limit: 500,
+        exclude_ids: alreadyAddedIdsCsv || undefined,
+        page: enrolledPage,
+        limit: PAGE_SIZE,
       }),
     enabled: open && smart && !isUserKind && !!entityTypeId,
   });
-  const enrolledEntities: Entity[] = enrolledResp?.data || [];
+  useEffect(() => {
+    if (!enrolledResp) return;
+    if (enrolledPage === 1) {
+      setEnrolledAccum(enrolledResp.data || []);
+    } else {
+      setEnrolledAccum((prev) => {
+        const seen = new Set(prev.map((e) => e.id));
+        const next = [...prev];
+        for (const e of enrolledResp.data || []) {
+          if (!seen.has(e.id)) next.push(e);
+        }
+        return next;
+      });
+    }
+  }, [enrolledResp, enrolledPage]);
+  const enrolledEntities: Entity[] = enrolledAccum;
   const enrolledTotal = enrolledResp?.count ?? 0;
+  const hasMoreEnrolled = enrolledEntities.length < enrolledTotal;
 
   // --- All tab: total count (entity sections only — users come from
   //     userApi.list() below which already returns everything). ---
@@ -172,7 +217,7 @@ export function ParticipantPicker({
         with_enrollment_status_for_activity: smart ? activityId : undefined,
         search,
         page: searchPage,
-        limit: SEARCH_PAGE_SIZE,
+        limit: PAGE_SIZE,
       }),
     enabled:
       open &&
@@ -238,6 +283,11 @@ export function ParticipantPicker({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [alreadyAdded, search],
   );
+  // Already-added rows are excluded server-side via `exclude_ids`, so
+  // the inner filter here is just defensive (no-op in normal flow).
+  // Client-side search filters the LOADED pages — caveat: matches in
+  // unloaded pages aren't visible. Users hunting for a specific name
+  // should use the All tab; Enrolled is for browsing the cohort.
   const enrolledRows = useMemo(
     () =>
       enrolledEntities
@@ -256,14 +306,12 @@ export function ParticipantPicker({
     [allUsers, search],
   );
 
-  // Counts — absolute totals (not filtered by the current search).
-  // Enrolled = total active_in_scope (from server) minus those already
-  // added. Added = parent-supplied count. All = total of the source.
+  // Counts — absolute totals (not filtered by the current search box).
+  // Enrolled count comes directly from the server (active_in_scope
+  // minus already-added, computed in SQL) so it stays correct at any
+  // org scale. Added = parent-supplied count. All = total of the source.
   const addedCount = alreadyAdded.length;
-  const alreadyAddedInScopeCount = enrolledEntities.filter((e) =>
-    alreadyAddedIds.has(e.id),
-  ).length;
-  const enrolledCount = Math.max(0, enrolledTotal - alreadyAddedInScopeCount);
+  const enrolledCount = enrolledTotal;
   const allCount = allTotal;
 
   const refreshAfterAction = () => {
@@ -367,28 +415,46 @@ export function ParticipantPicker({
             )}
 
             {smart && tab === "enrolled" && (
-              enrolledLoading ? (
+              enrolledLoading && enrolledEntities.length === 0 ? (
                 <p className="text-sm text-gray-500 p-3">Loading…</p>
               ) : enrolledRows.length === 0 ? (
                 <p className="text-sm text-gray-500 p-3">
                   {search.trim()
-                    ? `No enrolled ${entityTypeName.toLowerCase()} match.`
+                    ? `No enrolled ${entityTypeName.toLowerCase()} match. Try the All tab.`
                     : `No ${entityTypeName.toLowerCase()} is enrolled here yet.`}
                 </p>
               ) : (
-                enrolledRows.map((e) => (
-                  <PickerRow
-                    key={e.id}
-                    name={getName(e)}
-                    subtitle={"Enrolled here"}
-                    alreadyAdded={false}
-                    canEnrollAndAdd={true}
-                    activeInScope={true}
-                    onAdd={() => addMutation.mutate(e.id)}
-                    onEnrollAndAdd={() => setEnrollFor(e)}
-                    pending={addMutation.isPending}
-                  />
-                ))
+                <>
+                  {enrolledRows.map((e) => (
+                    <PickerRow
+                      key={e.id}
+                      name={getName(e)}
+                      subtitle={"Enrolled here"}
+                      alreadyAdded={false}
+                      canEnrollAndAdd={true}
+                      activeInScope={true}
+                      onAdd={() => addMutation.mutate(e.id)}
+                      onEnrollAndAdd={() => setEnrollFor(e)}
+                      pending={addMutation.isPending}
+                    />
+                  ))}
+                  {hasMoreEnrolled && (
+                    <div className="px-3 py-2 flex items-center justify-between gap-3 bg-gray-50">
+                      <span className="text-xs text-gray-500">
+                        Showing {enrolledEntities.length} of {enrolledTotal}.
+                      </span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={enrolledFetching}
+                        onClick={() => setEnrolledPage((p) => p + 1)}
+                      >
+                        {enrolledFetching ? "Loading…" : "Load more"}
+                      </Button>
+                    </div>
+                  )}
+                </>
               )
             )}
 
