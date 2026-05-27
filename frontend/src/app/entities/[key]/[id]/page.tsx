@@ -392,12 +392,12 @@ export default function EntityDetailPage() {
                             </Can>
                           </div>
                           <Can permission="enrollment:manage">
-                            <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
                               {isActive ? (
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                                  className="flex-1 text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
                                   onClick={() =>
                                     setEnrollmentAction({
                                       enrollment: e,
@@ -411,6 +411,7 @@ export default function EntityDetailPage() {
                                 <Button
                                   size="sm"
                                   variant="outline"
+                                  className="flex-1"
                                   onClick={() =>
                                     setEnrollmentAction({
                                       enrollment: e,
@@ -424,6 +425,7 @@ export default function EntityDetailPage() {
                               <Button
                                 size="sm"
                                 variant="outline"
+                                className="flex-1"
                                 onClick={() => setEnrollmentAction({ enrollment: e })}
                               >
                                 Edit
