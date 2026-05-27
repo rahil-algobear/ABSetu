@@ -652,7 +652,9 @@ def picker_add(
     # type is enrollable. Otherwise (Basic mode) skip the scope check.
     activity_dv_ids = {ad.dimension_value_id for ad in (activity.dimensions or [])}
     if activity_dv_ids:
+        from app.modules.dimension.model import DimensionValue
         from app.modules.entity.model import Entity
+        from app.modules.entity.routes import _enrollment_relevant_dim_ids
 
         entity = (
             db.query(Entity)
@@ -662,6 +664,25 @@ def picker_add(
         if not entity:
             raise ValidationError("Beneficiary not found in this organization.")
         if entity.entity_type.can_enroll:
+            # Filter activity dimensions to the ones the enrollment schema
+            # tracks — extras like Project/Intervention shouldn't be required
+            # for the enrollment to count as "in scope". Mirrors the
+            # listing's _compute_enrollment_status_map exactly so the UI
+            # and the guard agree.
+            relevant_dim_ids = _enrollment_relevant_dim_ids(
+                db, current_user.organization_id, entity.entity_type_id
+            )
+            if relevant_dim_ids:
+                dv_rows = (
+                    db.query(DimensionValue.id, DimensionValue.dimension_id)
+                    .filter(DimensionValue.id.in_(activity_dv_ids))
+                    .all()
+                )
+                scoped_activity_dvs = {
+                    dv_id for dv_id, dim_id in dv_rows if dim_id in relevant_dim_ids
+                }
+            else:
+                scoped_activity_dvs = set()
             actives = (
                 db.query(Enrollment)
                 .filter(
@@ -671,7 +692,7 @@ def picker_add(
                 .all()
             )
             in_scope = any(
-                activity_dv_ids.issubset({d.dimension_value_id for d in (e.dimensions or [])})
+                scoped_activity_dvs.issubset({d.dimension_value_id for d in (e.dimensions or [])})
                 for e in actives
             )
             if not in_scope:
