@@ -229,10 +229,6 @@ export interface EntityListParams {
   with_enrollment_status_for_activity?: string;
   enrollment_status_filter?: "active_in_scope" | "no_active_in_scope";
   ids?: string;
-  /** Comma-separated entity UUIDs to exclude from results. Used by the
-   *  picker to subtract already-added participants server-side so the
-   *  returned count is the actual remaining-to-add cohort. */
-  exclude_ids?: string;
 }
 
 export interface EntityFilterDefinition {
@@ -262,12 +258,28 @@ export const entityApi = {
     );
     return response.data.data;
   },
+  /** Fetch entities by ID. Transparently chunks the request so an
+   *  activity with hundreds of participants (or any other big batch
+   *  caller) doesn't trip the backend's per-request `ids` cap and,
+   *  more importantly, doesn't blow URL-length limits on intermediate
+   *  proxies. Chunks are fetched in parallel and re-merged. */
   listByIds: async (ids: string[]): Promise<Entity[]> => {
     if (ids.length === 0) return [];
-    const response = await authAxios.get<PaginatedResponse<Entity>>(
-      `/entities/?ids=${ids.join(",")}`,
+    // 200 UUIDs ≈ 7.4 KB of URL, comfortably under the 8 KB header
+    // limit most reverse proxies default to.
+    const CHUNK_SIZE = 200;
+    const chunks: string[][] = [];
+    for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+      chunks.push(ids.slice(i, i + CHUNK_SIZE));
+    }
+    const responses = await Promise.all(
+      chunks.map((chunk) =>
+        authAxios.get<PaginatedResponse<Entity>>(
+          `/entities/?ids=${chunk.join(",")}`,
+        ),
+      ),
     );
-    return response.data.data;
+    return responses.flatMap((r) => r.data.data);
   },
   listPaginated: async (params: EntityListParams): Promise<PaginatedResponse<Entity>> => {
     const response = await authAxios.get<PaginatedResponse<Entity>>('/entities/', { params });

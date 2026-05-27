@@ -356,7 +356,7 @@ infrastructure needed yet.
 | Tab | Pagination | Sort | Rationale |
 |---|---|---|---|
 | Added | None — show all | `created_at` ascending (order they were added) | Matches the existing per-row table; small bounded set (a session typically has 5–80 added) |
-| Enrolled | Paginated with Load more (server `limit: 50` per page). Server filters out already-added via `exclude_ids` so `count` = remaining-to-add. | First meta string ascending | Browsable cohort. Avoids the "load 500 rows just to subtract" approach which would still cap out at large org scale (10k+ beneficiaries) |
+| Enrolled | Paginated with Load more (server `limit: 50` per page). Cohort includes already-added rows — they render dimmed with the ✓ Added pill instead of being filtered out. | First meta string ascending | Stable badge count (cohort size, not remaining-to-add) and no need for client-side subtraction math that would silently miscount past the loaded page. |
 | All | Paginated with explicit Load more (server `limit: 50` per page) | First meta string ascending | Search-driven; user is looking for a specific person, not scrolling a roster. Load more lets them break past the first 50 when a short search term matches many rows |
 
 The `Enrolled` query passes `sort_by=meta:<first_text_field_key>` (the entity type's first meta field, typically a name) so the cohort scans in a useful order rather than created-at-desc. Same applies to `All`.

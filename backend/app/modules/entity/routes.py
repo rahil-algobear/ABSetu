@@ -179,17 +179,6 @@ def list_entities(
             "name lookups for a known set of IDs without pulling a full org."
         ),
     ),
-    exclude_ids: str
-    | None = Query(
-        None,
-        description=(
-            "Comma-separated entity UUIDs to subtract from the result set. "
-            "Composes with all other filters — used by the picker to skip "
-            "rows that are already added to the activity so the returned "
-            "count is the actual remaining-to-add cohort, not a denominator "
-            "the client has to subtract from."
-        ),
-    ),
     with_enrollment_status_for_activity: uuid.UUID
     | None = Query(
         None,
@@ -292,39 +281,20 @@ def list_entities(
             activity_dv_ids,
         )
 
-    include_id_set: set[uuid.UUID] | None = None
-    exclude_id_set: set[uuid.UUID] | None = None
+    include_ids: set[uuid.UUID] | None = None
+    exclude_ids: set[uuid.UUID] | None = None
     if enrollment_status_filter == "active_in_scope":
-        include_id_set = active_in_scope_ids or set()
+        include_ids = active_in_scope_ids or set()
     elif enrollment_status_filter == "no_active_in_scope":
-        exclude_id_set = active_in_scope_ids or set()
-
-    # Caller-supplied exclude set unions with anything we derived above.
-    # Capped at 1000 — beyond that callers should use server-side filters
-    # rather than passing an ID list.
-    if exclude_ids:
-        try:
-            extra_excludes = {
-                uuid.UUID(s.strip()) for s in exclude_ids.split(",") if s.strip()
-            }
-        except ValueError:
-            raise ValidationError("Invalid UUID in `exclude_ids` parameter.")
-        if len(extra_excludes) > 1000:
-            raise ValidationError(
-                "`exclude_ids` is capped at 1000 entries per request."
-            )
-        if exclude_id_set is None:
-            exclude_id_set = extra_excludes
-        else:
-            exclude_id_set |= extra_excludes
+        exclude_ids = active_in_scope_ids or set()
 
     rows, total = service.list_by_org_paginated(
         current_user.organization_id,
         params=params,
         accessible_dv_ids=accessible_dv_ids,
         list_columns=list_columns,
-        include_entity_ids=include_id_set,
-        exclude_entity_ids=exclude_id_set,
+        include_entity_ids=include_ids,
+        exclude_entity_ids=exclude_ids,
     )
 
     status_map: dict[uuid.UUID, str] = {}

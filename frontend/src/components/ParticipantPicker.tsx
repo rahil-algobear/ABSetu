@@ -127,45 +127,29 @@ export function ParticipantPicker({
     () => new Set(alreadyAdded.map((p) => p.id)),
     [alreadyAdded],
   );
-  // Stable comma-joined string keyed off the sorted alreadyAdded ids
-  // so the Enrolled query refetches when participants are added /
-  // removed without churning the key on unrelated re-renders.
-  const alreadyAddedIdsCsv = useMemo(
-    () => [...alreadyAddedIds].sort().join(","),
-    [alreadyAddedIds],
-  );
 
-  // --- Enrolled tab: active-in-scope cohort MINUS already-added rows,
-  //     paginated. Server applies both filters so `count` is the real
-  //     "remaining to add" total — no client-side subtraction (which
-  //     used to break beyond the first 500 rows on large orgs). ---
+  // --- Enrolled tab: full active-in-scope cohort, paginated. Rows
+  //     that are already added render dimmed with a ✓ Added pill
+  //     (handled at render time) so the cohort count stays stable
+  //     and we don't have to subtract anything client-side. ---
   const [enrolledPage, setEnrolledPage] = useState(1);
   const [enrolledAccum, setEnrolledAccum] = useState<Entity[]>([]);
-  // Reset accumulator whenever the exclude set changes — adding /
-  // removing a participant shifts which rows are "remaining".
   useEffect(() => {
     setEnrolledPage(1);
     setEnrolledAccum([]);
-  }, [alreadyAddedIdsCsv, activityId, entityTypeId]);
+  }, [activityId, entityTypeId]);
 
   const {
     data: enrolledResp,
     isLoading: enrolledLoading,
     isFetching: enrolledFetching,
   } = useQuery({
-    queryKey: [
-      "picker-enrolled",
-      entityTypeId,
-      activityId,
-      alreadyAddedIdsCsv,
-      enrolledPage,
-    ],
+    queryKey: ["picker-enrolled", entityTypeId, activityId, enrolledPage],
     queryFn: () =>
       entityApi.listPaginated({
         entity_type_id: entityTypeId,
         with_enrollment_status_for_activity: activityId,
         enrollment_status_filter: "active_in_scope",
-        exclude_ids: alreadyAddedIdsCsv || undefined,
         page: enrolledPage,
         limit: PAGE_SIZE,
       }),
@@ -283,19 +267,17 @@ export function ParticipantPicker({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [alreadyAdded, search],
   );
-  // Already-added rows are excluded server-side via `exclude_ids`, so
-  // the inner filter here is just defensive (no-op in normal flow).
-  // Client-side search filters the LOADED pages — caveat: matches in
-  // unloaded pages aren't visible. Users hunting for a specific name
-  // should use the All tab; Enrolled is for browsing the cohort.
+  // Enrolled rows include already-added ones (rendered with the
+  // ✓ Added pill + dim opacity in PickerRow) so the count stays
+  // stable as the user adds. Client-side search filters loaded pages
+  // — for searching across the full cohort, use the All tab.
   const enrolledRows = useMemo(
     () =>
       enrolledEntities
-        .filter((e) => !alreadyAddedIds.has(e.id))
         .filter((e) => matchesSearch(getName(e)))
         .sort((a, b) => getName(a).localeCompare(getName(b))),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [enrolledEntities, alreadyAddedIds, search],
+    [enrolledEntities, search],
   );
   const userRows = useMemo(
     () =>
@@ -307,9 +289,10 @@ export function ParticipantPicker({
   );
 
   // Counts — absolute totals (not filtered by the current search box).
-  // Enrolled count comes directly from the server (active_in_scope
-  // minus already-added, computed in SQL) so it stays correct at any
-  // org scale. Added = parent-supplied count. All = total of the source.
+  // Enrolled = total active-in-scope cohort (includes already-added,
+  // which render dimmed in the list). Added = parent-supplied count.
+  // All = total of the entity type. Stable badges that don't bounce
+  // as the user adds participants.
   const addedCount = alreadyAdded.length;
   const enrolledCount = enrolledTotal;
   const allCount = allTotal;
@@ -430,7 +413,7 @@ export function ParticipantPicker({
                       key={e.id}
                       name={getName(e)}
                       subtitle={"Enrolled here"}
-                      alreadyAdded={false}
+                      alreadyAdded={alreadyAddedIds.has(e.id)}
                       canEnrollAndAdd={true}
                       activeInScope={true}
                       onAdd={() => addMutation.mutate(e.id)}
@@ -651,7 +634,11 @@ function PickerRow({
   pending: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 px-3 py-2">
+    <div
+      className={`flex items-center justify-between gap-3 px-3 py-2 ${
+        alreadyAdded ? "opacity-60" : ""
+      }`}
+    >
       <div className="min-w-0">
         <div className="text-sm font-medium text-gray-800 truncate">{name}</div>
         {subtitle && (
