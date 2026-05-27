@@ -298,7 +298,7 @@ export default function EntityDetailPage() {
                       return (
                         <div
                           key={e.id}
-                          className="flex items-start justify-between p-3 border rounded gap-3"
+                          className="flex items-start justify-between p-3 border rounded gap-3 max-w-md"
                         >
                           <div className="flex-1 min-w-0 space-y-1 text-sm">
                             {allPairs.map((p, i) => (
