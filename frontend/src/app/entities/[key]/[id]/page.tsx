@@ -300,22 +300,13 @@ export default function EntityDetailPage() {
                           key={e.id}
                           className="flex items-start justify-between p-3 border rounded gap-3"
                         >
-                          <div className="flex-1 min-w-0">
-                            {allPairs.length > 0 && (
-                              <p className="text-sm text-gray-600 leading-relaxed">
-                                {allPairs.map((p, i) => (
-                                  <span key={`${p.label}-${i}`}>
-                                    {i > 0 && (
-                                      <span className="text-gray-300 mx-1.5">·</span>
-                                    )}
-                                    <span className="text-gray-500">{p.label}:</span>{" "}
-                                    <span className="font-medium text-gray-800">
-                                      {p.value}
-                                    </span>
-                                  </span>
-                                ))}
-                              </p>
-                            )}
+                          <div className="flex-1 min-w-0 space-y-1 text-sm">
+                            {allPairs.map((p, i) => (
+                              <div key={`${p.label}-${i}`}>
+                                <span className="text-gray-500">{p.label}:</span>{" "}
+                                <span className="font-medium text-gray-800">{p.value}</span>
+                              </div>
+                            ))}
                           </div>
                           <Can permission="enrollment:manage">
                             <Button
