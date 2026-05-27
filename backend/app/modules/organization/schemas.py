@@ -58,6 +58,11 @@ class FieldDefinition(BaseModel):
     dimension_id: str | None = None
     # For type="entity_list"
     entity_type_id: str | None = None
+    # For type="dimension" under enrollment scope: when set, this field
+    # participates in the composite uniqueness key for active enrollments
+    # of its entity, with the value as the per-value cap. null means the
+    # field does not contribute to the uniqueness check.
+    max_active_enrollments: int | None = None
     # For title generation config, status capture config, etc.
     config: dict[str, Any] | None = None
 

@@ -16,6 +16,7 @@ class EntityTypeCreate(BaseModel):
     config: dict[str, Any] | None = None
     sort_order: int = 0
     can_enroll: bool = True
+    max_active_enrollments: int | None = None
 
 
 class EntityTypeUpdate(BaseModel):
@@ -23,6 +24,7 @@ class EntityTypeUpdate(BaseModel):
     config: dict[str, Any] | None = None
     sort_order: int | None = None
     can_enroll: bool | None = None
+    max_active_enrollments: int | None = None
 
 
 class EntityTypeResponse(BaseResponseSchema):
@@ -32,6 +34,7 @@ class EntityTypeResponse(BaseResponseSchema):
     config: dict[str, Any] | None = None
     sort_order: int = 0
     can_enroll: bool = True
+    max_active_enrollments: int | None = None
 
 
 # --- Entity ---

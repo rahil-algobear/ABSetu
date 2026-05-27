@@ -202,11 +202,11 @@ export const entityTypeApi = {
     const response = await authAxios.get<EntityType>(`/entity-types/${id}`);
     return response.data;
   },
-  create: async (data: { name: string; key?: string; config?: Record<string, unknown>; sort_order?: number; can_enroll?: boolean }): Promise<EntityType> => {
+  create: async (data: { name: string; key?: string; config?: Record<string, unknown>; sort_order?: number; can_enroll?: boolean; max_active_enrollments?: number | null }): Promise<EntityType> => {
     const response = await authAxios.post<EntityType>('/entity-types/', data);
     return response.data;
   },
-  update: async (id: string, data: { name?: string; config?: Record<string, unknown>; sort_order?: number; can_enroll?: boolean }): Promise<EntityType> => {
+  update: async (id: string, data: { name?: string; config?: Record<string, unknown>; sort_order?: number; can_enroll?: boolean; max_active_enrollments?: number | null }): Promise<EntityType> => {
     const response = await authAxios.put<EntityType>(`/entity-types/${id}`, data);
     return response.data;
   },

@@ -33,6 +33,10 @@ class EntityType(BaseModel):
     config = Column(JSONB, nullable=True, default=dict)
     sort_order = Column(Integer, nullable=False, default=0)
     can_enroll = Column(Boolean, nullable=False, default=True, server_default=true())
+    # Total cap on active enrollments per entity of this type. NULL = unlimited.
+    # Enforced lazily — applies only to new writes; existing data that violates
+    # the rule stays as-is until staff clean it up.
+    max_active_enrollments = Column(Integer, nullable=True)
 
     organization = relationship("Organization", back_populates="entity_types")
     entities = relationship("Entity", back_populates="entity_type", lazy="dynamic")

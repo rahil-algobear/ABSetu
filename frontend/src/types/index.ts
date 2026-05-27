@@ -114,6 +114,7 @@ export interface EntityType {
   config: Record<string, unknown> | null;
   sort_order: number;
   can_enroll: boolean;
+  max_active_enrollments: number | null;
   updated_at: string | null;
 }
 
@@ -211,6 +212,10 @@ export interface MetaFieldDefinition {
   dimension_id?: string | null;
   // For type="entity_list"
   entity_type_id?: string | null;
+  // For type="dimension" under enrollment scope: per-value cap on active
+  // enrollments. When set, this field participates in the composite
+  // uniqueness key. null = field not in key.
+  max_active_enrollments?: number | null;
   // For title generation config, status capture config, etc.
   config?: Record<string, unknown>;
 }

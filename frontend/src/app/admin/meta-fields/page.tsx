@@ -1265,6 +1265,42 @@ export default function MetaFieldsPage() {
               </div>
             )}
 
+            {/* Per-value active enrollment cap — only meaningful for
+                dimension fields under enrollment scope */}
+            {fieldForm.type === "dimension" && activeSection === "enrollment" && (
+              <div>
+                <Label htmlFor="field-max-active">
+                  Active enrollment cap{" "}
+                  <span className="text-gray-400 text-xs font-normal">(optional)</span>
+                </Label>
+                <select
+                  id="field-max-active"
+                  className="w-full border rounded-md p-2 text-sm"
+                  value={fieldForm.max_active_enrollments ?? ""}
+                  onChange={(e) =>
+                    setFieldForm({
+                      ...fieldForm,
+                      max_active_enrollments: e.target.value
+                        ? Number(e.target.value)
+                        : null,
+                    })
+                  }
+                >
+                  <option value="">No limit</option>
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                  <option value="3">3</option>
+                  <option value="5">5</option>
+                  <option value="10">10</option>
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Limits active enrollments per value of this field. If multiple
+                  fields are capped, they form a combined uniqueness key (e.g.
+                  Programme + Location).
+                </p>
+              </div>
+            )}
+
             {/* Entity type picker for type=entity_list */}
             {fieldForm.type === "entity_list" && (
               <div>

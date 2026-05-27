@@ -944,6 +944,10 @@ def seed():
         print(f"  Ensured session meta field schema ({len(session_fields)} fields)")
 
         # 7b-i. Enrollment fields (Programme + Location dimensions, admission/release dates)
+        # max_active_enrollments=1 on both Programme and Location → composite
+        # uniqueness key (Programme, Location). Beneficiary can be in (Outreach,
+        # Mumbai) and (Outreach, Delhi) at the same time, but not two
+        # (Outreach, Mumbai) actives.
         enrollment_fields: list[dict] = []
         for dim_name, required, sort_order in ENROLLMENT_DIMENSION_FIELDS:
             enrollment_fields.append(
@@ -954,6 +958,7 @@ def seed():
                     "required": required,
                     "stage": "create",
                     "sort_order": sort_order,
+                    "max_active_enrollments": 1,
                 }
             )
         for label, required, sort_order in ENROLLMENT_DATE_FIELDS:

@@ -130,10 +130,12 @@ def update_entity_type(
     db: Session = Depends(get_db),
 ):
     service = EntityTypeService(db)
+    # exclude_unset (not exclude_none) so an explicit null on
+    # nullable columns like max_active_enrollments can clear them.
     et = service.update(
         entity_type_id,
         current_user.organization_id,
-        data.model_dump(exclude_none=True),
+        data.model_dump(exclude_unset=True),
     )
     return EntityTypeResponse.dump_from_model(et)
 
