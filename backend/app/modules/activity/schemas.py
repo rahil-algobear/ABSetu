@@ -32,6 +32,7 @@ class ActivityTypeResponse(BaseResponseSchema):
 
 
 class DimensionInfo(BaseModel):
+    dimension_id: str
     dimension_key: str
     dimension_name: str
     value_id: str

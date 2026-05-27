@@ -77,19 +77,68 @@ def _build_entity_response(
     ).dump()
 
 
+def _enrollment_relevant_dim_ids(
+    db: Session, org_id: uuid.UUID, entity_type_id: uuid.UUID | None
+) -> set[uuid.UUID]:
+    """Dimension IDs that the org's enrollment form-builder tracks for
+    this entity type. The smart picker's 'in scope' check filters the
+    activity's dimensions down to these — activities can carry extra
+    dims (Project, Intervention) that enrollments don't track, and we
+    don't want those to exclude otherwise-matching enrollments."""
+    from app.modules.organization.service import MetaFieldSchemaService
+
+    meta_service = MetaFieldSchemaService(db)
+    relevant: set[uuid.UUID] = set()
+
+    def _harvest(fields: list[dict]) -> None:
+        for fd in fields:
+            if fd.get("type") == "dimension" and fd.get("dimension_id"):
+                relevant.add(uuid.UUID(fd["dimension_id"]))
+
+    _harvest(meta_service.get_schema_by_scope(org_id, "enrollment"))
+    if entity_type_id:
+        _harvest(
+            meta_service.get_schema_by_scope(org_id, "enrollment", entity_type_id=entity_type_id)
+        )
+    # NOTE: dimension-value scoped enrollment fields are intentionally
+    # excluded — they only apply to enrollments that already match those
+    # values, so they'd circularly bias the scope check.
+    return relevant
+
+
 def _compute_enrollment_status_map(
     db: Session,
+    org_id: uuid.UUID,
+    entity_type_id: uuid.UUID | None,
     entity_ids: list[uuid.UUID],
     activity_dv_ids: set[uuid.UUID],
 ) -> dict[uuid.UUID, str]:
     """Per-entity 'active_in_scope' / 'no_active_in_scope' for the
-    smart participant picker. An entity is active_in_scope iff it has at
-    least one active enrollment whose dimension value set is a superset
-    of the activity's dimension value set."""
+    smart participant picker. An entity is active_in_scope iff it has
+    at least one active enrollment whose dimension values cover all
+    enrollment-tracked dimensions the activity carries. Activity dims
+    on axes the enrollment doesn't track (e.g. Project/Intervention)
+    are ignored — they're activity-scoping, not enrollment-scoping."""
     from app.modules.enrollment.model import Enrollment
 
     if not entity_ids:
         return {}
+
+    # Filter activity_dv_ids down to the dimensions the enrollment
+    # schema actually tracks.
+    relevant_dim_ids = _enrollment_relevant_dim_ids(db, org_id, entity_type_id)
+    if relevant_dim_ids and activity_dv_ids:
+        from app.modules.dimension.model import DimensionValue
+
+        dv_rows = (
+            db.query(DimensionValue.id, DimensionValue.dimension_id)
+            .filter(DimensionValue.id.in_(activity_dv_ids))
+            .all()
+        )
+        scoped_activity_dvs = {dv_id for dv_id, dim_id in dv_rows if dim_id in relevant_dim_ids}
+    else:
+        scoped_activity_dvs = set()
+
     enrollments = (
         db.query(Enrollment)
         .filter(Enrollment.entity_id.in_(entity_ids), Enrollment.is_active.is_(True))
@@ -103,7 +152,7 @@ def _compute_enrollment_status_map(
     result: dict[uuid.UUID, str] = {}
     for eid in entity_ids:
         en_dvs = by_entity.get(eid, [])
-        if any(activity_dv_ids.issubset(s) for s in en_dvs):
+        if any(scoped_activity_dvs.issubset(s) for s in en_dvs):
             result[eid] = "active_in_scope"
         else:
             result[eid] = "no_active_in_scope"
@@ -265,7 +314,13 @@ def list_entities(
         )
         activity_dv_ids = {row[0] for row in activity_dvs}
         page_entity_ids = [entity.id for entity, *_ in rows]
-        status_map = _compute_enrollment_status_map(db, page_entity_ids, activity_dv_ids)
+        status_map = _compute_enrollment_status_map(
+            db,
+            current_user.organization_id,
+            entity_type_id,
+            page_entity_ids,
+            activity_dv_ids,
+        )
 
     data = [
         _build_entity_response(
