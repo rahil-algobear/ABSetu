@@ -24,6 +24,7 @@ class EnrollmentCreate(BaseModel):
     entity_id: str
     meta: dict[str, Any] | None = None
     dimension_value_ids: list[str] = []
+    is_active: bool = True
 
 
 class EnrollmentUpdate(BaseModel):
