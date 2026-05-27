@@ -235,6 +235,11 @@ export function ParticipantPicker({
           onClose={() => setShowCreateNew(false)}
           onSuccess={() => {
             setShowCreateNew(false);
+            // Land back on the picker with a clean state so the
+            // freshly-created beneficiary actually surfaces — they
+            // wouldn't match whatever the user had typed before.
+            setSearch("");
+            setTab("enrolled_here");
             refreshAfterAction();
           }}
         />

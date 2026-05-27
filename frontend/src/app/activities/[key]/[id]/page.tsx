@@ -634,11 +634,17 @@ export default function ActivityDetailPage() {
                             entityTypeId={fieldEntityType.id}
                             entityTypeName={getFieldLabel(field)}
                             alreadyAddedIds={alreadyAddedIds}
-                            onAdded={() =>
+                            onAdded={() => {
                               queryClient.invalidateQueries({
                                 queryKey: ["participants", id],
-                              })
-                            }
+                              });
+                              // New beneficiary (if created via picker) needs
+                              // to land in the entity name-lookup cache, else
+                              // the participant row renders as a UUID.
+                              queryClient.invalidateQueries({
+                                queryKey: ["entities-for-sections"],
+                              });
+                            }}
                           />
                         </Can>
                       )}
