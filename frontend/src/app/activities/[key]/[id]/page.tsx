@@ -22,7 +22,6 @@ import { formatDate, formatDateTime } from "@/utils/date";
 import { Can } from "@/components/Auth/Permissions";
 
 import { DynamicMetaForm } from "@/components/DynamicMetaForm";
-import { SearchSelectParticipants } from "@/components/SearchSelectParticipants";
 import { ParticipantPicker } from "@/components/ParticipantPicker";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,7 +29,8 @@ import { Badge } from "@/components/ui/badge";
 import { PageLayout } from "@/components/ui/page-layout";
 import { PageContent } from "@/components/ui/page-content";
 import { PageHeader } from "@/components/ui/page-header";
-import { Trash2, Pencil, Users } from "lucide-react";
+import { Search, Trash2, Pencil, Users, X } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import toast from "react-hot-toast";
 
 export default function ActivityDetailPage() {
@@ -38,7 +38,8 @@ export default function ActivityDetailPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  const [editingSections, setEditingSections] = useState(false);
+  // Phase 3.1: one section at a time. The section_key being edited, or null.
+  const [editingSection, setEditingSection] = useState<string | null>(null);
   const [editingDetails, setEditingDetails] = useState(false);
   const [detailMetaValues, setDetailMetaValues] = useState<Record<string, unknown>>({});
   const [participantState, setParticipantState] = useState<
@@ -154,17 +155,19 @@ export default function ActivityDetailPage() {
     return field.entity_type_id || field.key;
   };
 
-  const saveMutation = useMutation({
-    mutationFn: (records: { participant_type: string; participant_id: string; section_key: string; status?: string; meta?: Record<string, unknown> }[]) =>
-      activityApi.saveParticipants(id, records),
+  const saveSectionMutation = useMutation({
+    mutationFn: (args: {
+      sectionKey: string;
+      records: { participant_type: string; participant_id: string; status?: string; meta?: Record<string, unknown> }[];
+    }) => activityApi.replaceSectionParticipants(id, args.sectionKey, args.records),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["participants", id] });
-      setEditingSections(false);
-      toast.success("Participants saved");
+      setEditingSection(null);
+      toast.success("Saved");
     },
     onError: (err: unknown) => {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      toast.error(msg || "Failed to save participants");
+      toast.error(msg || "Failed to save");
     },
   });
 
@@ -205,69 +208,52 @@ export default function ActivityDetailPage() {
     }
   };
 
-  const openEditing = () => {
-    const state: typeof participantState = {};
-    for (const field of participantListFields) {
-      const sectionKey = getSectionKey(field);
-      const sectionParticipants = participants.filter((p) => p.section_key === sectionKey);
-      state[sectionKey] = sectionParticipants.map((p) => ({
+  const openSectionEditing = (sectionKey: string) => {
+    const sectionParticipants = participants.filter((p) => p.section_key === sectionKey);
+    setParticipantState({
+      ...participantState,
+      [sectionKey]: sectionParticipants.map((p) => ({
         participant_id: p.participant_id,
         participant_type: p.participant_type,
         status: p.status || undefined,
         meta: p.meta || undefined,
-      }));
-    }
-    setParticipantState(state);
-    setEditingSections(true);
+      })),
+    });
+    setEditingSection(sectionKey);
   };
 
-  const handleSave = () => {
-    // Validate required sections
-    for (const field of participantListFields) {
-      if (field.required) {
-        const sectionKey = getSectionKey(field);
-        const sectionState = participantState[sectionKey] || [];
-        if (sectionState.length === 0) {
-          toast.error(`${getFieldLabel(field)} is required — add at least one participant`);
+  const handleSectionSave = (field: MetaFieldDefinition) => {
+    const sectionKey = getSectionKey(field);
+    const sectionState = participantState[sectionKey] || [];
+
+    if (field.required && sectionState.length === 0) {
+      toast.error(
+        `${getFieldLabel(field)} is required — add at least one participant`,
+      );
+      return;
+    }
+
+    const metaFields = getParticipationMetaFields(field);
+    const requiredFields = metaFields.filter((f) => f.required);
+    for (const p of sectionState) {
+      const meta = p.meta || {};
+      for (const f of requiredFields) {
+        if (!meta[f.key]) {
+          toast.error(`"${f.label}" is required for all participants`);
           return;
         }
       }
     }
 
-    // Validate required meta fields per participant
-    for (const field of participantListFields) {
-      const sectionKey = getSectionKey(field);
-      const sectionState = participantState[sectionKey] || [];
-      const metaFields = getParticipationMetaFields(field);
-      const requiredFields = metaFields.filter((f) => f.required);
-      if (requiredFields.length > 0) {
-        for (const p of sectionState) {
-          const meta = p.meta || {};
-          for (const f of requiredFields) {
-            if (!meta[f.key]) {
-              toast.error(`"${f.label}" is required for all participants`);
-              return;
-            }
-          }
-        }
-      }
-    }
-
-    const records: { participant_type: string; participant_id: string; section_key: string; status?: string; meta?: Record<string, unknown> }[] = [];
-    for (const field of participantListFields) {
-      const sectionKey = getSectionKey(field);
-      const sectionState = participantState[sectionKey] || [];
-      for (const p of sectionState) {
-        records.push({
-          participant_type: p.participant_type,
-          participant_id: p.participant_id,
-          section_key: sectionKey,
-          status: p.status,
-          meta: p.meta,
-        });
-      }
-    }
-    saveMutation.mutate(records);
+    saveSectionMutation.mutate({
+      sectionKey,
+      records: sectionState.map((p) => ({
+        participant_type: p.participant_type,
+        participant_id: p.participant_id,
+        status: p.status,
+        meta: p.meta,
+      })),
+    });
   };
 
   const participantsBySection = useMemo(() => {
@@ -449,147 +435,14 @@ export default function ActivityDetailPage() {
       {/* Participant sections */}
       {participantListFields.length > 0 ? (
         <Card>
-          <CardHeader className="flex-row items-center justify-between pb-2">
+          <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
               <Users className="h-4 w-4 text-gray-500" />
               Participants
             </CardTitle>
-            <Can permission="activity:create">
-              {!editingSections && (
-                <Button size="sm" variant="outline" onClick={openEditing}>
-                  <Pencil className="h-3.5 w-3.5 mr-1" />
-                  Edit
-                </Button>
-              )}
-            </Can>
           </CardHeader>
           <CardContent className="space-y-4">
-            {editingSections ? (
-              <form onSubmit={(e) => { e.preventDefault(); handleSave(); }}>
-                {participantListFields.map((field) => {
-                  const sectionKey = getSectionKey(field);
-                  const isUserSource = field.type === "user_list";
-                  const options = isUserSource
-                    ? users.map((u) => ({ id: u.id, name: `${u.first_name} ${u.last_name}` }))
-                    : (entitiesByType[field.entity_type_id || ""] || []);
-                  const sectionState = participantState[sectionKey] || [];
-                  const participantType = isUserSource ? "user" : "entity";
-                  const metaFields = getParticipationMetaFields(field);
-
-                  const captureStatus = field.config?.capture_status as boolean || false;
-                  const statuses = (field.config?.statuses as string[]) || ["present", "absent"];
-                  const defaultStatus = (field.config?.default_status as string) || statuses[0];
-
-                  const useSearchSelect = field.display_type === "search_select";
-
-                  return (
-                    <div key={sectionKey}>
-                      <h3 className="text-sm font-semibold mb-2">
-                        {getFieldLabel(field)}
-                        {field.required && <span className="text-red-500 ml-0.5">*</span>}
-                      </h3>
-                      {useSearchSelect ? (
-                        <SearchSelectParticipants
-                          sectionKey={sectionKey}
-                          options={options}
-                          participantType={participantType}
-                          selected={sectionState}
-                          onChange={(records) =>
-                            setParticipantState({ ...participantState, [sectionKey]: records })
-                          }
-                          captureStatus={captureStatus}
-                          statuses={statuses}
-                          defaultStatus={defaultStatus}
-                          metaFields={metaFields}
-                          entityTypeId={isUserSource ? null : (field.entity_type_id || null)}
-                          entityTypeName={getFieldLabel(field)}
-                        />
-                      ) : (
-                      <div className="space-y-1 max-h-64 overflow-y-auto border rounded-md p-2">
-                        {options.map((opt) => {
-                          const existing = sectionState.find((s) => s.participant_id === opt.id);
-                          const isSelected = !!existing;
-
-                          return (
-                            <div key={opt.id} className="border-b last:border-0 pb-2 mb-2 last:pb-0 last:mb-0">
-                              <div className="flex items-center justify-between gap-2 text-sm">
-                                <label className="flex items-center gap-2 flex-1">
-                                  <input
-                                    type="checkbox"
-                                    checked={isSelected}
-                                    onChange={(e) => {
-                                      const newState = [...sectionState];
-                                      if (e.target.checked) {
-                                        newState.push({
-                                          participant_id: opt.id,
-                                          participant_type: participantType,
-                                          status: captureStatus ? defaultStatus : undefined,
-                                          meta: {},
-                                        });
-                                      } else {
-                                        const idx = newState.findIndex((s) => s.participant_id === opt.id);
-                                        if (idx >= 0) newState.splice(idx, 1);
-                                      }
-                                      setParticipantState({ ...participantState, [sectionKey]: newState });
-                                    }}
-                                  />
-                                  {opt.name}
-                                </label>
-                                {captureStatus && isSelected && (
-                                  <select
-                                    className="border rounded px-2 py-0.5 text-xs"
-                                    value={existing?.status || ""}
-                                    onChange={(e) => {
-                                      const newState = sectionState.map((s) =>
-                                        s.participant_id === opt.id
-                                          ? { ...s, status: e.target.value }
-                                          : s
-                                      );
-                                      setParticipantState({ ...participantState, [sectionKey]: newState });
-                                    }}
-                                  >
-                                    {statuses.map((st) => (
-                                      <option key={st} value={st}>{st}</option>
-                                    ))}
-                                  </select>
-                                )}
-                              </div>
-
-                              {isSelected && metaFields.length > 0 && (
-                                <div className="ml-6 mt-2">
-                                  <DynamicMetaForm
-                                    fields={metaFields}
-                                    values={existing?.meta || {}}
-                                    onChange={(newMeta) => {
-                                      const newState = sectionState.map((s) =>
-                                        s.participant_id === opt.id
-                                          ? { ...s, meta: newMeta }
-                                          : s
-                                      );
-                                      setParticipantState({ ...participantState, [sectionKey]: newState });
-                                    }}
-                                  />
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                      )}
-                    </div>
-                  );
-                })}
-                <div className="flex gap-2 pt-2">
-                  <Button type="submit" disabled={saveMutation.isPending}>
-                    Save
-                  </Button>
-                  <Button type="button" variant="outline" onClick={() => setEditingSections(false)}>
-                    Cancel
-                  </Button>
-                </div>
-              </form>
-            ) : (
-              participantListFields.map((field) => {
+            {participantListFields.map((field) => {
                 const sectionKey = getSectionKey(field);
                 const sectionParticipants = participantsBySection[sectionKey] || [];
                 const metaFields = getParticipationMetaFields(field);
@@ -606,9 +459,13 @@ export default function ActivityDetailPage() {
                   : null;
                 const smartPickerEligible =
                   !!fieldEntityType?.can_enroll && activity.dimensions.length > 0;
-                const alreadyAddedIds = new Set(
-                  sectionParticipants.map((p) => p.participant_id),
-                );
+                const alreadyAdded = sectionParticipants.map((p) => ({
+                  id: p.participant_id,
+                  name: getParticipantName(p),
+                }));
+
+                const isEditingThisSection = editingSection === sectionKey;
+                const anySectionEditing = editingSection !== null;
 
                 return (
                   <div key={sectionKey}>
@@ -620,36 +477,71 @@ export default function ActivityDetailPage() {
                           {sectionParticipants.length}
                         </Badge>
                       </h3>
-                      {smartPickerEligible && fieldEntityType && (
-                        <Can permission="activity:create">
-                          <ParticipantPicker
-                            activityId={activity.id}
-                            activityDimensions={activity.dimensions.map((d) => ({
-                              dimension_id: d.dimension_id,
-                              dimension_name: d.dimension_name,
-                              value_id: d.value_id,
-                              value_name: d.value_name,
-                            }))}
-                            sectionKey={sectionKey}
-                            entityTypeId={fieldEntityType.id}
-                            entityTypeName={getFieldLabel(field)}
-                            alreadyAddedIds={alreadyAddedIds}
-                            onAdded={() => {
-                              queryClient.invalidateQueries({
-                                queryKey: ["participants", id],
-                              });
-                              // New beneficiary (if created via picker) needs
-                              // to land in the entity name-lookup cache, else
-                              // the participant row renders as a UUID.
-                              queryClient.invalidateQueries({
-                                queryKey: ["entities-for-sections"],
-                              });
-                            }}
-                          />
-                        </Can>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {/* Picker hidden while any section is in edit mode (v1) */}
+                        {smartPickerEligible && fieldEntityType && !anySectionEditing && (
+                          <Can permission="activity:create">
+                            <ParticipantPicker
+                              activityId={activity.id}
+                              activityDimensions={activity.dimensions.map((d) => ({
+                                dimension_id: d.dimension_id,
+                                dimension_name: d.dimension_name,
+                                value_id: d.value_id,
+                                value_name: d.value_name,
+                              }))}
+                              sectionKey={sectionKey}
+                              entityTypeId={fieldEntityType.id}
+                              entityTypeName={getFieldLabel(field)}
+                              alreadyAdded={alreadyAdded}
+                              onAdded={() => {
+                                queryClient.invalidateQueries({
+                                  queryKey: ["participants", id],
+                                });
+                                queryClient.invalidateQueries({
+                                  queryKey: ["entities-for-sections"],
+                                });
+                              }}
+                            />
+                          </Can>
+                        )}
+                        {/* Per-section Edit button — only when there's something
+                            to edit, no other section is mid-edit, and this
+                            section isn't currently editing. */}
+                        {sectionParticipants.length > 0 &&
+                          !anySectionEditing && (
+                            <Can permission="activity:create">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => openSectionEditing(sectionKey)}
+                              >
+                                <Pencil className="h-3.5 w-3.5 mr-1" />
+                                Edit
+                              </Button>
+                            </Can>
+                          )}
+                      </div>
                     </div>
-                    {sectionParticipants.length === 0 ? (
+                    {isEditingThisSection ? (
+                      <SectionEditMode
+                        field={field}
+                        sectionKey={sectionKey}
+                        metaFields={metaFields}
+                        rows={participantState[sectionKey] || []}
+                        onRowsChange={(rows) =>
+                          setParticipantState({ ...participantState, [sectionKey]: rows })
+                        }
+                        getNameFor={(participantId) => {
+                          const p = sectionParticipants.find(
+                            (x) => x.participant_id === participantId,
+                          );
+                          return p ? getParticipantName(p) : participantId;
+                        }}
+                        onSave={() => handleSectionSave(field)}
+                        onCancel={() => setEditingSection(null)}
+                        saving={saveSectionMutation.isPending}
+                      />
+                    ) : sectionParticipants.length === 0 ? (
                       <p className="text-gray-400 text-xs italic py-2">No participants added yet</p>
                     ) : useTable ? (
                       <div className="border rounded-md overflow-x-auto">
@@ -708,8 +600,7 @@ export default function ActivityDetailPage() {
                     )}
                   </div>
                 );
-              })
-            )}
+              })}
           </CardContent>
         </Card>
       ) : (
@@ -746,5 +637,163 @@ export default function ActivityDetailPage() {
       )}
       </PageContent>
     </PageLayout>
+  );
+}
+
+interface SectionRow {
+  participant_id: string;
+  participant_type: string;
+  status?: string;
+  meta?: Record<string, unknown>;
+}
+
+/** Phase 3.1 per-section edit mode. Renders the existing rows (no
+ *  add affordance — that's the picker's job) with editable status +
+ *  meta cells + ✕ remove. Save calls the section-scoped endpoint. */
+function SectionEditMode({
+  field,
+  metaFields,
+  rows,
+  onRowsChange,
+  getNameFor,
+  onSave,
+  onCancel,
+  saving,
+}: {
+  field: MetaFieldDefinition;
+  sectionKey: string;
+  metaFields: MetaFieldDefinition[];
+  rows: SectionRow[];
+  onRowsChange: (rows: SectionRow[]) => void;
+  getNameFor: (participantId: string) => string;
+  onSave: () => void;
+  onCancel: () => void;
+  saving: boolean;
+}) {
+  const [search, setSearch] = useState("");
+  const captureStatus = (field.config?.capture_status as boolean) || false;
+  const statuses = (field.config?.statuses as string[]) || ["present", "absent"];
+
+  const normalize = (s: string) => s.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+  const filteredRows = useMemo(() => {
+    if (!search.trim()) return rows;
+    const needle = normalize(search);
+    return rows.filter((r) => normalize(getNameFor(r.participant_id)).includes(needle));
+  }, [rows, search, getNameFor]);
+
+  const updateRow = (participantId: string, patch: Partial<SectionRow>) => {
+    onRowsChange(
+      rows.map((r) =>
+        r.participant_id === participantId ? { ...r, ...patch } : r,
+      ),
+    );
+  };
+  const removeRow = (participantId: string) => {
+    onRowsChange(rows.filter((r) => r.participant_id !== participantId));
+  };
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSave();
+      }}
+      className="space-y-3"
+    >
+      {rows.length > 5 && (
+        <div className="relative">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
+          <Input
+            placeholder="Search…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-8"
+          />
+        </div>
+      )}
+
+      {rows.length === 0 ? (
+        <p className="text-gray-400 text-xs italic py-2">
+          No participants in this section. Cancel and use {`"+`} {field.label}{`"`} to add.
+        </p>
+      ) : filteredRows.length === 0 ? (
+        <p className="text-gray-400 text-xs italic py-2">No matches.</p>
+      ) : (
+        <div className="border rounded-md overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 border-b">
+              <tr>
+                <th className="text-left px-3 py-2 font-medium">Name</th>
+                {captureStatus && (
+                  <th className="text-left px-3 py-2 font-medium">Status</th>
+                )}
+                {metaFields.map((f) => (
+                  <th key={f.key} className="text-left px-3 py-2 font-medium">
+                    {f.label}
+                    {f.required && <span className="text-red-500 ml-0.5">*</span>}
+                  </th>
+                ))}
+                <th className="w-8" />
+              </tr>
+            </thead>
+            <tbody>
+              {filteredRows.map((r) => (
+                <tr key={r.participant_id} className="border-b last:border-0">
+                  <td className="px-3 py-2">{getNameFor(r.participant_id)}</td>
+                  {captureStatus && (
+                    <td className="px-3 py-2">
+                      <select
+                        className="border rounded px-2 py-1 text-xs"
+                        value={r.status || ""}
+                        onChange={(e) =>
+                          updateRow(r.participant_id, { status: e.target.value })
+                        }
+                      >
+                        <option value=""></option>
+                        {statuses.map((s) => (
+                          <option key={s} value={s}>
+                            {s}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                  )}
+                  {metaFields.map((f) => (
+                    <td key={f.key} className="px-3 py-2">
+                      <DynamicMetaForm
+                        fields={[f]}
+                        values={r.meta || {}}
+                        onChange={(newMeta) =>
+                          updateRow(r.participant_id, { meta: newMeta })
+                        }
+                      />
+                    </td>
+                  ))}
+                  <td className="px-2 py-2 text-right">
+                    <button
+                      type="button"
+                      onClick={() => removeRow(r.participant_id)}
+                      className="text-gray-400 hover:text-red-500"
+                      title="Remove"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div className="flex gap-2 pt-2">
+        <Button type="submit" disabled={saving}>
+          Save
+        </Button>
+        <Button type="button" variant="outline" onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
+    </form>
   );
 }

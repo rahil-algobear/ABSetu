@@ -46,6 +46,11 @@ interface ActivityDimensionValue {
   value_name: string;
 }
 
+interface AlreadyAddedParticipant {
+  id: string;
+  name: string;
+}
+
 interface ParticipantPickerProps {
   activityId: string;
   /** Dimensions the activity is scoped to. The picker matches rows
@@ -54,9 +59,10 @@ interface ParticipantPickerProps {
   sectionKey: string;
   entityTypeId: string;
   entityTypeName: string;
-  /** Participant IDs already attached to this activity — those rows
-   *  show as "✓ Added" instead of an action button. */
-  alreadyAddedIds: Set<string>;
+  /** Currently-added participants in this section. Picker uses these
+   *  for the Added tab (no separate fetch needed) and to filter them
+   *  out of the Enrolled tab. */
+  alreadyAdded: AlreadyAddedParticipant[];
   /** Fired after a successful picker action. Parent should re-fetch
    *  the activity's participants. */
   onAdded: () => void;
@@ -64,49 +70,109 @@ interface ParticipantPickerProps {
   triggerLabel?: string;
 }
 
+type PickerTab = "added" | "enrolled" | "all";
+
+const normalize = (s: string) =>
+  s.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+
 export function ParticipantPicker({
   activityId,
   activityDimensions,
   sectionKey,
   entityTypeId,
   entityTypeName,
-  alreadyAddedIds,
+  alreadyAdded,
   onAdded,
   triggerLabel,
 }: ParticipantPickerProps) {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const [tab, setTab] = useState<"enrolled_here" | "all">("enrolled_here");
+  const [tab, setTab] = useState<PickerTab>("enrolled");
   const [enrollFor, setEnrollFor] = useState<Entity | null>(null);
   const [showCreateNew, setShowCreateNew] = useState(false);
 
-  const activityDvIds = useMemo(
-    () => activityDimensions.map((d) => d.value_id),
-    [activityDimensions],
+  const alreadyAddedIds = useMemo(
+    () => new Set(alreadyAdded.map((p) => p.id)),
+    [alreadyAdded],
   );
 
-  // Fetch beneficiaries with enrollment_status for this activity.
-  const { data: entitiesResp, isLoading } = useQuery({
-    queryKey: ["picker-entities", entityTypeId, activityId, search],
+  // Cohort query — every entity with active_in_scope status. No search
+  // (cohort size is bounded by scope; client-side filter handles it).
+  const { data: cohortResp, isLoading: cohortLoading } = useQuery({
+    queryKey: ["picker-cohort", entityTypeId, activityId],
     queryFn: () =>
       entityApi.listPaginated({
         entity_type_id: entityTypeId,
         with_enrollment_status_for_activity: activityId,
-        search: search || undefined,
-        limit: 50,
+        limit: 500,
       }),
     enabled: open,
   });
-  const entities: Entity[] = entitiesResp?.data || [];
+  const cohortEntities: Entity[] = cohortResp?.data || [];
+  const enrolledEntities = useMemo(
+    () => cohortEntities.filter((e) => e.enrollment_status === "active_in_scope"),
+    [cohortEntities],
+  );
 
-  const filteredEntities = useMemo(() => {
-    if (tab === "all") return entities;
-    return entities.filter((e) => e.enrollment_status === "active_in_scope");
-  }, [entities, tab]);
+  // Search query — only fires on the All tab when the user has typed.
+  // Backend uses normalize=True so "auto test" matches "Auto-Test 48".
+  const { data: searchResp, isLoading: searchLoading } = useQuery({
+    queryKey: ["picker-search", entityTypeId, activityId, search],
+    queryFn: () =>
+      entityApi.listPaginated({
+        entity_type_id: entityTypeId,
+        with_enrollment_status_for_activity: activityId,
+        search,
+        limit: 50,
+      }),
+    enabled: open && tab === "all" && search.trim().length > 0,
+  });
+  const searchEntities: Entity[] = searchResp?.data || [];
+  const searchTotal = searchResp?.count ?? 0;
+
+  // Client-side filter helper for tabs that aren't search-driven.
+  const matchesSearch = (name: string) => {
+    if (!search.trim()) return true;
+    return normalize(name).includes(normalize(search));
+  };
+
+  const getName = (e: Entity): string => {
+    const firstStringVal = Object.values(e.meta || {}).find(
+      (v) => typeof v === "string" && v,
+    ) as string | undefined;
+    return firstStringVal || e.code || e.id;
+  };
+
+  // Per-tab visible rows.
+  const addedRows = useMemo(
+    () =>
+      [...alreadyAdded]
+        .filter((p) => matchesSearch(p.name))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [alreadyAdded, search],
+  );
+  const enrolledRows = useMemo(
+    () =>
+      enrolledEntities
+        .filter((e) => !alreadyAddedIds.has(e.id))
+        .filter((e) => matchesSearch(getName(e)))
+        .sort((a, b) => getName(a).localeCompare(getName(b))),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [enrolledEntities, alreadyAddedIds, search],
+  );
+
+  // Counts — absolute totals, not the search-filtered visible list.
+  const addedCount = alreadyAdded.length;
+  const enrolledCount = enrolledEntities.filter(
+    (e) => !alreadyAddedIds.has(e.id),
+  ).length;
+  const allCount = search.trim() ? searchTotal : 0;
 
   const refreshAfterAction = () => {
-    queryClient.invalidateQueries({ queryKey: ["picker-entities"] });
+    queryClient.invalidateQueries({ queryKey: ["picker-cohort"] });
+    queryClient.invalidateQueries({ queryKey: ["picker-search"] });
     onAdded();
   };
 
@@ -128,7 +194,7 @@ export function ParticipantPicker({
   const close = () => {
     setOpen(false);
     setSearch("");
-    setTab("enrolled_here");
+    setTab("enrolled");
     setEnrollFor(null);
   };
 
@@ -158,42 +224,94 @@ export function ParticipantPicker({
 
           <div className="flex gap-2">
             <TabPill
-              active={tab === "enrolled_here"}
-              label="Enrolled here"
-              count={
-                entities.filter((e) => e.enrollment_status === "active_in_scope")
-                  .length
-              }
-              onClick={() => setTab("enrolled_here")}
+              active={tab === "added"}
+              label="Added"
+              count={addedCount}
+              onClick={() => setTab("added")}
+            />
+            <TabPill
+              active={tab === "enrolled"}
+              label="Enrolled"
+              count={enrolledCount}
+              onClick={() => setTab("enrolled")}
             />
             <TabPill
               active={tab === "all"}
               label="All"
-              count={entities.length}
+              count={allCount}
               onClick={() => setTab("all")}
             />
           </div>
 
           <div className="max-h-96 overflow-y-auto border rounded-md divide-y">
-            {isLoading ? (
-              <p className="text-sm text-gray-500 p-3">Loading…</p>
-            ) : filteredEntities.length === 0 ? (
-              <p className="text-sm text-gray-500 p-3">
-                {tab === "enrolled_here"
-                  ? "No one is enrolled here yet."
-                  : `No ${entityTypeName.toLowerCase()} found.`}
-              </p>
-            ) : (
-              filteredEntities.map((e) => (
-                <PickerRow
-                  key={e.id}
-                  entity={e}
-                  alreadyAdded={alreadyAddedIds.has(e.id)}
-                  onAdd={() => addMutation.mutate(e.id)}
-                  onEnrollAndAdd={() => setEnrollFor(e)}
-                  pending={addMutation.isPending}
-                />
-              ))
+            {tab === "added" && (
+              addedRows.length === 0 ? (
+                <p className="text-sm text-gray-500 p-3">
+                  {search.trim()
+                    ? `No added ${entityTypeName.toLowerCase()} match.`
+                    : `No ${entityTypeName.toLowerCase()} added yet.`}
+                </p>
+              ) : (
+                addedRows.map((p) => (
+                  <div
+                    key={p.id}
+                    className="flex items-center justify-between gap-3 px-3 py-2"
+                  >
+                    <div className="text-sm font-medium text-gray-800 truncate">
+                      {p.name}
+                    </div>
+                    <span className="text-xs text-gray-500 px-2">✓ Added</span>
+                  </div>
+                ))
+              )
+            )}
+
+            {tab === "enrolled" && (
+              cohortLoading ? (
+                <p className="text-sm text-gray-500 p-3">Loading…</p>
+              ) : enrolledRows.length === 0 ? (
+                <p className="text-sm text-gray-500 p-3">
+                  {search.trim()
+                    ? `No enrolled ${entityTypeName.toLowerCase()} match.`
+                    : `No ${entityTypeName.toLowerCase()} is enrolled here yet.`}
+                </p>
+              ) : (
+                enrolledRows.map((e) => (
+                  <PickerRow
+                    key={e.id}
+                    entity={e}
+                    alreadyAdded={false}
+                    onAdd={() => addMutation.mutate(e.id)}
+                    onEnrollAndAdd={() => setEnrollFor(e)}
+                    pending={addMutation.isPending}
+                  />
+                ))
+              )
+            )}
+
+            {tab === "all" && (
+              !search.trim() ? (
+                <p className="text-sm text-gray-500 p-3">
+                  Type to search {entityTypeName.toLowerCase()}…
+                </p>
+              ) : searchLoading ? (
+                <p className="text-sm text-gray-500 p-3">Searching…</p>
+              ) : searchEntities.length === 0 ? (
+                <p className="text-sm text-gray-500 p-3">
+                  No {entityTypeName.toLowerCase()} match.
+                </p>
+              ) : (
+                searchEntities.map((e) => (
+                  <PickerRow
+                    key={e.id}
+                    entity={e}
+                    alreadyAdded={alreadyAddedIds.has(e.id)}
+                    onAdd={() => addMutation.mutate(e.id)}
+                    onEnrollAndAdd={() => setEnrollFor(e)}
+                    pending={addMutation.isPending}
+                  />
+                ))
+              )
             )}
           </div>
 
@@ -239,7 +357,7 @@ export function ParticipantPicker({
             // freshly-created beneficiary actually surfaces — they
             // wouldn't match whatever the user had typed before.
             setSearch("");
-            setTab("enrolled_here");
+            setTab("enrolled");
             refreshAfterAction();
           }}
         />

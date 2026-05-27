@@ -281,7 +281,8 @@ class EntityService:
         # Always include code in search if searchable or no config
         if searchable_keys is None or "code" in searchable_keys:
             search_columns.append(Entity.code)
-        query = apply_search(query, params.search, search_columns)
+        # normalize=True so "auto test" matches "Auto-Test 48", etc.
+        query = apply_search(query, params.search, search_columns, normalize=True)
 
         # Filters (static + dimension + meta from list config)
         filter_config = self.get_filter_config()

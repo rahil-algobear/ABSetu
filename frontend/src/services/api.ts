@@ -357,6 +357,18 @@ export const activityApi = {
     const response = await authAxios.post<ActivityParticipant[]>(`/activities/${activityId}/participants`, { records });
     return response.data;
   },
+  replaceSectionParticipants: async (
+    activityId: string,
+    sectionKey: string,
+    records: { participant_type: string; participant_id: string; status?: string; meta?: Record<string, unknown> }[],
+  ): Promise<ActivityParticipant[]> => {
+    const response = await authAxios.put<ActivityParticipant[]>(
+      `/activities/${activityId}/participants`,
+      { records },
+      { params: { section_key: sectionKey } },
+    );
+    return response.data;
+  },
 
   // --- Smart picker (Phase 3) ---
 
