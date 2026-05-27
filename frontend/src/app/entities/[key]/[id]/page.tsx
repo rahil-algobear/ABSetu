@@ -433,7 +433,7 @@ export default function EntityDetailPage() {
                                     })
                                   }
                                 >
-                                  End enrollment
+                                  Set Inactive
                                 </Button>
                               ) : (
                                 <Button
@@ -447,7 +447,7 @@ export default function EntityDetailPage() {
                                     })
                                   }
                                 >
-                                  Start again
+                                  Set Active
                                 </Button>
                               )}
                               <Button
@@ -562,6 +562,7 @@ function EnrollmentForm({
   const [isActive, setIsActive] = useState<boolean>(
     initialIsActive ?? enrollment?.is_active ?? true,
   );
+  const [formError, setFormError] = useState<string | null>(null);
 
   const { data: dimensions = [] } = useQuery<Dimension[]>({
     queryKey: ["dimensions"],
@@ -635,7 +636,7 @@ function EnrollmentForm({
       onSuccess();
     },
     onError: (err: { response?: { data?: { message?: string } } }) => {
-      toast.error(err.response?.data?.message || "Failed to create enrollment");
+      setFormError(err.response?.data?.message || "Failed to create enrollment");
     },
   });
 
@@ -650,12 +651,13 @@ function EnrollmentForm({
       onSuccess();
     },
     onError: (err: { response?: { data?: { message?: string } } }) => {
-      toast.error(err.response?.data?.message || "Failed to update enrollment");
+      setFormError(err.response?.data?.message || "Failed to update enrollment");
     },
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError(null);
 
     // Validate required fields (mirrors activity create page)
     for (const field of formFields) {
@@ -667,14 +669,14 @@ function EnrollmentForm({
           allDimensionValues.find((dv) => dv.id === dvId)?.dimension_id === dimId,
         );
         if (!hasValue) {
-          toast.error(`${field.label} is required`);
+          setFormError(`${field.label} is required.`);
           return;
         }
         continue;
       }
       const val = metaValues[field.key];
       if (val === undefined || val === null || val === "") {
-        toast.error(`${field.label} is required`);
+        setFormError(`${field.label} is required.`);
         return;
       }
     }
@@ -759,6 +761,11 @@ function EnrollmentForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
+      {formError && (
+        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {formError}
+        </div>
+      )}
       {formFields.length === 0 ? (
         <p className="text-sm text-gray-500">
           No fields have been configured for enrollments. Please ask your admin to set them up in Form Fields under Admin settings.
