@@ -343,6 +343,16 @@ mode** + a **3-tab picker** that handles the full lifecycle.
 - `Added` tab uses parent-supplied participant data (no separate
   fetch).
 
+**Pagination & sort per tab:**
+
+| Tab | Pagination | Sort | Rationale |
+|---|---|---|---|
+| Added | None — show all | `created_at` ascending (order they were added) | Matches the existing per-row table; small bounded set (a session typically has 5–80 added) |
+| Enrolled | None — show all (lift the existing `limit: 50` cap) | First meta string (name) ascending | Browsable cohort; staff scan for a name; cohort size is bounded by the activity's scope |
+| All | Paginated (server default `limit: 50`) | First meta string ascending | Search-driven; user is looking for a specific person, not scrolling a roster |
+
+The `Enrolled` query passes `sort_by=meta:<first_text_field_key>` (the entity type's first meta field, typically a name) so the cohort scans in a useful order rather than created-at-desc. Same applies to `All`.
+
 ### What's gone
 
 - The global `Edit Participants` CTA at the top of the participants
