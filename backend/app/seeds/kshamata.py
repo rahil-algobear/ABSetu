@@ -45,12 +45,12 @@ ORG_LOGO_URL = "https://kshamata.org/wp-content/uploads/2022/06/revised-logo.png
 ENTITY_TYPES = [
     {
         "name": "Beneficiary",
-        "config": {"can_enroll": True},
+        "can_enroll": True,
         "sort_order": 0,
     },
     {
         "name": "Facilitator",
-        "config": {"can_enroll": False},
+        "can_enroll": False,
         "sort_order": 1,
     },
 ]
@@ -749,7 +749,7 @@ def seed():
                     organization_id=org.id,
                     name=et_data["name"],
                     key=slug,
-                    config=et_data["config"],
+                    can_enroll=et_data["can_enroll"],
                     sort_order=et_data["sort_order"],
                 )
                 db.add(et)

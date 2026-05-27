@@ -26,7 +26,7 @@ export default function EntityTypesPage() {
   const queryClient = useQueryClient();
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<EntityType | null>(null);
-  const [form, setForm] = useState({ name: "", can_enroll: false });
+  const [form, setForm] = useState({ name: "", can_enroll: true });
 
   const { data: entityTypes = [], isLoading } = useQuery({
     queryKey: ["entity-types"],
@@ -65,16 +65,15 @@ export default function EntityTypesPage() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ name: "", can_enroll: false });
+    setForm({ name: "", can_enroll: true });
     setModalOpen(true);
   };
 
   const openEdit = (item: EntityType) => {
     setEditing(item);
-    const config = (item.config || {}) as Record<string, boolean>;
     setForm({
       name: item.name,
-      can_enroll: config.can_enroll || false,
+      can_enroll: item.can_enroll,
     });
     setModalOpen(true);
   };
@@ -86,16 +85,13 @@ export default function EntityTypesPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const config = {
-      can_enroll: form.can_enroll,
-    };
     if (editing) {
       updateMutation.mutate({
         id: editing.id,
-        data: { name: form.name, config },
+        data: { name: form.name, can_enroll: form.can_enroll },
       });
     } else {
-      createMutation.mutate({ name: form.name, config });
+      createMutation.mutate({ name: form.name, can_enroll: form.can_enroll });
     }
   };
 
@@ -129,11 +125,10 @@ export default function EntityTypesPage() {
           </TableHeader>
           <TableBody>
             {entityTypes.map((et) => {
-              const config = (et.config || {}) as Record<string, boolean>;
               return (
                 <TableRow key={et.id}>
                   <TableCell>{et.name}</TableCell>
-                  <TableCell>{config.can_enroll ? "Yes" : "No"}</TableCell>
+                  <TableCell>{et.can_enroll ? "Yes" : "No"}</TableCell>
                   <TableCell>
                     <Can permission="entity_type:manage">
                       <div className="flex items-center justify-center gap-2">

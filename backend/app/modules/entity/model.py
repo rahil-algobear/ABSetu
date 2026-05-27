@@ -2,7 +2,17 @@
 Entity models: EntityType, Entity, CodeCounter
 """
 
-from sqlalchemy import Column, ForeignKey, Index, Integer, String, UniqueConstraint, text
+from sqlalchemy import (
+    Boolean,
+    Column,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    UniqueConstraint,
+    text,
+    true,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 
@@ -22,20 +32,12 @@ class EntityType(BaseModel):
     key = Column(String, nullable=False)
     config = Column(JSONB, nullable=True, default=dict)
     sort_order = Column(Integer, nullable=False, default=0)
+    can_enroll = Column(Boolean, nullable=False, default=True, server_default=true())
 
     organization = relationship("Organization", back_populates="entity_types")
     entities = relationship("Entity", back_populates="entity_type", lazy="dynamic")
 
     __table_args__ = (UniqueConstraint("organization_id", "key", name="uq_entity_type_org_key"),)
-
-    @property
-    def can_enroll(self) -> bool:
-        """Whether entities of this type can have enrollments.
-
-        Sole source of truth for the enrollability check — read this
-        instead of poking at config["can_enroll"] directly.
-        """
-        return (self.config or {}).get("can_enroll", True) is not False
 
 
 class Entity(BaseModel):

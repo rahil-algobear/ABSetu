@@ -15,12 +15,14 @@ class EntityTypeCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     config: dict[str, Any] | None = None
     sort_order: int = 0
+    can_enroll: bool = True
 
 
 class EntityTypeUpdate(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=200)
     config: dict[str, Any] | None = None
     sort_order: int | None = None
+    can_enroll: bool | None = None
 
 
 class EntityTypeResponse(BaseResponseSchema):
