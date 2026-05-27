@@ -72,7 +72,9 @@ export default function EntityDetailPage() {
 
 
   const [showCreate, setShowCreate] = useState(false);
-  const [editingEnrollment, setEditingEnrollment] = useState<Enrollment | null>(null);
+  const [enrollmentAction, setEnrollmentAction] = useState<
+    { enrollment: Enrollment; mode: "edit" | "end" | "start" } | null
+  >(null);
   const [editingDetails, setEditingDetails] = useState(false);
   const [detailMetaValues, setDetailMetaValues] = useState<Record<string, unknown>>({});
 
@@ -226,7 +228,7 @@ export default function EntityDetailPage() {
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg">Enrollments</CardTitle>
               <Can permission="enrollment:manage">
-                {!showCreate && !editingEnrollment && (
+                {!showCreate && !enrollmentAction && (
                   <Button size="sm" onClick={() => setShowCreate(true)}>
                     <Plus className="h-4 w-4 mr-1" />
                     Add
@@ -249,21 +251,22 @@ export default function EntityDetailPage() {
               />
             )}
 
-            {editingEnrollment && (
+            {enrollmentAction && (
               <EnrollmentForm
                 entityId={id}
                 entityTypeId={entity.entity_type_id}
-                enrollment={editingEnrollment}
+                enrollment={enrollmentAction.enrollment}
+                mode={enrollmentAction.mode}
                 allSchemas={allSchemas}
                 onSuccess={() => {
-                  setEditingEnrollment(null);
+                  setEnrollmentAction(null);
                   queryClient.invalidateQueries({ queryKey: ["enrollments-entity", id] });
                 }}
-                onCancel={() => setEditingEnrollment(null)}
+                onCancel={() => setEnrollmentAction(null)}
               />
             )}
 
-            {!showCreate && !editingEnrollment && (
+            {!showCreate && !enrollmentAction && (
               <>
                 {enrollments.length === 0 ? (
                   <p className="text-gray-500 text-sm">No enrollments</p>
@@ -295,27 +298,73 @@ export default function EntityDetailPage() {
                           return { label: f.label, value: formatted };
                         });
                       const allPairs = [...dimensionPairs, ...fieldPairs];
+                      const isActive = e.is_active;
                       return (
                         <div
                           key={e.id}
-                          className="flex items-start justify-between p-3 border rounded gap-3"
+                          className={`flex flex-col p-3 border rounded gap-2 ${
+                            isActive ? "" : "bg-gray-50 border-gray-200"
+                          }`}
                         >
-                          <div className="flex-1 min-w-0 space-y-1 text-sm">
-                            {allPairs.map((p, i) => (
-                              <div key={`${p.label}-${i}`}>
-                                <span className="text-gray-500">{p.label}:</span>{" "}
-                                <span className="font-medium text-gray-800">{p.value}</span>
-                              </div>
-                            ))}
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex-1 min-w-0 space-y-1 text-sm">
+                              {!isActive && (
+                                <Badge variant="secondary" className="mb-1 text-xs">
+                                  Ended
+                                </Badge>
+                              )}
+                              {allPairs.map((p, i) => (
+                                <div
+                                  key={`${p.label}-${i}`}
+                                  className={isActive ? "" : "text-gray-500"}
+                                >
+                                  <span className="text-gray-500">{p.label}:</span>{" "}
+                                  <span
+                                    className={`font-medium ${
+                                      isActive ? "text-gray-800" : "text-gray-600"
+                                    }`}
+                                  >
+                                    {p.value}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                            <Can permission="enrollment:manage">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() =>
+                                  setEnrollmentAction({ enrollment: e, mode: "edit" })
+                                }
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                            </Can>
                           </div>
                           <Can permission="enrollment:manage">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => setEditingEnrollment(e)}
-                            >
-                              <Pencil className="h-3.5 w-3.5" />
-                            </Button>
+                            {isActive ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="self-start text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                                onClick={() =>
+                                  setEnrollmentAction({ enrollment: e, mode: "end" })
+                                }
+                              >
+                                End enrollment
+                              </Button>
+                            ) : (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="self-start"
+                                onClick={() =>
+                                  setEnrollmentAction({ enrollment: e, mode: "start" })
+                                }
+                              >
+                                Start again
+                              </Button>
+                            )}
                           </Can>
                         </div>
                       );
@@ -400,6 +449,7 @@ function EnrollmentForm({
   entityId,
   entityTypeId,
   enrollment,
+  mode = "edit",
   allSchemas,
   onSuccess,
   onCancel,
@@ -407,6 +457,7 @@ function EnrollmentForm({
   entityId: string;
   entityTypeId: string;
   enrollment?: Enrollment;
+  mode?: "edit" | "end" | "start";
   allSchemas: MetaFieldSchemaItem[];
   onSuccess: () => void;
   onCancel: () => void;
@@ -494,10 +545,23 @@ function EnrollmentForm({
         enrollmentApi.updateDimensions(data.id, data.tagIds),
       ]),
     onSuccess: () => {
-      toast.success("Enrollment updated");
+      toast.success(
+        mode === "end"
+          ? "Enrollment ended"
+          : mode === "start"
+            ? "Enrollment started"
+            : "Enrollment updated",
+      );
       onSuccess();
     },
-    onError: () => toast.error("Failed to update enrollment"),
+    onError: () =>
+      toast.error(
+        mode === "end"
+          ? "Failed to end enrollment"
+          : mode === "start"
+            ? "Failed to start enrollment"
+            : "Failed to update enrollment",
+      ),
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -527,9 +591,12 @@ function EnrollmentForm({
 
     const meta = Object.keys(metaValues).length > 0 ? metaValues : undefined;
     if (isEdit && enrollment) {
+      const updates: Partial<Enrollment> = { meta };
+      if (mode === "end") updates.is_active = false;
+      else if (mode === "start") updates.is_active = true;
       updateMutation.mutate({
         id: enrollment.id,
-        updates: { meta },
+        updates,
         tagIds: dimensionValueIds,
       });
     } else {
@@ -604,7 +671,13 @@ function EnrollmentForm({
     <div className="border rounded p-3 mb-3 bg-gray-50">
       <div className="flex items-center justify-between mb-3">
         <h3 className="font-medium text-sm">
-          {isEdit ? "Edit Enrollment" : "New Enrollment"}
+          {mode === "end"
+            ? "End Enrollment"
+            : mode === "start"
+              ? "Start Enrollment"
+              : isEdit
+                ? "Edit Enrollment"
+                : "New Enrollment"}
         </h3>
         <Button size="sm" variant="ghost" onClick={onCancel}>
           <X className="h-4 w-4" />
@@ -621,8 +694,22 @@ function EnrollmentForm({
 
         <div className="flex gap-2">
           {formFields.length > 0 && (
-            <Button type="submit" disabled={isPending}>
-              {isEdit ? "Save" : "Create"}
+            <Button
+              type="submit"
+              disabled={isPending}
+              className={
+                mode === "end"
+                  ? "bg-red-600 hover:bg-red-700 text-white"
+                  : undefined
+              }
+            >
+              {mode === "end"
+                ? "End enrollment"
+                : mode === "start"
+                  ? "Start enrollment"
+                  : isEdit
+                    ? "Save"
+                    : "Create"}
             </Button>
           )}
           <Button type="button" variant="outline" onClick={onCancel}>

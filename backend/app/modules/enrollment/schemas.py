@@ -28,10 +28,12 @@ class EnrollmentCreate(BaseModel):
 
 class EnrollmentUpdate(BaseModel):
     meta: dict[str, Any] | None = None
+    is_active: bool | None = None
 
 
 class EnrollmentResponse(BaseResponseSchema):
     organization_id: str
     entity_id: str
     meta: dict[str, Any] | None = None
+    is_active: bool = True
     dimensions: list[DimensionInfo] = []
