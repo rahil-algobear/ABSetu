@@ -270,48 +270,28 @@ export default function EntityDetailPage() {
                 ) : (
                   <div className="space-y-2">
                     {enrollments.map((e) => {
-                      const dateFields = collectEnrollmentFields(
+                      const nonDimensionFields = collectEnrollmentFields(
                         allSchemas,
                         entity.entity_type_id,
                         e.dimensions?.map((d) => d.value_id) || [],
-                      ).filter((f) => f.type === "date" && f.visible !== false);
-                      // Optional date fields act as end-of-enrollment markers
-                      // (e.g. "Date of Release"). If any has a value, the
-                      // enrollment is considered released.
-                      const released = dateFields.some(
-                        (f) => !f.required && e.meta?.[f.key],
-                      );
+                      ).filter((f) => f.type !== "dimension" && f.visible !== false);
                       return (
-                      <div
-                        key={e.id}
-                        className="flex justify-between items-center p-2 border rounded"
-                      >
-                        <div>
-                          <div className="flex gap-1 mb-0.5 flex-wrap">
-                            {e.dimensions?.map((dim) => (
-                              <Badge key={dim.value_id} variant="secondary" className="text-xs">
-                                {dim.value_name}
-                              </Badge>
-                            ))}
+                        <div
+                          key={e.id}
+                          className="flex justify-between items-start p-2 border rounded gap-2"
+                        >
+                          <div className="flex-1 min-w-0">
+                            {e.dimensions && e.dimensions.length > 0 && (
+                              <div className="flex gap-1 mb-2 flex-wrap">
+                                {e.dimensions.map((dim) => (
+                                  <Badge key={dim.value_id} variant="secondary" className="text-xs">
+                                    {dim.value_name}
+                                  </Badge>
+                                ))}
+                              </div>
+                            )}
+                            <MetaFieldDisplay fields={nonDimensionFields} values={e.meta} />
                           </div>
-                          {dateFields.length > 0 && (
-                            <p className="text-xs text-gray-500">
-                              {dateFields
-                                .map((f) => {
-                                  const val = e.meta?.[f.key] as string | undefined;
-                                  return val
-                                    ? `${f.label}: ${formatDate(val)}`
-                                    : null;
-                                })
-                                .filter(Boolean)
-                                .join(" · ")}
-                            </p>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Badge variant={released ? "secondary" : "default"}>
-                            {released ? "Released" : "Active"}
-                          </Badge>
                           <Can permission="enrollment:manage">
                             <Button
                               size="sm"
@@ -322,7 +302,6 @@ export default function EntityDetailPage() {
                             </Button>
                           </Can>
                         </div>
-                      </div>
                       );
                     })}
                   </div>
