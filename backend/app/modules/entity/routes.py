@@ -39,6 +39,7 @@ def _build_entity_response(
     enrollment_count: int = 0,
     activity_count: int = 0,
     created_by_name: str | None = None,
+    enrollment_status: str | None = None,
 ) -> dict:
     meta = e.meta or {}
     dim_infos = []
@@ -72,7 +73,41 @@ def _build_entity_response(
         dimensions=dim_infos,
         enrollment_count=enrollment_count,
         activity_count=activity_count,
+        enrollment_status=enrollment_status,
     ).dump()
+
+
+def _compute_enrollment_status_map(
+    db: Session,
+    entity_ids: list[uuid.UUID],
+    activity_dv_ids: set[uuid.UUID],
+) -> dict[uuid.UUID, str]:
+    """Per-entity 'active_in_scope' / 'no_active_in_scope' for the
+    smart participant picker. An entity is active_in_scope iff it has at
+    least one active enrollment whose dimension value set is a superset
+    of the activity's dimension value set."""
+    from app.modules.enrollment.model import Enrollment
+
+    if not entity_ids:
+        return {}
+    enrollments = (
+        db.query(Enrollment)
+        .filter(Enrollment.entity_id.in_(entity_ids), Enrollment.is_active.is_(True))
+        .all()
+    )
+    by_entity: dict[uuid.UUID, list[set[uuid.UUID]]] = {}
+    for e in enrollments:
+        by_entity.setdefault(e.entity_id, []).append(
+            {d.dimension_value_id for d in (e.dimensions or [])}
+        )
+    result: dict[uuid.UUID, str] = {}
+    for eid in entity_ids:
+        en_dvs = by_entity.get(eid, [])
+        if any(activity_dv_ids.issubset(s) for s in en_dvs):
+            result[eid] = "active_in_scope"
+        else:
+            result[eid] = "no_active_in_scope"
+    return result
 
 
 # --- Entity Types ---
@@ -167,6 +202,15 @@ def list_entities(
     sort_order: str = Query("desc", pattern="^(asc|desc)$"),
     filters: str | None = Query(None),
     entity_type_id: uuid.UUID | None = Query(None),
+    with_enrollment_status_for_activity: uuid.UUID
+    | None = Query(
+        None,
+        description=(
+            "When set, each row gets an enrollment_status field indicating "
+            "whether the entity has an active enrollment whose dimensions "
+            "cover this activity's dimension scope."
+        ),
+    ),
     current_user: User = Depends(get_current_user),
     accessible_dv_ids: list[uuid.UUID] | None = Depends(get_accessible_dimension_value_ids),
     db: Session = Depends(get_db),
@@ -209,8 +253,28 @@ def list_entities(
         accessible_dv_ids=accessible_dv_ids,
         list_columns=list_columns,
     )
+
+    status_map: dict[uuid.UUID, str] = {}
+    if with_enrollment_status_for_activity is not None:
+        from app.modules.dimension.model import ActivityDimension
+
+        activity_dvs = (
+            db.query(ActivityDimension.dimension_value_id)
+            .filter(ActivityDimension.activity_id == with_enrollment_status_for_activity)
+            .all()
+        )
+        activity_dv_ids = {row[0] for row in activity_dvs}
+        page_entity_ids = [entity.id for entity, *_ in rows]
+        status_map = _compute_enrollment_status_map(db, page_entity_ids, activity_dv_ids)
+
     data = [
-        _build_entity_response(entity, enrollment_count, activity_count, created_by_name)
+        _build_entity_response(
+            entity,
+            enrollment_count,
+            activity_count,
+            created_by_name,
+            enrollment_status=status_map.get(entity.id),
+        )
         for entity, enrollment_count, activity_count, created_by_name in rows
     ]
     return PaginatedResponse(count=total, data=data)

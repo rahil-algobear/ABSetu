@@ -27,6 +27,9 @@ from app.modules.activity.schemas import (
     DimensionInfo,
     ParticipantBulkCreate,
     ParticipantResponse,
+    PickerAddPayload,
+    PickerCreateAndAddPayload,
+    PickerEnrollAndAddPayload,
 )
 from app.modules.activity.service import (
     ActivityParticipantService,
@@ -543,6 +546,211 @@ def save_participants(
         ).dump()
         for p in participants
     ]
+
+
+# --- Smart picker (Phase 3) — per-action endpoints ---
+
+
+def _participant_response(p) -> dict:
+    return ParticipantResponse(
+        id=str(p.id),
+        updated_at=p.updated_at,
+        activity_id=str(p.activity_id),
+        participant_type=p.participant_type,
+        participant_id=str(p.participant_id),
+        section_key=p.section_key,
+        status=p.status,
+        meta=p.meta,
+    ).dump()
+
+
+def _create_picker_participant(
+    db: Session, activity_id: uuid.UUID, entity_id: uuid.UUID, section_key: str
+):
+    """Common tail of every picker action — creates the ActivityParticipant
+    row. Caller is responsible for the surrounding transaction."""
+    from sqlalchemy.exc import IntegrityError as SAIntegrityError
+
+    from app.modules.activity.model import ActivityParticipant
+
+    p = ActivityParticipant(
+        activity_id=activity_id,
+        participant_type="entity",
+        participant_id=entity_id,
+        section_key=section_key,
+    )
+    db.add(p)
+    try:
+        db.flush()
+    except SAIntegrityError:
+        db.rollback()
+        raise ValidationError("This beneficiary is already a participant in this activity.")
+    return p
+
+
+def _verify_dimensions_cover_activity(activity, submitted_dv_ids: list[str]) -> None:
+    """The picker auto-supplies activity dimensions to new enrollments;
+    we still verify server-side that the submitted set covers them."""
+    required = {ad.dimension_value_id for ad in (activity.dimensions or [])}
+    if not required:
+        return
+    submitted = {uuid.UUID(d) for d in submitted_dv_ids}
+    if not required.issubset(submitted):
+        raise ValidationError(
+            "Enrollment dimensions must include all of this activity's dimensions."
+        )
+
+
+@activity_router.post(
+    "/{activity_id}/participants/add",
+    dependencies=[Depends(require_permissions("activity:create"))],
+    status_code=201,
+)
+def picker_add(
+    data: PickerAddPayload,
+    activity=Depends(get_accessible_activity),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Smart-picker action: beneficiary already has an active enrollment
+    in scope (verified server-side). Just create the ActivityParticipant.
+
+    Used for both Smart mode active-in-scope rows and Basic mode rows
+    (non-enrollable entity types or dimensionless activities) — those
+    just skip the scope verification."""
+    from app.modules.enrollment.model import Enrollment
+
+    entity_uuid = uuid.UUID(data.entity_id)
+    # Re-derive correctness when activity has dimensions AND the entity
+    # type is enrollable. Otherwise (Basic mode) skip the scope check.
+    activity_dv_ids = {ad.dimension_value_id for ad in (activity.dimensions or [])}
+    if activity_dv_ids:
+        from app.modules.entity.model import Entity
+
+        entity = (
+            db.query(Entity)
+            .filter_by(id=entity_uuid, organization_id=current_user.organization_id)
+            .first()
+        )
+        if not entity:
+            raise ValidationError("Beneficiary not found in this organization.")
+        if entity.entity_type.can_enroll:
+            actives = (
+                db.query(Enrollment)
+                .filter(
+                    Enrollment.entity_id == entity_uuid,
+                    Enrollment.is_active.is_(True),
+                )
+                .all()
+            )
+            in_scope = any(
+                activity_dv_ids.issubset({d.dimension_value_id for d in (e.dimensions or [])})
+                for e in actives
+            )
+            if not in_scope:
+                raise ValidationError(
+                    "This beneficiary has no active enrollment matching this "
+                    "activity's scope. Use Enroll & Add instead."
+                )
+
+    p = _create_picker_participant(db, activity.id, entity_uuid, data.section_key)
+    db.commit()
+    db.refresh(p)
+    return _participant_response(p)
+
+
+@activity_router.post(
+    "/{activity_id}/participants/enroll_and_add",
+    dependencies=[Depends(require_permissions("activity:create"))],
+    status_code=201,
+)
+def picker_enroll_and_add(
+    data: PickerEnrollAndAddPayload,
+    activity=Depends(get_accessible_activity),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Smart-picker action: existing beneficiary, no active enrollment
+    in scope. Creates a fresh active enrollment (any old inactive ones
+    stay as historical record) and adds as participant. Atomic."""
+    from app.modules.enrollment.service import EnrollmentService
+
+    _verify_dimensions_cover_activity(activity, data.enrollment_dimension_value_ids)
+
+    enrollment_service = EnrollmentService(db)
+    try:
+        enrollment_service.create(
+            current_user.organization_id,
+            {
+                "entity_id": data.entity_id,
+                "meta": data.enrollment_meta or {},
+                "is_active": True,
+            },
+            dimension_value_ids=data.enrollment_dimension_value_ids,
+            commit=False,
+        )
+        p = _create_picker_participant(db, activity.id, uuid.UUID(data.entity_id), data.section_key)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+    db.refresh(p)
+    return _participant_response(p)
+
+
+@activity_router.post(
+    "/{activity_id}/participants/create_and_add",
+    dependencies=[Depends(require_permissions("activity:create"))],
+    status_code=201,
+)
+def picker_create_and_add(
+    data: PickerCreateAndAddPayload,
+    activity=Depends(get_accessible_activity),
+    current_user: User = Depends(get_current_user),
+    accessible_dv_ids: list[uuid.UUID] | None = Depends(get_accessible_dimension_value_ids),
+    db: Session = Depends(get_db),
+):
+    """Smart-picker action: brand new beneficiary. Creates entity +
+    active enrollment + participant in one transaction. Any step
+    failing rolls everything back."""
+    from app.modules.enrollment.service import EnrollmentService
+    from app.modules.entity.service import EntityService
+
+    _verify_dimensions_cover_activity(activity, data.enrollment_dimension_value_ids)
+
+    entity_service = EntityService(db)
+    enrollment_service = EnrollmentService(db)
+    try:
+        entity = entity_service.create(
+            current_user.organization_id,
+            {
+                "entity_type_id": data.entity_type_id,
+                "meta": data.entity_meta or {},
+            },
+            dimension_value_ids=data.entity_dimension_value_ids,
+            accessible_dv_ids=accessible_dv_ids,
+            created_by=current_user.id,
+            commit=False,
+        )
+        enrollment_service.create(
+            current_user.organization_id,
+            {
+                "entity_id": str(entity.id),
+                "meta": data.enrollment_meta or {},
+                "is_active": True,
+            },
+            dimension_value_ids=data.enrollment_dimension_value_ids,
+            commit=False,
+        )
+        p = _create_picker_participant(db, activity.id, entity.id, data.section_key)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+    db.refresh(p)
+    return _participant_response(p)
 
 
 # Include sub-routers

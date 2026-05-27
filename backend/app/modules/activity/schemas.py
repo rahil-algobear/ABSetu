@@ -82,3 +82,36 @@ class ParticipantResponse(BaseResponseSchema):
     section_key: str
     status: str | None = None
     meta: dict[str, Any] | None = None
+
+
+# --- Smart picker (Phase 3) — per-action payloads ---
+
+
+class PickerAddPayload(BaseModel):
+    """Beneficiary already has an active enrollment in scope. Just add."""
+
+    entity_id: str
+    section_key: str
+
+
+class PickerEnrollAndAddPayload(BaseModel):
+    """Beneficiary exists but has no active enrollment in scope. Create
+    a new active enrollment (using the activity's dimensions plus any
+    extras the user filled), then add as participant."""
+
+    entity_id: str
+    section_key: str
+    enrollment_meta: dict[str, Any] | None = None
+    enrollment_dimension_value_ids: list[str] = []
+
+
+class PickerCreateAndAddPayload(BaseModel):
+    """Beneficiary doesn't exist yet. Create entity + enrollment + add
+    as participant, all in one transaction."""
+
+    entity_type_id: str
+    entity_meta: dict[str, Any] | None = None
+    entity_dimension_value_ids: list[str] = []
+    section_key: str
+    enrollment_meta: dict[str, Any] | None = None
+    enrollment_dimension_value_ids: list[str] = []
