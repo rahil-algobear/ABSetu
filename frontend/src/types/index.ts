@@ -338,5 +338,9 @@ export interface Enrollment {
   meta: Record<string, unknown> | null;
   is_active: boolean;
   dimensions: DimensionInfo[];
+  // Whether the current user can edit/end/delete this enrollment given
+  // their dimension access. Computed server-side. Out-of-scope rows are
+  // still visible (for fraud/cross-scope transparency) but read-only.
+  editable: boolean;
   updated_at: string | null;
 }

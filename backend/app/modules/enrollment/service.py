@@ -244,10 +244,33 @@ class EnrollmentService:
         self.db.refresh(enrollment)
         return enrollment
 
-    def update(self, enrollment_id: uuid.UUID, data: dict) -> Enrollment:
+    def _check_access(
+        self,
+        enrollment: Enrollment,
+        accessible_dv_ids: list[uuid.UUID] | None,
+    ) -> None:
+        """Raise ForbiddenError when the current user can't act on this
+        enrollment given their dimension access. Untagged enrollments
+        (no dimensions) are accessible to everyone — they're not scoped."""
+        if accessible_dv_ids is None:
+            return  # unrestricted user
+        record_dv_ids = [d.dimension_value_id for d in (enrollment.dimensions or [])]
+        if not record_dv_ids:
+            return  # untagged enrollment is org-wide
+        from app.modules.dimension.service import UserDimensionAccessService
+
+        UserDimensionAccessService(self.db).check_record_access(accessible_dv_ids, record_dv_ids)
+
+    def update(
+        self,
+        enrollment_id: uuid.UUID,
+        data: dict,
+        accessible_dv_ids: list[uuid.UUID] | None = None,
+    ) -> Enrollment:
         enrollment = self.db.query(Enrollment).filter_by(id=enrollment_id).first()
         if not enrollment:
             raise NotFoundError("Enrollment not found")
+        self._check_access(enrollment, accessible_dv_ids)
 
         # Re-validate active-enrollment limits when transitioning inactive
         # → active. Without this, staff could bypass the cap by deactivating
@@ -274,22 +297,32 @@ class EnrollmentService:
         self.db.refresh(enrollment)
         return enrollment
 
-    def delete(self, enrollment_id: uuid.UUID, org_id: uuid.UUID) -> None:
+    def delete(
+        self,
+        enrollment_id: uuid.UUID,
+        org_id: uuid.UUID,
+        accessible_dv_ids: list[uuid.UUID] | None = None,
+    ) -> None:
         enrollment = (
             self.db.query(Enrollment).filter_by(id=enrollment_id, organization_id=org_id).first()
         )
         if not enrollment:
             raise NotFoundError("Enrollment not found")
+        self._check_access(enrollment, accessible_dv_ids)
         # EnrollmentDimension rows cascade via ondelete="CASCADE".
         self.db.delete(enrollment)
         self.db.commit()
 
     def update_dimensions(
-        self, enrollment_id: uuid.UUID, dimension_value_ids: list[str]
+        self,
+        enrollment_id: uuid.UUID,
+        dimension_value_ids: list[str],
+        accessible_dv_ids: list[uuid.UUID] | None = None,
     ) -> Enrollment:
         enrollment = self.db.query(Enrollment).filter_by(id=enrollment_id).first()
         if not enrollment:
             raise NotFoundError("Enrollment not found")
+        self._check_access(enrollment, accessible_dv_ids)
 
         self.db.query(EnrollmentDimension).filter_by(enrollment_id=enrollment.id).delete()
         for dv_id in dimension_value_ids:

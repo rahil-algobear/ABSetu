@@ -377,24 +377,26 @@ export default function EntityDetailPage() {
                             >
                               {isActive ? "Active" : "Inactive"}
                             </Badge>
-                            <Can permission="enrollment:manage">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="text-gray-400 hover:text-red-600 hover:bg-red-50"
-                                onClick={() => {
-                                  if (
-                                    confirm(
-                                      "Delete this enrollment? This can't be undone.",
-                                    )
-                                  ) {
-                                    deleteEnrollmentMutation.mutate(e.id);
-                                  }
-                                }}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
-                            </Can>
+                            {e.editable && (
+                              <Can permission="enrollment:manage">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="text-gray-400 hover:text-red-600 hover:bg-red-50"
+                                  onClick={() => {
+                                    if (
+                                      confirm(
+                                        "Delete this enrollment? This can't be undone.",
+                                      )
+                                    ) {
+                                      deleteEnrollmentMutation.mutate(e.id);
+                                    }
+                                  }}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </Can>
+                            )}
                           </div>
                           <div className="space-y-1 text-sm">
                             {allPairs.map((p, i) => (
@@ -404,6 +406,7 @@ export default function EntityDetailPage() {
                               </div>
                             ))}
                           </div>
+                          {e.editable && (
                           <Can permission="enrollment:manage">
                             <div className="flex items-center gap-2">
                               {isActive ? (
@@ -445,6 +448,7 @@ export default function EntityDetailPage() {
                               </Button>
                             </div>
                           </Can>
+                          )}
                         </div>
                       );
                     })}
