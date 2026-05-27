@@ -767,15 +767,15 @@ function EnrollmentForm({
         </div>
       )}
 
-      <div className="flex gap-2 pt-2">
+      <div className="flex justify-end gap-2 pt-3 mt-3 border-t -mx-6 px-6">
+        <Button type="button" variant="outline" onClick={onCancel}>
+          Cancel
+        </Button>
         {formFields.length > 0 && (
           <Button type="submit" disabled={isPending}>
             {isEdit ? "Save" : "Create"}
           </Button>
         )}
-        <Button type="button" variant="outline" onClick={onCancel}>
-          Cancel
-        </Button>
       </div>
     </form>
   );
