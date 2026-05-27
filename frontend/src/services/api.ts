@@ -385,6 +385,23 @@ export const activityApi = {
     );
     return response.data;
   },
+  pickerCreateAndAdd: async (
+    activityId: string,
+    data: {
+      entity_type_id: string;
+      entity_meta?: Record<string, unknown>;
+      entity_dimension_value_ids?: string[];
+      section_key: string;
+      enrollment_meta?: Record<string, unknown>;
+      enrollment_dimension_value_ids: string[];
+    },
+  ): Promise<ActivityParticipant> => {
+    const response = await authAxios.post<ActivityParticipant>(
+      `/activities/${activityId}/participants/create_and_add`,
+      data,
+    );
+    return response.data;
+  },
 };
 
 // --- Roles ---

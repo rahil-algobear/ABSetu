@@ -31,7 +31,7 @@ import {
   MetaFieldDefinition,
   MetaFieldSchemaItem,
 } from "@/types";
-import { collectEnrollmentFields } from "@/utils/meta-fields";
+import { collectEnrollmentFields, getFieldsForScope } from "@/utils/meta-fields";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog } from "@/components/ui/dialog";
@@ -79,6 +79,7 @@ export function ParticipantPicker({
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<"enrolled_here" | "all">("enrolled_here");
   const [enrollFor, setEnrollFor] = useState<Entity | null>(null);
+  const [showCreateNew, setShowCreateNew] = useState(false);
 
   const activityDvIds = useMemo(
     () => activityDimensions.map((d) => d.value_id),
@@ -195,6 +196,18 @@ export function ParticipantPicker({
               ))
             )}
           </div>
+
+          <div className="pt-2 border-t">
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={() => setShowCreateNew(true)}
+            >
+              <Plus className="h-4 w-4 mr-1" />
+              Create new {entityTypeName.toLowerCase()}
+            </Button>
+          </div>
         </div>
       </Dialog>
 
@@ -207,6 +220,21 @@ export function ParticipantPicker({
           onClose={() => setEnrollFor(null)}
           onSuccess={() => {
             setEnrollFor(null);
+            refreshAfterAction();
+          }}
+        />
+      )}
+
+      {showCreateNew && (
+        <CreateAndAddModal
+          activityId={activityId}
+          activityDimensions={activityDimensions}
+          sectionKey={sectionKey}
+          entityTypeId={entityTypeId}
+          entityTypeName={entityTypeName}
+          onClose={() => setShowCreateNew(false)}
+          onSuccess={() => {
+            setShowCreateNew(false);
             refreshAfterAction();
           }}
         />
@@ -311,9 +339,30 @@ function EnrollAndAddModal({
     queryFn: metaFieldSchemaApi.getAll,
   });
 
+  // Dimension IDs the enrollment form-builder tracks for this entity
+  // type. Activity dimensions on other axes (Project, Intervention,
+  // etc.) shouldn't end up on the enrollment record or in the locked
+  // banner — they're activity-only.
+  const enrollmentTrackedDimIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const f of collectEnrollmentFields(
+      allSchemas,
+      entity.entity_type_id,
+      [],
+    )) {
+      if (f.type === "dimension" && f.dimension_id) ids.add(f.dimension_id);
+    }
+    return ids;
+  }, [allSchemas, entity.entity_type_id]);
+
+  const relevantActivityDimensions = useMemo(
+    () => activityDimensions.filter((d) => enrollmentTrackedDimIds.has(d.dimension_id)),
+    [activityDimensions, enrollmentTrackedDimIds],
+  );
+
   const activityDimIds = useMemo(
-    () => new Set(activityDimensions.map((d) => d.dimension_id)),
-    [activityDimensions],
+    () => new Set(relevantActivityDimensions.map((d) => d.dimension_id)),
+    [relevantActivityDimensions],
   );
 
   // Required + visible enrollment fields, excluding any dimension
@@ -322,7 +371,7 @@ function EnrollAndAddModal({
     const fields = collectEnrollmentFields(
       allSchemas,
       entity.entity_type_id,
-      activityDimensions.map((d) => d.value_id),
+      relevantActivityDimensions.map((d) => d.value_id),
     );
     return fields.filter((f) => {
       if (f.visible === false) return false;
@@ -331,7 +380,7 @@ function EnrollAndAddModal({
       }
       return true;
     });
-  }, [allSchemas, entity.entity_type_id, activityDimensions, activityDimIds]);
+  }, [allSchemas, entity.entity_type_id, relevantActivityDimensions, activityDimIds]);
 
   const [metaValues, setMetaValues] = useState<Record<string, unknown>>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -342,7 +391,7 @@ function EnrollAndAddModal({
         entity_id: entity.id,
         section_key: sectionKey,
         enrollment_meta: Object.keys(metaValues).length ? metaValues : undefined,
-        enrollment_dimension_value_ids: activityDimensions.map((d) => d.value_id),
+        enrollment_dimension_value_ids: relevantActivityDimensions.map((d) => d.value_id),
       }),
     onSuccess: () => {
       toast.success("Enrolled and added");
@@ -382,12 +431,14 @@ function EnrollAndAddModal({
             {formError}
           </div>
         )}
-        <div className="rounded-md bg-gray-50 px-3 py-2 text-xs text-gray-600">
-          <span className="text-gray-500">Will enroll in:</span>{" "}
-          {activityDimensions
-            .map((d) => `${d.dimension_name}: ${d.value_name}`)
-            .join(" · ")}
-        </div>
+        {relevantActivityDimensions.length > 0 && (
+          <div className="rounded-md bg-gray-50 px-3 py-2 text-xs text-gray-600">
+            <span className="text-gray-500">Will enroll in:</span>{" "}
+            {relevantActivityDimensions
+              .map((d) => `${d.dimension_name}: ${d.value_name}`)
+              .join(" · ")}
+          </div>
+        )}
 
         {fillableFields.length > 0 ? (
           <DynamicMetaForm
@@ -407,6 +458,179 @@ function EnrollAndAddModal({
           </Button>
           <Button type="submit" disabled={mutation.isPending}>
             Enroll &amp; Add
+          </Button>
+        </div>
+      </form>
+    </Dialog>
+  );
+}
+
+/** Combined modal: entity-create fields + required enrollment fields,
+ *  saved atomically via /participants/create_and_add. Activity
+ *  dimensions auto-applied to the new enrollment. */
+function CreateAndAddModal({
+  activityId,
+  activityDimensions,
+  sectionKey,
+  entityTypeId,
+  entityTypeName,
+  onClose,
+  onSuccess,
+}: {
+  activityId: string;
+  activityDimensions: ActivityDimensionValue[];
+  sectionKey: string;
+  entityTypeId: string;
+  entityTypeName: string;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const { data: allSchemas = [] } = useQuery<MetaFieldSchemaItem[]>({
+    queryKey: ["meta-field-schemas"],
+    queryFn: metaFieldSchemaApi.getAll,
+  });
+
+  // Same scope-down as the existing Enroll & Add modal: filter activity
+  // dimensions to those the enrollment form-builder tracks.
+  const enrollmentTrackedDimIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const f of collectEnrollmentFields(allSchemas, entityTypeId, [])) {
+      if (f.type === "dimension" && f.dimension_id) ids.add(f.dimension_id);
+    }
+    return ids;
+  }, [allSchemas, entityTypeId]);
+
+  const relevantActivityDimensions = useMemo(
+    () => activityDimensions.filter((d) => enrollmentTrackedDimIds.has(d.dimension_id)),
+    [activityDimensions, enrollmentTrackedDimIds],
+  );
+
+  const entityFields: MetaFieldDefinition[] = useMemo(
+    () =>
+      getFieldsForScope(allSchemas, {
+        type: "entity",
+        entity_type_id: entityTypeId,
+      }).filter((f) => f.visible !== false),
+    [allSchemas, entityTypeId],
+  );
+
+  const enrollmentFields: MetaFieldDefinition[] = useMemo(() => {
+    const fields = collectEnrollmentFields(
+      allSchemas,
+      entityTypeId,
+      relevantActivityDimensions.map((d) => d.value_id),
+    );
+    return fields.filter((f) => {
+      if (f.visible === false) return false;
+      if (
+        f.type === "dimension" &&
+        f.dimension_id &&
+        enrollmentTrackedDimIds.has(f.dimension_id)
+      ) {
+        // activity supplies this dimension; don't ask the user again
+        return false;
+      }
+      return true;
+    });
+  }, [allSchemas, entityTypeId, relevantActivityDimensions, enrollmentTrackedDimIds]);
+
+  const [entityMeta, setEntityMeta] = useState<Record<string, unknown>>({});
+  const [enrollmentMeta, setEnrollmentMeta] = useState<Record<string, unknown>>({});
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      activityApi.pickerCreateAndAdd(activityId, {
+        entity_type_id: entityTypeId,
+        entity_meta: Object.keys(entityMeta).length ? entityMeta : undefined,
+        section_key: sectionKey,
+        enrollment_meta: Object.keys(enrollmentMeta).length ? enrollmentMeta : undefined,
+        enrollment_dimension_value_ids: relevantActivityDimensions.map((d) => d.value_id),
+      }),
+    onSuccess: () => {
+      toast.success(`${entityTypeName} created and added`);
+      onSuccess();
+    },
+    onError: (err: { response?: { data?: { message?: string } } }) => {
+      setFormError(err.response?.data?.message || "Failed to create and add");
+    },
+  });
+
+  const onSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormError(null);
+    for (const f of entityFields) {
+      if (!f.required) continue;
+      const v = entityMeta[f.key];
+      if (v === undefined || v === null || v === "") {
+        setFormError(`${f.label} is required.`);
+        return;
+      }
+    }
+    for (const f of enrollmentFields) {
+      if (!f.required) continue;
+      const v = enrollmentMeta[f.key];
+      if (v === undefined || v === null || v === "") {
+        setFormError(`${f.label} is required.`);
+        return;
+      }
+    }
+    mutation.mutate();
+  };
+
+  return (
+    <Dialog open onClose={onClose} title={`Create new ${entityTypeName}`}>
+      <form onSubmit={onSubmit} className="space-y-4">
+        {formError && (
+          <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            {formError}
+          </div>
+        )}
+
+        {entityFields.length > 0 && (
+          <div className="space-y-2">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+              {entityTypeName} details
+            </h4>
+            <DynamicMetaForm
+              fields={entityFields}
+              values={entityMeta}
+              onChange={setEntityMeta}
+            />
+          </div>
+        )}
+
+        <div className="space-y-2">
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+            Enrollment
+          </h4>
+          {relevantActivityDimensions.length > 0 && (
+            <div className="rounded-md bg-gray-50 px-3 py-2 text-xs text-gray-600">
+              <span className="text-gray-500">Will enroll in:</span>{" "}
+              {relevantActivityDimensions
+                .map((d) => `${d.dimension_name}: ${d.value_name}`)
+                .join(" · ")}
+            </div>
+          )}
+          {enrollmentFields.length > 0 ? (
+            <DynamicMetaForm
+              fields={enrollmentFields}
+              values={enrollmentMeta}
+              onChange={setEnrollmentMeta}
+            />
+          ) : (
+            <p className="text-xs text-gray-500">
+              No additional enrollment fields configured.
+            </p>
+          )}
+        </div>
+
+        <div className="flex justify-end gap-2 pt-2 border-t">
+          <Button type="button" variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={mutation.isPending}>
+            Create &amp; Add
           </Button>
         </div>
       </form>

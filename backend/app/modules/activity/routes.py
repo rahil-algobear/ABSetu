@@ -172,6 +172,7 @@ def _build_activity_response(
         if dv and dv.dimension:
             dim_infos.append(
                 DimensionInfo(
+                    dimension_id=str(dv.dimension.id),
                     dimension_key=dv.dimension.key,
                     dimension_name=dv.dimension.name,
                     value_id=str(dv.id),
@@ -588,16 +589,42 @@ def _create_picker_participant(
     return p
 
 
-def _verify_dimensions_cover_activity(activity, submitted_dv_ids: list[str]) -> None:
+def _verify_dimensions_cover_activity(
+    db: Session,
+    org_id: uuid.UUID,
+    entity_type_id: uuid.UUID,
+    activity,
+    submitted_dv_ids: list[str],
+) -> None:
     """The picker auto-supplies activity dimensions to new enrollments;
-    we still verify server-side that the submitted set covers them."""
-    required = {ad.dimension_value_id for ad in (activity.dimensions or [])}
+    we still verify server-side that the submitted set covers them.
+    Only the activity dimensions on axes the enrollment form actually
+    tracks are required — extra activity dims (e.g. Project,
+    Intervention) are ignored."""
+    from app.modules.dimension.model import DimensionValue
+    from app.modules.entity.routes import _enrollment_relevant_dim_ids
+
+    all_required = {ad.dimension_value_id for ad in (activity.dimensions or [])}
+    if not all_required:
+        return
+
+    relevant_dim_ids = _enrollment_relevant_dim_ids(db, org_id, entity_type_id)
+    if not relevant_dim_ids:
+        return
+
+    dv_rows = (
+        db.query(DimensionValue.id, DimensionValue.dimension_id)
+        .filter(DimensionValue.id.in_(all_required))
+        .all()
+    )
+    required = {dv_id for dv_id, dim_id in dv_rows if dim_id in relevant_dim_ids}
     if not required:
         return
+
     submitted = {uuid.UUID(d) for d in submitted_dv_ids}
     if not required.issubset(submitted):
         raise ValidationError(
-            "Enrollment dimensions must include all of this activity's dimensions."
+            "Enrollment dimensions must include this activity's enrollment-tracked dimensions."
         )
 
 
@@ -674,8 +701,25 @@ def picker_enroll_and_add(
     in scope. Creates a fresh active enrollment (any old inactive ones
     stay as historical record) and adds as participant. Atomic."""
     from app.modules.enrollment.service import EnrollmentService
+    from app.modules.entity.model import Entity
 
-    _verify_dimensions_cover_activity(activity, data.enrollment_dimension_value_ids)
+    entity_row = (
+        db.query(Entity.entity_type_id)
+        .filter_by(
+            id=uuid.UUID(data.entity_id),
+            organization_id=current_user.organization_id,
+        )
+        .first()
+    )
+    if not entity_row:
+        raise ValidationError("Beneficiary not found in this organization.")
+    _verify_dimensions_cover_activity(
+        db,
+        current_user.organization_id,
+        entity_row[0],
+        activity,
+        data.enrollment_dimension_value_ids,
+    )
 
     enrollment_service = EnrollmentService(db)
     try:
@@ -717,7 +761,13 @@ def picker_create_and_add(
     from app.modules.enrollment.service import EnrollmentService
     from app.modules.entity.service import EntityService
 
-    _verify_dimensions_cover_activity(activity, data.enrollment_dimension_value_ids)
+    _verify_dimensions_cover_activity(
+        db,
+        current_user.organization_id,
+        uuid.UUID(data.entity_type_id),
+        activity,
+        data.enrollment_dimension_value_ids,
+    )
 
     entity_service = EntityService(db)
     enrollment_service = EnrollmentService(db)
