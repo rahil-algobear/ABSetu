@@ -214,6 +214,149 @@ Falls back to today's plain `search_select` otherwise.
 
 ---
 
+## Phase 4 — Configurable enrollment limits
+
+### What
+
+Per-entity-type and per-field caps on active enrollments, so NGOs with
+varied workflows (residential rehab → 1 active, online learning → 1
+total, multi-centre outreach → 1 per Location) can encode their rules
+without code changes. Replaces today's hardcoded "block exact-dimension
+duplicates" rule with a configurable model.
+
+### Schema
+
+**EntityType (new column):**
+```
+max_active_enrollments INTEGER NULL  -- total cap per beneficiary
+                                     -- null = unlimited
+```
+
+**Form field, dimension type, enrollment scope (new field config):**
+```
+max_active_enrollments INTEGER NULL  -- per-value cap on this dimension
+                                     -- null = field not part of the
+                                     -- uniqueness key
+```
+
+Stored alongside other field config in the JSONB `fields` array — no
+migration for the field-level setting.
+
+### Composite-key (AND) semantics
+
+When multiple form fields have `max_active_enrollments` set, they form a
+**composite uniqueness key**. The check operates on the combined key,
+not each field independently:
+
+1. Build the composite key from the incoming enrollment's values for
+   every dimension field with `max_active_enrollments` set.
+2. Count active enrollments for this entity that match the **full
+   composite key**.
+3. If the count would exceed the cap, reject.
+
+**Cap when multiple maxes are set:** use `min(maxes)` — the strictest
+field wins. Documented as "set all key fields to the same max; mixed
+values default to the strictest." Single-field cases use that field's
+max directly.
+
+### Validation flow
+
+On enrollment **create** and on **transition from inactive → active**:
+
+1. **Total cap check** (if `entity_type.max_active_enrollments` is set):
+   count entity's active enrollments. If would exceed, reject.
+2. **Composite-key check** (if any dimension field on the incoming
+   enrollment has `max_active_enrollments` set): build composite key,
+   count matching active enrollments, reject if would exceed
+   `min(maxes)`.
+
+Either rule can fire independently. Update flow must re-run both checks
+on the inactive→active transition — otherwise staff could bypass the
+limit by ending one enrollment and activating a previously-inactive one.
+
+### Error messages
+
+Distinct, actionable text per rule:
+
+- Total cap: *"Sunita Devi already has 1 active enrollment. End an
+  existing one first."*
+- Composite key (Kshamata-style): *"An active enrollment with
+  Programme=Outreach, Location=Mumbai already exists for this
+  beneficiary."*
+
+Both surface via the existing `err.response.data.message` toast pipeline.
+
+### Admin UI
+
+**Entity-types modal (existing, extended):**
+```
+☑ Enable Enrollments
+
+  Max active enrollments per beneficiary
+  ┌────────────────┐
+  │ Unlimited     ▾│   ← Unlimited / 1 / 2 / 3 / Custom...
+  └────────────────┘
+```
+
+**Form-builder modal (existing, extended) — dimension fields under
+Enrollments tab:**
+```
+Type: Dimension (selected)
+Dimension: Programme
+...
+
+Active enrollment cap   (optional)
+┌────────────────┐
+│ No limit      ▾│   ← No limit / 1 / 2 / 3 / Custom...
+└────────────────┘
+Help: "Limit how many active enrollments can share the same value of
+       this field. If multiple fields are capped, they form a combined
+       uniqueness key."
+```
+
+Only renders when:
+- `activeSection === "enrollment"`
+- `type === "dimension"`
+
+### Behaviour examples
+
+Kshamata sets `max=1` on both Programme and Location:
+- (Outreach, Mumbai) blocks (Outreach, Mumbai) ✓
+- (Outreach, Mumbai) allows (Outreach, Delhi) ✓ (different combined key)
+- (Outreach, Mumbai) allows (Literacy, Mumbai) ✓
+
+Online-only NGO sets `max=1` on `EntityType.max_active_enrollments`,
+no dimension fields configured:
+- Beneficiary can hold at most 1 active enrollment ever, regardless of
+  dimensions ✓
+
+Multi-centre outreach sets `max=1` on Location only:
+- (Outreach, Mumbai) blocks (Literacy, Mumbai) ✓ (same Location)
+- (Outreach, Mumbai) allows (Outreach, Delhi) ✓
+
+### Lenient enforcement
+
+Rules apply to **new writes only**. Existing data that doesn't comply
+(if rules are tightened later) stays as-is until staff clean it up. No
+"prevent saving the rule unless data complies" gate.
+
+### Deferred — captured but not building
+
+- **Per-value count with non-uniform maxes across multiple key fields.**
+  We accept the `min(maxes)` rule for v1; if any org has a legitimate
+  mixed-max use case it can surface later.
+- **Date-overlap validation** ("no two active enrollments whose
+  start/end ranges overlap"). Requires a `lifecycle_role` flag on date
+  fields — the very concept Phase 1 explicitly dropped in favour of the
+  explicit `is_active` toggle. Defer until an NGO presents the case.
+- **Composite uniqueness across non-dimension fields** (e.g., "unique
+  by Programme + a date field"). Overkill for v1; revisit if asked.
+- **Strict enforcement** (reject saving a tighter rule when existing
+  data violates it). Lenient first; if it causes problems we add the
+  pre-check.
+
+---
+
 ## Execution order
 
 1. **Phase 1** — `is_active` column, end/start UX, edit-modal reuse.
@@ -221,3 +364,5 @@ Falls back to today's plain `search_select` otherwise.
 2. **Phase 2** — delete enrollment. Small, slot it in while in the same
    files as Phase 1.
 3. **Phase 3** — smart picker. Builds on Phase 1's signal.
+4. **Phase 4** — configurable enrollment limits. Independent of
+   Phase 3 — can land before or after the picker.
