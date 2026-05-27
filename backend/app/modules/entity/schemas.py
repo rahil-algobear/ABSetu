@@ -15,12 +15,14 @@ class EntityTypeCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     config: dict[str, Any] | None = None
     sort_order: int = 0
+    can_enroll: bool = True
 
 
 class EntityTypeUpdate(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=200)
     config: dict[str, Any] | None = None
     sort_order: int | None = None
+    can_enroll: bool | None = None
 
 
 class EntityTypeResponse(BaseResponseSchema):
@@ -29,6 +31,7 @@ class EntityTypeResponse(BaseResponseSchema):
     key: str
     config: dict[str, Any] | None = None
     sort_order: int = 0
+    can_enroll: bool = True
 
 
 # --- Entity ---
@@ -63,6 +66,7 @@ class EntityResponse(BaseResponseSchema):
     entity_type_name: str | None = None
     entity_type_key: str | None = None
     entity_type_config: dict[str, Any] | None = None
+    entity_type_can_enroll: bool = True
     dimensions: list[DimensionInfo] = []
     enrollment_count: int = 0
     activity_count: int = 0

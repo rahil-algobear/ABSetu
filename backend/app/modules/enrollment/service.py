@@ -53,8 +53,7 @@ class EnrollmentService:
             raise ValidationError("Entity not found in this organization")
 
         # Verify entity type allows enrollment
-        config = entity.entity_type.config or {}
-        if not config.get("can_enroll", True):
+        if not entity.entity_type.can_enroll:
             raise ValidationError(
                 f"Entity type '{entity.entity_type.name}' does not support enrollments"
             )

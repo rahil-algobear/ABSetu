@@ -22,7 +22,7 @@ import {
   MetaFieldDefinition,
   MetaFieldSchemaItem,
 } from "@/types";
-import { getFieldsForScope } from "@/utils/meta-fields";
+import { collectEnrollmentFields, getFieldsForScope } from "@/utils/meta-fields";
 
 import { Can } from "@/components/Auth/Permissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,7 +36,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Plus, Pencil, X, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
-import { formatDate } from "@/utils/date";
+import { formatDate, formatDateTime } from "@/utils/date";
 
 /**
  * Cascading dimension filter — reused from activities page pattern.
@@ -97,10 +97,6 @@ export default function EntityDetailPage() {
       : [],
     [allSchemas, entity],
   );
-  const enrollmentMetaFields = useMemo(
-    () => getFieldsForScope(allSchemas, { type: "enrollment" }),
-    [allSchemas],
-  );
 
   const { data: activities = [] } = useQuery<Activity[]>({
     queryKey: ["activities-entity", id],
@@ -123,7 +119,7 @@ export default function EntityDetailPage() {
     [activities, activityTypeFilter]
   );
 
-  const canEnroll = entity?.entity_type_config?.can_enroll !== false;
+  const canEnroll = entity?.entity_type_can_enroll !== false;
 
   const editDisabledKeys = useMemo(() => {
     const keys = new Set<string>();
@@ -243,7 +239,8 @@ export default function EntityDetailPage() {
             {showCreate && (
               <EnrollmentForm
                 entityId={id}
-                metaFields={enrollmentMetaFields}
+                entityTypeId={entity.entity_type_id}
+                allSchemas={allSchemas}
                 onSuccess={() => {
                   setShowCreate(false);
                   queryClient.invalidateQueries({ queryKey: ["enrollments-entity", id] });
@@ -255,8 +252,9 @@ export default function EntityDetailPage() {
             {editingEnrollment && (
               <EnrollmentForm
                 entityId={id}
+                entityTypeId={entity.entity_type_id}
                 enrollment={editingEnrollment}
-                metaFields={enrollmentMetaFields}
+                allSchemas={allSchemas}
                 onSuccess={() => {
                   setEditingEnrollment(null);
                   queryClient.invalidateQueries({ queryKey: ["enrollments-entity", id] });
@@ -270,29 +268,46 @@ export default function EntityDetailPage() {
                 {enrollments.length === 0 ? (
                   <p className="text-gray-500 text-sm">No enrollments</p>
                 ) : (
-                  <div className="space-y-2">
-                    {enrollments.map((e) => (
-                      <div
-                        key={e.id}
-                        className="flex justify-between items-center p-2 border rounded"
-                      >
-                        <div>
-                          <div className="flex gap-1 mb-0.5 flex-wrap">
-                            {e.dimensions?.map((dim) => (
-                              <Badge key={dim.value_id} variant="secondary" className="text-xs">
-                                {dim.value_name}
-                              </Badge>
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
+                    {enrollments.map((e) => {
+                      const dimensionPairs = (e.dimensions || []).map((dim) => ({
+                        label: dim.dimension_name,
+                        value: dim.value_name,
+                      }));
+                      const fieldPairs = collectEnrollmentFields(
+                        allSchemas,
+                        entity.entity_type_id,
+                        e.dimensions?.map((d) => d.value_id) || [],
+                      )
+                        .filter((f) => f.type !== "dimension" && f.visible !== false)
+                        .map((f) => {
+                          const val = e.meta?.[f.key];
+                          const isEmpty = val === undefined || val === null || val === "";
+                          let formatted: string;
+                          if (isEmpty) formatted = "—";
+                          else if (f.type === "boolean") formatted = val ? "Yes" : "No";
+                          else if (f.type === "date" && typeof val === "string")
+                            formatted = formatDate(val);
+                          else if (f.type === "datetime" && typeof val === "string")
+                            formatted = formatDateTime(val);
+                          else if (Array.isArray(val)) formatted = val.join(", ");
+                          else formatted = String(val);
+                          return { label: f.label, value: formatted };
+                        });
+                      const allPairs = [...dimensionPairs, ...fieldPairs];
+                      return (
+                        <div
+                          key={e.id}
+                          className="flex items-start justify-between p-3 border rounded gap-3"
+                        >
+                          <div className="flex-1 min-w-0 space-y-1 text-sm">
+                            {allPairs.map((p, i) => (
+                              <div key={`${p.label}-${i}`}>
+                                <span className="text-gray-500">{p.label}:</span>{" "}
+                                <span className="font-medium text-gray-800">{p.value}</span>
+                              </div>
                             ))}
                           </div>
-                          <p className="text-xs text-gray-500">
-                            {formatDate(e.meta?.admission_date as string)}
-                            {e.meta?.release_date ? ` to ${formatDate(e.meta.release_date as string)}` : ""}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Badge variant={e.meta?.release_date ? "secondary" : "default"}>
-                            {e.meta?.release_date ? "Released" : "Active"}
-                          </Badge>
                           <Can permission="enrollment:manage">
                             <Button
                               size="sm"
@@ -303,8 +318,8 @@ export default function EntityDetailPage() {
                             </Button>
                           </Can>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </>
@@ -383,14 +398,16 @@ export default function EntityDetailPage() {
 
 function EnrollmentForm({
   entityId,
+  entityTypeId,
   enrollment,
-  metaFields,
+  allSchemas,
   onSuccess,
   onCancel,
 }: {
   entityId: string;
+  entityTypeId: string;
   enrollment?: Enrollment;
-  metaFields: MetaFieldDefinition[];
+  allSchemas: MetaFieldSchemaItem[];
   onSuccess: () => void;
   onCancel: () => void;
 }) {
@@ -417,17 +434,32 @@ function EnrollmentForm({
     queryFn: () => dimensionValueLinkApi.list(),
   });
 
-  const selectableDimensions = useMemo(
-    () => dimensions,
-    [dimensions]
-  );
-
   const [dimensionValueIds, setDimensionValueIds] = useState<string[]>(
     () => enrollment?.dimensions?.map((t) => t.value_id) || []
   );
   const [metaValues, setMetaValues] = useState<Record<string, unknown>>(
     () => enrollment?.meta || {}
   );
+
+  // Admin-configured fields for this enrollment (re-runs as dimensions change
+  // to surface dimension-value-scoped fields).
+  const allFields = useMemo(
+    () => collectEnrollmentFields(allSchemas, entityTypeId, dimensionValueIds),
+    [allSchemas, entityTypeId, dimensionValueIds],
+  );
+  const formFields = useMemo(
+    () => allFields.filter((f) => f.visible !== false),
+    [allFields],
+  );
+
+  const createDisabledKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const f of allFields) {
+      if (isEdit && f.stage === "create") keys.add(f.key);
+      if (!isEdit && f.stage === "record") keys.add(f.key);
+    }
+    return keys;
+  }, [allFields, isEdit]);
 
   const selectedByDim = useMemo(() => {
     const map: Record<string, string> = {};
@@ -470,6 +502,29 @@ function EnrollmentForm({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Validate required fields (mirrors activity create page)
+    for (const field of formFields) {
+      if (!field.required || createDisabledKeys.has(field.key)) continue;
+      if (field.type === "dimension") {
+        const dimId = field.dimension_id;
+        if (!dimId) continue;
+        const hasValue = dimensionValueIds.some((dvId) =>
+          allDimensionValues.find((dv) => dv.id === dvId)?.dimension_id === dimId,
+        );
+        if (!hasValue) {
+          toast.error(`${field.label} is required`);
+          return;
+        }
+        continue;
+      }
+      const val = metaValues[field.key];
+      if (val === undefined || val === null || val === "") {
+        toast.error(`${field.label} is required`);
+        return;
+      }
+    }
+
     const meta = Object.keys(metaValues).length > 0 ? metaValues : undefined;
     if (isEdit && enrollment) {
       updateMutation.mutate({
@@ -488,6 +543,63 @@ function EnrollmentForm({
 
   const isPending = createMutation.isPending || updateMutation.isPending;
 
+  const renderField = (field: MetaFieldDefinition) => {
+    if (field.type === "dimension") {
+      const dim = dimensions.find((d) => d.id === field.dimension_id);
+      if (!dim) return null;
+      const dimValues = allDimensionValues.filter(
+        (dv) => dv.dimension_id === dim.id,
+      );
+      const filtered = getFilteredValues(
+        dimValues,
+        selectedByDim,
+        dim.id,
+        dimensionValueLinks,
+      );
+      const currentSelection =
+        dimensionValueIds.find((dvId) =>
+          dimValues.some((dv) => dv.id === dvId),
+        ) || "";
+      return (
+        <div key={`dim-${field.key}`}>
+          <label className="text-sm font-medium">
+            {field.label}
+            {field.required && <span className="text-red-500 ml-0.5">*</span>}
+          </label>
+          <select
+            className="w-full mt-1 border rounded-md p-2 text-sm"
+            value={currentSelection}
+            onChange={(e) => {
+              const newId = e.target.value;
+              const otherIds = dimensionValueIds.filter(
+                (dvId) => !dimValues.some((dv) => dv.id === dvId),
+              );
+              setDimensionValueIds(newId ? [...otherIds, newId] : otherIds);
+            }}
+            required={field.required}
+          >
+            <option value="">Select {field.label}...</option>
+            {filtered.map((dv) => (
+              <option key={dv.id} value={dv.id}>
+                {dv.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      );
+    }
+    return (
+      <div key={`field-${field.key}`}>
+        <DynamicMetaForm
+          fields={[field]}
+          values={metaValues}
+          onChange={setMetaValues}
+          disabledKeys={createDisabledKeys}
+        />
+      </div>
+    );
+  };
+
   return (
     <div className="border rounded p-3 mb-3 bg-gray-50">
       <div className="flex items-center justify-between mb-3">
@@ -499,71 +611,20 @@ function EnrollmentForm({
         </Button>
       </div>
       <form onSubmit={handleSubmit} className="space-y-3">
-        {/* Dimension selectors (non-system only) — cascading */}
-        {selectableDimensions.map((dim) => {
-          const dimValues = allDimensionValues.filter(
-            (dv) => dv.dimension_id === dim.id
-          );
-          const filtered = getFilteredValues(
-            dimValues,
-            selectedByDim,
-            dim.id,
-            dimensionValueLinks
-          );
-          const currentSelection =
-            dimensionValueIds.find((dvId) =>
-              dimValues.some((dv) => dv.id === dvId)
-            ) || "";
-          return (
-            <div key={dim.id}>
-              <label className="text-sm font-medium">{dim.name}</label>
-              <select
-                className="w-full mt-1 border rounded-md p-2 text-sm"
-                value={currentSelection}
-                onChange={(e) => {
-                  const newId = e.target.value;
-                  const otherIds = dimensionValueIds.filter(
-                    (dvId) => !dimValues.some((dv) => dv.id === dvId)
-                  );
-                  setDimensionValueIds(
-                    newId ? [...otherIds, newId] : otherIds
-                  );
-                }}
-              >
-                <option value="">Select {dim.name}...</option>
-                {filtered.map((dv) => (
-                  <option key={dv.id} value={dv.id}>
-                    {dv.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          );
-        })}
-
-        <DynamicMetaForm
-          fields={metaFields.filter((f) => {
-            if (f.visible === false) return false;
-            // "edit only" fields should be hidden on create
-            if (!isEdit && f.stage === "record") return false;
-            return true;
-          })}
-          values={metaValues}
-          onChange={setMetaValues}
-          disabledKeys={(() => {
-            const keys = new Set<string>();
-            for (const f of metaFields) {
-              // "create only" fields are visible but disabled on edit
-              if (isEdit && f.stage === "create") keys.add(f.key);
-            }
-            return keys;
-          })()}
-        />
+        {formFields.length === 0 ? (
+          <p className="text-sm text-gray-500">
+            No fields have been configured for enrollments. Please ask your admin to set them up in Form Fields under Admin settings.
+          </p>
+        ) : (
+          formFields.map(renderField)
+        )}
 
         <div className="flex gap-2">
-          <Button type="submit" disabled={isPending}>
-            {isEdit ? "Save" : "Create"}
-          </Button>
+          {formFields.length > 0 && (
+            <Button type="submit" disabled={isPending}>
+              {isEdit ? "Save" : "Create"}
+            </Button>
+          )}
           <Button type="button" variant="outline" onClick={onCancel}>
             Cancel
           </Button>

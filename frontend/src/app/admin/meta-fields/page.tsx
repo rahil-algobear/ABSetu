@@ -40,7 +40,7 @@ import { Plus, Pencil, Trash2, ChevronUp, ChevronDown } from "lucide-react";
 import toast from "react-hot-toast";
 
 
-const FIELD_TYPES: { value: MetaFieldType; label: string; section?: SectionKind }[] = [
+const FIELD_TYPES: { value: MetaFieldType; label: string; sections?: SectionKind[] }[] = [
   { value: "text", label: "Text" },
   { value: "number", label: "Number" },
   { value: "date", label: "Date" },
@@ -48,9 +48,9 @@ const FIELD_TYPES: { value: MetaFieldType; label: string; section?: SectionKind 
   { value: "select", label: "Dropdown" },
   { value: "multiselect", label: "Multi-select" },
   { value: "boolean", label: "Yes/No" },
-  { value: "dimension", label: "Dimension picker", section: "activity" },
-  { value: "entity_list", label: "Entity list", section: "activity" },
-  { value: "user_list", label: "User list", section: "activity" },
+  { value: "dimension", label: "Dimension picker", sections: ["activity", "enrollment"] },
+  { value: "entity_list", label: "Entity list", sections: ["activity"] },
+  { value: "user_list", label: "User list", sections: ["activity"] },
 ];
 
 const emptyField: MetaFieldDefinition = {
@@ -97,6 +97,11 @@ export default function MetaFieldsPage() {
   const [activityFilterDimId, setActivityFilterDimId] = useState<string>("");
   const [activityFilterDvId, setActivityFilterDvId] = useState<string>("");
 
+  // Enrollment tab view filters
+  const [enrollmentFilterEntityId, setEnrollmentFilterEntityId] = useState<string>("");
+  const [enrollmentFilterDimId, setEnrollmentFilterDimId] = useState<string>("");
+  const [enrollmentFilterDvId, setEnrollmentFilterDvId] = useState<string>("");
+
   // Participant tab
   const [participantEntityId, setParticipantEntityId] = useState<string>("");
   const [participantFilterTypeId, setParticipantFilterTypeId] = useState<string>("");
@@ -119,6 +124,11 @@ export default function MetaFieldsPage() {
     queryFn: entityTypeApi.list,
   });
 
+  const enrollableEntityTypes = useMemo(
+    () => entityTypesList.filter((et) => et.can_enroll),
+    [entityTypesList],
+  );
+
   const { data: activityTypes = [] } = useQuery<ActivityType[]>({
     queryKey: ["activity-types"],
     queryFn: activityTypeApi.list,
@@ -140,10 +150,10 @@ export default function MetaFieldsPage() {
     queryFn: metaFieldSchemaApi.getAll,
   });
 
-  // Current scope for entity/dimension/other tabs
+  // Current scope for entity/dimension tabs (single-scope mode).
+  // Activity/participant/enrollment use multi-scope (flat) mode.
   const currentScope = useMemo((): MetaFieldScope | null => {
-    if (activeSection === "activity" || activeSection === "participant") return null;
-    if (activeSection === "enrollment") return { type: "enrollment" };
+    if (activeSection === "activity" || activeSection === "participant" || activeSection === "enrollment") return null;
     if (!activeKey) return null;
     switch (activeSection) {
       case "entity": return { type: "entity", entity_type_id: activeKey };
@@ -170,6 +180,9 @@ export default function MetaFieldsPage() {
         break;
       case "enrollment":
         setActiveKey("");
+        setEnrollmentFilterEntityId("");
+        setEnrollmentFilterDimId("");
+        setEnrollmentFilterDvId("");
         break;
       case "activity":
         setActivityFilterTypeId("");
@@ -192,9 +205,10 @@ export default function MetaFieldsPage() {
     }
   }, [entityTypesList]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Build a display label from activity type + dimension value IDs
-  const buildScopeLabel = (atId: string, dvId: string, fallback: string): string => {
+  // Build a display label from activity type / entity type / dimension value IDs
+  const buildScopeLabel = (atId: string, dvId: string, fallback: string, etId: string = ""): string => {
     const labels: string[] = [];
+    if (etId) labels.push(entityTypesList.find((e) => e.id === etId)?.name || etId);
     if (atId) labels.push(activityTypes.find((a) => a.id === atId)?.name || atId);
     if (dvId) {
       const dv = allDimensionValues.find((d) => d.id === dvId);
@@ -228,6 +242,31 @@ export default function MetaFieldsPage() {
     rows.sort((a, b) => (a.field.sort_order ?? 0) - (b.field.sort_order ?? 0));
     return rows;
   }, [allSchemas, activityFilterTypeId, activityFilterDimId, activityFilterDvId, activityTypes, allDimensionValues, dimensions]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // --- Flat rows for Enrollment tab ---
+  const enrollmentRows = useMemo((): FlatFieldRow[] => {
+    const rows: FlatFieldRow[] = [];
+    for (const item of allSchemas) {
+      if (!item.fields?.length || item.scope.type !== "enrollment") continue;
+
+      const etId = item.scope.entity_type_id || "";
+      const dvId = item.scope.dimension_value_id || "";
+      const dimId = dvId
+        ? allDimensionValues.find((d) => d.id === dvId)?.dimension_id || ""
+        : "";
+
+      if (enrollmentFilterEntityId && etId !== enrollmentFilterEntityId) continue;
+      if (enrollmentFilterDimId && dimId !== enrollmentFilterDimId) continue;
+      if (enrollmentFilterDvId && dvId !== enrollmentFilterDvId) continue;
+
+      const scopeLabel = buildScopeLabel("", dvId, "All enrollments", etId);
+      for (let i = 0; i < item.fields.length; i++) {
+        rows.push({ field: item.fields[i], fieldIndex: i, schema: item, scopeLabel });
+      }
+    }
+    rows.sort((a, b) => (a.field.sort_order ?? 0) - (b.field.sort_order ?? 0));
+    return rows;
+  }, [allSchemas, enrollmentFilterEntityId, enrollmentFilterDimId, enrollmentFilterDvId, allDimensionValues, dimensions, entityTypesList]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- Flat rows for Participant tab ---
   const participantRows = useMemo((): FlatFieldRow[] => {
@@ -268,11 +307,17 @@ export default function MetaFieldsPage() {
     return counts;
   }, [allSchemas]);
 
-  // Build MetaFieldScope from modal state for activity/participant
+  // Build MetaFieldScope from modal state for activity/participant/enrollment
   const buildScopeFromModal = (): MetaFieldScope => {
     if (activeSection === "activity") {
       const scope: MetaFieldScope = { type: "activity" };
       if (modalActivityTypeId) scope.activity_type_id = modalActivityTypeId;
+      if (modalDvId) scope.dimension_value_id = modalDvId;
+      return scope;
+    }
+    if (activeSection === "enrollment") {
+      const scope: MetaFieldScope = { type: "enrollment" };
+      if (modalEntityId) scope.entity_type_id = modalEntityId;
       if (modalDvId) scope.dimension_value_id = modalDvId;
       return scope;
     }
@@ -318,6 +363,11 @@ export default function MetaFieldsPage() {
       setModalActivityTypeId("");
       setModalDimId("");
       setModalDvId("");
+    } else if (activeSection === "enrollment") {
+      setModalEntityId("");
+      setModalActivityTypeId("");
+      setModalDimId("");
+      setModalDvId("");
     } else if (activeSection === "participant") {
       setModalEntityId(participantEntityId);
       setModalActivityTypeId("");
@@ -336,12 +386,12 @@ export default function MetaFieldsPage() {
     setFieldForm({ ...emptyField, ...f });
     setOptionsText(f.options?.join("\n") || "");
 
-    if (activeSection === "activity" || activeSection === "participant") {
+    if (isFlatScope) {
       setModalActivityTypeId(target!.scope.activity_type_id || "");
       setModalDvId(target!.scope.dimension_value_id || "");
       const dvId = target!.scope.dimension_value_id || "";
       setModalDimId(dvId ? allDimensionValues.find((d) => d.id === dvId)?.dimension_id || "" : "");
-      if (activeSection === "participant") {
+      if (activeSection === "participant" || activeSection === "enrollment") {
         setModalEntityId(target!.scope.entity_type_id || "");
       }
     }
@@ -383,7 +433,7 @@ export default function MetaFieldsPage() {
       delete (field as Partial<MetaFieldDefinition>).key;
     }
 
-    if (activeSection === "activity" || activeSection === "participant") {
+    if (isFlatScope) {
       const newScope = buildScopeFromModal();
       if (editingIndex !== null && editingSchema) {
         const oldScope = editingSchema.scope;
@@ -408,8 +458,7 @@ export default function MetaFieldsPage() {
         // New field — add to the scope from modal
         const newScope = buildScopeFromModal();
         const existingFields = findMatchingSchema(newScope)?.fields || [];
-        const rows = activeSection === "activity" ? activityRows : participantRows;
-        const maxOrder = rows.reduce((max, r) => Math.max(max, r.field.sort_order ?? 0), -1);
+        const maxOrder = flatRows.reduce((max, r) => Math.max(max, r.field.sort_order ?? 0), -1);
         const newField = { ...field, sort_order: maxOrder + 1 };
         saveFields(newScope, [...existingFields, newField]);
       }
@@ -450,7 +499,7 @@ export default function MetaFieldsPage() {
   // Move a field up/down in the flat (cross-scope) table, then re-normalize
   // all sort_order values so every field gets a unique sequential number.
   const moveFlatRow = (rowIndex: number, direction: "up" | "down") => {
-    const rows = [...(activeSection === "activity" ? activityRows : participantRows)];
+    const rows = [...flatRows];
     const targetRowIndex = direction === "up" ? rowIndex - 1 : rowIndex + 1;
     if (targetRowIndex < 0 || targetRowIndex >= rows.length) return;
 
@@ -494,7 +543,7 @@ export default function MetaFieldsPage() {
   };
   const isStructuralType = fieldForm.type === "dimension" || fieldForm.type === "entity_list" || fieldForm.type === "user_list";
   const availableFieldTypes = useMemo(() => {
-    return FIELD_TYPES.filter((ft) => !ft.section || ft.section === activeSection);
+    return FIELD_TYPES.filter((ft) => !ft.sections || ft.sections.includes(activeSection));
   }, [activeSection]);
 
   // Selected label for entity/dimension/other header
@@ -522,12 +571,18 @@ export default function MetaFieldsPage() {
     ...entityTypesList,
   ];
 
-  const isActivityOrParticipant = activeSection === "activity" || activeSection === "participant";
-  const flatRows = activeSection === "activity" ? activityRows : participantRows;
+  const isFlatScope = activeSection === "activity" || activeSection === "participant" || activeSection === "enrollment";
+  const flatRows = activeSection === "activity"
+    ? activityRows
+    : activeSection === "enrollment"
+      ? enrollmentRows
+      : participantRows;
   const totalFlatFields = flatRows.length;
   const hasFilters = activeSection === "activity"
     ? !!(activityFilterTypeId || activityFilterDimId || activityFilterDvId)
-    : !!(participantFilterTypeId || participantFilterDimId || participantFilterDvId);
+    : activeSection === "enrollment"
+      ? !!(enrollmentFilterEntityId || enrollmentFilterDimId || enrollmentFilterDvId)
+      : !!(participantFilterTypeId || participantFilterDimId || participantFilterDvId);
 
   return (
     <>
@@ -601,6 +656,73 @@ export default function MetaFieldsPage() {
           </div>
         )}
 
+
+        {/* Enrollment tab: view filter dropdowns */}
+        {activeSection === "enrollment" && (
+          <div className="flex items-end gap-3 flex-wrap">
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">Filter by Entity Type</label>
+              <select
+                className="border rounded-md px-3 py-1.5 text-sm"
+                value={enrollmentFilterEntityId}
+                onChange={(e) => setEnrollmentFilterEntityId(e.target.value)}
+              >
+                <option value="">All</option>
+                {enrollableEntityTypes.map((et) => (
+                  <option key={et.id} value={et.id}>{et.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">Filter by Dimension</label>
+              <select
+                className="border rounded-md px-3 py-1.5 text-sm"
+                value={enrollmentFilterDimId}
+                onChange={(e) => {
+                  setEnrollmentFilterDimId(e.target.value);
+                  setEnrollmentFilterDvId("");
+                }}
+              >
+                <option value="">All</option>
+                {dimensions.map((d) => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {enrollmentFilterDimId && (
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Value</label>
+                <select
+                  className="border rounded-md px-3 py-1.5 text-sm"
+                  value={enrollmentFilterDvId}
+                  onChange={(e) => setEnrollmentFilterDvId(e.target.value)}
+                >
+                  <option value="">All</option>
+                  {allDimensionValues
+                    .filter((dv) => dv.dimension_id === enrollmentFilterDimId)
+                    .map((dv) => (
+                      <option key={dv.id} value={dv.id}>{dv.name}</option>
+                    ))}
+                </select>
+              </div>
+            )}
+
+            {hasFilters && (
+              <button
+                onClick={() => {
+                  setEnrollmentFilterEntityId("");
+                  setEnrollmentFilterDimId("");
+                  setEnrollmentFilterDvId("");
+                }}
+                className="text-xs text-purple-600 hover:text-purple-800 pb-2"
+              >
+                Clear filters
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Activity tab: view filter dropdowns */}
         {activeSection === "activity" && (
@@ -758,7 +880,7 @@ export default function MetaFieldsPage() {
       </div>
 
       {/* Fields table for entity/dimension/other (single-scope) */}
-      {!isActivityOrParticipant && currentScope && (
+      {!isFlatScope && currentScope && (
         <>
           <div className="flex items-center justify-between mb-3">
             <p className="text-sm font-medium text-gray-700">
@@ -856,7 +978,7 @@ export default function MetaFieldsPage() {
       )}
 
       {/* Grouped flat table for activity/participant */}
-      {isActivityOrParticipant && (
+      {isFlatScope && (
         <>
           <div className="flex items-center justify-between mb-3">
             <p className="text-sm font-medium text-gray-700">
@@ -883,6 +1005,10 @@ export default function MetaFieldsPage() {
                       setActivityFilterTypeId("");
                       setActivityFilterDimId("");
                       setActivityFilterDvId("");
+                    } else if (activeSection === "enrollment") {
+                      setEnrollmentFilterEntityId("");
+                      setEnrollmentFilterDimId("");
+                      setEnrollmentFilterDvId("");
                     } else {
                       setParticipantFilterTypeId("");
                       setParticipantFilterDimId("");
@@ -994,7 +1120,7 @@ export default function MetaFieldsPage() {
       >
         <form onSubmit={handleSave} className="space-y-3">
           {/* Scope selection for activity/participant */}
-          {isActivityOrParticipant && (
+          {isFlatScope && (
             <div className="space-y-3 pb-3 mb-3 border-b">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Scope</p>
 
@@ -1014,22 +1140,43 @@ export default function MetaFieldsPage() {
                 </div>
               )}
 
-              <div>
-                <Label htmlFor="modal-activity-type">
-                  Activity Type <span className="text-gray-400 text-xs font-normal">(optional)</span>
-                </Label>
-                <select
-                  id="modal-activity-type"
-                  className="w-full border rounded-md p-2 text-sm"
-                  value={modalActivityTypeId}
-                  onChange={(e) => setModalActivityTypeId(e.target.value)}
-                >
-                  <option value="">All</option>
-                  {activityTypes.map((at) => (
-                    <option key={at.id} value={at.id}>{at.name}</option>
-                  ))}
-                </select>
-              </div>
+              {activeSection === "enrollment" && (
+                <div>
+                  <Label htmlFor="modal-entity">
+                    Entity Type <span className="text-gray-400 text-xs font-normal">(optional)</span>
+                  </Label>
+                  <select
+                    id="modal-entity"
+                    className="w-full border rounded-md p-2 text-sm "
+                    value={modalEntityId}
+                    onChange={(e) => setModalEntityId(e.target.value)}
+                  >
+                    <option value="">All</option>
+                    {enrollableEntityTypes.map((et) => (
+                      <option key={et.id} value={et.id}>{et.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {activeSection !== "enrollment" && (
+                <div>
+                  <Label htmlFor="modal-activity-type">
+                    Activity Type <span className="text-gray-400 text-xs font-normal">(optional)</span>
+                  </Label>
+                  <select
+                    id="modal-activity-type"
+                    className="w-full border rounded-md p-2 text-sm"
+                    value={modalActivityTypeId}
+                    onChange={(e) => setModalActivityTypeId(e.target.value)}
+                  >
+                    <option value="">All</option>
+                    {activityTypes.map((at) => (
+                      <option key={at.id} value={at.id}>{at.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <div>
                 <Label htmlFor="modal-dimension">

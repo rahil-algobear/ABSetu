@@ -113,6 +113,7 @@ export interface EntityType {
   key: string;
   config: Record<string, unknown> | null;
   sort_order: number;
+  can_enroll: boolean;
   updated_at: string | null;
 }
 
@@ -135,6 +136,7 @@ export interface Entity {
   entity_type_name: string | null;
   entity_type_key: string | null;
   entity_type_config: Record<string, unknown> | null;
+  entity_type_can_enroll: boolean;
   dimensions: DimensionInfo[];
   created_at: string | null;
   updated_at: string | null;
