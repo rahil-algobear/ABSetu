@@ -58,6 +58,25 @@ class EnrollmentService:
                 f"Entity type '{entity.entity_type.name}' does not support enrollments"
             )
 
+        # Guard against duplicate active enrollments with identical
+        # dimensions (only when dimensions are actually set — an
+        # enrollment with no dimensions is unscoped, so duplicates there
+        # are allowed for organizations that may want them).
+        if dimension_value_ids:
+            incoming_dvs = {uuid.UUID(d) for d in dimension_value_ids}
+            existing_active = (
+                self.db.query(Enrollment)
+                .filter(Enrollment.entity_id == entity.id, Enrollment.is_active.is_(True))
+                .all()
+            )
+            for existing in existing_active:
+                existing_dvs = {d.dimension_value_id for d in (existing.dimensions or [])}
+                if existing_dvs == incoming_dvs:
+                    raise ValidationError(
+                        "An active enrollment already exists for this beneficiary "
+                        "with the same dimensions."
+                    )
+
         meta = normalize_meta_datetimes(dict(data.get("meta") or {}))
 
         enrollment = Enrollment(

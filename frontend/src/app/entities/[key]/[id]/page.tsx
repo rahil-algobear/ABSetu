@@ -32,8 +32,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DynamicMetaForm, MetaFieldDisplay } from "@/components/DynamicMetaForm";
+import { Dialog } from "@/components/ui/dialog";
 import { PageHeader } from "@/components/ui/page-header";
-import { Plus, Pencil, X, ChevronRight } from "lucide-react";
+import { Plus, Pencil, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import { formatDate, formatDateTime } from "@/utils/date";
@@ -239,7 +240,11 @@ export default function EntityDetailPage() {
             </div>
           </CardHeader>
           <CardContent>
-            {showCreate && (
+            <Dialog
+              open={showCreate}
+              onClose={() => setShowCreate(false)}
+              title="New Enrollment"
+            >
               <EnrollmentForm
                 entityId={id}
                 entityTypeId={entity.entity_type_id}
@@ -250,57 +255,59 @@ export default function EntityDetailPage() {
                 }}
                 onCancel={() => setShowCreate(false)}
               />
-            )}
+            </Dialog>
 
-            {enrollmentAction && (
-              <EnrollmentForm
-                entityId={id}
-                entityTypeId={entity.entity_type_id}
-                enrollment={enrollmentAction.enrollment}
-                initialIsActive={enrollmentAction.initialIsActive}
-                allSchemas={allSchemas}
-                onSuccess={() => {
-                  setEnrollmentAction(null);
-                  queryClient.invalidateQueries({ queryKey: ["enrollments-entity", id] });
-                }}
-                onCancel={() => setEnrollmentAction(null)}
-              />
-            )}
+            <Dialog
+              open={!!enrollmentAction}
+              onClose={() => setEnrollmentAction(null)}
+              title="Edit Enrollment"
+            >
+              {enrollmentAction && (
+                <EnrollmentForm
+                  entityId={id}
+                  entityTypeId={entity.entity_type_id}
+                  enrollment={enrollmentAction.enrollment}
+                  initialIsActive={enrollmentAction.initialIsActive}
+                  allSchemas={allSchemas}
+                  onSuccess={() => {
+                    setEnrollmentAction(null);
+                    queryClient.invalidateQueries({ queryKey: ["enrollments-entity", id] });
+                  }}
+                  onCancel={() => setEnrollmentAction(null)}
+                />
+              )}
+            </Dialog>
 
-            {!showCreate && !enrollmentAction && (
-              <>
+            <>
                 {enrollments.length === 0 ? (
                   <p className="text-gray-500 text-sm">No enrollments</p>
                 ) : (
                   <>
-                    {enrollments.length > 3 && (
-                      <div className="flex gap-2 mb-3">
-                        {(
-                          [
-                            { key: "active" as const, label: "Active", count: enrollments.filter((e) => e.is_active).length },
-                            { key: "ended" as const, label: "Ended", count: enrollments.filter((e) => !e.is_active).length },
-                            { key: "all" as const, label: "All", count: enrollments.length },
-                          ]
-                        ).map((tab) => (
-                          <button
-                            key={tab.key}
-                            onClick={() => setEnrollmentTab(tab.key)}
-                            className={`px-3 py-1.5 text-sm rounded-full whitespace-nowrap transition-colors ${
-                              enrollmentTab === tab.key
-                                ? "bg-purple-100 text-purple-700 font-medium"
-                                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                            }`}
-                          >
-                            {tab.label}
-                            <span className="ml-1 text-xs opacity-70">({tab.count})</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
+                    <div className="flex gap-2 -mt-1 mb-4">
+                      {(
+                        [
+                          { key: "active" as const, label: "Active", count: enrollments.filter((e) => e.is_active).length },
+                          { key: "ended" as const, label: "Inactive", count: enrollments.filter((e) => !e.is_active).length },
+                          { key: "all" as const, label: "All", count: enrollments.length },
+                        ]
+                      ).map((tab) => (
+                        <button
+                          key={tab.key}
+                          onClick={() => setEnrollmentTab(tab.key)}
+                          className={`px-3 py-1.5 text-sm rounded-full whitespace-nowrap transition-colors ${
+                            enrollmentTab === tab.key
+                              ? "bg-purple-100 text-purple-700 font-medium"
+                              : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                          }`}
+                        >
+                          {tab.label}
+                          <span className="ml-1 text-xs opacity-70">({tab.count})</span>
+                        </button>
+                      ))}
+                    </div>
                     <div className="grid grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-2">
                       {enrollments
                         .filter((e) => {
-                          if (enrollments.length <= 3) return true;
                           if (enrollmentTab === "active") return e.is_active;
                           if (enrollmentTab === "ended") return !e.is_active;
                           return true;
@@ -345,7 +352,7 @@ export default function EntityDetailPage() {
                                 variant={isActive ? "default" : "secondary"}
                                 className="mb-1 text-xs"
                               >
-                                {isActive ? "Active" : "Ended"}
+                                {isActive ? "Active" : "Inactive"}
                               </Badge>
                               {allPairs.map((p, i) => (
                                 <div key={`${p.label}-${i}`}>
@@ -402,7 +409,6 @@ export default function EntityDetailPage() {
                   </>
                 )}
               </>
-            )}
           </CardContent>
         </Card>
       )}
@@ -688,65 +694,55 @@ function EnrollmentForm({
   };
 
   return (
-    <div className="border rounded p-3 mb-3 bg-gray-50">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="font-medium text-sm">
-          {isEdit ? "Edit Enrollment" : "New Enrollment"}
-        </h3>
-        <Button size="sm" variant="ghost" onClick={onCancel}>
-          <X className="h-4 w-4" />
+    <form onSubmit={handleSubmit} className="space-y-3">
+      {formFields.length === 0 ? (
+        <p className="text-sm text-gray-500">
+          No fields have been configured for enrollments. Please ask your admin to set them up in Form Fields under Admin settings.
+        </p>
+      ) : (
+        formFields.map(renderField)
+      )}
+
+      {formFields.length > 0 && (
+        <div className="flex items-center gap-3">
+          <label className="text-sm font-medium">Status:</label>
+          <div className="inline-flex rounded-md border overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setIsActive(false)}
+              className={`px-3 py-1.5 text-sm transition-colors ${
+                !isActive
+                  ? "bg-gray-600 text-white"
+                  : "bg-white text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              Inactive
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsActive(true)}
+              className={`px-3 py-1.5 text-sm transition-colors border-l ${
+                isActive
+                  ? "bg-purple-600 text-white"
+                  : "bg-white text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              Active
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="flex gap-2 pt-2">
+        {formFields.length > 0 && (
+          <Button type="submit" disabled={isPending}>
+            {isEdit ? "Save" : "Create"}
+          </Button>
+        )}
+        <Button type="button" variant="outline" onClick={onCancel}>
+          Cancel
         </Button>
       </div>
-      <form onSubmit={handleSubmit} className="space-y-3">
-        {formFields.length === 0 ? (
-          <p className="text-sm text-gray-500">
-            No fields have been configured for enrollments. Please ask your admin to set them up in Form Fields under Admin settings.
-          </p>
-        ) : (
-          formFields.map(renderField)
-        )}
-
-        {formFields.length > 0 && (
-          <div className="flex items-center gap-3 pt-2 border-t">
-            <label className="text-sm font-medium">Status:</label>
-            <div className="inline-flex rounded-md border overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setIsActive(true)}
-                className={`px-3 py-1.5 text-sm transition-colors ${
-                  isActive
-                    ? "bg-purple-600 text-white"
-                    : "bg-white text-gray-600 hover:bg-gray-50"
-                }`}
-              >
-                Active
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsActive(false)}
-                className={`px-3 py-1.5 text-sm transition-colors border-l ${
-                  !isActive
-                    ? "bg-gray-600 text-white"
-                    : "bg-white text-gray-600 hover:bg-gray-50"
-                }`}
-              >
-                Ended
-              </button>
-            </div>
-          </div>
-        )}
-
-        <div className="flex gap-2">
-          {formFields.length > 0 && (
-            <Button type="submit" disabled={isPending}>
-              {isEdit ? "Save" : "Create"}
-            </Button>
-          )}
-          <Button type="button" variant="outline" onClick={onCancel}>
-            Cancel
-          </Button>
-        </div>
-      </form>
-    </div>
+    </form>
   );
 }
