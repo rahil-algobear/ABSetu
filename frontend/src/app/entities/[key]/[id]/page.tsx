@@ -357,21 +357,13 @@ export default function EntityDetailPage() {
                             isActive ? "" : "opacity-60"
                           }`}
                         >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="flex-1 min-w-0 space-y-1 text-sm">
-                              <Badge
-                                variant={isActive ? "default" : "secondary"}
-                                className="mb-1 text-xs"
-                              >
-                                {isActive ? "Active" : "Inactive"}
-                              </Badge>
-                              {allPairs.map((p, i) => (
-                                <div key={`${p.label}-${i}`}>
-                                  <span className="text-gray-500">{p.label}:</span>{" "}
-                                  <span className="font-medium text-gray-800">{p.value}</span>
-                                </div>
-                              ))}
-                            </div>
+                          <div className="flex items-center justify-between gap-3">
+                            <Badge
+                              variant={isActive ? "default" : "secondary"}
+                              className="text-xs"
+                            >
+                              {isActive ? "Active" : "Inactive"}
+                            </Badge>
                             <Can permission="enrollment:manage">
                               <Button
                                 size="sm"
@@ -390,6 +382,14 @@ export default function EntityDetailPage() {
                                 <Trash2 className="h-3.5 w-3.5" />
                               </Button>
                             </Can>
+                          </div>
+                          <div className="space-y-1 text-sm">
+                            {allPairs.map((p, i) => (
+                              <div key={`${p.label}-${i}`}>
+                                <span className="text-gray-500">{p.label}:</span>{" "}
+                                <span className="font-medium text-gray-800">{p.value}</span>
+                              </div>
+                            ))}
                           </div>
                           <Can permission="enrollment:manage">
                             <div className="flex items-center gap-2">
