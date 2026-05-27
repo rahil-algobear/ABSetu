@@ -239,6 +239,7 @@ export default function EntityDetailPage() {
             {showCreate && (
               <EnrollmentForm
                 entityId={id}
+                entityTypeId={entity.entity_type_id}
                 allSchemas={allSchemas}
                 onSuccess={() => {
                   setShowCreate(false);
@@ -251,6 +252,7 @@ export default function EntityDetailPage() {
             {editingEnrollment && (
               <EnrollmentForm
                 entityId={id}
+                entityTypeId={entity.entity_type_id}
                 enrollment={editingEnrollment}
                 allSchemas={allSchemas}
                 onSuccess={() => {
@@ -379,12 +381,14 @@ export default function EntityDetailPage() {
 
 function EnrollmentForm({
   entityId,
+  entityTypeId,
   enrollment,
   allSchemas,
   onSuccess,
   onCancel,
 }: {
   entityId: string;
+  entityTypeId: string;
   enrollment?: Enrollment;
   allSchemas: MetaFieldSchemaItem[];
   onSuccess: () => void;
@@ -423,8 +427,8 @@ function EnrollmentForm({
   // Admin-configured fields for this enrollment (re-runs as dimensions change
   // to surface dimension-value-scoped fields).
   const allFields = useMemo(
-    () => collectEnrollmentFields(allSchemas, dimensionValueIds),
-    [allSchemas, dimensionValueIds],
+    () => collectEnrollmentFields(allSchemas, entityTypeId, dimensionValueIds),
+    [allSchemas, entityTypeId, dimensionValueIds],
   );
   const formFields = useMemo(
     () => allFields.filter((f) => f.visible !== false),

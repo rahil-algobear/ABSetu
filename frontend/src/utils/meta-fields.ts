@@ -136,12 +136,13 @@ export function collectActivityFields(
 }
 
 /**
- * Collect all applicable enrollment meta fields for a given set of dimension values.
- * Returns fields from: base, dim-only, and dv-specific scopes.
+ * Collect all applicable enrollment meta fields for a given entity type + dimension values.
+ * Returns fields from: base, entity-type-only, dim-only, dv-specific, and combined scopes.
  * Fields are deduplicated by key — more specific scopes override broader ones.
  */
 export function collectEnrollmentFields(
   schemas: MetaFieldSchemaItem[],
+  entityTypeId: string | null,
   dimensionValueIds: string[],
 ): MetaFieldDefinition[] {
   const fields: MetaFieldDefinition[] = [];
@@ -150,16 +151,35 @@ export function collectEnrollmentFields(
   // Base scope: all enrollments
   fields.push(...getFieldsForScope(schemas, { type: "enrollment" }));
 
+  if (entityTypeId) {
+    fields.push(...getFieldsForScope(schemas, { type: "enrollment", entity_type_id: entityTypeId }));
+  }
+
   // Dimension-level scopes (all values of a dimension)
   const dimIds = resolveDimensionIds(dvToDim, dimensionValueIds);
   for (const dimId of dimIds) {
     fields.push(...getFieldsForScope(schemas, { type: "enrollment", dimension_id: dimId }));
+    if (entityTypeId) {
+      fields.push(...getFieldsForScope(schemas, {
+        type: "enrollment",
+        entity_type_id: entityTypeId,
+        dimension_id: dimId,
+      }));
+    }
   }
 
   // Dimension value specific scopes
   for (const dvId of dimensionValueIds) {
     const dimId = dvToDim[dvId] || null;
     fields.push(...getFieldsForScope(schemas, { type: "enrollment", dimension_value_id: dvId, dimension_id: dimId }));
+    if (entityTypeId) {
+      fields.push(...getFieldsForScope(schemas, {
+        type: "enrollment",
+        entity_type_id: entityTypeId,
+        dimension_value_id: dvId,
+        dimension_id: dimId,
+      }));
+    }
   }
 
   return dedupeByKey(fields).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));

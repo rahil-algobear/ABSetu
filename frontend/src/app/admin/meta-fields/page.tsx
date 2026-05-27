@@ -98,6 +98,7 @@ export default function MetaFieldsPage() {
   const [activityFilterDvId, setActivityFilterDvId] = useState<string>("");
 
   // Enrollment tab view filters
+  const [enrollmentFilterEntityId, setEnrollmentFilterEntityId] = useState<string>("");
   const [enrollmentFilterDimId, setEnrollmentFilterDimId] = useState<string>("");
   const [enrollmentFilterDvId, setEnrollmentFilterDvId] = useState<string>("");
 
@@ -174,6 +175,7 @@ export default function MetaFieldsPage() {
         break;
       case "enrollment":
         setActiveKey("");
+        setEnrollmentFilterEntityId("");
         setEnrollmentFilterDimId("");
         setEnrollmentFilterDvId("");
         break;
@@ -198,9 +200,10 @@ export default function MetaFieldsPage() {
     }
   }, [entityTypesList]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Build a display label from activity type + dimension value IDs
-  const buildScopeLabel = (atId: string, dvId: string, fallback: string): string => {
+  // Build a display label from activity type / entity type / dimension value IDs
+  const buildScopeLabel = (atId: string, dvId: string, fallback: string, etId: string = ""): string => {
     const labels: string[] = [];
+    if (etId) labels.push(entityTypesList.find((e) => e.id === etId)?.name || etId);
     if (atId) labels.push(activityTypes.find((a) => a.id === atId)?.name || atId);
     if (dvId) {
       const dv = allDimensionValues.find((d) => d.id === dvId);
@@ -241,22 +244,24 @@ export default function MetaFieldsPage() {
     for (const item of allSchemas) {
       if (!item.fields?.length || item.scope.type !== "enrollment") continue;
 
+      const etId = item.scope.entity_type_id || "";
       const dvId = item.scope.dimension_value_id || "";
       const dimId = dvId
         ? allDimensionValues.find((d) => d.id === dvId)?.dimension_id || ""
         : "";
 
+      if (enrollmentFilterEntityId && etId !== enrollmentFilterEntityId) continue;
       if (enrollmentFilterDimId && dimId !== enrollmentFilterDimId) continue;
       if (enrollmentFilterDvId && dvId !== enrollmentFilterDvId) continue;
 
-      const scopeLabel = buildScopeLabel("", dvId, "All enrollments");
+      const scopeLabel = buildScopeLabel("", dvId, "All enrollments", etId);
       for (let i = 0; i < item.fields.length; i++) {
         rows.push({ field: item.fields[i], fieldIndex: i, schema: item, scopeLabel });
       }
     }
     rows.sort((a, b) => (a.field.sort_order ?? 0) - (b.field.sort_order ?? 0));
     return rows;
-  }, [allSchemas, enrollmentFilterDimId, enrollmentFilterDvId, allDimensionValues, dimensions]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [allSchemas, enrollmentFilterEntityId, enrollmentFilterDimId, enrollmentFilterDvId, allDimensionValues, dimensions, entityTypesList]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- Flat rows for Participant tab ---
   const participantRows = useMemo((): FlatFieldRow[] => {
@@ -307,6 +312,7 @@ export default function MetaFieldsPage() {
     }
     if (activeSection === "enrollment") {
       const scope: MetaFieldScope = { type: "enrollment" };
+      if (modalEntityId) scope.entity_type_id = modalEntityId;
       if (modalDvId) scope.dimension_value_id = modalDvId;
       return scope;
     }
@@ -353,6 +359,7 @@ export default function MetaFieldsPage() {
       setModalDimId("");
       setModalDvId("");
     } else if (activeSection === "enrollment") {
+      setModalEntityId("");
       setModalActivityTypeId("");
       setModalDimId("");
       setModalDvId("");
@@ -379,7 +386,7 @@ export default function MetaFieldsPage() {
       setModalDvId(target!.scope.dimension_value_id || "");
       const dvId = target!.scope.dimension_value_id || "";
       setModalDimId(dvId ? allDimensionValues.find((d) => d.id === dvId)?.dimension_id || "" : "");
-      if (activeSection === "participant") {
+      if (activeSection === "participant" || activeSection === "enrollment") {
         setModalEntityId(target!.scope.entity_type_id || "");
       }
     }
@@ -569,7 +576,7 @@ export default function MetaFieldsPage() {
   const hasFilters = activeSection === "activity"
     ? !!(activityFilterTypeId || activityFilterDimId || activityFilterDvId)
     : activeSection === "enrollment"
-      ? !!(enrollmentFilterDimId || enrollmentFilterDvId)
+      ? !!(enrollmentFilterEntityId || enrollmentFilterDimId || enrollmentFilterDvId)
       : !!(participantFilterTypeId || participantFilterDimId || participantFilterDvId);
 
   return (
@@ -649,6 +656,20 @@ export default function MetaFieldsPage() {
         {activeSection === "enrollment" && (
           <div className="flex items-end gap-3 flex-wrap">
             <div>
+              <label className="text-xs text-gray-500 block mb-1">Filter by Entity Type</label>
+              <select
+                className="border rounded-md px-3 py-1.5 text-sm"
+                value={enrollmentFilterEntityId}
+                onChange={(e) => setEnrollmentFilterEntityId(e.target.value)}
+              >
+                <option value="">All</option>
+                {entityTypesList.map((et) => (
+                  <option key={et.id} value={et.id}>{et.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
               <label className="text-xs text-gray-500 block mb-1">Filter by Dimension</label>
               <select
                 className="border rounded-md px-3 py-1.5 text-sm"
@@ -685,7 +706,11 @@ export default function MetaFieldsPage() {
 
             {hasFilters && (
               <button
-                onClick={() => { setEnrollmentFilterDimId(""); setEnrollmentFilterDvId(""); }}
+                onClick={() => {
+                  setEnrollmentFilterEntityId("");
+                  setEnrollmentFilterDimId("");
+                  setEnrollmentFilterDvId("");
+                }}
                 className="text-xs text-purple-600 hover:text-purple-800 pb-2"
               >
                 Clear filters
@@ -976,6 +1001,7 @@ export default function MetaFieldsPage() {
                       setActivityFilterDimId("");
                       setActivityFilterDvId("");
                     } else if (activeSection === "enrollment") {
+                      setEnrollmentFilterEntityId("");
                       setEnrollmentFilterDimId("");
                       setEnrollmentFilterDvId("");
                     } else {
@@ -1104,6 +1130,25 @@ export default function MetaFieldsPage() {
                   >
                     {participantEntityOptions.map((opt) => (
                       <option key={opt.id} value={opt.id}>{opt.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {activeSection === "enrollment" && (
+                <div>
+                  <Label htmlFor="modal-entity">
+                    Entity Type <span className="text-gray-400 text-xs font-normal">(optional)</span>
+                  </Label>
+                  <select
+                    id="modal-entity"
+                    className="w-full border rounded-md p-2 text-sm "
+                    value={modalEntityId}
+                    onChange={(e) => setModalEntityId(e.target.value)}
+                  >
+                    <option value="">All</option>
+                    {entityTypesList.map((et) => (
+                      <option key={et.id} value={et.id}>{et.name}</option>
                     ))}
                   </select>
                 </div>

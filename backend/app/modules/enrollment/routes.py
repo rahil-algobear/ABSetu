@@ -12,6 +12,7 @@ from app.common.exceptions import ValidationError
 from app.core.database import get_db
 from app.modules.auth.model import User
 from app.modules.dimension.model import DimensionValue
+from app.modules.entity.model import Entity
 from app.modules.enrollment.schemas import (
     DimensionInfo,
     EnrollmentCreate,
@@ -29,6 +30,7 @@ enrollment_router = APIRouter(prefix="/enrollments")
 def _collect_enrollment_field_defs(
     db: Session,
     org_id: uuid.UUID,
+    entity_type_id: uuid.UUID | None,
     dimension_value_ids: list[uuid.UUID] | None = None,
 ) -> dict[str, dict]:
     """Collect all applicable meta field definitions for an enrollment."""
@@ -36,9 +38,22 @@ def _collect_enrollment_field_defs(
     all_field_defs: dict[str, dict] = {}
     for fd in meta_service.get_schema_by_scope(org_id, "enrollment"):
         all_field_defs[fd["key"]] = fd
+    if entity_type_id:
+        for fd in meta_service.get_schema_by_scope(
+            org_id, "enrollment", entity_type_id=entity_type_id
+        ):
+            all_field_defs[fd["key"]] = fd
     for dv_id in dimension_value_ids or []:
         for fd in meta_service.get_schema_by_scope(org_id, "enrollment", dimension_value_id=dv_id):
             all_field_defs[fd["key"]] = fd
+        if entity_type_id:
+            for fd in meta_service.get_schema_by_scope(
+                org_id,
+                "enrollment",
+                entity_type_id=entity_type_id,
+                dimension_value_id=dv_id,
+            ):
+                all_field_defs[fd["key"]] = fd
     return all_field_defs
 
 
@@ -98,8 +113,21 @@ def create_enrollment(
     db: Session = Depends(get_db),
 ):
     dv_uuids = [uuid.UUID(v) for v in (data.dimension_value_ids or [])]
+
+    # Resolve entity type for scope-aware validation; service.create
+    # raises if the entity itself doesn't exist or isn't in this org.
+    entity_type_row = (
+        db.query(Entity.entity_type_id)
+        .filter_by(
+            id=uuid.UUID(data.entity_id),
+            organization_id=current_user.organization_id,
+        )
+        .first()
+    )
+    entity_type_id = entity_type_row[0] if entity_type_row else None
+
     all_field_defs = _collect_enrollment_field_defs(
-        db, current_user.organization_id, dv_uuids
+        db, current_user.organization_id, entity_type_id, dv_uuids
     )
 
     submitted_meta = data.meta or {}
