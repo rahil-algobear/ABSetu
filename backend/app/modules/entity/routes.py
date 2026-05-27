@@ -77,35 +77,6 @@ def _build_entity_response(
     ).dump()
 
 
-def _enrollment_relevant_dim_ids(
-    db: Session, org_id: uuid.UUID, entity_type_id: uuid.UUID | None
-) -> set[uuid.UUID]:
-    """Dimension IDs that the org's enrollment form-builder tracks for
-    this entity type. The smart picker's 'in scope' check filters the
-    activity's dimensions down to these — activities can carry extra
-    dims (Project, Intervention) that enrollments don't track, and we
-    don't want those to exclude otherwise-matching enrollments."""
-    from app.modules.organization.service import MetaFieldSchemaService
-
-    meta_service = MetaFieldSchemaService(db)
-    relevant: set[uuid.UUID] = set()
-
-    def _harvest(fields: list[dict]) -> None:
-        for fd in fields:
-            if fd.get("type") == "dimension" and fd.get("dimension_id"):
-                relevant.add(uuid.UUID(fd["dimension_id"]))
-
-    _harvest(meta_service.get_schema_by_scope(org_id, "enrollment"))
-    if entity_type_id:
-        _harvest(
-            meta_service.get_schema_by_scope(org_id, "enrollment", entity_type_id=entity_type_id)
-        )
-    # NOTE: dimension-value scoped enrollment fields are intentionally
-    # excluded — they only apply to enrollments that already match those
-    # values, so they'd circularly bias the scope check.
-    return relevant
-
-
 def _compute_enrollment_status_map(
     db: Session,
     org_id: uuid.UUID,
@@ -113,31 +84,21 @@ def _compute_enrollment_status_map(
     entity_ids: list[uuid.UUID],
     activity_dv_ids: set[uuid.UUID],
 ) -> dict[uuid.UUID, str]:
-    """Per-entity 'active_in_scope' / 'no_active_in_scope' for the
-    smart participant picker. An entity is active_in_scope iff it has
-    at least one active enrollment whose dimension values cover all
-    enrollment-tracked dimensions the activity carries. Activity dims
-    on axes the enrollment doesn't track (e.g. Project/Intervention)
-    are ignored — they're activity-scoping, not enrollment-scoping."""
+    """Per-entity 'active_in_scope' / 'no_active_in_scope' for the smart
+    participant picker. Uses the shared scope helpers so the listing
+    query, the picker_add guard, and the enroll/create endpoints all
+    agree on what "in scope" means."""
+    from app.common.helpers.enrollment_scope import (
+        get_enrollment_relevant_dim_ids,
+        scope_activity_dvs,
+    )
     from app.modules.enrollment.model import Enrollment
 
     if not entity_ids:
         return {}
 
-    # Filter activity_dv_ids down to the dimensions the enrollment
-    # schema actually tracks.
-    relevant_dim_ids = _enrollment_relevant_dim_ids(db, org_id, entity_type_id)
-    if relevant_dim_ids and activity_dv_ids:
-        from app.modules.dimension.model import DimensionValue
-
-        dv_rows = (
-            db.query(DimensionValue.id, DimensionValue.dimension_id)
-            .filter(DimensionValue.id.in_(activity_dv_ids))
-            .all()
-        )
-        scoped_activity_dvs = {dv_id for dv_id, dim_id in dv_rows if dim_id in relevant_dim_ids}
-    else:
-        scoped_activity_dvs = set()
+    relevant_dim_ids = get_enrollment_relevant_dim_ids(db, org_id, entity_type_id)
+    scoped_activity_dvs = scope_activity_dvs(db, activity_dv_ids, relevant_dim_ids)
 
     enrollments = (
         db.query(Enrollment)

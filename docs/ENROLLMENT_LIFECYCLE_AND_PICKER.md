@@ -299,6 +299,76 @@ a clear message instead of silently dropping the request.
 
 ---
 
+## Phase 3.1 — Consolidate participant edit & view states
+
+### What
+
+Today the activity detail page has two modes for participants:
+
+- A **read-only view** with the smart picker button for adds.
+- An **Edit Participants** mode that loads everything into the
+  bulk SearchSelectParticipants form for editing or removal.
+
+The split was a v1 compromise — the picker handles atomic adds, but
+the bulk-edit mode lingers because it's the only way to remove a
+participant or edit per-participant meta (status, notes). Two modes
+for one section is confusing.
+
+### Target shape
+
+One mode. The read-only view becomes the single surface:
+
+- **Add** stays as today: the smart picker via the `+` button.
+- **Remove** moves inline — small × per participant row, confirm
+  before firing.
+- **Per-participant meta** (status, attendance, notes) becomes
+  editable inline in the table — same DynamicMetaForm cells, just
+  rendered in-place rather than behind a modal-switch.
+
+The "Edit Participants" button goes away. `SearchSelectParticipants`
+can be retired from the activity detail page entirely (still used by
+the activity create page until Phase 3.2 below extends the picker
+there too).
+
+### Why this matters
+
+- Removes a confusing UX state (no more "switch into edit mode to
+  remove someone").
+- Eliminates the bulk-save flow's footgun: the existing endpoint
+  `POST /activities/{id}/participants` deletes-and-recreates every
+  participant on save, which would clobber the picker's atomic adds
+  if they raced.
+- Makes the picker the unambiguous source of truth for write actions.
+
+### Scope
+
+- New backend endpoint(s) for atomic per-participant remove + meta
+  update (`DELETE` + `PATCH` on a participant row).
+- Refactor the activity detail page's participants section:
+  - Drop the `editingSections` toggle.
+  - Replace `SearchSelectParticipants` usage in this surface.
+  - Inline remove icon + editable meta cells.
+- Leave the activity create page alone for now — it still needs the
+  bulk flow because there's no activity_id yet to call atomic
+  endpoints against. Addressed by **Phase 3.2** (defer): activity
+  create flow → save activity first, then open picker.
+
+### Open questions
+
+- For editable meta cells with `captureStatus`: optimistic update or
+  wait-for-server? Lean optimistic given the call shape.
+- Permission key for remove — reuse `activity:create`, or split out
+  `activity:participant:remove`? Reuse for v1, split later if NGOs ask.
+
+### Deferred — Phase 3.2
+
+- Make the activity create page route through the picker too. The
+  shape: create activity in one step, then participants are added via
+  picker against the new id. Eliminates the last remaining caller of
+  the bulk-save endpoint.
+
+---
+
 ## Phase 4 — Configurable enrollment limits
 
 ### What
@@ -449,5 +519,9 @@ Rules apply to **new writes only**. Existing data that doesn't comply
 2. **Phase 2** — delete enrollment. Small, slot it in while in the same
    files as Phase 1.
 3. **Phase 3** — smart picker. Builds on Phase 1's signal.
-4. **Phase 4** — configurable enrollment limits. Independent of
+4. **Phase 3.1** — consolidate participant edit/view states on the
+   activity detail page. Builds on Phase 3.
+5. **Phase 3.2 (deferred)** — extend picker flow to the activity create
+   page, retire bulk participant save.
+6. **Phase 4** — configurable enrollment limits. Independent of
    Phase 3 — can land before or after the picker.
