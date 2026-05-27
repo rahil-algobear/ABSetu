@@ -492,4 +492,8 @@ export const enrollmentApi = {
     const response = await authAxios.put<Enrollment>(`/enrollments/${id}/dimensions`, dimensionValueIds);
     return response.data;
   },
+  delete: async (id: string) => {
+    const response = await authAxios.delete(`/enrollments/${id}`);
+    return response.data;
+  },
 };

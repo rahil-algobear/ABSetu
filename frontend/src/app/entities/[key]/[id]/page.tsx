@@ -34,7 +34,7 @@ import { Input } from "@/components/ui/input";
 import { DynamicMetaForm, MetaFieldDisplay } from "@/components/DynamicMetaForm";
 import { Dialog } from "@/components/ui/dialog";
 import { PageHeader } from "@/components/ui/page-header";
-import { Plus, Pencil, ChevronRight } from "lucide-react";
+import { Plus, Pencil, Trash2, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import { formatDate, formatDateTime } from "@/utils/date";
@@ -142,6 +142,17 @@ export default function EntityDetailPage() {
       toast.success("Details updated");
     },
     onError: () => toast.error("Failed to update details"),
+  });
+
+  const deleteEnrollmentMutation = useMutation({
+    mutationFn: (enrollmentId: string) => enrollmentApi.delete(enrollmentId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["enrollments-entity", id] });
+      toast.success("Enrollment deleted");
+    },
+    onError: (err: { response?: { data?: { message?: string } } }) => {
+      toast.error(err.response?.data?.message || "Failed to delete enrollment");
+    },
   });
 
   const openEditDetails = () => {
@@ -362,13 +373,31 @@ export default function EntityDetailPage() {
                               ))}
                             </div>
                             <Can permission="enrollment:manage">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => setEnrollmentAction({ enrollment: e })}
-                              >
-                                <Pencil className="h-3.5 w-3.5" />
-                              </Button>
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => setEnrollmentAction({ enrollment: e })}
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="text-gray-400 hover:text-red-600 hover:bg-red-50"
+                                  onClick={() => {
+                                    if (
+                                      confirm(
+                                        "Delete this enrollment? This can't be undone.",
+                                      )
+                                    ) {
+                                      deleteEnrollmentMutation.mutate(e.id);
+                                    }
+                                  }}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
                             </Can>
                           </div>
                           <Can permission="enrollment:manage">
