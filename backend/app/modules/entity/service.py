@@ -240,15 +240,41 @@ class EntityService:
 
         return query.order_by(Entity.created_at.desc()).all()
 
+    def list_by_ids(
+        self,
+        org_id: uuid.UUID,
+        entity_ids: list[uuid.UUID],
+        accessible_dv_ids: list[uuid.UUID] | None = None,
+    ) -> list[tuple]:
+        """Fetch specific entities by ID — used for name lookups when
+        the caller already knows what it needs (e.g. activity detail
+        page resolving participant names)."""
+        query = self._build_base_query(org_id, accessible_dv_ids)
+        return query.filter(Entity.id.in_(entity_ids)).all()
+
     def list_by_org_paginated(
         self,
         org_id: uuid.UUID,
         params: ListParams,
         accessible_dv_ids: list[uuid.UUID] | None = None,
         list_columns: list[dict] | None = None,
+        include_entity_ids: set[uuid.UUID] | None = None,
+        exclude_entity_ids: set[uuid.UUID] | None = None,
     ) -> tuple[list[tuple], int]:
-        """Paginated list with search, filter, sort support."""
+        """Paginated list with search, filter, sort support.
+
+        `include_entity_ids` / `exclude_entity_ids` apply a pre-filter on
+        Entity.id before paging — used by the picker's enrollment-status
+        filter so the total count reflects the filtered set."""
         query = self._build_base_query(org_id, accessible_dv_ids)
+
+        if include_entity_ids is not None:
+            if not include_entity_ids:
+                # Empty include set → no results, short-circuit.
+                return ([], 0)
+            query = query.filter(Entity.id.in_(include_entity_ids))
+        if exclude_entity_ids:
+            query = query.filter(~Entity.id.in_(exclude_entity_ids))
 
         # Build filter/sort/search keys from list config
         filterable_keys = None

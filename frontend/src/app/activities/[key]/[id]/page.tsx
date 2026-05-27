@@ -115,22 +115,44 @@ export default function ActivityDetailPage() {
 
   const hasUserSection = participantListFields.some((f) => f.type === "user_list");
 
+  // Just the IDs of entities that are actually participants in this
+  // activity — by-ids fetch scales with participants-per-activity, not
+  // total org size.
+  const participantEntityIds = useMemo(
+    () =>
+      participants
+        .filter((p) => p.participant_type === "entity")
+        .map((p) => p.participant_id),
+    [participants],
+  );
+
   const { data: entitiesByType = {} } = useQuery({
-    queryKey: ["entities-for-sections", entitySourceIds.join(",")],
+    queryKey: ["entities-for-sections", participantEntityIds.join(",")],
     queryFn: async () => {
+      const entities =
+        participantEntityIds.length > 0
+          ? await entityApi.listByIds(participantEntityIds)
+          : [];
+
+      // Group by entity_type_id, deriving the display name from each
+      // type's first meta column (matches the old behaviour).
       const result: Record<string, { id: string; name: string }[]> = {};
-      for (const typeId of entitySourceIds) {
-        const [entities, columns] = await Promise.all([
-          entityApi.list(typeId),
-          listConfigApi.get(`entity:${typeId}`),
-        ]);
-        // Use first visible column to derive display name
-        const firstCol = columns.find((c) => c.visible && c.key.startsWith("meta:"));
-        const metaKey = firstCol?.key.replace(/^meta:/, "");
-        result[typeId] = entities.map((e) => ({
+      const columnsByType: Record<string, string | undefined> = {};
+      await Promise.all(
+        entitySourceIds.map(async (typeId) => {
+          const columns = await listConfigApi.get(`entity:${typeId}`);
+          const firstCol = columns.find((c) => c.visible && c.key.startsWith("meta:"));
+          columnsByType[typeId] = firstCol?.key.replace(/^meta:/, "");
+          result[typeId] = [];
+        }),
+      );
+      for (const e of entities) {
+        const metaKey = columnsByType[e.entity_type_id];
+        const list = result[e.entity_type_id] || (result[e.entity_type_id] = []);
+        list.push({
           id: e.id,
           name: metaKey ? String((e.meta || {})[metaKey] || "") : "",
-        }));
+        });
       }
       return result;
     },

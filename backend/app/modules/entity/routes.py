@@ -13,6 +13,7 @@ from app.common.dependencies import (
     get_current_user,
     require_permissions,
 )
+from app.common.exceptions import ValidationError
 from app.common.schemas.base_response import PaginatedResponse
 from app.common.schemas.list_params import ListParams
 from app.core.database import get_db
@@ -75,49 +76,6 @@ def _build_entity_response(
         activity_count=activity_count,
         enrollment_status=enrollment_status,
     ).dump()
-
-
-def _compute_enrollment_status_map(
-    db: Session,
-    org_id: uuid.UUID,
-    entity_type_id: uuid.UUID | None,
-    entity_ids: list[uuid.UUID],
-    activity_dv_ids: set[uuid.UUID],
-) -> dict[uuid.UUID, str]:
-    """Per-entity 'active_in_scope' / 'no_active_in_scope' for the smart
-    participant picker. Uses the shared scope helpers so the listing
-    query, the picker_add guard, and the enroll/create endpoints all
-    agree on what "in scope" means."""
-    from app.common.helpers.enrollment_scope import (
-        get_enrollment_relevant_dim_ids,
-        scope_activity_dvs,
-    )
-    from app.modules.enrollment.model import Enrollment
-
-    if not entity_ids:
-        return {}
-
-    relevant_dim_ids = get_enrollment_relevant_dim_ids(db, org_id, entity_type_id)
-    scoped_activity_dvs = scope_activity_dvs(db, activity_dv_ids, relevant_dim_ids)
-
-    enrollments = (
-        db.query(Enrollment)
-        .filter(Enrollment.entity_id.in_(entity_ids), Enrollment.is_active.is_(True))
-        .all()
-    )
-    by_entity: dict[uuid.UUID, list[set[uuid.UUID]]] = {}
-    for e in enrollments:
-        by_entity.setdefault(e.entity_id, []).append(
-            {d.dimension_value_id for d in (e.dimensions or [])}
-        )
-    result: dict[uuid.UUID, str] = {}
-    for eid in entity_ids:
-        en_dvs = by_entity.get(eid, [])
-        if any(scoped_activity_dvs.issubset(s) for s in en_dvs):
-            result[eid] = "active_in_scope"
-        else:
-            result[eid] = "no_active_in_scope"
-    return result
 
 
 # --- Entity Types ---
@@ -206,12 +164,21 @@ def delete_entity_type(
 @entity_router.get("/", dependencies=[Depends(require_permissions("entity:view"))])
 def list_entities(
     page: int = Query(1, ge=1),
-    limit: int = Query(25, ge=1, le=100),
+    limit: int = Query(25, ge=1, le=1000),
     search: str | None = Query(None),
     sort_by: str | None = Query(None),
     sort_order: str = Query("desc", pattern="^(asc|desc)$"),
     filters: str | None = Query(None),
     entity_type_id: uuid.UUID | None = Query(None),
+    ids: str
+    | None = Query(
+        None,
+        description=(
+            "Comma-separated list of entity UUIDs. When set, the response is "
+            "restricted to these entities only — used by surfaces that need "
+            "name lookups for a known set of IDs without pulling a full org."
+        ),
+    ),
     with_enrollment_status_for_activity: uuid.UUID
     | None = Query(
         None,
@@ -221,6 +188,17 @@ def list_entities(
             "cover this activity's dimension scope."
         ),
     ),
+    enrollment_status_filter: str
+    | None = Query(
+        None,
+        pattern="^(active_in_scope|no_active_in_scope)$",
+        description=(
+            "Filter rows by enrollment_status. Requires "
+            "with_enrollment_status_for_activity. Applied before pagination "
+            "so totals reflect the filtered set — backs the picker's "
+            "accurate Enrolled count."
+        ),
+    ),
     current_user: User = Depends(get_current_user),
     accessible_dv_ids: list[uuid.UUID] | None = Depends(get_accessible_dimension_value_ids),
     db: Session = Depends(get_db),
@@ -228,6 +206,28 @@ def list_entities(
     import json
 
     service = EntityService(db)
+
+    # Early return path: explicit ID list (used by surfaces that need
+    # name lookups for a known set without pulling a full org page).
+    if ids:
+        try:
+            id_list = [uuid.UUID(s.strip()) for s in ids.split(",") if s.strip()]
+        except ValueError:
+            raise ValidationError("Invalid UUID in `ids` parameter.")
+        if not id_list:
+            return PaginatedResponse(count=0, data=[])
+        # Hard cap to keep this from being abused; participant lookups
+        # don't need more than a few hundred per page.
+        if len(id_list) > 500:
+            raise ValidationError("`ids` is capped at 500 entries per request.")
+        rows = service.list_by_ids(
+            current_user.organization_id, id_list, accessible_dv_ids=accessible_dv_ids
+        )
+        data = [
+            _build_entity_response(entity, enrollment_count, activity_count, created_by_name)
+            for entity, enrollment_count, activity_count, created_by_name in rows
+        ]
+        return PaginatedResponse(count=len(data), data=data)
 
     # Merge entity_type_id into filters JSON so apply_filters handles it uniformly
     merged_filters = filters
@@ -257,15 +257,15 @@ def list_entities(
             current_user.organization_id, f"entity:{entity_type_id}"
         )
 
-    rows, total = service.list_by_org_paginated(
-        current_user.organization_id,
-        params=params,
-        accessible_dv_ids=accessible_dv_ids,
-        list_columns=list_columns,
-    )
-
-    status_map: dict[uuid.UUID, str] = {}
+    # If the caller wants enrollment_status info or a filter, compute the
+    # active-in-scope entity set up front. Cheaper than per-row status
+    # computation and also gives us accurate filtered totals.
+    active_in_scope_ids: set[uuid.UUID] | None = None
+    activity_dv_ids: set[uuid.UUID] = set()
     if with_enrollment_status_for_activity is not None:
+        from app.common.helpers.enrollment_scope import (
+            get_entities_active_in_activity_scope,
+        )
         from app.modules.dimension.model import ActivityDimension
 
         activity_dvs = (
@@ -274,14 +274,35 @@ def list_entities(
             .all()
         )
         activity_dv_ids = {row[0] for row in activity_dvs}
-        page_entity_ids = [entity.id for entity, *_ in rows]
-        status_map = _compute_enrollment_status_map(
+        active_in_scope_ids = get_entities_active_in_activity_scope(
             db,
             current_user.organization_id,
             entity_type_id,
-            page_entity_ids,
             activity_dv_ids,
         )
+
+    include_ids: set[uuid.UUID] | None = None
+    exclude_ids: set[uuid.UUID] | None = None
+    if enrollment_status_filter == "active_in_scope":
+        include_ids = active_in_scope_ids or set()
+    elif enrollment_status_filter == "no_active_in_scope":
+        exclude_ids = active_in_scope_ids or set()
+
+    rows, total = service.list_by_org_paginated(
+        current_user.organization_id,
+        params=params,
+        accessible_dv_ids=accessible_dv_ids,
+        list_columns=list_columns,
+        include_entity_ids=include_ids,
+        exclude_entity_ids=exclude_ids,
+    )
+
+    status_map: dict[uuid.UUID, str] = {}
+    if with_enrollment_status_for_activity is not None and active_in_scope_ids is not None:
+        for entity, *_ in rows:
+            status_map[entity.id] = (
+                "active_in_scope" if entity.id in active_in_scope_ids else "no_active_in_scope"
+            )
 
     data = [
         _build_entity_response(

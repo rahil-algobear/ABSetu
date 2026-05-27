@@ -82,3 +82,51 @@ def enrollment_in_activity_scope(
         return False
     scoped = scope_activity_dvs(db, activity_dv_ids, relevant_dim_ids)
     return scoped.issubset(enrollment_dv_ids)
+
+
+def get_entities_active_in_activity_scope(
+    db: Session,
+    org_id: uuid.UUID,
+    entity_type_id: uuid.UUID | None,
+    activity_dv_ids: set[uuid.UUID],
+) -> set[uuid.UUID]:
+    """All entity IDs (within the org / entity type) that have at least
+    one active enrollment whose dimensions cover the enrollment-tracked
+    subset of the activity's dimensions.
+
+    Returns an empty set if the org doesn't track any enrollment-relevant
+    dimensions or the activity has no values on those dimensions — both
+    "no scoping signal" cases.
+
+    Backs the picker's accurate Enrolled count: we filter the entity
+    listing by membership in this set instead of computing status row-by-
+    row and undercounting beyond a page limit."""
+    from sqlalchemy import func
+
+    relevant_dim_ids = get_enrollment_relevant_dim_ids(db, org_id, entity_type_id)
+    if not relevant_dim_ids:
+        return set()
+    scoped = scope_activity_dvs(db, activity_dv_ids, relevant_dim_ids)
+    if not scoped:
+        return set()
+
+    from app.modules.dimension.model import EnrollmentDimension
+    from app.modules.enrollment.model import Enrollment
+
+    # Per-enrollment: count distinct matching dvs across the scoped set.
+    # An enrollment qualifies iff its matching-count equals len(scoped) —
+    # i.e. it carries every scoped activity dv (extra dimensions are
+    # fine, they just don't get counted here because of the .in_() filter).
+    rows = (
+        db.query(Enrollment.entity_id)
+        .join(EnrollmentDimension, EnrollmentDimension.enrollment_id == Enrollment.id)
+        .filter(
+            Enrollment.organization_id == org_id,
+            Enrollment.is_active.is_(True),
+            EnrollmentDimension.dimension_value_id.in_(scoped),
+        )
+        .group_by(Enrollment.id, Enrollment.entity_id)
+        .having(func.count(EnrollmentDimension.dimension_value_id.distinct()) == len(scoped))
+        .all()
+    )
+    return {row[0] for row in rows}

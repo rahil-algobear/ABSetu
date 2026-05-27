@@ -97,23 +97,37 @@ export function ParticipantPicker({
     [alreadyAdded],
   );
 
-  // Cohort query — every entity with active_in_scope status. No search
-  // (cohort size is bounded by scope; client-side filter handles it).
-  const { data: cohortResp, isLoading: cohortLoading } = useQuery({
-    queryKey: ["picker-cohort", entityTypeId, activityId],
+  // Enrolled cohort — backend filters to active_in_scope server-side,
+  // so the total count is accurate even at scale (no 500-row cap on
+  // client-side filtering). Limit caps a single response but the total
+  // count field reflects the full filtered set.
+  const { data: enrolledResp, isLoading: enrolledLoading } = useQuery({
+    queryKey: ["picker-enrolled", entityTypeId, activityId],
     queryFn: () =>
       entityApi.listPaginated({
         entity_type_id: entityTypeId,
         with_enrollment_status_for_activity: activityId,
+        enrollment_status_filter: "active_in_scope",
         limit: 500,
       }),
     enabled: open,
   });
-  const cohortEntities: Entity[] = cohortResp?.data || [];
-  const enrolledEntities = useMemo(
-    () => cohortEntities.filter((e) => e.enrollment_status === "active_in_scope"),
-    [cohortEntities],
-  );
+  const enrolledEntities: Entity[] = enrolledResp?.data || [];
+  const enrolledTotal = enrolledResp?.count ?? 0;
+
+  // Total count of entities of this type (for the All tab badge,
+  // shown whether or not user is searching). limit=1 because we
+  // only need the count, not the rows.
+  const { data: totalResp } = useQuery({
+    queryKey: ["picker-total", entityTypeId],
+    queryFn: () =>
+      entityApi.listPaginated({
+        entity_type_id: entityTypeId,
+        limit: 1,
+      }),
+    enabled: open,
+  });
+  const allTotal = totalResp?.count ?? 0;
 
   // Search query — only fires on the All tab when the user has typed.
   // Backend uses normalize=True so "auto test" matches "Auto-Test 48".
@@ -129,7 +143,6 @@ export function ParticipantPicker({
     enabled: open && tab === "all" && search.trim().length > 0,
   });
   const searchEntities: Entity[] = searchResp?.data || [];
-  const searchTotal = searchResp?.count ?? 0;
 
   // Client-side filter helper for tabs that aren't search-driven.
   const matchesSearch = (name: string) => {
@@ -163,15 +176,19 @@ export function ParticipantPicker({
     [enrolledEntities, alreadyAddedIds, search],
   );
 
-  // Counts — absolute totals, not the search-filtered visible list.
+  // Counts — absolute totals (not filtered by the current search).
+  // Enrolled = total active_in_scope (from server) minus those already
+  // added. Added = parent-supplied count. All = total entities of type.
   const addedCount = alreadyAdded.length;
-  const enrolledCount = enrolledEntities.filter(
-    (e) => !alreadyAddedIds.has(e.id),
+  const alreadyAddedInScopeCount = enrolledEntities.filter((e) =>
+    alreadyAddedIds.has(e.id),
   ).length;
-  const allCount = search.trim() ? searchTotal : 0;
+  const enrolledCount = Math.max(0, enrolledTotal - alreadyAddedInScopeCount);
+  const allCount = allTotal;
 
   const refreshAfterAction = () => {
-    queryClient.invalidateQueries({ queryKey: ["picker-cohort"] });
+    queryClient.invalidateQueries({ queryKey: ["picker-enrolled"] });
+    queryClient.invalidateQueries({ queryKey: ["picker-total"] });
     queryClient.invalidateQueries({ queryKey: ["picker-search"] });
     onAdded();
   };
@@ -267,7 +284,7 @@ export function ParticipantPicker({
             )}
 
             {tab === "enrolled" && (
-              cohortLoading ? (
+              enrolledLoading ? (
                 <p className="text-sm text-gray-500 p-3">Loading…</p>
               ) : enrolledRows.length === 0 ? (
                 <p className="text-sm text-gray-500 p-3">

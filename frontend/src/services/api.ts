@@ -227,6 +227,8 @@ export interface EntityListParams {
   limit?: number;
   entity_type_id?: string;
   with_enrollment_status_for_activity?: string;
+  enrollment_status_filter?: "active_in_scope" | "no_active_in_scope";
+  ids?: string;
 }
 
 export interface EntityFilterDefinition {
@@ -246,8 +248,21 @@ export interface FilterResponse {
 
 export const entityApi = {
   list: async (entityTypeId?: string): Promise<Entity[]> => {
-    const params = entityTypeId ? `?entity_type_id=${entityTypeId}` : '';
-    const response = await authAxios.get<PaginatedResponse<Entity>>(`/entities/${params}`);
+    // High limit so the activity create page's SearchSelectParticipants
+    // options list covers orgs with hundreds of beneficiaries. Phase 3.2
+    // retires that flow; until then this is the patch.
+    const params = new URLSearchParams({ limit: "1000" });
+    if (entityTypeId) params.set("entity_type_id", entityTypeId);
+    const response = await authAxios.get<PaginatedResponse<Entity>>(
+      `/entities/?${params.toString()}`,
+    );
+    return response.data.data;
+  },
+  listByIds: async (ids: string[]): Promise<Entity[]> => {
+    if (ids.length === 0) return [];
+    const response = await authAxios.get<PaginatedResponse<Entity>>(
+      `/entities/?ids=${ids.join(",")}`,
+    );
     return response.data.data;
   },
   listPaginated: async (params: EntityListParams): Promise<PaginatedResponse<Entity>> => {
