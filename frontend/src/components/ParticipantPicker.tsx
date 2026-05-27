@@ -370,22 +370,33 @@ function EnrollAndAddModal({
     [relevantActivityDimensions],
   );
 
-  // Required + visible enrollment fields, excluding any dimension
-  // fields the activity already locks in. The user fills the rest.
-  const fillableFields: MetaFieldDefinition[] = useMemo(() => {
-    const fields = collectEnrollmentFields(
+  // Every visible enrollment field, in form-builder order. Dimension
+  // fields the activity locks render disabled with the activity's
+  // value; other fields are user-editable.
+  const visibleFields: MetaFieldDefinition[] = useMemo(() => {
+    return collectEnrollmentFields(
       allSchemas,
       entity.entity_type_id,
       relevantActivityDimensions.map((d) => d.value_id),
-    );
-    return fields.filter((f) => {
-      if (f.visible === false) return false;
-      if (f.type === "dimension" && f.dimension_id && activityDimIds.has(f.dimension_id)) {
-        return false; // activity supplies this dimension
-      }
-      return true;
-    });
-  }, [allSchemas, entity.entity_type_id, relevantActivityDimensions, activityDimIds]);
+    ).filter((f) => f.visible !== false);
+  }, [allSchemas, entity.entity_type_id, relevantActivityDimensions]);
+
+  // Dimension-value lookup keyed by dimension_id, for quickly rendering
+  // a locked dimension field's value.
+  const activityDimValueByDimId = useMemo(
+    () => new Map(relevantActivityDimensions.map((d) => [d.dimension_id, d])),
+    [relevantActivityDimensions],
+  );
+
+  // Fields the user actually fills (used for required-field validation).
+  const userFillableFields = useMemo(
+    () =>
+      visibleFields.filter(
+        (f) =>
+          !(f.type === "dimension" && f.dimension_id && activityDimIds.has(f.dimension_id)),
+      ),
+    [visibleFields, activityDimIds],
+  );
 
   const [metaValues, setMetaValues] = useState<Record<string, unknown>>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -410,8 +421,9 @@ function EnrollAndAddModal({
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
-    // Required-field check (mirrors EnrollmentForm validation shape).
-    for (const f of fillableFields) {
+    // Required-field check on the fields the user actually fills.
+    // Locked dimension fields are auto-supplied by the activity.
+    for (const f of userFillableFields) {
       if (!f.required) continue;
       const v = metaValues[f.key];
       if (v === undefined || v === null || v === "") {
@@ -436,21 +448,22 @@ function EnrollAndAddModal({
             {formError}
           </div>
         )}
-        {relevantActivityDimensions.length > 0 && (
-          <div className="rounded-md bg-gray-50 px-3 py-2 text-xs text-gray-600">
-            <span className="text-gray-500">Will enroll in:</span>{" "}
-            {relevantActivityDimensions
-              .map((d) => `${d.dimension_name}: ${d.value_name}`)
-              .join(" · ")}
+        {visibleFields.length > 0 ? (
+          <div className="space-y-3">
+            {visibleFields.map((f) => (
+              <EnrollmentFieldRow
+                key={f.key}
+                field={f}
+                lockedValue={
+                  f.type === "dimension" && f.dimension_id
+                    ? activityDimValueByDimId.get(f.dimension_id)?.value_name
+                    : undefined
+                }
+                metaValues={metaValues}
+                onChange={setMetaValues}
+              />
+            ))}
           </div>
-        )}
-
-        {fillableFields.length > 0 ? (
-          <DynamicMetaForm
-            fields={fillableFields}
-            values={metaValues}
-            onChange={setMetaValues}
-          />
         ) : (
           <p className="text-sm text-gray-500">
             No additional fields needed. Confirm to enroll and add.
@@ -519,25 +532,33 @@ function CreateAndAddModal({
     [allSchemas, entityTypeId],
   );
 
-  const enrollmentFields: MetaFieldDefinition[] = useMemo(() => {
-    const fields = collectEnrollmentFields(
+  // Every visible enrollment field, in form-builder order. Dimension
+  // fields whose value the activity supplies render as locked.
+  const visibleEnrollmentFields: MetaFieldDefinition[] = useMemo(() => {
+    return collectEnrollmentFields(
       allSchemas,
       entityTypeId,
       relevantActivityDimensions.map((d) => d.value_id),
-    );
-    return fields.filter((f) => {
-      if (f.visible === false) return false;
-      if (
-        f.type === "dimension" &&
-        f.dimension_id &&
-        enrollmentTrackedDimIds.has(f.dimension_id)
-      ) {
-        // activity supplies this dimension; don't ask the user again
-        return false;
-      }
-      return true;
-    });
-  }, [allSchemas, entityTypeId, relevantActivityDimensions, enrollmentTrackedDimIds]);
+    ).filter((f) => f.visible !== false);
+  }, [allSchemas, entityTypeId, relevantActivityDimensions]);
+
+  const activityDimValueByDimId = useMemo(
+    () => new Map(relevantActivityDimensions.map((d) => [d.dimension_id, d])),
+    [relevantActivityDimensions],
+  );
+
+  const userFillableEnrollmentFields = useMemo(
+    () =>
+      visibleEnrollmentFields.filter(
+        (f) =>
+          !(
+            f.type === "dimension" &&
+            f.dimension_id &&
+            enrollmentTrackedDimIds.has(f.dimension_id)
+          ),
+      ),
+    [visibleEnrollmentFields, enrollmentTrackedDimIds],
+  );
 
   const [entityMeta, setEntityMeta] = useState<Record<string, unknown>>({});
   const [enrollmentMeta, setEnrollmentMeta] = useState<Record<string, unknown>>({});
@@ -572,7 +593,7 @@ function CreateAndAddModal({
         return;
       }
     }
-    for (const f of enrollmentFields) {
+    for (const f of userFillableEnrollmentFields) {
       if (!f.required) continue;
       const v = enrollmentMeta[f.key];
       if (v === undefined || v === null || v === "") {
@@ -605,24 +626,24 @@ function CreateAndAddModal({
           </div>
         )}
 
-        <div className="space-y-2">
+        <div className="space-y-3">
           <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
             Enrollment
           </h4>
-          {relevantActivityDimensions.length > 0 && (
-            <div className="rounded-md bg-gray-50 px-3 py-2 text-xs text-gray-600">
-              <span className="text-gray-500">Will enroll in:</span>{" "}
-              {relevantActivityDimensions
-                .map((d) => `${d.dimension_name}: ${d.value_name}`)
-                .join(" · ")}
-            </div>
-          )}
-          {enrollmentFields.length > 0 ? (
-            <DynamicMetaForm
-              fields={enrollmentFields}
-              values={enrollmentMeta}
-              onChange={setEnrollmentMeta}
-            />
+          {visibleEnrollmentFields.length > 0 ? (
+            visibleEnrollmentFields.map((f) => (
+              <EnrollmentFieldRow
+                key={f.key}
+                field={f}
+                lockedValue={
+                  f.type === "dimension" && f.dimension_id
+                    ? activityDimValueByDimId.get(f.dimension_id)?.value_name
+                    : undefined
+                }
+                metaValues={enrollmentMeta}
+                onChange={setEnrollmentMeta}
+              />
+            ))
           ) : (
             <p className="text-xs text-gray-500">
               No additional enrollment fields configured.
@@ -640,5 +661,52 @@ function CreateAndAddModal({
         </div>
       </form>
     </Dialog>
+  );
+}
+
+/** Renders a single enrollment field. Locked dimension fields (whose
+ *  value the activity supplies) display as a read-only label + chip;
+ *  everything else delegates to DynamicMetaForm. */
+function EnrollmentFieldRow({
+  field,
+  lockedValue,
+  metaValues,
+  onChange,
+}: {
+  field: MetaFieldDefinition;
+  lockedValue: string | undefined;
+  metaValues: Record<string, unknown>;
+  onChange: (v: Record<string, unknown>) => void;
+}) {
+  if (field.type === "dimension" && lockedValue !== undefined) {
+    return (
+      <div>
+        <label className="text-sm font-medium">
+          {field.label}
+          {field.required && <span className="text-red-500 ml-0.5">*</span>}
+        </label>
+        <div className="mt-1 px-3 py-2 border rounded-md bg-gray-50 text-sm text-gray-700">
+          {lockedValue}
+        </div>
+      </div>
+    );
+  }
+  if (field.type === "dimension") {
+    // Enrollment-tracked dimension that the activity doesn't supply.
+    // V1 picker doesn't render a cascading dimension picker here —
+    // user can still enroll via the regular enrollment form on the
+    // entity detail page if they need to set this.
+    return (
+      <div className="text-xs text-gray-400 italic">
+        {field.label}: configure via the entity detail page
+      </div>
+    );
+  }
+  return (
+    <DynamicMetaForm
+      fields={[field]}
+      values={metaValues}
+      onChange={onChange}
+    />
   );
 }
