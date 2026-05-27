@@ -246,8 +246,15 @@ export interface FilterResponse {
 
 export const entityApi = {
   list: async (entityTypeId?: string): Promise<Entity[]> => {
-    const params = entityTypeId ? `?entity_type_id=${entityTypeId}` : '';
-    const response = await authAxios.get<PaginatedResponse<Entity>>(`/entities/${params}`);
+    // High limit so name lookups on dependent pages (activity detail
+    // participants, etc.) cover orgs with hundreds of beneficiaries.
+    // For larger orgs a proper "fetch by IDs" endpoint is the right
+    // long-term fix.
+    const params = new URLSearchParams({ limit: "1000" });
+    if (entityTypeId) params.set("entity_type_id", entityTypeId);
+    const response = await authAxios.get<PaginatedResponse<Entity>>(
+      `/entities/?${params.toString()}`,
+    );
     return response.data.data;
   },
   listPaginated: async (params: EntityListParams): Promise<PaginatedResponse<Entity>> => {
