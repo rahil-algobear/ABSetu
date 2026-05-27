@@ -745,6 +745,7 @@ function SectionEditMode({
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b">
               <tr>
+                <th className="w-8" />
                 <th className="text-left px-3 py-2 font-medium">Name</th>
                 {captureStatus && (
                   <th className="text-left px-3 py-2 font-medium">Status</th>
@@ -755,12 +756,21 @@ function SectionEditMode({
                     {f.required && <span className="text-red-500 ml-0.5">*</span>}
                   </th>
                 ))}
-                <th className="w-8" />
               </tr>
             </thead>
             <tbody>
               {filteredRows.map((r) => (
                 <tr key={r.participant_id} className="border-b last:border-0">
+                  <td className="px-2 py-2 text-center">
+                    <button
+                      type="button"
+                      onClick={() => removeRow(r.participant_id)}
+                      className="text-gray-400 hover:text-red-500"
+                      title="Remove"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </td>
                   <td className="px-3 py-2">{getNameFor(r.participant_id)}</td>
                   {captureStatus && (
                     <td className="px-3 py-2">
@@ -791,16 +801,6 @@ function SectionEditMode({
                       />
                     </td>
                   ))}
-                  <td className="px-2 py-2 text-right">
-                    <button
-                      type="button"
-                      onClick={() => removeRow(r.participant_id)}
-                      className="text-gray-400 hover:text-red-500"
-                      title="Remove"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </td>
                 </tr>
               ))}
             </tbody>
