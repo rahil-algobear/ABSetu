@@ -226,6 +226,7 @@ export interface EntityListParams {
   page?: number;
   limit?: number;
   entity_type_id?: string;
+  with_enrollment_status_for_activity?: string;
 }
 
 export interface EntityFilterDefinition {
@@ -354,6 +355,34 @@ export const activityApi = {
   },
   saveParticipants: async (activityId: string, records: { participant_type: string; participant_id: string; section_key: string; status?: string; meta?: Record<string, unknown> }[]): Promise<ActivityParticipant[]> => {
     const response = await authAxios.post<ActivityParticipant[]>(`/activities/${activityId}/participants`, { records });
+    return response.data;
+  },
+
+  // --- Smart picker (Phase 3) ---
+
+  pickerAdd: async (
+    activityId: string,
+    data: { entity_id: string; section_key: string },
+  ): Promise<ActivityParticipant> => {
+    const response = await authAxios.post<ActivityParticipant>(
+      `/activities/${activityId}/participants/add`,
+      data,
+    );
+    return response.data;
+  },
+  pickerEnrollAndAdd: async (
+    activityId: string,
+    data: {
+      entity_id: string;
+      section_key: string;
+      enrollment_meta?: Record<string, unknown>;
+      enrollment_dimension_value_ids: string[];
+    },
+  ): Promise<ActivityParticipant> => {
+    const response = await authAxios.post<ActivityParticipant>(
+      `/activities/${activityId}/participants/enroll_and_add`,
+      data,
+    );
     return response.data;
   },
 };

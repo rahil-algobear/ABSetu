@@ -23,6 +23,7 @@ import { Can } from "@/components/Auth/Permissions";
 
 import { DynamicMetaForm } from "@/components/DynamicMetaForm";
 import { SearchSelectParticipants } from "@/components/SearchSelectParticipants";
+import { ParticipantPicker } from "@/components/ParticipantPicker";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -596,15 +597,52 @@ export default function ActivityDetailPage() {
                 const hasStatus = captureStatus || sectionParticipants.some((p) => p.status);
                 const useTable = hasStatus || metaFields.length > 0;
 
+                // Phase 3 smart picker — show inline "+ Add" when the field
+                // points at an enrollable entity type AND the activity has
+                // dimensions. Other cases continue to rely on the existing
+                // Edit Participants flow (bulk save).
+                const fieldEntityType = field.type === "entity_list"
+                  ? entityTypes.find((t) => t.id === field.entity_type_id)
+                  : null;
+                const smartPickerEligible =
+                  !!fieldEntityType?.can_enroll && activity.dimensions.length > 0;
+                const alreadyAddedIds = new Set(
+                  sectionParticipants.map((p) => p.participant_id),
+                );
+
                 return (
                   <div key={sectionKey}>
-                    <h3 className="text-sm font-semibold mb-1 flex items-center gap-1.5">
-                      {getFieldLabel(field)}
-                      {field.required && <span className="text-red-500 ml-0.5">*</span>}
-                      <Badge variant="secondary" className="text-xs font-normal ml-1">
-                        {sectionParticipants.length}
-                      </Badge>
-                    </h3>
+                    <div className="flex items-center justify-between mb-1">
+                      <h3 className="text-sm font-semibold flex items-center gap-1.5">
+                        {getFieldLabel(field)}
+                        {field.required && <span className="text-red-500 ml-0.5">*</span>}
+                        <Badge variant="secondary" className="text-xs font-normal ml-1">
+                          {sectionParticipants.length}
+                        </Badge>
+                      </h3>
+                      {smartPickerEligible && fieldEntityType && (
+                        <Can permission="activity:create">
+                          <ParticipantPicker
+                            activityId={activity.id}
+                            activityDimensions={activity.dimensions.map((d) => ({
+                              dimension_id: d.dimension_id,
+                              dimension_name: d.dimension_name,
+                              value_id: d.value_id,
+                              value_name: d.value_name,
+                            }))}
+                            sectionKey={sectionKey}
+                            entityTypeId={fieldEntityType.id}
+                            entityTypeName={getFieldLabel(field)}
+                            alreadyAddedIds={alreadyAddedIds}
+                            onAdded={() =>
+                              queryClient.invalidateQueries({
+                                queryKey: ["participants", id],
+                              })
+                            }
+                          />
+                        </Can>
+                      )}
+                    </div>
                     {sectionParticipants.length === 0 ? (
                       <p className="text-gray-400 text-xs italic py-2">No participants added yet</p>
                     ) : useTable ? (

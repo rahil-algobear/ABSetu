@@ -74,3 +74,8 @@ class EntityResponse(BaseResponseSchema):
     dimensions: list[DimensionInfo] = []
     enrollment_count: int = 0
     activity_count: int = 0
+    # Set only when the listing call passes
+    # with_enrollment_status_for_activity=<activity_id>. Tells the picker
+    # whether this entity already has an active enrollment whose
+    # dimensions cover the activity's scope.
+    enrollment_status: str | None = None

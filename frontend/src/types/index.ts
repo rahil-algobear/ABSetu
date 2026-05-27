@@ -144,6 +144,10 @@ export interface Entity {
   updated_at: string | null;
   enrollment_count: number;
   activity_count: number;
+  // Set only when the listing query passes
+  // with_enrollment_status_for_activity=<id>. Used by the smart
+  // participant picker to choose the right row action.
+  enrollment_status?: "active_in_scope" | "no_active_in_scope" | null;
 }
 
 // --- Activity Types ---

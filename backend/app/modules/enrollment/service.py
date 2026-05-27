@@ -195,6 +195,7 @@ class EnrollmentService:
         org_id: uuid.UUID,
         data: dict,
         dimension_value_ids: list[str] | None = None,
+        commit: bool = True,
     ) -> Enrollment:
         # Verify entity belongs to org
         entity = (
@@ -240,8 +241,11 @@ class EnrollmentService:
             )
             self.db.add(dim)
 
-        self.db.commit()
-        self.db.refresh(enrollment)
+        if commit:
+            self.db.commit()
+            self.db.refresh(enrollment)
+        else:
+            self.db.flush()
         return enrollment
 
     def _check_access(

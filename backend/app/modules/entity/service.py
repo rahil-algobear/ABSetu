@@ -323,6 +323,7 @@ class EntityService:
         dimension_value_ids: list[str] | None = None,
         accessible_dv_ids: list[uuid.UUID] | None = None,
         created_by: uuid.UUID | None = None,
+        commit: bool = True,
     ) -> Entity:
         from app.modules.dimension.service import UserDimensionAccessService
 
@@ -362,8 +363,11 @@ class EntityService:
             )
             self.db.add(dim)
 
-        self.db.commit()
-        self.db.refresh(entity)
+        if commit:
+            self.db.commit()
+            self.db.refresh(entity)
+        else:
+            self.db.flush()
         return entity
 
     def update(self, entity_id: uuid.UUID, org_id: uuid.UUID, data: dict) -> Entity:

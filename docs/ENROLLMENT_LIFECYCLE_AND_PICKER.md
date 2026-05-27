@@ -127,19 +127,28 @@ Each enrollment card gets a delete control alongside edit and end/start.
 
 ### What
 
-Replace the inline participant section's "Add" experience for enrollable
-entity types with a focused modal/sheet that knows about enrollment state.
+Replace today's inline `SearchSelectParticipants` dropdown for the "Add"
+flow on an activity's participant fields with a standalone modal/sheet
+that's aware of enrollment scope and lifecycle. One component, conditional
+affordances based on the field's entity type and the activity's dimensions.
 
 ### When the smart picker is used
 
-Auto-activated for `entity_list` fields where:
+The picker is always used (replaces `SearchSelectParticipants` everywhere
+an `entity_list` / `user_list` field renders). Its shape adapts:
 
-- `entity_type.can_enroll === true`
-- The activity has at least one dimension value
+| Field's entity type | Activity has dimensions? | Picker shape |
+|---|---|---|
+| Enrollable (e.g., Beneficiary) | Yes | "Smart mode": tabs (Enrolled here / All), per-row status, Enroll & Add, Create new |
+| Enrollable | No | "Basic mode": single list, `[+ Add]` per row, Create new |
+| Not enrollable (e.g., Facilitator) | Any | "Basic mode": single list, `[+ Add]`, Create new |
+| User list | Any | "Basic mode" |
 
-Falls back to today's plain `search_select` otherwise.
+Enrollment-related affordances kick in only when **both** the field's
+entity type is enrollable **and** the activity carries at least one
+dimension value to scope against.
 
-### Picker UX
+### Picker UX (smart mode)
 
 ```
 ┌─────────────────────────────────────────────────┐
@@ -147,70 +156,146 @@ Falls back to today's plain `search_select` otherwise.
 ├─────────────────────────────────────────────────┤
 │  [ Enrolled here ]   All beneficiaries          │
 ├─────────────────────────────────────────────────┤
-│ Asha Devi              Enrolled  [✓]            │
-│ Priya Sharma           Enrolled  [+ Add]        │
-│ Rakesh Bose            Ended     [Re-enroll]    │
-│ Vikram Rao             Not enrolled [Enroll &   │
-│                                       Add]      │
+│ Asha Devi             Enrolled    [✓ Added]    │
+│ Priya Sharma          Enrolled    [+ Add]      │
+│ Vikram Rao            Not enrolled [Enroll &   │
+│                                       Add]     │
 ├─────────────────────────────────────────────────┤
-│ No matches? [+ Create new beneficiary]          │  ← contextual
-│ [+ Create new beneficiary]                      │  ← sticky bottom
+│ No matches? [+ Create new beneficiary]         │  ← contextual
+│ [+ Create new beneficiary]                     │  ← sticky bottom
 └─────────────────────────────────────────────────┘
 ```
 
-- **"Enrolled here"** tab (default): beneficiaries with an active enrollment
-  in the activity's exact dimension scope.
-- **"All beneficiaries"** tab: full pool, filterable by search. Each row
-  shows enrollment status for this activity's scope.
-
-| Status | Button | Backend action |
-|---|---|---|
-| Active in scope | `[+ Add]` / checkbox | add as participant |
-| Inactive in scope | `[Re-enroll & Add]` | flip existing enrollment to active, then add |
-| No enrollment in scope | `[Enroll & Add]` | create new enrollment (active), then add |
-
-- **Create Beneficiary** CTA in two places: sticky bottom (always present)
-  and contextual no-results variant ("Create 'Asha Devi'" — uses the search
-  term as the starting name). Opens a modal with the Beneficiary entity form
-  + enrollment fields stacked; one save creates entity + enrollment + adds
-  as participant.
-
+- **"Enrolled here"** tab (default): beneficiaries with an *active*
+  enrollment whose dimensions cover the activity's dimensions
+  (`activity_dvs ⊆ enrollment_dvs`).
+- **"All beneficiaries"** tab: full pool of the entity type, filterable
+  by search.
 - **Mobile**: full-screen sheet.
+
+### Row states (smart mode — only two)
+
+We deliberately collapsed three states into two. Reactivating an old
+inactive enrollment would either keep its stale dates or destroy them; a
+new enrollment preserves the old as historical record and starts fresh.
+
+| Status | Button | Behaviour |
+|---|---|---|
+| Active enrollment in scope | `[+ Add]` (or `[✓ Added]` if already added) | direct API call → adds participant |
+| No active enrollment in scope (whether inactive history exists or not) | `[Enroll & Add]` | opens existing EnrollmentForm modal (activity's dimensions pre-locked, status pre-set Active) → save creates new active enrollment + adds participant |
+
+### "Create new beneficiary" flow
+
+CTA appears in two places: contextual when search has no results
+(`Create "Asha Devi"` using the typed name as a starting value), and as a
+sticky bottom button in the picker.
+
+Opens a **combined modal** with two stacked sections:
+- Entity-scoped meta fields for the entity type (e.g. Name, DOB, etc.)
+- Required enrollment meta fields (Date of Admission, etc.)
+
+The activity's dimensions are applied to the new enrollment automatically
+(not shown as form fields, but surfaced as a read-only "Will enroll in:
+Programme=Outreach, Location=ShantiSadan" line at the top of the
+enrollment section).
+
+One Save → backend creates entity + creates enrollment + adds as
+participant in a single transaction.
 
 ### Backend
 
-- New endpoint or extended `/entities/` query that, given an entity type and
-  the activity's dimension values, returns beneficiaries with an
-  `enrollment_status` per row:
-  ```
-  enrollment_status: "active" | "inactive" | "none"
-  existing_enrollment_id?: string  // for "active" / "inactive"
-  ```
-- New endpoint for the combined enroll + add action:
-  `POST /activities/{id}/participants/enroll` that, given a beneficiary id:
-  - Determines status server-side (no client trust)
-  - Creates or reactivates the enrollment atomically
-  - Adds the participant
-  - Returns participant + enrollment
+#### New endpoint — single action dispatcher
 
-- Cleaner SQL than the lifecycle-derived version: filter on
-  `enrollments.is_active = true AND <dimension exact match>` directly.
+`POST /api/activities/{activity_id}/participants` with a tagged
+union payload that handles all three actions atomically:
+
+```jsonc
+// Active in scope, just add
+{ "action": "add", "beneficiary_id": "uuid" }
+
+// No active in scope — create a new active enrollment, then add
+{ "action": "enroll_and_add",
+  "beneficiary_id": "uuid",
+  "enrollment_meta": { ... },        // user-filled required fields
+  "enrollment_dimension_value_ids": [ ... ]   // includes activity's dims,
+                                              // plus any extras from the form
+}
+
+// Brand new beneficiary
+{ "action": "create_and_add",
+  "entity_meta": { ... },
+  "entity_dimension_value_ids": [ ... ],
+  "enrollment_meta": { ... },
+  "enrollment_dimension_value_ids": [ ... ]
+}
+```
+
+All three run in a single DB transaction. Validation errors from any step
+(required-field misses, Phase 4 composite-key violations, total-cap
+violations, scope access denials) bubble up as `ValidationError` /
+`ForbiddenError` with the existing inline-error message shape.
+
+#### Listing query — extend `/api/entities/` for picker
+
+Add a `with_enrollment_status_for_activity={activity_id}` query param.
+When set, each row in the response includes:
+
+```
+enrollment_status: "active_in_scope" | "no_active_in_scope"
+```
+
+The check: does the beneficiary have any active enrollment whose
+dimensions are a superset of the activity's dimensions? Cleaner SQL than
+inferring from lifecycle dates: `is_active=true AND <all activity dvs
+present in enrollment_dimensions>`.
+
+For Basic mode (no scope-matching), the field is omitted from the
+response.
+
+#### Server-side guard
+
+The backend re-derives the action's correct shape — never trusts the
+client's `action` field. If the client sends `add` but the beneficiary
+doesn't actually have an active enrollment in scope, server rejects with
+a clear message instead of silently dropping the request.
 
 ### Frontend
 
-- New `EnrollmentAwarePicker` component, opened from the activity participant
-  section's "Add" button when activation conditions are met.
-- Inline beneficiary create form reuses the entity create components,
-  pre-fills enrollment dimensions from the activity.
+- New component `ParticipantPicker` in `/components/`. Replaces
+  `SearchSelectParticipants` wherever it's used (activity create/edit
+  pages, activity detail page when adding participants).
+- Modal/sheet chrome; Dialog primitive for desktop, full-screen on mobile.
+- Smart mode wires up the tabs + per-row status; Basic mode renders just
+  the list.
+- Per-row "Enroll & Add" reuses the existing `EnrollmentForm` modal,
+  opened on top, with `initialIsActive=true` and the activity's dimensions
+  pre-locked. On save, the form dispatches `enroll_and_add` to the new
+  endpoint instead of the plain enrollment create.
+- "Create new" CTA opens a combined modal (entity fields + enrollment
+  fields stacked). Save dispatches `create_and_add`.
 
-### Open questions
+### Decided (no longer open)
 
-- "Re-enroll & Add" semantics: just flip `is_active` back to true on the
-  existing enrollment, vs. create a fresh enrollment record. Probably flip
-  the existing one — preserves history and continuity.
-- Picker for activities with multiple participant fields (Beneficiaries +
-  Facilitators): both can open their own pickers; the enrollment-aware
-  variant only kicks in for the enrollable type.
+- **Re-Enroll dropped.** Inactive enrollments stay as historical record;
+  new active enrollment is always a fresh row. Old data (Date of Release
+  etc.) preserved.
+- **Atomic single endpoint** over multi-call client orchestration.
+- **Activity's dimensions auto-applied** to new enrollments — no dimension
+  picker in the create-from-picker flows.
+- **Standalone reusable component**, currently invoked only from
+  activity surfaces.
+
+### Deferred
+
+- **EntityCreateForm extraction.** Today's create-beneficiary form is
+  duplicated between the entity listing page and `SearchSelectParticipants`.
+  Phase 3 adds a third instance (the picker's combined modal). A separate
+  refactor pass should consolidate all three into a shared component.
+- **"Previously enrolled" history badge** on no-active rows. Useful
+  context but not needed for v1 — users can check the entity detail page.
+- **Phase 4 access edge case** in picker (inactive enrollment in
+  unreachable dimensions). Mostly theoretical; if a user encounters a
+  403 on the action, surface the inline error and move on.
 
 ---
 
