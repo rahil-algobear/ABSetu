@@ -268,7 +268,7 @@ export default function EntityDetailPage() {
                 {enrollments.length === 0 ? (
                   <p className="text-gray-500 text-sm">No enrollments</p>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
                     {enrollments.map((e) => {
                       const dimensionPairs = (e.dimensions || []).map((dim) => ({
                         label: dim.dimension_name,
@@ -298,7 +298,7 @@ export default function EntityDetailPage() {
                       return (
                         <div
                           key={e.id}
-                          className="flex items-start justify-between p-3 border rounded gap-3 max-w-md"
+                          className="flex items-start justify-between p-3 border rounded gap-3"
                         >
                           <div className="flex-1 min-w-0 space-y-1 text-sm">
                             {allPairs.map((p, i) => (
