@@ -7,9 +7,11 @@ import uuid
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.core.database import get_db
 from app.common.dependencies import get_current_user, require_permissions
+from app.common.exceptions import ValidationError
+from app.core.database import get_db
 from app.modules.auth.model import User
+from app.modules.dimension.model import DimensionValue
 from app.modules.enrollment.schemas import (
     DimensionInfo,
     EnrollmentCreate,
@@ -17,10 +19,27 @@ from app.modules.enrollment.schemas import (
     EnrollmentUpdate,
 )
 from app.modules.enrollment.service import EnrollmentService
+from app.modules.organization.service import MetaFieldSchemaService
 
 router = APIRouter(tags=["enrollments"])
 
 enrollment_router = APIRouter(prefix="/enrollments")
+
+
+def _collect_enrollment_field_defs(
+    db: Session,
+    org_id: uuid.UUID,
+    dimension_value_ids: list[uuid.UUID] | None = None,
+) -> dict[str, dict]:
+    """Collect all applicable meta field definitions for an enrollment."""
+    meta_service = MetaFieldSchemaService(db)
+    all_field_defs: dict[str, dict] = {}
+    for fd in meta_service.get_schema_by_scope(org_id, "enrollment"):
+        all_field_defs[fd["key"]] = fd
+    for dv_id in dimension_value_ids or []:
+        for fd in meta_service.get_schema_by_scope(org_id, "enrollment", dimension_value_id=dv_id):
+            all_field_defs[fd["key"]] = fd
+    return all_field_defs
 
 
 def _build_enrollment_response(e) -> dict:
@@ -78,6 +97,34 @@ def create_enrollment(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    dv_uuids = [uuid.UUID(v) for v in (data.dimension_value_ids or [])]
+    all_field_defs = _collect_enrollment_field_defs(
+        db, current_user.organization_id, dv_uuids
+    )
+
+    submitted_meta = data.meta or {}
+    submitted_dim_ids: set[str] = set()
+    if dv_uuids:
+        dvs = db.query(DimensionValue.dimension_id).filter(DimensionValue.id.in_(dv_uuids)).all()
+        submitted_dim_ids = {str(row[0]) for row in dvs}
+
+    for fd in all_field_defs.values():
+        if not fd.get("required"):
+            continue
+        stage = fd.get("stage") or "both"
+        if stage not in ("both", "create"):
+            continue
+
+        fd_type = fd.get("type")
+        if fd_type == "dimension":
+            dim_id = fd.get("dimension_id")
+            if dim_id and dim_id not in submitted_dim_ids:
+                raise ValidationError(f"{fd.get('label', 'Dimension')} is required")
+        else:
+            val = submitted_meta.get(fd["key"])
+            if val is None or val == "":
+                raise ValidationError(f"{fd.get('label', fd['key'])} is required")
+
     service = EnrollmentService(db)
     enrollment = service.create(
         current_user.organization_id,
