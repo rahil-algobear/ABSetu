@@ -2,7 +2,7 @@
 Activity, ActivityType, ActivityParticipant schemas
 """
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -103,10 +103,19 @@ class ParticipantResponse(BaseResponseSchema):
 
 
 class PickerAddPayload(BaseModel):
-    """Beneficiary already has an active enrollment in scope. Just add."""
+    """Add a participant via the picker.
+
+    Smart-mode entity rows: beneficiary already has an active enrollment
+    in scope (verified server-side). Basic-mode entity rows (non-enrollable
+    type or dimensionless activity) and user rows skip the scope check
+    and just record the participant.
+
+    `entity_id` carries the user id when `participant_type == "user"` —
+    name kept for back-compat with the original Smart-only payload."""
 
     entity_id: str
     section_key: str
+    participant_type: Literal["entity", "user"] = "entity"
 
 
 class PickerEnrollAndAddPayload(BaseModel):

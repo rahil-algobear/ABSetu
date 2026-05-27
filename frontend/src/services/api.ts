@@ -389,7 +389,11 @@ export const activityApi = {
 
   pickerAdd: async (
     activityId: string,
-    data: { entity_id: string; section_key: string },
+    data: {
+      entity_id: string;
+      section_key: string;
+      participant_type?: "entity" | "user";
+    },
   ): Promise<ActivityParticipant> => {
     const response = await authAxios.post<ActivityParticipant>(
       `/activities/${activityId}/participants/add`,

@@ -388,6 +388,24 @@ The `Enrolled` query passes `sort_by=meta:<first_text_field_key>` (the entity ty
 - Save calls the section-scoped endpoint, refreshes the participants
   query, exits edit mode.
 
+### Picker for non-smart sections
+
+The picker is the inline `+ <Type>` button on every entity_list /
+user_list section. Smart mode (3 tabs + Enroll & Add + Create new)
+applies only when the section's entity type is enrollable AND the
+activity carries dimensions. Other sections still get a picker — just
+a slimmer one.
+
+| Section kind | Tabs | Row actions | Create new |
+|---|---|---|---|
+| Smart entity (enrollable + activity has dims) | Added / Enrolled / All | `+ Add` for active-in-scope, `Enroll & Add` otherwise | Yes (combined entity + enrollment modal) |
+| Basic entity (non-enrollable OR no activity dims) | Added / All | `+ Add` directly | Deferred — defer to the regular entity-create page |
+| User (`user_list` section) | Added / All | `+ Add` directly | No — admins manage users via the user-admin page |
+
+User-section adds reuse the same `POST /activities/{id}/participants/add`
+endpoint with `participant_type=user` (default `entity`). The endpoint
+skips entity/enrollment scope checks for user rows.
+
 ### Open questions
 
 - Permission key for the section-scoped bulk endpoint — reuse
