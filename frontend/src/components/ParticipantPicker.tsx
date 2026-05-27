@@ -186,6 +186,13 @@ export function ParticipantPicker({
     enabled: open && !isUserKind && !!entityTypeId,
   });
 
+  // For small entity types (total ≤ one page), we render the All tab
+  // without requiring a search — there's nothing to scroll past. Above
+  // the page-size threshold the search prompt kicks in.
+  const allTotalForGate = totalResp?.count ?? 0;
+  const showAllByDefault =
+    !isUserKind && totalResp !== undefined && allTotalForGate <= PAGE_SIZE;
+
   // --- All tab: search results. Entity sections paginate via server
   //     search; user sections client-filter the full user list. ---
   // Server returns the page indicated by `page`; we append non-first
@@ -206,9 +213,9 @@ export function ParticipantPicker({
     enabled:
       open &&
       tab === "all" &&
-      search.trim().length > 0 &&
       !isUserKind &&
-      !!entityTypeId,
+      !!entityTypeId &&
+      (search.trim().length > 0 || showAllByDefault),
   });
   useEffect(() => {
     if (!searchResp) return;
@@ -468,7 +475,7 @@ export function ParticipantPicker({
             )}
 
             {tab === "all" && !isUserKind && (
-              !search.trim() ? (
+              !search.trim() && !showAllByDefault ? (
                 <p className="text-sm text-gray-500 p-3">
                   Type to search {entityTypeName.toLowerCase()}…
                 </p>
