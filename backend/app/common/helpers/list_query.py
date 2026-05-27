@@ -12,18 +12,44 @@ from sqlalchemy import String, exists, func, or_
 from sqlalchemy.orm import Query
 
 
-def apply_search(query: Query, search_term: str | None, columns: list) -> Query:
+def apply_search(
+    query: Query,
+    search_term: str | None,
+    columns: list,
+    normalize: bool = False,
+) -> Query:
     """
     Apply ILIKE search across multiple columns (OR).
 
     columns: list of SQLAlchemy column expressions
         e.g. [Entity.code, Entity.name]
+
+    When `normalize=True`, both the search term and the column values are
+    normalized (strip non-alphanumerics, lowercase) before matching. Makes
+    searches friendlier — typing "auto test" matches "Auto-Test 48", "Auto
+    Test 48", etc. — at the cost of not using simple b-tree indexes on the
+    underlying columns (a functional index would be needed for large
+    datasets; fine at NGO scale).
     """
     if not search_term or not search_term.strip():
         return query
 
-    term = f"%{search_term.strip()}%"
-    conditions = [col.ilike(term) for col in columns]
+    if normalize:
+        import re
+
+        from sqlalchemy import func
+
+        normalized_term = re.sub(r"[^a-zA-Z0-9]", "", search_term).lower()
+        if not normalized_term:
+            return query
+        term = f"%{normalized_term}%"
+        conditions = [
+            func.lower(func.regexp_replace(col, r"[^a-zA-Z0-9]", "", "g")).ilike(term)
+            for col in columns
+        ]
+    else:
+        term = f"%{search_term.strip()}%"
+        conditions = [col.ilike(term) for col in columns]
     return query.filter(or_(*conditions))
 
 

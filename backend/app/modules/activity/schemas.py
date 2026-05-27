@@ -76,6 +76,20 @@ class ParticipantBulkCreate(BaseModel):
     records: list[ParticipantRecord]
 
 
+class ParticipantSectionRecord(BaseModel):
+    """Row for the section-scoped bulk save. section_key comes from the
+    query param so the body is just the rows."""
+
+    participant_type: str
+    participant_id: str
+    status: str | None = None
+    meta: dict[str, Any] | None = None
+
+
+class ParticipantSectionReplace(BaseModel):
+    records: list[ParticipantSectionRecord]
+
+
 class ParticipantResponse(BaseResponseSchema):
     activity_id: str
     participant_type: str
