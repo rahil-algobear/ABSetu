@@ -38,3 +38,8 @@ class EnrollmentResponse(BaseResponseSchema):
     meta: dict[str, Any] | None = None
     is_active: bool = True
     dimensions: list[DimensionInfo] = []
+    # Whether the current user can edit/end/delete this enrollment given
+    # their dimension access. Computed server-side per row; the enrollment
+    # itself is still visible to anyone with enrollment:view for
+    # transparency (fraud detection, cross-scope context).
+    editable: bool = True

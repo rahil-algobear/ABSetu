@@ -7,7 +7,11 @@ import uuid
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.common.dependencies import get_current_user, require_permissions
+from app.common.dependencies import (
+    get_accessible_dimension_value_ids,
+    get_current_user,
+    require_permissions,
+)
 from app.common.exceptions import ValidationError
 from app.core.database import get_db
 from app.modules.auth.model import User
@@ -57,7 +61,28 @@ def _collect_enrollment_field_defs(
     return all_field_defs
 
 
-def _build_enrollment_response(e) -> dict:
+def _is_editable(db: Session, e, accessible_dv_ids: list[uuid.UUID] | None) -> bool:
+    """Whether the current user can mutate this enrollment given their
+    dimension access. Mirrors EnrollmentService._check_access exactly so
+    the response flag and the backend guard never disagree."""
+    if accessible_dv_ids is None:
+        return True
+    record_dv_ids = [d.dimension_value_id for d in (e.dimensions or [])]
+    if not record_dv_ids:
+        return True
+    from app.common.exceptions import ForbiddenError
+    from app.modules.dimension.service import UserDimensionAccessService
+
+    try:
+        UserDimensionAccessService(db).check_record_access(accessible_dv_ids, record_dv_ids)
+        return True
+    except ForbiddenError:
+        return False
+
+
+def _build_enrollment_response(
+    db: Session, e, accessible_dv_ids: list[uuid.UUID] | None = None
+) -> dict:
     meta = e.meta or {}
     dim_infos = []
     for d in e.dimensions or []:
@@ -80,6 +105,7 @@ def _build_enrollment_response(e) -> dict:
         meta=meta,
         is_active=e.is_active,
         dimensions=dim_infos,
+        editable=_is_editable(db, e, accessible_dv_ids),
     ).dump()
 
 
@@ -89,20 +115,22 @@ def _build_enrollment_response(e) -> dict:
 def list_enrollments_by_entity(
     entity_id: uuid.UUID,
     db: Session = Depends(get_db),
+    accessible_dv_ids: list[uuid.UUID] | None = Depends(get_accessible_dimension_value_ids),
 ):
     service = EnrollmentService(db)
     enrollments = service.list_by_entity(entity_id)
-    return [_build_enrollment_response(e) for e in enrollments]
+    return [_build_enrollment_response(db, e, accessible_dv_ids) for e in enrollments]
 
 
 @enrollment_router.get("/", dependencies=[Depends(require_permissions("enrollment:view"))])
 def list_enrollments(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    accessible_dv_ids: list[uuid.UUID] | None = Depends(get_accessible_dimension_value_ids),
 ):
     service = EnrollmentService(db)
     enrollments = service.list_by_org(current_user.organization_id)
-    return [_build_enrollment_response(e) for e in enrollments]
+    return [_build_enrollment_response(db, e, accessible_dv_ids) for e in enrollments]
 
 
 @enrollment_router.post(
@@ -160,7 +188,7 @@ def create_enrollment(
         data.model_dump(exclude={"dimension_value_ids"}),
         dimension_value_ids=data.dimension_value_ids,
     )
-    return _build_enrollment_response(enrollment)
+    return _build_enrollment_response(db, enrollment)
 
 
 @enrollment_router.put(
@@ -170,13 +198,15 @@ def update_enrollment(
     enrollment_id: uuid.UUID,
     data: EnrollmentUpdate,
     db: Session = Depends(get_db),
+    accessible_dv_ids: list[uuid.UUID] | None = Depends(get_accessible_dimension_value_ids),
 ):
     service = EnrollmentService(db)
     enrollment = service.update(
         enrollment_id,
         data.model_dump(exclude_none=True),
+        accessible_dv_ids=accessible_dv_ids,
     )
-    return _build_enrollment_response(enrollment)
+    return _build_enrollment_response(db, enrollment, accessible_dv_ids)
 
 
 @enrollment_router.delete(
@@ -187,9 +217,14 @@ def delete_enrollment(
     enrollment_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    accessible_dv_ids: list[uuid.UUID] | None = Depends(get_accessible_dimension_value_ids),
 ):
     service = EnrollmentService(db)
-    service.delete(enrollment_id, current_user.organization_id)
+    service.delete(
+        enrollment_id,
+        current_user.organization_id,
+        accessible_dv_ids=accessible_dv_ids,
+    )
     return {"message": "Enrollment deleted"}
 
 
@@ -201,10 +236,13 @@ def update_enrollment_dimensions(
     enrollment_id: uuid.UUID,
     dimension_value_ids: list[str],
     db: Session = Depends(get_db),
+    accessible_dv_ids: list[uuid.UUID] | None = Depends(get_accessible_dimension_value_ids),
 ):
     service = EnrollmentService(db)
-    enrollment = service.update_dimensions(enrollment_id, dimension_value_ids)
-    return _build_enrollment_response(enrollment)
+    enrollment = service.update_dimensions(
+        enrollment_id, dimension_value_ids, accessible_dv_ids=accessible_dv_ids
+    )
+    return _build_enrollment_response(db, enrollment, accessible_dv_ids)
 
 
 router.include_router(enrollment_router)
