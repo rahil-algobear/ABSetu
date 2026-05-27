@@ -270,6 +270,10 @@ export default function EntityDetailPage() {
                 ) : (
                   <div className="space-y-2">
                     {enrollments.map((e) => {
+                      const dimensionPairs = (e.dimensions || []).map((dim) => ({
+                        label: dim.dimension_name,
+                        value: dim.value_name,
+                      }));
                       const fieldPairs = collectEnrollmentFields(
                         allSchemas,
                         entity.entity_type_id,
@@ -278,9 +282,10 @@ export default function EntityDetailPage() {
                         .filter((f) => f.type !== "dimension" && f.visible !== false)
                         .map((f) => {
                           const val = e.meta?.[f.key];
-                          if (val === undefined || val === null || val === "") return null;
+                          const isEmpty = val === undefined || val === null || val === "";
                           let formatted: string;
-                          if (f.type === "boolean") formatted = val ? "Yes" : "No";
+                          if (isEmpty) formatted = "—";
+                          else if (f.type === "boolean") formatted = val ? "Yes" : "No";
                           else if (f.type === "date" && typeof val === "string")
                             formatted = formatDate(val);
                           else if (f.type === "datetime" && typeof val === "string")
@@ -288,33 +293,18 @@ export default function EntityDetailPage() {
                           else if (Array.isArray(val)) formatted = val.join(", ");
                           else formatted = String(val);
                           return { label: f.label, value: formatted };
-                        })
-                        .filter(
-                          (p): p is { label: string; value: string } => p !== null,
-                        );
+                        });
+                      const allPairs = [...dimensionPairs, ...fieldPairs];
                       return (
                         <div
                           key={e.id}
                           className="flex items-start justify-between p-3 border rounded gap-3"
                         >
-                          <div className="flex-1 min-w-0 space-y-1.5">
-                            {e.dimensions && e.dimensions.length > 0 && (
-                              <div className="flex gap-1 flex-wrap">
-                                {e.dimensions.map((dim) => (
-                                  <Badge
-                                    key={dim.value_id}
-                                    variant="secondary"
-                                    className="text-xs"
-                                  >
-                                    {dim.value_name}
-                                  </Badge>
-                                ))}
-                              </div>
-                            )}
-                            {fieldPairs.length > 0 && (
-                              <p className="text-xs text-gray-600 leading-relaxed">
-                                {fieldPairs.map((p, i) => (
-                                  <span key={p.label}>
+                          <div className="flex-1 min-w-0">
+                            {allPairs.length > 0 && (
+                              <p className="text-sm text-gray-600 leading-relaxed">
+                                {allPairs.map((p, i) => (
+                                  <span key={`${p.label}-${i}`}>
                                     {i > 0 && (
                                       <span className="text-gray-300 mx-1.5">·</span>
                                     )}
