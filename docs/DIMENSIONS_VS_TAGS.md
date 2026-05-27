@@ -1,6 +1,9 @@
 # Dimensions vs Tags — Design Thinking
 
-> **Status:** Open question. Not a decision. Capture for later thinking.
+> **Status:** Decision A (add `controls_access` flag to dimensions) is **landed**.
+> Whether to introduce a separate Tags module — or eventually rename Dimensions to Tags — is **still pending**. See "Still Open" below.
+
+---
 
 ## Question
 
@@ -8,98 +11,119 @@ Should "Tags" be a separate concept from "Dimensions," or are they the same thin
 
 Original plan: Dimensions for access control, Tags for everything else (filtering, reporting, categorization).
 
-Current instinct: they may be structurally identical, and maintaining two parallel taxonomies is duplicative.
+Brainstorm explored two paths:
+
+- **Path A — Unify.** One table, one role flag (`is_dimension` / `controls_access`) distinguishes structural axes from tag-like ones. Eventually rename Dimensions → Tags in code and UI.
+- **Path B — Separate modules.** Keep Dimensions as the structural taxonomy. Build Tags as a distinct module (different schema, different UX placement) when a concrete free-form labeling use case arrives.
+
+We have **partially committed to Path A's first step** (the flag) without committing to the rename or to which path wins long-term.
 
 ---
 
-## What exists today
+## What shipped (Decision A)
 
-Only `dimensions` exists. There is no `tags` table.
+Implemented in commits `409062c..ce30c32`.
 
-Schema (see `backend/app/modules/dimension/model.py`):
+### Schema
 
-- `dimensions` — org-scoped grouping axis (name, key, sort_order, is_system)
-- `dimension_values` — values within a dimension (name, code, sort_order, meta)
-- `dimension_value_links` — cross-value compatibility rules (which values are valid together)
-- `activity_dimensions`, `entity_dimensions`, `enrollment_dimensions` — M2M attach to entities
-- `user_dimensions` — M2M to users for access scoping
+- New column on `dimensions`: `controls_access: bool, default=True, server_default=true()`.
+- Migrations: `t4u5v6w7x8y9_add_is_dimension_to_dimensions` then `u5v6w7x8y9z0_rename_is_dimension_to_controls_access`.
+- Existing dimensions backfilled to `controls_access=true` — no behaviour change for current data.
 
-Dimensions in this codebase do a lot more than tagging:
+See `backend/app/modules/dimension/model.py:28`.
 
-1. **Replaced first-class entities.** Centre, Programme, ProgrammeCenter were removed in favour of dimensions (`docs/GENERIC_ARCHITECTURE.md`). Dimensions are the structural taxonomy of the org.
-2. **Encode cross-value rules** via `DimensionValueLink` — e.g. "Programme:Outreach is valid at Location:ShantiSadan", replacing both `programme_centers` and the old `CENTRE_INTERVENTIONS` map.
-3. **Drive access** via `UserDimension` (replaced `user_center_access`, `user_programme_access`, `user_session_template_access`).
-4. **Drive form rendering.** Form layouts can include `{type: "dimension", dimension_id: "...", display_type: "dropdown"}` (`docs/META_FIELDS_CONSOLIDATION.md`).
-5. **Drive reporting.** `DimensionBreakdownChart`, attendance matrix filtering (`docs/ATTENDANCE_REPORTING_MODULE.md`).
-6. **Have system-managed variants.** `is_system = "activity_type"` syncs values from the `activity_types` table.
-7. **Have their own meta fields.** `DimensionValue.meta` (JSONB).
+### Backend guards
 
----
+- **`UserDimensionAccessService.update_access`** rejects values whose parent dimension has `controls_access=false`, raising `ValidationError`. Tag-like axes are silently ineligible from the user-access editor.
+- **`UserDimensionAccessService.get_access_value_ids`** filters out values whose parent dimension no longer controls access. If an admin flips a dimension from access-control to tag-like, existing `UserDimension` rows for its values stop granting/restricting access — they become dead data until cleaned up, but are preserved so flipping the dimension back restores the restriction. Read-time filtering, not destructive cleanup.
+- **`DimensionValueLinkService` is intentionally not guarded.** Link rules are open to any axis pair regardless of `controls_access`. This is what makes Sub-Intervention (a tag-like dimension) able to cascade from its parent Intervention. See the comment at `backend/app/modules/dimension/service.py:153`.
 
-## The case for unifying (Tags = Dimensions)
+### Frontend
 
-- Schema is identical: org-scoped, grouped, M2M to entities.
-- Avoids two parallel admin UIs, two query paths, two attach mechanisms.
-- A "tag" is just a dimension value where the dimension happens to have looser governance.
-- All the existing infrastructure (form rendering, reporting, list filtering) already works for any dimension — it would automatically work for tags too.
+- **Manage Dimensions page** (`frontend/src/app/admin/manage-dimensions/page.tsx`): checkbox "Use for access control" with help text on the create/edit modal; new "Access Control" column on the list showing Yes/No badge.
+- **Users page** (`frontend/src/app/admin/users/page.tsx`): the access editor and table columns filter to `controls_access=true` dimensions only. Defence in depth on top of the backend guard.
+- **DimensionMatrixDialog**: chip click hides/shows axes in the matrix — orthogonal QoL, not strictly part of this change.
+- `Dimension` type in `frontend/src/types/index.ts` gets the new field.
 
-## The case for keeping them separate
+### Seeder
 
-- **`DimensionValueLink` only makes sense for governed, low-cardinality axes.** "Programme runs at Location" is a curated rule space. If "vegetarian" tags can also participate in links, the rule space explodes.
-- **`UserDimension` currently treats every value as access-eligible.** If a tag like "needs_translator" lands in the same table, an admin could accidentally scope a user by it and break their data view.
-- **Cardinality differs.** Structural dimensions tend to be ~5 axes × ~10 values per org. Tag systems can balloon to hundreds. Current settings UI (tab-per-dimension) wouldn't scale.
-- **Governance differs.** Dimensions are admin-managed with codes, sort orders, link rules. Tags are typically lightweight, inline-creatable.
-- **Mental model for users.** "Programme" feels different from "vegetarian." Lumping them together in one UI may confuse admins about which labels gate access.
+Kshamata seeder now creates a **Sub-Intervention** dimension with `controls_access=false`:
 
----
+- Lives alongside the existing `intervention` dimension.
+- Each sub-intervention value (e.g. *Individual Counseling*, *Group Counseling*, *DMT*) has explicit `DimensionValueLink` rows to:
+  - its parent Intervention (e.g. *Mental Health*),
+  - `Programme:Transformation`,
+  - `Location:Thane` (so cascade dropdowns populate).
+- Seeder safeguard keeps `controls_access=false` on re-seed, even if an admin flipped it in the UI between runs.
 
-## Candidate design: unify the table, differentiate the role
-
-Keep one schema. Make the *role* of each dimension explicit on the parent row.
-
-Proposed flags on `dimensions`:
-
-| Flag | Purpose |
-|------|---------|
-| `controls_access: bool` | Server-side enforcement: only dimensions with this flag can have values assigned via `UserDimension`. |
-| `participates_in_links: bool` | Only true for structural axes. Gates what can appear in `DimensionValueLink`. |
-| `value_creation: 'admin' \| 'inline'` | Admin-only (dimension-like) vs inline-creatable from entity forms (tag-like). |
-| `cardinality: 'single' \| 'multi'` | Some axes are exactly-one-per-entity (Project); tags are typically many. |
-| `is_system: string \| null` | Already exists. Synced from a concrete table (e.g. `activity_type`). |
-
-Settings UI then presents two views over the same table:
-- **Structural dimensions** — `controls_access` and/or `participates_in_links`, admin-managed.
-- **Tags** — inline-creatable, multi-select, no link rules, no access semantics.
-
-Same data, different governance and affordances.
+This is the first real-world tag-like axis in the codebase. It validates that the flag does what we need.
 
 ---
 
-## Risks / open questions
+## Design decisions captured
 
-1. **Server-side enforcement.** If `UserDimension` accepts any `dimension_value_id`, the unification leaks. Need a check at write time that the parent dimension has `controls_access=true`. Same for `DimensionValueLink` and `participates_in_links`.
-2. **Existing seeders and code paths.** `is_system="activity_type"` syncing, `PROGRAMME_ACTIVITY_TYPES` map, `_remove_stale_programme_at_links()` — all assume structural dimensions. Need to confirm none of them inadvertently apply to tag-like rows.
-3. **Form rendering.** META_FIELDS_CONSOLIDATION already treats dimensions as one of three element types with a `display_type`. Tags would likely want a chip-picker `display_type` and possibly a "create new" affordance — minor extension, not architectural.
-4. **Migration story.** If we add the flags, what defaults? Existing dimensions are all structural — `controls_access=true`, `participates_in_links=true`, `value_creation='admin'`, `cardinality='multi'` (current behaviour). New "tag" rows opt into the looser settings.
-5. **Naming.** If unified, what do we call the concept in the UI? Probably keep "Dimensions" as the underlying name and surface "Tags" as a UI category, since "Dimension" already has product meaning across reports/forms.
-6. **Reporting.** Tag-based breakdowns probably want different defaults than dimension breakdowns (e.g. top-N instead of all values). Worth thinking about, not a blocker.
+These were resolved during the brainstorm and are baked into what shipped. Worth recording so we don't relitigate.
+
+### One flag, not three
+
+The original doc proposed `controls_access`, `participates_in_links`, `value_creation`, `cardinality` as separate knobs. We collapsed to **one flag** (`controls_access`) because:
+
+- The three behaviours don't cluster the way the doc assumed. Sub-Intervention is `controls_access=false` *but needs link rules* — it cascades from Mental Health. Bundling "access" and "links" into one flag would have blocked this case.
+- Solution: keep `controls_access` for the access gate, and **don't gate links at all**. Link rules are admin-discipline, not schema-enforced. The "rule space explosion" worry from the doc is theoretical; in practice admins create the rules they need.
+- `cardinality` (single vs multi) isn't enforced in the codebase today and has no real bug. YAGNI.
+- `value_creation` (admin vs inline) becomes relevant only when a real tag-creation-from-entity-form UX exists. Defer.
+
+### Stale access rows: filter, don't delete
+
+When `controls_access` flips false on a dimension, existing `UserDimension` rows for its values become semantically inert. We treat them as dead data at read time (filtered out in `get_access_value_ids`) rather than deleting them on the flip.
+
+Reason: preserves admin intent. If the admin flips the dimension back, the original access restrictions return automatically. A destructive cleanup would force re-entry.
+
+### Link rules open to any axis pair
+
+`DimensionValueLink` accepts any two dimension values regardless of `controls_access`. This enables Sub-Intervention cascade and any future tag-like axis that needs cascade behaviour. If misuse becomes a problem (admins linking free-form tags carelessly), add a guard later — but the failure mode is admin error, not a schema bug.
 
 ---
 
-## Simpler alternative (worth weighing)
+## Still open
 
-Just add `controls_access: bool` and call it a day. Don't model `participates_in_links`, `value_creation`, `cardinality` upfront.
+### The rename question — separate module vs collapse to Tags
 
-- **Pro:** smallest possible change. Lets us see if the simpler model holds before adding knobs.
-- **Con:** without `participates_in_links` and `cardinality`, you'll either constrain all dimensions to behave the same way or end up special-casing structural ones in code anyway. Retrofitting flags onto a populated table later is more work than adding them now.
+We have not decided whether dimensions and tags should ultimately be **one concept** or **two**.
+
+**Path A: rename Dimensions to Tags everywhere.**
+
+- `dimensions` → `tag_types`, `dimension_values` → `tags`, etc.
+- `controls_access` becomes the flag that distinguishes "structural tags" from "free-form tags."
+- Pros: single mental model, single CRUD surface, cleaner naming ("Tag" is universally understood; "Dimension" is jargon).
+- Cons: invasive mechanical rename across backend, frontend, API routes, permissions, seeders, docs. Doesn't change reporting capability — only cognitive overhead.
+
+**Path B: keep Dimensions, add a separate Tags module later when needed.**
+
+- Dimensions stay as the structural module (Programme, Location, Intervention, Sub-Intervention, etc., each with `controls_access` either true or false).
+- Tags module gets built fresh when a real free-form labeling use case arrives — likely a different schema (possibly flat, no parent grouping), inline-creatable, no link rules, no access semantics.
+- Pros: respects the genuine UX difference — dimensions go at the **top** of activity forms with cascading required dropdowns, tags would go at the **bottom** as optional chip-pickers added after the fact. Admins think differently about "defining a new axis" vs "labelling a record." Two modules let each have UX, lifecycle, and governance that fits its role.
+- Cons: two CRUD surfaces in settings (probably desirable for clarity, not actually a cost); two attachment-table patterns when Tags lands.
+
+**Where we leaned in the brainstorm:** Path B looked stronger by the end. The argument: when a field worker creates a session and picks Location / Intervention / Programme, those aren't tags — they're the structural coordinates of the record. Tagging is something you do *after*, optionally. Forcing both into one model means the `controls_access` flag ends up doing UI layout work (top-of-form vs bottom-of-form rendering), which is a smell.
+
+**Not decided yet** because Path B's case rests on a concrete free-form labeling use case that hasn't shown up in the codebase. The Kshamata dashboard indicators (`docs/...`) are all served by dimensions today. Until a real "this should be a tag, not a dimension" requirement arrives, the question stays open.
+
+### Triggers for picking a path
+
+Revisit when any of these happens:
+
+1. A partner org needs **inline tag creation from an entity form** (admin doesn't pre-define values; users add new labels as they go). This is a clear "Tags module needed" signal — dimensions are admin-curated.
+2. The Manage Dimensions settings page **becomes unwieldy** because too many `controls_access=false` axes pile up alongside structural ones.
+3. We need **tags on activity_types** for reporting rollups (e.g. "Psychological Care" as a category bucket over 7 interventions). This pushes toward either a parent_id on dimension_value (within the existing module) or a separate Tags module that can attach to activity_types.
+4. Reporting requires a **distinct "free-form filter" UX** at the bottom of list pages that doesn't fit the current dimension-as-filter pattern.
+
+Until then, every new axis is added as a dimension — with `controls_access=true` if it gates access, `false` if it's structural-but-tag-like (Sub-Intervention is the reference example).
 
 ---
 
-## Decision criteria (for later)
+## Historical reference
 
-- How many tag-like axes do real orgs want, and how do they differ from structural ones?
-- Will tags need to participate in any inter-value rules, or are they always flat?
-- Do we need inline tag creation from entity forms, or is admin-managed fine?
-- Does the Settings UI become unwieldy if everything is one list?
+The original doc proposed multiple flags (`participates_in_links`, `value_creation`, `cardinality`) and a unified-but-role-flagged design. The brainstorm landed on a simpler version: one flag, links left open, and the rename question explicitly deferred. The richer design remains an option if multi-flag governance becomes necessary — start by splitting `participates_in_links` off from `controls_access`, since that's the most likely first divergence.
 
-Revisit once we have a concrete tag use case from a partner org.
+The doc previously also referenced an `is_system` column on dimensions that was never actually built (`is_system` exists only on `roles`). That reference has been removed.
