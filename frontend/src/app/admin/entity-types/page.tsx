@@ -180,7 +180,7 @@ export default function EntityTypesPage() {
               checked={form.can_enroll}
               onChange={(e) => setForm({ ...form, can_enroll: e.target.checked })}
             />
-            <Label htmlFor="can_enroll">Enable Enrolments</Label>
+            <Label htmlFor="can_enroll">Enable Enrollments</Label>
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={closeModal}>
