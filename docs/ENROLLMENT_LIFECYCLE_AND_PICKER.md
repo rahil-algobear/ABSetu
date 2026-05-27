@@ -367,6 +367,25 @@ there too).
   picker against the new id. Eliminates the last remaining caller of
   the bulk-save endpoint.
 
+### Deferred — Required-field validation cleanup
+
+Required-field validation against a meta-field schema is currently
+re-implemented in several places with subtly different code paths:
+
+- `enrollment/routes.py:create_enrollment` — server validation when
+  creating an enrollment directly.
+- `EnrollmentForm` (entity detail page) — client validation before
+  enrollment create/update.
+- `EnrollAndAddModal` and `CreateAndAddModal` (smart picker) — each
+  re-runs its own version against its slice of fields.
+- Activity create/edit paths likely have similar patterns.
+
+Worth extracting a single backend helper (`validate_required_fields(
+field_defs, values)`) and a matching client-side hook. Touches a few
+files but the behaviour change is nil — purely a "one place to fix
+required-field semantics" win. Schedule when one of these surfaces
+needs a real behavioural change.
+
 ---
 
 ## Phase 4 — Configurable enrollment limits
