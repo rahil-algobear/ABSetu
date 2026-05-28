@@ -1,16 +1,15 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { entityApi, metaFieldSchemaApi } from "@/services/api";
 import { MetaFieldDefinition, MetaFieldSchemaItem } from "@/types";
-import { getFieldsForScope } from "@/utils/meta-fields";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DateTimeInput } from "@/components/ui/date-time-input";
 import { Dialog } from "@/components/ui/dialog";
-import { DynamicMetaForm } from "@/components/DynamicMetaForm";
+import { EntityFields, type EntityFieldsHandle } from "@/components/EntityFields";
 import { Plus, Search, X } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -56,17 +55,17 @@ export function SearchSelectParticipants({
   const [search, setSearch] = useState("");
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [newEntityMeta, setNewEntityMeta] = useState<Record<string, unknown>>({});
+  const [createFormError, setCreateFormError] = useState<string | null>(null);
+  const entityFieldsRef = useRef<EntityFieldsHandle>(null);
   const queryClient = useQueryClient();
 
-  // Entity-type-specific meta fields
+  // allSchemas is forwarded to EntityFields; the form-builder field set
+  // (with stage filtering, disabled keys, and validation) lives inside
+  // that component now.
   const { data: allSchemas = [] } = useQuery<MetaFieldSchemaItem[]>({
     queryKey: ["meta-field-schemas"],
     queryFn: metaFieldSchemaApi.getAll,
   });
-  const entityMetaFields = useMemo(
-    () => entityTypeId ? getFieldsForScope(allSchemas, { type: "entity", entity_type_id: entityTypeId }) : [],
-    [allSchemas, entityTypeId],
-  );
 
   const createEntityMutation = useMutation({
     mutationFn: entityApi.create,
@@ -84,6 +83,7 @@ export function SearchSelectParticipants({
       ]);
       setShowCreateDialog(false);
       setNewEntityMeta({});
+      setCreateFormError(null);
       toast.success(`${entityTypeName} created and selected — save to confirm`);
     },
     onError: () => toast.error(`Failed to create ${entityTypeName.toLowerCase()}`),
@@ -270,13 +270,22 @@ export function SearchSelectParticipants({
       {entityTypeId && (
         <Dialog
           open={showCreateDialog}
-          onClose={() => setShowCreateDialog(false)}
+          onClose={() => {
+            setShowCreateDialog(false);
+            setCreateFormError(null);
+          }}
           title={`Add New ${entityTypeName}`}
         >
           <form
             onSubmit={(e) => {
               e.preventDefault();
               e.stopPropagation();
+              setCreateFormError(null);
+              const validationError = entityFieldsRef.current?.validate();
+              if (validationError) {
+                setCreateFormError(validationError);
+                return;
+              }
               const meta = Object.keys(newEntityMeta).length > 0 ? newEntityMeta : undefined;
               createEntityMutation.mutate({
                 entity_type_id: entityTypeId,
@@ -285,16 +294,27 @@ export function SearchSelectParticipants({
             }}
             className="space-y-3"
           >
-            <DynamicMetaForm
-              fields={entityMetaFields.filter((f) => f.visible !== false)}
-              values={newEntityMeta}
-              onChange={setNewEntityMeta}
+            {createFormError && (
+              <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {createFormError}
+              </div>
+            )}
+            <EntityFields
+              ref={entityFieldsRef}
+              entityTypeId={entityTypeId}
+              allSchemas={allSchemas}
+              metaValues={newEntityMeta}
+              onMetaChange={setNewEntityMeta}
+              mode="create"
             />
             <div className="flex justify-end gap-2 pt-2">
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setShowCreateDialog(false)}
+                onClick={() => {
+                  setShowCreateDialog(false);
+                  setCreateFormError(null);
+                }}
               >
                 Cancel
               </Button>
