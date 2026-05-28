@@ -325,7 +325,10 @@ def get_entity_filters(
     db: Session = Depends(get_db),
 ):
     """Return available filter definitions, sortable keys, and visible columns for entity list."""
-    from app.common.helpers.filter_definitions import build_list_filter_response
+    from app.common.helpers.filter_definitions import (
+        build_enrollment_filter_definitions,
+        build_list_filter_response,
+    )
 
     org_id = current_user.organization_id
 
@@ -358,7 +361,7 @@ def get_entity_filters(
         ],
     }
 
-    return build_list_filter_response(
+    response = build_list_filter_response(
         db,
         org_id,
         accessible_dv_ids,
@@ -370,6 +373,32 @@ def get_entity_filters(
         default_sortable_keys=["name", "code", "created_at"],
         extra_filters=[created_by_filter],
     )
+
+    # Enrollment filters — appended after build_list_filter_response so they
+    # bypass list-config gating (auto-filterable for now). Scoped to the
+    # selected entity type if one is picked and it allows enrollments; for
+    # the "all types" view, surface fields for the union of enrollable types.
+    enrollable_et_ids: list[uuid.UUID] = []
+    if entity_type_id:
+        try:
+            et = next(e for e in entity_types if str(e.id) == entity_type_id)
+        except StopIteration:
+            et = None
+        if et and et.can_enroll:
+            enrollable_et_ids = [et.id]
+    else:
+        enrollable_et_ids = [et.id for et in entity_types if et.can_enroll]
+
+    enrollment_filters = build_enrollment_filter_definitions(
+        db,
+        org_id,
+        enrollable_et_ids,
+        accessible_dv_ids,
+    )
+    if enrollment_filters:
+        response["filters"].extend(enrollment_filters)
+
+    return response
 
 
 @entity_router.get(

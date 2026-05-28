@@ -8,7 +8,7 @@ import uuid
 from datetime import date, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import String, exists, func, or_
+from sqlalchemy import Numeric, String, exists, func, or_
 from sqlalchemy.orm import Query
 
 
@@ -188,6 +188,45 @@ def parse_filters(
         elif filter_type == "boolean":
             parsed.append({"key": key, "type": filter_type, "config": config, "value": value})
 
+        elif filter_type in ("enrollment_meta_select",):
+            coerced = value if isinstance(value, list) else [value]
+            parsed.append({"key": key, "type": filter_type, "config": config, "value": coerced})
+
+        elif filter_type == "enrollment_meta_range":
+            if not isinstance(value, dict):
+                continue
+            coerced = {}
+            if "min" in value and value["min"] is not None:
+                coerced["min"] = value["min"]
+            if "max" in value and value["max"] is not None:
+                coerced["max"] = value["max"]
+            if coerced:
+                parsed.append({"key": key, "type": filter_type, "config": config, "value": coerced})
+
+        elif filter_type == "enrollment_meta_date_range":
+            if not isinstance(value, dict):
+                continue
+            coerced = {}
+            start = value.get("start")
+            end = value.get("end")
+            if start and isinstance(start, str) and _validate_date_or_datetime(start):
+                coerced["start"] = start
+            if end and isinstance(end, str) and _validate_date_or_datetime(end):
+                coerced["end"] = end
+            if coerced:
+                parsed.append({"key": key, "type": filter_type, "config": config, "value": coerced})
+
+        elif filter_type == "enrollment_meta_boolean":
+            parsed.append({"key": key, "type": filter_type, "config": config, "value": value})
+
+        elif filter_type == "enrollment_dimension":
+            raw_ids = value if isinstance(value, list) else [value]
+            try:
+                coerced = [uuid.UUID(v) for v in raw_ids]
+            except (ValueError, AttributeError):
+                continue
+            parsed.append({"key": key, "type": filter_type, "config": config, "value": coerced})
+
     return parsed
 
 
@@ -204,6 +243,12 @@ def apply_filters(
     each validated filter to the query.
     """
     parsed = parse_filters(filters_json, filter_config)
+
+    # Enrollment filters (meta + dimensions) share a single EXISTS subquery —
+    # "same-enrollment match": for an entity to pass, ONE active enrollment
+    # must satisfy ALL selected enrollment conditions. Collected here and
+    # applied as a single composite predicate after the main loop.
+    enrollment_filters: list[dict] = []
 
     for f in parsed:
         config = f["config"]
@@ -275,7 +320,75 @@ def apply_filters(
                 col = config["column"]
                 query = query.filter(col == value)
 
+        elif filter_type in (
+            "enrollment_meta_select",
+            "enrollment_meta_range",
+            "enrollment_meta_date_range",
+            "enrollment_meta_boolean",
+            "enrollment_dimension",
+        ):
+            enrollment_filters.append(f)
+
+    if enrollment_filters:
+        query = _apply_enrollment_filters(query, enrollment_filters)
+
     return query
+
+
+def _apply_enrollment_filters(query: Query, enrollment_filters: list[dict]) -> Query:
+    """Apply collected enrollment filters as a single EXISTS subquery.
+
+    Same-enrollment match: one active enrollment of the entity must
+    satisfy every selected condition. Dimension filters become nested
+    EXISTS clauses inside the outer subquery (one per dimension axis,
+    AND-ed), matching how dimension filters work on entities — entities
+    must match on each dimension axis, but any value within the axis.
+    """
+    from app.modules.dimension.model import EnrollmentDimension
+    from app.modules.enrollment.model import Enrollment
+
+    # All entries share the same parent_pk — pull from the first.
+    parent_pk = enrollment_filters[0]["config"]["parent_pk"]
+
+    conds = [
+        Enrollment.entity_id == parent_pk,
+        Enrollment.is_active.is_(True),
+    ]
+
+    for f in enrollment_filters:
+        config = f["config"]
+        value = f["value"]
+        ftype = f["type"]
+
+        if ftype == "enrollment_meta_select":
+            meta_key = config["meta_key"]
+            conds.append(Enrollment.meta[meta_key].astext.in_(value))
+        elif ftype == "enrollment_meta_range":
+            meta_key = config["meta_key"]
+            text_col = Enrollment.meta[meta_key].astext
+            if "min" in value:
+                conds.append(text_col.cast(Numeric) >= value["min"])
+            if "max" in value:
+                conds.append(text_col.cast(Numeric) <= value["max"])
+        elif ftype == "enrollment_meta_date_range":
+            meta_key = config["meta_key"]
+            text_col = Enrollment.meta[meta_key].astext
+            if "start" in value:
+                conds.append(text_col >= _normalize_to_utc_str(value["start"]))
+            if "end" in value:
+                conds.append(text_col <= _normalize_to_utc_str(value["end"]))
+        elif ftype == "enrollment_meta_boolean":
+            meta_key = config["meta_key"]
+            conds.append(Enrollment.meta[meta_key].astext == str(value).lower())
+        elif ftype == "enrollment_dimension":
+            conds.append(
+                exists().where(
+                    EnrollmentDimension.enrollment_id == Enrollment.id,
+                    EnrollmentDimension.dimension_value_id.in_(value),
+                )
+            )
+
+    return query.filter(exists().where(*conds))
 
 
 def paginate(query: Query, page: int, limit: int) -> tuple[list, int]:

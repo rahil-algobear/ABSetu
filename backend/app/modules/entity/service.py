@@ -13,7 +13,10 @@ from app.common.helpers.dimension_scoping import (
     apply_dimension_access_scoping,
     group_dvs_by_dimension,
 )
-from app.common.helpers.filter_definitions import build_dimension_filter_config
+from app.common.helpers.filter_definitions import (
+    build_dimension_filter_config,
+    build_enrollment_filter_config,
+)
 from app.common.helpers.list_query import apply_filters, apply_search, apply_sort, paginate
 from app.common.helpers.meta_normalize import normalize_meta_datetimes
 from app.common.helpers.slugify import slugify
@@ -310,7 +313,7 @@ class EntityService:
         # normalize=True so "auto test" matches "Auto-Test 48", etc.
         query = apply_search(query, params.search, search_columns, normalize=True)
 
-        # Filters (static + dimension + meta from list config)
+        # Filters (static + dimension + meta from list config + enrollment)
         filter_config = self.get_filter_config()
         filter_config.update(self.get_dimension_filter_config(org_id))
         if filterable_keys:
@@ -323,6 +326,26 @@ class EntityService:
                     filterable_keys,
                 )
             )
+
+        # Enrollment filters are auto-included (not gated by list config) for
+        # entity types with can_enroll=True. The /filters endpoint scopes the
+        # exposed fields to match — here we just need to recognise every
+        # potential key the client might send.
+        enrollable_et_ids = [
+            et.id
+            for et in self.db.query(EntityType)
+            .filter_by(organization_id=org_id)
+            .filter(EntityType.can_enroll.is_(True))
+            .all()
+        ]
+        filter_config.update(
+            build_enrollment_filter_config(
+                self.db,
+                org_id,
+                enrollable_et_ids,
+                parent_pk=Entity.id,
+            )
+        )
         query = apply_filters(query, params.filters, filter_config)
 
         # Sort (includes meta fields from list config)
