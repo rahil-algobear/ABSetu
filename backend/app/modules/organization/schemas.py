@@ -35,7 +35,7 @@ DISPLAY_TYPES = Literal[
     "multi_select",
 ]
 
-STAGE_TYPES = Literal["create", "record", "both"]
+STAGE_TYPES = Literal["create", "edit", "both"]
 
 
 class FieldDefinition(BaseModel):

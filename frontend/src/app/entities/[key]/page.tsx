@@ -348,7 +348,7 @@ function EntityTypeEntitiesContent() {
             fields={metaFields.filter((f) => {
               if (f.visible === false) return false;
               // "edit only" fields should be hidden on create
-              if (!editing && f.stage === "record") return false;
+              if (!editing && f.stage === "edit") return false;
               return true;
             })}
             values={metaValues}

@@ -196,7 +196,7 @@ export type MetaFieldType =
 export type MetaFieldDisplayType =
   | "input" | "dropdown" | "radio" | "checklist" | "textarea"
   | "date" | "datetime" | "search_select" | "multi_select";
-export type MetaFieldStage = "create" | "record" | "both";
+export type MetaFieldStage = "create" | "edit" | "both";
 
 export interface MetaFieldDefinition {
   key: string;

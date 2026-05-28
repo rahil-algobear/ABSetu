@@ -91,15 +91,15 @@ export default function ActivityDetailPage() {
     return allFields.filter((f) =>
       f.visible !== false
       && (f.type === "entity_list" || f.type === "user_list")
-      && (!f.stage || f.stage === "both" || f.stage === "record")
+      && (!f.stage || f.stage === "both" || f.stage === "edit")
     );
   }, [allFields]);
 
-  // Field keys not editable on the edit/record stage (create-only fields)
+  // Field keys not editable on the edit stage (create-only fields)
   const editDisabledKeys = useMemo(() => {
     const keys = new Set<string>();
     for (const f of allFields) {
-      if (f.stage && f.stage !== "both" && f.stage !== "record") {
+      if (f.stage && f.stage !== "both" && f.stage !== "edit") {
         keys.add(f.key);
       }
     }

@@ -225,7 +225,7 @@ export default function DimensionValuesPage() {
               const keys = new Set<string>();
               for (const f of metaFields) {
                 if (editingValue && f.stage === "create") keys.add(f.key);
-                if (!editingValue && f.stage === "record") keys.add(f.key);
+                if (!editingValue && f.stage === "edit") keys.add(f.key);
               }
               return keys;
             })()}

@@ -93,7 +93,7 @@ export interface EnrollmentFieldsProps {
   dimensionMode: EnrollmentDimensionMode;
 
   /** Defaults to "create". Drives stage-based field disabling:
-   *  - create → disable fields with stage = "record"
+   *  - create → disable fields with stage = "edit"
    *  - edit   → disable fields with stage = "create" */
   mode?: "create" | "edit";
 
@@ -162,7 +162,7 @@ export function EnrollmentFields({
     const keys = new Set<string>();
     for (const f of allFields) {
       if (mode === "edit" && f.stage === "create") keys.add(f.key);
-      if (mode === "create" && f.stage === "record") keys.add(f.key);
+      if (mode === "create" && f.stage === "edit") keys.add(f.key);
     }
     return keys;
   }, [allFields, mode]);

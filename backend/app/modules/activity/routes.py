@@ -423,7 +423,7 @@ def update_activity(
             if not fd.get("required"):
                 continue
             stage = fd.get("stage") or "both"
-            if stage not in ("both", "record"):
+            if stage not in ("both", "edit"):
                 continue
             fd_type = fd.get("type")
             if fd_type in ("dimension", "entity_list", "user_list"):

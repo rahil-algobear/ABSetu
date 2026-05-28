@@ -955,7 +955,7 @@ export default function MetaFieldsPage() {
                     <TableCell>{field.visible !== false ? "Yes" : "No"}</TableCell>
                     <TableCell className="text-sm text-gray-500">
                       {field.stage === "create" ? "Create only"
-                        : field.stage === "record" ? "Edit only"
+                        : field.stage === "edit" ? "Edit only"
                         : "Both"}
                     </TableCell>
                     <TableCell>
@@ -1084,7 +1084,7 @@ export default function MetaFieldsPage() {
                     <TableCell>{row.field.visible !== false ? "Yes" : "No"}</TableCell>
                     <TableCell className="text-sm text-gray-500">
                       {row.field.stage === "create" ? "Create only"
-                        : row.field.stage === "record" ? "Edit only"
+                        : row.field.stage === "edit" ? "Edit only"
                         : "Both"}
                     </TableCell>
                     <TableCell>
@@ -1501,7 +1501,7 @@ export default function MetaFieldsPage() {
                 >
                   <option value="both">Both create and edit</option>
                   <option value="create">Create only</option>
-                  <option value="record">Edit only</option>
+                  <option value="edit">Edit only</option>
                 </select>
               </div>
             )}
