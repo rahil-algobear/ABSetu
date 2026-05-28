@@ -351,6 +351,7 @@ export interface ActivityListParams {
   page?: number;
   limit?: number;
   activity_type_id?: string;
+  entity_id?: string;
 }
 
 export const activityApi = {

@@ -24,15 +24,14 @@ import { PageLayout } from "@/components/ui/page-layout";
 import { PageContent } from "@/components/ui/page-content";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { MetaFieldDisplay } from "@/components/DynamicMetaForm";
 import { EntityFields, type EntityFieldsHandle } from "@/components/EntityFields";
 import { EnrollmentForm } from "@/components/EnrollmentForm";
+import { ActivityList } from "@/components/ActivityList";
 import { Dialog } from "@/components/ui/dialog";
 import { PageHeader } from "@/components/ui/page-header";
-import { Plus, Pencil, Trash2, ChevronRight } from "lucide-react";
-import Link from "next/link";
+import { Plus, Pencil, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
 import { formatDate, formatDateTime } from "@/utils/date";
 
@@ -104,14 +103,48 @@ export default function EntityDetailPage() {
     enabled: activities.length > 0,
   });
 
-  const [activityTypeFilter, setActivityTypeFilter] = useState<string>("");
+  const typesWithActivities = useMemo(() => {
+    const countByTypeId = new Map<string, number>();
+    for (const a of activities) {
+      countByTypeId.set(
+        a.activity_type_id,
+        (countByTypeId.get(a.activity_type_id) ?? 0) + 1,
+      );
+    }
+    return activityTypes
+      .filter((t) => countByTypeId.has(t.id))
+      .map((t) => ({
+        id: t.id,
+        key: t.key,
+        name: t.name,
+        count: countByTypeId.get(t.id) ?? 0,
+      }));
+  }, [activities, activityTypes]);
 
-  const filteredActivities = useMemo(
-    () => activityTypeFilter
-      ? activities.filter((a) => a.activity_type_id === activityTypeFilter)
-      : activities,
-    [activities, activityTypeFilter]
-  );
+  const subTabParam = searchParams.get("type");
+  const activeSubTabKey =
+    typesWithActivities.find((t) => t.key === subTabParam)?.key ??
+    typesWithActivities[0]?.key ??
+    "";
+
+  const handleSubTabChange = (value: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("type", value);
+    // Reset ActivityList URL state so each type starts fresh
+    for (const k of Array.from(params.keys())) {
+      if (
+        k === "search" ||
+        k === "sort_by" ||
+        k === "sort_order" ||
+        k === "page" ||
+        k === "show" ||
+        k.startsWith("filter_")
+      ) {
+        params.delete(k);
+      }
+    }
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  };
 
   const filteredEnrollments = useMemo(
     () => enrollments.filter((e) => {
@@ -466,65 +499,40 @@ export default function EntityDetailPage() {
         </TabsContent>
         {canViewActivities && (
         <TabsContent value="activities">
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-lg">Activities</CardTitle>
-              {activityTypes.length > 1 && activities.length > 0 && (
-                <select
-                  className="border rounded-md px-2 py-1 text-sm"
-                  value={activityTypeFilter}
-                  onChange={(e) => setActivityTypeFilter(e.target.value)}
-                >
-                  <option value="">All types</option>
-                  {activityTypes.map((at) => (
-                    <option key={at.id} value={at.id}>{at.name}</option>
-                  ))}
-                </select>
-              )}
-            </div>
-          </CardHeader>
-          <CardContent>
-            {activities.length === 0 ? (
-              <p className="text-gray-500 text-sm">No activities</p>
-            ) : filteredActivities.length === 0 ? (
-              <p className="text-gray-500 text-sm">No activities for this type</p>
-            ) : (
-              <div className="space-y-2">
-                {filteredActivities.map((a) => (
-                  <Link
-                    key={a.id}
-                    href={`/activities/${activityTypes.find((at) => at.id === a.activity_type_id)?.key || "unknown"}/${a.id}`}
-                    className="flex items-center justify-between p-2 border rounded hover:bg-gray-50 transition-colors"
-                  >
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium">
-                        {a.dimensions?.length > 0 ? a.dimensions[0].value_name : a.activity_type_name || "Activity"}
-                      </div>
-                      <div className="text-xs text-gray-500 mt-0.5">
-                        {formatDate(a.start_date)}
-                        {a.end_date && a.end_date !== a.start_date && ` – ${formatDate(a.end_date)}`}
-                      </div>
-                      {a.dimensions?.length > 0 && (
-                        <div className="flex gap-1 mt-1 flex-wrap">
-                          {(a.title ? a.dimensions : a.dimensions.slice(1)).map((dim) => (
-                            <Badge key={dim.value_id} variant="secondary" className="text-xs">
-                              {dim.value_name}
-                            </Badge>
-                          ))}
-                        </div>
-                      )}
-                      {a.notes && (
-                        <p className="text-xs text-gray-500 mt-1 truncate max-w-[300px]">{a.notes}</p>
-                      )}
-                    </div>
-                    <ChevronRight className="h-4 w-4 text-gray-400 shrink-0 ml-2" />
-                  </Link>
+          {typesWithActivities.length === 0 ? (
+            <Card>
+              <CardContent>
+                <p className="text-gray-500 text-sm">No activities</p>
+              </CardContent>
+            </Card>
+          ) : typesWithActivities.length === 1 ? (
+            <ActivityList
+              activityTypeKey={typesWithActivities[0].key}
+              activityTypeId={typesWithActivities[0].id}
+              activityTypeName={typesWithActivities[0].name}
+              extraFilters={{ entity_id: id }}
+            />
+          ) : (
+            <Tabs value={activeSubTabKey} onValueChange={handleSubTabChange}>
+              <TabsList className="mb-2">
+                {typesWithActivities.map((t) => (
+                  <TabsTrigger key={t.key} value={t.key}>
+                    {t.name} ({t.count})
+                  </TabsTrigger>
                 ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+              </TabsList>
+              {typesWithActivities.map((t) => (
+                <TabsContent key={t.key} value={t.key}>
+                  <ActivityList
+                    activityTypeKey={t.key}
+                    activityTypeId={t.id}
+                    activityTypeName={t.name}
+                    extraFilters={{ entity_id: id }}
+                  />
+                </TabsContent>
+              ))}
+            </Tabs>
+          )}
         </TabsContent>
         )}
       </Tabs>
