@@ -60,7 +60,11 @@ function FilterChips({
   const chips: { key: string; value: string; label: string; valueLabel: string; renderValue?: ReactNode }[] = [];
   for (const f of activeFilters) {
     const def = filterDefinitions.find((d) => d.key === f.key);
-    const label = f.label || def?.label || f.key;
+    const baseLabel = f.label || def?.label || f.key;
+    // Prefix the chip's label with the section so "Project" from an
+    // enrollment filter doesn't collide visually with an entity-side
+    // "Project" filter on the same toolbar.
+    const label = def?.section ? `${def.section}: ${baseLabel}` : baseLabel;
 
     if ((def?.type === "date_range" || def?.type === "datetime_range") && typeof f.value === "string") {
       chips.push({

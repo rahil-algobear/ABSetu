@@ -235,6 +235,7 @@ export interface EntityFilterDefinition {
   key: string;
   label: string;
   type: "select" | "range" | "date_range" | "boolean" | "text";
+  section?: string;
   options?: { value: string; label: string }[];
   min?: number;
   max?: number;
