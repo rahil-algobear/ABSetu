@@ -278,6 +278,14 @@ function EntityTypeEntitiesContent() {
                   ))}
                   <TableCell>
                     <div className="flex items-center justify-center gap-2">
+                      <Can permission="entity:edit">
+                        <button
+                          onClick={(ev) => openEdit(ev, e)}
+                          className="text-gray-400 hover:text-primary"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                      </Can>
                       {entityType?.can_enroll && (
                         <Can permission="enrollment:manage">
                           <button
@@ -292,14 +300,6 @@ function EntityTypeEntitiesContent() {
                           </button>
                         </Can>
                       )}
-                      <Can permission="entity:edit">
-                        <button
-                          onClick={(ev) => openEdit(ev, e)}
-                          className="text-gray-400 hover:text-primary"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </button>
-                      </Can>
                     </div>
                   </TableCell>
                 </TableRow>
