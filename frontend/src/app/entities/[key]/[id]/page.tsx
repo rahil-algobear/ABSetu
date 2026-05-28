@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -25,7 +25,8 @@ import { PageContent } from "@/components/ui/page-content";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { DynamicMetaForm, MetaFieldDisplay } from "@/components/DynamicMetaForm";
+import { MetaFieldDisplay } from "@/components/DynamicMetaForm";
+import { EntityFields, type EntityFieldsHandle } from "@/components/EntityFields";
 import { EnrollmentForm } from "@/components/EnrollmentForm";
 import { Dialog } from "@/components/ui/dialog";
 import { PageHeader } from "@/components/ui/page-header";
@@ -46,6 +47,8 @@ export default function EntityDetailPage() {
   const [enrollmentTab, setEnrollmentTab] = useState<"active" | "ended" | "all">("active");
   const [editingDetails, setEditingDetails] = useState(false);
   const [detailMetaValues, setDetailMetaValues] = useState<Record<string, unknown>>({});
+  const [detailFormError, setDetailFormError] = useState<string | null>(null);
+  const entityFieldsRef = useRef<EntityFieldsHandle>(null);
 
   const { data: entity, isLoading } = useQuery({
     queryKey: ["entity", id],
@@ -101,20 +104,13 @@ export default function EntityDetailPage() {
 
   const canEnroll = entity?.entity_type_can_enroll !== false;
 
-  const editDisabledKeys = useMemo(() => {
-    const keys = new Set<string>();
-    for (const f of metaFields) {
-      if (f.stage === "create") keys.add(f.key);
-    }
-    return keys;
-  }, [metaFields]);
-
   const updateDetailsMutation = useMutation({
     mutationFn: (meta: Record<string, unknown>) =>
       entityApi.update(id, { meta }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["entity", id] });
       setEditingDetails(false);
+      setDetailFormError(null);
       toast.success("Details updated");
     },
     onError: () => toast.error("Failed to update details"),
@@ -133,11 +129,23 @@ export default function EntityDetailPage() {
 
   const openEditDetails = () => {
     setDetailMetaValues(entity?.meta || {});
+    setDetailFormError(null);
     setEditingDetails(true);
+  };
+
+  const cancelEditDetails = () => {
+    setEditingDetails(false);
+    setDetailFormError(null);
   };
 
   const handleSaveDetails = (e: React.FormEvent) => {
     e.preventDefault();
+    setDetailFormError(null);
+    const validationError = entityFieldsRef.current?.validate();
+    if (validationError) {
+      setDetailFormError(validationError);
+      return;
+    }
     updateDetailsMutation.mutate(detailMetaValues);
   };
 
@@ -185,17 +193,24 @@ export default function EntityDetailPage() {
           <CardContent>
             {editingDetails ? (
               <form onSubmit={handleSaveDetails} className="space-y-3">
-                <DynamicMetaForm
-                  fields={metaFields.filter((f) => f.visible !== false)}
-                  values={detailMetaValues}
-                  onChange={setDetailMetaValues}
-                  disabledKeys={editDisabledKeys}
+                {detailFormError && (
+                  <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                    {detailFormError}
+                  </div>
+                )}
+                <EntityFields
+                  ref={entityFieldsRef}
+                  entityTypeId={entity.entity_type_id}
+                  allSchemas={allSchemas}
+                  metaValues={detailMetaValues}
+                  onMetaChange={setDetailMetaValues}
+                  mode="edit"
                 />
                 <div className="flex gap-2 pt-2">
                   <Button type="submit" disabled={updateDetailsMutation.isPending}>
                     Save
                   </Button>
-                  <Button type="button" variant="outline" onClick={() => setEditingDetails(false)}>
+                  <Button type="button" variant="outline" onClick={cancelEditDetails}>
                     Cancel
                   </Button>
                 </div>
