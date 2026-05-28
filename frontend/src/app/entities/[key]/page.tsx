@@ -13,6 +13,7 @@ import type { FilterDefinition } from "@/components/ui/filter-modal";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { DynamicMetaForm } from "@/components/DynamicMetaForm";
+import { EnrollmentForm } from "@/components/EnrollmentForm";
 import { PageLayout } from "@/components/ui/page-layout";
 import { PageHeader } from "@/components/ui/page-header";
 import { ListToolbar } from "@/components/ui/list-toolbar";
@@ -27,7 +28,7 @@ import {
   TableCell,
 } from "@/components/ui/page-table";
 import { PageContent } from "@/components/ui/page-content";
-import { Plus, Pencil } from "lucide-react";
+import { Plus, Pencil, UserPlus } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import { formatDate, formatDateTime, DATE_FORMATS } from "@/utils/date";
@@ -39,6 +40,7 @@ function EntityTypeEntitiesContent() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Entity | null>(null);
   const [metaValues, setMetaValues] = useState<Record<string, unknown>>({});
+  const [quickEnrollEntity, setQuickEnrollEntity] = useState<Entity | null>(null);
 
   // Find the entity type by key
   const { data: entityTypes = [] } = useQuery({
@@ -275,6 +277,20 @@ function EntityTypeEntitiesContent() {
                   ))}
                   <TableCell>
                     <div className="flex items-center justify-center gap-2">
+                      {entityType?.can_enroll && (
+                        <Can permission="enrollment:manage">
+                          <button
+                            onClick={(ev) => {
+                              ev.stopPropagation();
+                              setQuickEnrollEntity(e);
+                            }}
+                            className="text-gray-400 hover:text-primary"
+                            title="Quick Enroll"
+                          >
+                            <UserPlus className="h-4 w-4" />
+                          </button>
+                        </Can>
+                      )}
                       <Can permission="entity:edit">
                         <button
                           onClick={(ev) => openEdit(ev, e)}
@@ -301,6 +317,25 @@ function EntityTypeEntitiesContent() {
           </div>
         </>
       )}
+
+      <Dialog
+        open={!!quickEnrollEntity}
+        onClose={() => setQuickEnrollEntity(null)}
+        title={`Enroll ${typeName}`}
+      >
+        {quickEnrollEntity && entityType && (
+          <EnrollmentForm
+            entityId={quickEnrollEntity.id}
+            entityTypeId={entityType.id}
+            allSchemas={allSchemas}
+            onSuccess={() => {
+              setQuickEnrollEntity(null);
+              queryClient.invalidateQueries({ queryKey: ["entities"] });
+            }}
+            onCancel={() => setQuickEnrollEntity(null)}
+          />
+        )}
+      </Dialog>
 
       <Dialog
         open={modalOpen}
