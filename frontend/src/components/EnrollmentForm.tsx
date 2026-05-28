@@ -1,54 +1,18 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useMemo, useRef, useState } from "react";
+import { useMutation } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 
-import {
-  enrollmentApi,
-  dimensionApi,
-  dimensionValueLinkApi,
-} from "@/services/api";
-import {
-  Dimension,
-  DimensionValue,
-  DimensionValueLink,
-  Enrollment,
-  MetaFieldDefinition,
-  MetaFieldSchemaItem,
-} from "@/types";
-import { collectEnrollmentFields } from "@/utils/meta-fields";
+import { enrollmentApi } from "@/services/api";
+import type { Enrollment, MetaFieldSchemaItem } from "@/types";
 
 import { Button } from "@/components/ui/button";
-import { DynamicMetaForm } from "@/components/DynamicMetaForm";
-
-/**
- * Cascading dimension filter — reused from activities page pattern.
- */
-function getFilteredValues(
-  targetDimValues: DimensionValue[],
-  selectedByDim: Record<string, string>,
-  targetDimId: string,
-  dimensionValueLinks: DimensionValueLink[],
-): DimensionValue[] {
-  const otherSelections = Object.entries(selectedByDim)
-    .filter(([dimId, dvId]) => dimId !== targetDimId && dvId)
-    .map(([, dvId]) => dvId);
-
-  if (otherSelections.length === 0) return targetDimValues;
-
-  const linkPairs = new Set<string>();
-  for (const link of dimensionValueLinks) {
-    linkPairs.add(`${link.dimension_value_id_1}:${link.dimension_value_id_2}`);
-    linkPairs.add(`${link.dimension_value_id_2}:${link.dimension_value_id_1}`);
-  }
-
-  return targetDimValues.filter((dv) =>
-    otherSelections.every(
-      (selectedId) => linkPairs.has(`${dv.id}:${selectedId}`)
-    )
-  );
-}
+import {
+  EnrollmentFields,
+  useVisibleEnrollmentFields,
+  type EnrollmentFieldsHandle,
+} from "@/components/EnrollmentFields";
 
 export function EnrollmentForm({
   entityId,
@@ -73,69 +37,24 @@ export function EnrollmentForm({
   );
   const [formError, setFormError] = useState<string | null>(null);
 
-  const { data: dimensions = [] } = useQuery<Dimension[]>({
-    queryKey: ["dimensions"],
-    queryFn: dimensionApi.list,
-  });
-
-  const { data: allDimensionValues = [] } = useQuery<DimensionValue[]>({
-    queryKey: ["all-dimension-values", dimensions.map((d) => d.id).join(",")],
-    queryFn: async () => {
-      const results = await Promise.all(
-        dimensions.map((d) => dimensionApi.listAccessibleValues(d.id))
-      );
-      return results.flat();
-    },
-    enabled: dimensions.length > 0,
-  });
-
-  const { data: dimensionValueLinks = [] } = useQuery<DimensionValueLink[]>({
-    queryKey: ["dimension-value-links-all"],
-    queryFn: () => dimensionValueLinkApi.list(),
-  });
-
   const [dimensionValueIds, setDimensionValueIds] = useState<string[]>(
-    () => enrollment?.dimensions?.map((t) => t.value_id) || []
+    () => enrollment?.dimensions?.map((t) => t.value_id) || [],
   );
   const [metaValues, setMetaValues] = useState<Record<string, unknown>>(
-    () => enrollment?.meta || {}
+    () => enrollment?.meta || {},
   );
 
-  // Admin-configured fields for this enrollment (re-runs as dimensions change
-  // to surface dimension-value-scoped fields).
-  const allFields = useMemo(
-    () => collectEnrollmentFields(allSchemas, entityTypeId, dimensionValueIds),
-    [allSchemas, entityTypeId, dimensionValueIds],
-  );
-  const formFields = useMemo(
-    () => allFields.filter((f) => f.visible !== false),
-    [allFields],
-  );
+  const fieldsRef = useRef<EnrollmentFieldsHandle>(null);
 
-  const createDisabledKeys = useMemo(() => {
-    const keys = new Set<string>();
-    for (const f of allFields) {
-      if (isEdit && f.stage === "create") keys.add(f.key);
-      if (!isEdit && f.stage === "record") keys.add(f.key);
-    }
-    return keys;
-  }, [allFields, isEdit]);
-
-  const selectedByDim = useMemo(() => {
-    const map: Record<string, string> = {};
-    for (const dim of dimensions) {
-      const dimValues = allDimensionValues.filter(
-        (dv) => dv.dimension_id === dim.id
-      );
-      const selected = dimensionValueIds.find((id) =>
-        dimValues.some((dv) => dv.id === id)
-      );
-      if (selected) {
-        map[dim.id] = selected;
-      }
-    }
-    return map;
-  }, [dimensions, allDimensionValues, dimensionValueIds]);
+  // Used to decide whether to render the empty-state message and hide the
+  // submit/status toggle. Cheap re-derivation of the same field set the
+  // renderer computes.
+  const visibleFields = useVisibleEnrollmentFields({
+    entityTypeId,
+    allSchemas,
+    knownDimensionValueIds: dimensionValueIds,
+  });
+  const hasFields = visibleFields.length > 0;
 
   const createMutation = useMutation({
     mutationFn: (data: Parameters<typeof enrollmentApi.create>[0]) =>
@@ -168,26 +87,10 @@ export function EnrollmentForm({
     e.preventDefault();
     setFormError(null);
 
-    // Validate required fields (mirrors activity create page)
-    for (const field of formFields) {
-      if (!field.required || createDisabledKeys.has(field.key)) continue;
-      if (field.type === "dimension") {
-        const dimId = field.dimension_id;
-        if (!dimId) continue;
-        const hasValue = dimensionValueIds.some((dvId) =>
-          allDimensionValues.find((dv) => dv.id === dvId)?.dimension_id === dimId,
-        );
-        if (!hasValue) {
-          setFormError(`${field.label} is required.`);
-          return;
-        }
-        continue;
-      }
-      const val = metaValues[field.key];
-      if (val === undefined || val === null || val === "") {
-        setFormError(`${field.label} is required.`);
-        return;
-      }
+    const validationError = fieldsRef.current?.validate();
+    if (validationError) {
+      setFormError(validationError);
+      return;
     }
 
     const meta = Object.keys(metaValues).length > 0 ? metaValues : undefined;
@@ -209,65 +112,6 @@ export function EnrollmentForm({
 
   const isPending = createMutation.isPending || updateMutation.isPending;
 
-  const renderField = (field: MetaFieldDefinition) => {
-    if (field.type === "dimension") {
-      const dim = dimensions.find((d) => d.id === field.dimension_id);
-      if (!dim) return null;
-      const dimValues = allDimensionValues.filter(
-        (dv) => dv.dimension_id === dim.id,
-      );
-      const filtered = getFilteredValues(
-        dimValues,
-        selectedByDim,
-        dim.id,
-        dimensionValueLinks,
-      );
-      const currentSelection =
-        dimensionValueIds.find((dvId) =>
-          dimValues.some((dv) => dv.id === dvId),
-        ) || "";
-      const isFieldDisabled = createDisabledKeys.has(field.key);
-      return (
-        <div key={`dim-${field.key}`}>
-          <label className="text-sm font-medium">
-            {field.label}
-            {field.required && <span className="text-red-500 ml-0.5">*</span>}
-          </label>
-          <select
-            className="w-full mt-1 border rounded-md p-2 text-sm disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
-            value={currentSelection}
-            onChange={(e) => {
-              const newId = e.target.value;
-              const otherIds = dimensionValueIds.filter(
-                (dvId) => !dimValues.some((dv) => dv.id === dvId),
-              );
-              setDimensionValueIds(newId ? [...otherIds, newId] : otherIds);
-            }}
-            required={field.required}
-            disabled={isFieldDisabled}
-          >
-            <option value="">Select {field.label}...</option>
-            {filtered.map((dv) => (
-              <option key={dv.id} value={dv.id}>
-                {dv.name}
-              </option>
-            ))}
-          </select>
-        </div>
-      );
-    }
-    return (
-      <div key={`field-${field.key}`}>
-        <DynamicMetaForm
-          fields={[field]}
-          values={metaValues}
-          onChange={setMetaValues}
-          disabledKeys={createDisabledKeys}
-        />
-      </div>
-    );
-  };
-
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
       {formError && (
@@ -275,54 +119,77 @@ export function EnrollmentForm({
           {formError}
         </div>
       )}
-      {formFields.length === 0 ? (
+
+      {hasFields ? (
+        <>
+          <EnrollmentFields
+            ref={fieldsRef}
+            entityTypeId={entityTypeId}
+            allSchemas={allSchemas}
+            lockedDimensions={[]}
+            userDimensionValueIds={dimensionValueIds}
+            onUserDimensionsChange={setDimensionValueIds}
+            metaValues={metaValues}
+            onMetaChange={setMetaValues}
+            dimensionMode="picker"
+            mode={isEdit ? "edit" : "create"}
+          />
+          <StatusToggle isActive={isActive} onChange={setIsActive} />
+        </>
+      ) : (
         <p className="text-sm text-gray-500">
           No fields have been configured for enrollments. Please ask your admin to set them up in Form Fields under Admin settings.
         </p>
-      ) : (
-        formFields.map(renderField)
-      )}
-
-      {formFields.length > 0 && (
-        <div>
-          <label className="block text-sm font-medium">Status</label>
-          <div className="inline-flex mt-1 rounded-md border overflow-hidden">
-            <button
-              type="button"
-              onClick={() => setIsActive(false)}
-              className={`px-3 py-1.5 text-sm transition-colors ${
-                !isActive
-                  ? "bg-gray-600 text-white"
-                  : "bg-white text-gray-600 hover:bg-gray-50"
-              }`}
-            >
-              Inactive
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsActive(true)}
-              className={`px-3 py-1.5 text-sm transition-colors border-l ${
-                isActive
-                  ? "bg-purple-600 text-white"
-                  : "bg-white text-gray-600 hover:bg-gray-50"
-              }`}
-            >
-              Active
-            </button>
-          </div>
-        </div>
       )}
 
       <div className="flex justify-end gap-2 pt-3 mt-3 border-t -mx-6 px-6">
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
-        {formFields.length > 0 && (
+        {hasFields && (
           <Button type="submit" disabled={isPending}>
             {isEdit ? "Save" : "Create"}
           </Button>
         )}
       </div>
     </form>
+  );
+}
+
+function StatusToggle({
+  isActive,
+  onChange,
+}: {
+  isActive: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <div>
+      <label className="block text-sm font-medium">Status</label>
+      <div className="inline-flex mt-1 rounded-md border overflow-hidden">
+        <button
+          type="button"
+          onClick={() => onChange(false)}
+          className={`px-3 py-1.5 text-sm transition-colors ${
+            !isActive
+              ? "bg-gray-600 text-white"
+              : "bg-white text-gray-600 hover:bg-gray-50"
+          }`}
+        >
+          Inactive
+        </button>
+        <button
+          type="button"
+          onClick={() => onChange(true)}
+          className={`px-3 py-1.5 text-sm transition-colors border-l ${
+            isActive
+              ? "bg-purple-600 text-white"
+              : "bg-white text-gray-600 hover:bg-gray-50"
+          }`}
+        >
+          Active
+        </button>
+      </div>
+    </div>
   );
 }
