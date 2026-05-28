@@ -185,9 +185,21 @@ class ActivityService:
         params: ListParams,
         accessible_dv_ids: list[uuid.UUID] | None = None,
         list_columns: list[dict] | None = None,
+        participant_entity_id: uuid.UUID | None = None,
     ) -> tuple[list[tuple], int]:
         """Paginated list with search, filter, sort support."""
         query = self._build_base_query(org_id, accessible_dv_ids)
+
+        if participant_entity_id is not None:
+            participant_subq = (
+                self.db.query(ActivityParticipant.activity_id)
+                .filter(
+                    ActivityParticipant.participant_type == "entity",
+                    ActivityParticipant.participant_id == participant_entity_id,
+                )
+                .subquery()
+            )
+            query = query.filter(Activity.id.in_(self.db.query(participant_subq)))
 
         # Build filter/sort/search keys from list config
         filterable_keys = None

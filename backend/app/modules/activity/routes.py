@@ -207,6 +207,7 @@ def list_activities(
     sort_order: str = Query("desc", pattern="^(asc|desc)$"),
     filters: str | None = Query(None),
     activity_type_id: uuid.UUID | None = Query(None),
+    entity_id: uuid.UUID | None = Query(None),
     current_user: User = Depends(get_current_user),
     accessible_dv_ids: list[uuid.UUID] | None = Depends(get_accessible_dimension_value_ids),
     db: Session = Depends(get_db),
@@ -248,6 +249,7 @@ def list_activities(
         params=params,
         accessible_dv_ids=accessible_dv_ids,
         list_columns=list_columns,
+        participant_entity_id=entity_id,
     )
 
     data = []
