@@ -31,25 +31,38 @@ export function slugify(str: string): string {
     .replace(/^-|-$/g, "");
 }
 
-// URL prefixes that mirror the backend's real-key shape (dim:..., meta:...).
-// Static columns (no colon in their real key) stay bare. "field" rather than
-// "meta" so the URL matches frontend vocabulary, not DB schema names.
-const DIM_PREFIX = "dim";
-const FIELD_PREFIX = "field";
+// Map of backend real-key prefix → URL slug prefix. Backend keys are shaped
+// "{prefix}:{id-or-key}" (e.g. "meta:3bg7_name", "enrollment_dim:uuid"); the
+// URL uses frontend-facing vocabulary instead of leaking DB schema names.
+// Static columns have no ":" in their key and stay bare.
+//
+// Enrollment-scoped meta and dimensions collapse to a single "enrollment"
+// URL prefix. In-scope collisions (an enrollment meta field and an
+// enrollment dimension with the same label) are possible but unlikely;
+// promote to "enrollment-field" / "enrollment-dim" if we ever hit one.
+const KEY_PREFIX_TO_URL: Record<string, string> = {
+  dim: "dim",
+  meta: "field",
+  enrollment_meta: "enrollment",
+  enrollment_dim: "enrollment",
+};
 
 /**
  * Compute the URL slug for a real key, prefixing by source type so
  * dimensions, user-defined fields, and static columns can never collide.
  *
- *   dim:abc-uuid     + "Centre"   -> "dim-centre"
- *   meta:3bg7_centre + "Centre"   -> "field-centre"
- *   created_at       + "Created"  -> "created"
+ *   dim:abc-uuid          + "Centre"   -> "dim-centre"
+ *   meta:3bg7_centre      + "Centre"   -> "field-centre"
+ *   enrollment_meta:loc   + "Location" -> "enrollment-location"
+ *   enrollment_dim:abc    + "Project"  -> "enrollment-project"
+ *   created_at            + "Created"  -> "created"
  */
 function slugForKey(realKey: string, label: string): string {
   const base = slugify(label);
-  if (realKey.startsWith("dim:")) return `${DIM_PREFIX}-${base}`;
-  if (realKey.startsWith("meta:")) return `${FIELD_PREFIX}-${base}`;
-  return base;
+  const colonIdx = realKey.indexOf(":");
+  if (colonIdx === -1) return base;
+  const urlPrefix = KEY_PREFIX_TO_URL[realKey.slice(0, colonIdx)];
+  return urlPrefix ? `${urlPrefix}-${base}` : base;
 }
 
 /**
