@@ -197,7 +197,7 @@ export default function EntityDetailPage() {
 
       <Tabs value={activeTab} onValueChange={handleTabChange}>
         {canViewActivities && (
-          <TabsList className="mb-4">
+          <TabsList className="mb-2">
             <TabsTrigger value="details">Details</TabsTrigger>
             <TabsTrigger value="activities">
               Activities{activities.length > 0 ? ` (${activities.length})` : ""}
