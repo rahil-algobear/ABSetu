@@ -252,8 +252,10 @@ function DimensionValuesPageContent() {
           </div>
           <DynamicMetaForm
             fields={metaFields.filter((f) => f.visible !== false)}
-            values={metaValues}
-            onChange={setMetaValues}
+            // Dimension-value meta is scalar-only — adapt to the
+            // FormValues shape at the boundary.
+            values={{ meta: metaValues, dimensions: [] }}
+            onChange={(next) => setMetaValues(next.meta)}
             disabledKeys={(() => {
               const keys = new Set<string>();
               for (const f of metaFields) {

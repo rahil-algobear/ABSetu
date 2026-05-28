@@ -687,10 +687,13 @@ export default function ActivityDetailPage() {
 
             return (
               <div key={`edit-field-${field.key}`}>
+                {/* Activity meta + dim selections are tracked separately
+                    on this page, so adapt at the boundary to the
+                    DynamicMetaForm FormValues shape. */}
                 <DynamicMetaForm
                   fields={[field]}
-                  values={detailMetaValues}
-                  onChange={setDetailMetaValues}
+                  values={{ meta: detailMetaValues, dimensions: [] }}
+                  onChange={(next) => setDetailMetaValues(next.meta)}
                   disabledKeys={editDisabledKeys}
                 />
               </div>
@@ -841,11 +844,13 @@ function SectionEditMode({
                   )}
                   {metaFields.map((f) => (
                     <td key={f.key} className="px-3 py-2">
+                      {/* Per-row inline cell editor — only the meta
+                          bucket is meaningful here; no dim selections. */}
                       <DynamicMetaForm
                         fields={[f]}
-                        values={r.meta || {}}
-                        onChange={(newMeta) =>
-                          updateRow(r.participant_id, { meta: newMeta })
+                        values={{ meta: r.meta || {}, dimensions: [] }}
+                        onChange={(next) =>
+                          updateRow(r.participant_id, { meta: next.meta })
                         }
                       />
                     </td>

@@ -365,8 +365,12 @@ export default function NewActivityPage() {
           <div key={`field-${field.key}`}>
             <DynamicMetaForm
               fields={[field]}
-              values={metaValues}
-              onChange={setMetaValues}
+              // This page keeps activity meta + dimension selections in
+              // separate state buckets and renders its own dim picker
+              // above (not via DynamicMetaForm). Adapt at the boundary
+              // so the renderer sees the unified FormValues shape.
+              values={{ meta: metaValues, dimensions: [] }}
+              onChange={(next) => setMetaValues(next.meta)}
               disabledKeys={createDisabledKeys}
             />
           </div>
