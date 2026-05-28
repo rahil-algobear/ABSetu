@@ -30,30 +30,71 @@ import type {
 } from "@/types";
 import { collectEnrollmentFields } from "@/utils/meta-fields";
 
+import { DynamicMetaForm } from "@/components/DynamicMetaForm";
+
 /**
- * Thin wrapper around collectEnrollmentFields that filters to visible
- * fields. Parents call this when they need to decide whether to render
- * an empty state (or hide the submit button), without paying for the
- * renderer's dimension queries.
+ * Filters the field list to what should actually render on the form.
+ * Hides fields the admin has marked invisible, plus:
+ *   - on create: hides stage = "edit" fields (only relevant after the
+ *     record exists; org doesn't have the data at create time, so
+ *     showing them as disabled placeholders is noise)
+ *   - on edit:   keeps stage = "create" fields visible (they were set
+ *     at creation and lock for editing — see getStageDisabledKeys)
+ */
+function filterVisibleFields(
+  fields: MetaFieldDefinition[],
+  mode: "create" | "edit",
+): MetaFieldDefinition[] {
+  return fields.filter((f) => {
+    if (f.visible === false) return false;
+    if (mode === "create" && f.stage === "edit") return false;
+    return true;
+  });
+}
+
+/**
+ * Returns the set of field keys that should render disabled. Only
+ * applies to stage = "create" fields on edit — those were captured at
+ * creation, so we keep them visible for context but lock editing.
+ */
+function getStageDisabledKeys(
+  fields: MetaFieldDefinition[],
+  mode: "create" | "edit",
+): Set<string> {
+  const keys = new Set<string>();
+  if (mode !== "edit") return keys;
+  for (const f of fields) {
+    if (f.stage === "create") keys.add(f.key);
+  }
+  return keys;
+}
+
+/**
+ * Thin wrapper around collectEnrollmentFields that applies the same
+ * visibility rules the renderer uses. Parents call this when they need
+ * to decide whether to render an empty state (or hide the submit
+ * button), without paying for the renderer's dimension queries.
  */
 export function useVisibleEnrollmentFields({
   entityTypeId,
   allSchemas,
   knownDimensionValueIds,
+  mode = "create",
 }: {
   entityTypeId: string;
   allSchemas: MetaFieldSchemaItem[];
   knownDimensionValueIds: string[];
+  mode?: "create" | "edit";
 }): MetaFieldDefinition[] {
   return useMemo(
     () =>
-      collectEnrollmentFields(allSchemas, entityTypeId, knownDimensionValueIds)
-        .filter((f) => f.visible !== false),
-    [allSchemas, entityTypeId, knownDimensionValueIds],
+      filterVisibleFields(
+        collectEnrollmentFields(allSchemas, entityTypeId, knownDimensionValueIds),
+        mode,
+      ),
+    [allSchemas, entityTypeId, knownDimensionValueIds, mode],
   );
 }
-
-import { DynamicMetaForm } from "@/components/DynamicMetaForm";
 
 export interface EnrollmentLockedDimension {
   dimension_id: string;
@@ -92,9 +133,9 @@ export interface EnrollmentFieldsProps {
    *              not let users pick dimensions outside the activity). */
   dimensionMode: EnrollmentDimensionMode;
 
-  /** Defaults to "create". Drives stage-based field disabling:
-   *  - create → disable fields with stage = "edit"
-   *  - edit   → disable fields with stage = "create" */
+  /** Defaults to "create". Drives stage-based handling:
+   *  - create → hide fields with stage = "edit" (not yet relevant)
+   *  - edit   → disable fields with stage = "create" (locked after first save) */
   mode?: "create" | "edit";
 
   ref?: Ref<EnrollmentFieldsHandle>;
@@ -154,18 +195,14 @@ export function EnrollmentFields({
   );
 
   const visibleFields = useMemo(
-    () => allFields.filter((f) => f.visible !== false),
-    [allFields],
+    () => filterVisibleFields(allFields, mode),
+    [allFields, mode],
   );
 
-  const disabledKeys = useMemo(() => {
-    const keys = new Set<string>();
-    for (const f of allFields) {
-      if (mode === "edit" && f.stage === "create") keys.add(f.key);
-      if (mode === "create" && f.stage === "edit") keys.add(f.key);
-    }
-    return keys;
-  }, [allFields, mode]);
+  const disabledKeys = useMemo(
+    () => getStageDisabledKeys(visibleFields, mode),
+    [visibleFields, mode],
+  );
 
   // Cascading dropdown filter: only the user-selected ids participate,
   // since locked ones come from a different (non-user) axis.

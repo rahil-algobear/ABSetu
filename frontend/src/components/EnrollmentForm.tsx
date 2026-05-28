@@ -53,6 +53,7 @@ export function EnrollmentForm({
     entityTypeId,
     allSchemas,
     knownDimensionValueIds: dimensionValueIds,
+    mode: isEdit ? "edit" : "create",
   });
   const hasFields = visibleFields.length > 0;
 

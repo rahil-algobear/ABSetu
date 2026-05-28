@@ -40,6 +40,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { DynamicMetaForm } from "@/components/DynamicMetaForm";
 import {
   EnrollmentFields,
+  useVisibleEnrollmentFields,
   type EnrollmentFieldsHandle,
   type EnrollmentLockedDimension,
 } from "@/components/EnrollmentFields";
@@ -719,15 +720,11 @@ function EnrollAndAddModal({
     [activityDimensions, enrollmentTrackedDimIds],
   );
 
-  const hasFields = useMemo(
-    () =>
-      collectEnrollmentFields(
-        allSchemas,
-        entity.entity_type_id,
-        lockedDimensions.map((d) => d.value_id),
-      ).some((f) => f.visible !== false),
-    [allSchemas, entity.entity_type_id, lockedDimensions],
-  );
+  const hasFields = useVisibleEnrollmentFields({
+    entityTypeId: entity.entity_type_id,
+    allSchemas,
+    knownDimensionValueIds: lockedDimensions.map((d) => d.value_id),
+  }).length > 0;
 
   const [metaValues, setMetaValues] = useState<Record<string, unknown>>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -860,15 +857,11 @@ function CreateAndAddModal({
     [allSchemas, entityTypeId],
   );
 
-  const hasEnrollmentFields = useMemo(
-    () =>
-      collectEnrollmentFields(
-        allSchemas,
-        entityTypeId,
-        lockedDimensions.map((d) => d.value_id),
-      ).some((f) => f.visible !== false),
-    [allSchemas, entityTypeId, lockedDimensions],
-  );
+  const hasEnrollmentFields = useVisibleEnrollmentFields({
+    entityTypeId,
+    allSchemas,
+    knownDimensionValueIds: lockedDimensions.map((d) => d.value_id),
+  }).length > 0;
 
   const [entityMeta, setEntityMeta] = useState<Record<string, unknown>>({});
   const [enrollmentMeta, setEnrollmentMeta] = useState<Record<string, unknown>>({});
