@@ -215,48 +215,20 @@ export default function EntityDetailPage() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg">Details</CardTitle>
-              {!editingDetails && (
-                <Can permission="entity:edit">
-                  <Button size="sm" variant="outline" onClick={openEditDetails}>
-                    <Pencil className="h-3.5 w-3.5 mr-1" />
-                    Edit
-                  </Button>
-                </Can>
-              )}
+              <Can permission="entity:edit">
+                <Button size="sm" variant="outline" onClick={openEditDetails}>
+                  <Pencil className="h-3.5 w-3.5 mr-1" />
+                  Edit
+                </Button>
+              </Can>
             </div>
           </CardHeader>
           <CardContent>
-            {editingDetails ? (
-              <form onSubmit={handleSaveDetails} className="space-y-3">
-                {detailFormError && (
-                  <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                    {detailFormError}
-                  </div>
-                )}
-                <EntityFields
-                  ref={entityFieldsRef}
-                  entityTypeId={entity.entity_type_id}
-                  allSchemas={allSchemas}
-                  metaValues={detailMetaValues}
-                  onMetaChange={setDetailMetaValues}
-                  mode="edit"
-                />
-                <div className="flex gap-2 pt-2">
-                  <Button type="submit" disabled={updateDetailsMutation.isPending}>
-                    Save
-                  </Button>
-                  <Button type="button" variant="outline" onClick={cancelEditDetails}>
-                    Cancel
-                  </Button>
-                </div>
-              </form>
-            ) : (
-              <MetaFieldDisplay
-                fields={metaFields}
-                values={entity.meta}
-                showEmpty
-              />
-            )}
+            <MetaFieldDisplay
+              fields={metaFields}
+              values={entity.meta}
+              showEmpty
+            />
           </CardContent>
         </Card>
       )}
@@ -556,6 +528,37 @@ export default function EntityDetailPage() {
         </TabsContent>
         )}
       </Tabs>
+
+      <Dialog
+        open={editingDetails}
+        onClose={cancelEditDetails}
+        title="Edit Details"
+        className="max-w-lg"
+      >
+        <form onSubmit={handleSaveDetails} className="space-y-3">
+          {detailFormError && (
+            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {detailFormError}
+            </div>
+          )}
+          <EntityFields
+            ref={entityFieldsRef}
+            entityTypeId={entity.entity_type_id}
+            allSchemas={allSchemas}
+            metaValues={detailMetaValues}
+            onMetaChange={setDetailMetaValues}
+            mode="edit"
+          />
+          <div className="flex gap-2 pt-2">
+            <Button type="submit" disabled={updateDetailsMutation.isPending}>
+              Save
+            </Button>
+            <Button type="button" variant="outline" onClick={cancelEditDetails}>
+              Cancel
+            </Button>
+          </div>
+        </form>
+      </Dialog>
       </PageContent>
     </PageLayout>
   );
