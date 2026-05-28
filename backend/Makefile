@@ -122,6 +122,7 @@ db-reset:
 
 db-fresh: db-reset upgrade seed
 	$(PYTHON) -m app.seeds.kshamata
+	$(PYTHON) -m app.seeds.gramodaya
 	@echo "Fresh database ready with all seeds!"
 
 kill-server:
