@@ -106,6 +106,7 @@ export default function EntityDetailPage() {
   const typesWithActivities = useMemo(() => {
     const countByTypeId = new Map<string, number>();
     for (const a of activities) {
+      if (!a.activity_type_id) continue;
       countByTypeId.set(
         a.activity_type_id,
         (countByTypeId.get(a.activity_type_id) ?? 0) + 1,
