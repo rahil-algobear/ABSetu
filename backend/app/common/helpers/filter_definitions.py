@@ -348,6 +348,54 @@ def _enrollment_meta_scopes(entity_type_ids: list[uuid.UUID]) -> list[MetaFieldS
     return scopes
 
 
+def _collect_enrollment_effective_fields(
+    db: Session,
+    org_id: uuid.UUID,
+    enrollable_entity_type_ids: list[uuid.UUID],
+) -> list[dict]:
+    """Enrollment fields (meta + dimension-typed) in declared sort_order.
+
+    Mirrors the enrollment form: pulls fields from the base scope plus the
+    enrollable entity types, dedupes (meta by key, dimension by dimension_id),
+    and sorts by sort_order so filter order matches form order.
+
+    Dimensions only surface here when the org admin declared them as
+    enrollment fields — org-wide dimensions that aren't on enrollments
+    are intentionally excluded.
+    """
+    if not enrollable_entity_type_ids:
+        return []
+
+    seen_meta_keys: set[str] = set()
+    seen_dim_ids: set[uuid.UUID] = set()
+    fields: list[dict] = []
+
+    for _key, field in _collect_fields(
+        db, org_id, _enrollment_meta_scopes(enrollable_entity_type_ids)
+    ):
+        ftype = field.get("type", "text")
+        if ftype == "dimension":
+            dim_id_raw = field.get("dimension_id")
+            if not dim_id_raw:
+                continue
+            try:
+                dim_id = dim_id_raw if isinstance(dim_id_raw, uuid.UUID) else uuid.UUID(dim_id_raw)
+            except (ValueError, TypeError):
+                continue
+            if dim_id in seen_dim_ids:
+                continue
+            seen_dim_ids.add(dim_id)
+            fields.append({**field, "_resolved_dimension_id": dim_id})
+        else:
+            if field["key"] in seen_meta_keys:
+                continue
+            seen_meta_keys.add(field["key"])
+            fields.append(field)
+
+    fields.sort(key=lambda f: f.get("sort_order", 0))
+    return fields
+
+
 def build_enrollment_filter_definitions(
     db: Session,
     org_id: uuid.UUID,
@@ -357,36 +405,35 @@ def build_enrollment_filter_definitions(
     """Build /filters response entries for enrollment meta + dimensions.
 
     Surfaced on the entity listing for entity types with can_enroll=True.
-    Labels are prefixed with "Enrollment: " so users can tell them apart
-    from entity-level filters. Returns [] if no enrollable types exist.
+    Fields are emitted in the enrollment form's declared sort_order — meta
+    and dimension entries interleaved — and tagged with section="Enrollment"
+    so the frontend can group them. Only dimensions explicitly declared as
+    enrollment fields are included.
     """
     from app.modules.dimension.model import Dimension, DimensionValue
 
-    if not enrollable_entity_type_ids:
+    effective = _collect_enrollment_effective_fields(db, org_id, enrollable_entity_type_ids)
+    if not effective:
         return []
 
-    result: list[dict] = []
+    # Dimension lookup + access scoping prep (only used when we hit a
+    # dimension field below, but cheaper to build once).
+    dim_ids_in_play = {
+        f["_resolved_dimension_id"] for f in effective if f.get("type") == "dimension"
+    }
+    dim_by_id: dict[uuid.UUID, Dimension] = {}
+    values_by_dim: dict[uuid.UUID, list[DimensionValue]] = {}
+    if dim_ids_in_play:
+        for d in db.query(Dimension).filter(Dimension.id.in_(dim_ids_in_play)).all():
+            dim_by_id[d.id] = d
+        for v in (
+            db.query(DimensionValue)
+            .filter(DimensionValue.dimension_id.in_(dim_ids_in_play))
+            .order_by(DimensionValue.sort_order, DimensionValue.name)
+            .all()
+        ):
+            values_by_dim.setdefault(v.dimension_id, []).append(v)
 
-    # Enrollment meta filters
-    for _meta_key, field in _collect_fields(
-        db, org_id, _enrollment_meta_scopes(enrollable_entity_type_ids)
-    ):
-        ftype = field.get("type", "text")
-        ui_type = _ENROLLMENT_META_FRONTEND_TYPE_MAP.get(ftype)
-        if not ui_type:
-            continue
-        label = field.get("label", field["key"])
-        entry: dict = {
-            "key": f"enrollment_meta:{field['key']}",
-            "label": f"Enrollment: {label}",
-            "type": ui_type,
-        }
-        if ui_type == "select" and field.get("options"):
-            entry["options"] = [{"value": o, "label": o} for o in field["options"]]
-        result.append(entry)
-
-    # Enrollment dimensions — same shape as entity dimension filters but
-    # scoped against enrollment_dimensions instead of entity_dimensions.
     restricted_dims: dict[uuid.UUID, set[uuid.UUID]] = {}
     if accessible_dv_ids:
         dv_dim_rows = (
@@ -397,29 +444,44 @@ def build_enrollment_filter_definitions(
         for dv_id, dim_id in dv_dim_rows:
             restricted_dims.setdefault(dim_id, set()).add(dv_id)
 
-    dims = (
-        db.query(Dimension).filter_by(organization_id=org_id).order_by(Dimension.sort_order).all()
-    )
-    for dim in dims:
-        values = (
-            db.query(DimensionValue)
-            .filter_by(dimension_id=dim.id)
-            .order_by(DimensionValue.sort_order, DimensionValue.name)
-            .all()
-        )
-        if dim.id in restricted_dims:
-            allowed = restricted_dims[dim.id]
-            values = [v for v in values if v.id in allowed]
-        if not values:
+    result: list[dict] = []
+    for field in effective:
+        ftype = field.get("type", "text")
+        label = field.get("label", field.get("key", ""))
+
+        if ftype == "dimension":
+            dim_id = field["_resolved_dimension_id"]
+            if dim_id not in dim_by_id:
+                continue
+            values = values_by_dim.get(dim_id, [])
+            if dim_id in restricted_dims:
+                allowed = restricted_dims[dim_id]
+                values = [v for v in values if v.id in allowed]
+            if not values:
+                continue
+            result.append(
+                {
+                    "key": f"enrollment_dim:{dim_id}",
+                    "label": label,
+                    "section": "Enrollment",
+                    "type": "select",
+                    "options": [{"value": str(v.id), "label": v.name} for v in values],
+                }
+            )
             continue
-        result.append(
-            {
-                "key": f"enrollment_dim:{dim.id}",
-                "label": f"Enrollment: {dim.name}",
-                "type": "select",
-                "options": [{"value": str(v.id), "label": v.name} for v in values],
-            }
-        )
+
+        ui_type = _ENROLLMENT_META_FRONTEND_TYPE_MAP.get(ftype)
+        if not ui_type:
+            continue
+        entry: dict = {
+            "key": f"enrollment_meta:{field['key']}",
+            "label": label,
+            "section": "Enrollment",
+            "type": ui_type,
+        }
+        if ui_type == "select" and field.get("options"):
+            entry["options"] = [{"value": o, "label": o} for o in field["options"]]
+        result.append(entry)
 
     return result
 
@@ -432,36 +494,34 @@ def build_enrollment_filter_config(
 ) -> dict[str, dict]:
     """Build apply_filters-compatible config for enrollment meta + dimensions.
 
-    The matching SQL — a single EXISTS subquery against active enrollments
-    of the entity — is built in apply_filters() once it has collected all
-    enrollment filters for the request, so per-filter entries here only
-    carry the shape data (meta key, dimension id, parent FK).
+    Mirrors the field set in build_enrollment_filter_definitions — only
+    dimensions explicitly declared as enrollment fields get a config entry,
+    so requests referencing other dimensions are silently dropped at parse
+    time. The matching SQL (a single EXISTS subquery against active
+    enrollments) is built in apply_filters once all enrollment filters
+    have been collected.
     """
-    from app.modules.dimension.model import Dimension
-
-    if not enrollable_entity_type_ids:
+    effective = _collect_enrollment_effective_fields(db, org_id, enrollable_entity_type_ids)
+    if not effective:
         return {}
 
     config: dict[str, dict] = {}
-
-    for _meta_key, field in _collect_fields(
-        db, org_id, _enrollment_meta_scopes(enrollable_entity_type_ids)
-    ):
+    for field in effective:
         ftype = field.get("type", "text")
+        if ftype == "dimension":
+            dim_id = field["_resolved_dimension_id"]
+            config[f"enrollment_dim:{dim_id}"] = {
+                "type": "enrollment_dimension",
+                "dimension_id": dim_id,
+                "parent_pk": parent_pk,
+            }
+            continue
         backend_type = _ENROLLMENT_META_BACKEND_TYPE_MAP.get(ftype)
         if not backend_type:
             continue
         config[f"enrollment_meta:{field['key']}"] = {
             "type": backend_type,
             "meta_key": field["key"],
-            "parent_pk": parent_pk,
-        }
-
-    dims = db.query(Dimension).filter_by(organization_id=org_id).all()
-    for dim in dims:
-        config[f"enrollment_dim:{dim.id}"] = {
-            "type": "enrollment_dimension",
-            "dimension_id": dim.id,
             "parent_pk": parent_pk,
         }
 

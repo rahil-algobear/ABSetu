@@ -64,6 +64,7 @@ function EntityTypeEntitiesContent() {
       key: f.key,
       label: f.label,
       type: f.type as FilterDefinition["type"],
+      section: f.section,
       options: f.options,
       min: f.min,
       max: f.max,

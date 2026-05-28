@@ -17,6 +17,13 @@ export interface FilterDefinition {
   key: string;
   label: string;
   type: "select" | "range" | "date_range" | "datetime_range" | "boolean" | "text";
+  /**
+   * Optional grouping label. Filters with the same section render together
+   * under a section header in the modal and get the section prefixed to
+   * their chip on the toolbar. Ungrouped filters appear before the first
+   * named section without a header.
+   */
+  section?: string;
   options?: FilterOption[];
   min?: number;
   max?: number;
@@ -158,9 +165,19 @@ export function FilterModal({
 
       {/* Scrollable content */}
       <div className="max-h-[60vh] overflow-y-auto">
-        {filterDefinitions.map((def, i) => (
+        {filterDefinitions.map((def, i) => {
+          const prevSection = i > 0 ? filterDefinitions[i - 1].section : undefined;
+          const showSectionHeader = !!def.section && def.section !== prevSection;
+          return (
           <div key={def.key}>
-            {i > 0 && <div className="border-t border-gray-200" />}
+            {showSectionHeader && (
+              <div className="px-6 pt-4 pb-1 bg-gray-50 border-t border-gray-200">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  {def.section}
+                </p>
+              </div>
+            )}
+            {i > 0 && !showSectionHeader && <div className="border-t border-gray-200" />}
             <div className="px-6 py-4">
               <div className="flex items-center gap-3 mb-2">
                 <p className="text-sm font-medium text-gray-700">{def.label}</p>
@@ -281,7 +298,8 @@ export function FilterModal({
               )}
             </div>
           </div>
-        ))}
+          );
+        })}
 
         {filterDefinitions.length === 0 && (
           <p className="text-sm text-gray-500 px-6 py-4">No filters available.</p>
