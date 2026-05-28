@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useRef } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   entityApi,
@@ -18,13 +18,14 @@ import {
 } from "@/types";
 import { collectEnrollmentFields, getFieldsForScope } from "@/utils/meta-fields";
 
-import { Can } from "@/components/Auth/Permissions";
+import { Can, usePermissions } from "@/components/Auth/Permissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageLayout } from "@/components/ui/page-layout";
 import { PageContent } from "@/components/ui/page-content";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { MetaFieldDisplay } from "@/components/DynamicMetaForm";
 import { EntityFields, type EntityFieldsHandle } from "@/components/EntityFields";
 import { EnrollmentForm } from "@/components/EnrollmentForm";
@@ -38,6 +39,25 @@ import { formatDate, formatDateTime } from "@/utils/date";
 export default function EntityDetailPage() {
   const { id } = useParams<{ key: string; id: string }>();
   const queryClient = useQueryClient();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const { can } = usePermissions();
+  const canViewActivities = can("activity:view");
+  const tabParam = searchParams.get("tab");
+  const activeTab =
+    tabParam === "activities" && canViewActivities ? "activities" : "details";
+
+  const handleTabChange = (value: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (value === "details") {
+      params.delete("tab");
+    } else {
+      params.set("tab", value);
+    }
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  };
 
 
   const [showCreate, setShowCreate] = useState(false);
@@ -175,8 +195,23 @@ export default function EntityDetailPage() {
         </div>
       )}
 
+      <Tabs value={activeTab} onValueChange={handleTabChange}>
+        {canViewActivities && (
+          <TabsList className="mb-4">
+            <TabsTrigger value="details">Details</TabsTrigger>
+            <TabsTrigger value="activities">
+              Activities{activities.length > 0 ? ` (${activities.length})` : ""}
+            </TabsTrigger>
+          </TabsList>
+        )}
+        <TabsContent value="details">
+          <div
+            className={`grid grid-cols-1 gap-4 ${
+              canEnroll ? "md:grid-cols-3" : "md:grid-cols-2"
+            }`}
+          >
       {metaFields.length > 0 && (
-        <Card className="mb-4">
+        <Card className="md:col-span-1">
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg">Details</CardTitle>
@@ -227,7 +262,7 @@ export default function EntityDetailPage() {
       )}
 
       {canEnroll && (
-        <Card>
+        <Card className="md:col-span-2">
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg">Enrollments</CardTitle>
@@ -455,8 +490,11 @@ export default function EntityDetailPage() {
         </Card>
       )}
 
-      <Can permission="activity:view">
-        <Card className="mt-4">
+          </div>
+        </TabsContent>
+        {canViewActivities && (
+        <TabsContent value="activities">
+        <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg">Activities</CardTitle>
@@ -515,7 +553,9 @@ export default function EntityDetailPage() {
             )}
           </CardContent>
         </Card>
-      </Can>
+        </TabsContent>
+        )}
+      </Tabs>
       </PageContent>
     </PageLayout>
   );
