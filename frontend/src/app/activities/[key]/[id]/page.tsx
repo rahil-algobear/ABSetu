@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo } from "react";
 import { useParams, useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -22,7 +22,6 @@ import { formatDate, formatDateTime } from "@/utils/date";
 import { Can } from "@/components/Auth/Permissions";
 
 import { DynamicMetaForm } from "@/components/DynamicMetaForm";
-import { ActivityFields, type ActivityFieldsHandle } from "@/components/ActivityFields";
 import { ParticipantPicker } from "@/components/ParticipantPicker";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -61,13 +60,8 @@ export default function ActivityDetailPage() {
   const [editingSection, setEditingSection] = useState<string | null>(null);
   const [editingDetails, setEditingDetails] = useState(false);
   const [detailMetaValues, setDetailMetaValues] = useState<Record<string, unknown>>({});
-  const [detailFormError, setDetailFormError] = useState<string | null>(null);
-  const activityFieldsRef = useRef<ActivityFieldsHandle>(null);
 
-  const cancelEditDetails = () => {
-    setEditingDetails(false);
-    setDetailFormError(null);
-  };
+  const cancelEditDetails = () => setEditingDetails(false);
   const [participantState, setParticipantState] = useState<
     Record<string, { participant_id: string; participant_type: string; status?: string; meta?: Record<string, unknown> }[]>
   >({});
@@ -119,6 +113,17 @@ export default function ActivityDetailPage() {
       && (f.type === "entity_list" || f.type === "user_list")
       && (!f.stage || f.stage === "both" || f.stage === "edit")
     );
+  }, [allFields]);
+
+  // Field keys not editable on the edit stage (create-only fields)
+  const editDisabledKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const f of allFields) {
+      if (f.stage && f.stage !== "both" && f.stage !== "edit") {
+        keys.add(f.key);
+      }
+    }
+    return keys;
   }, [allFields]);
 
   // Entity type source IDs for loading entity options
@@ -214,7 +219,6 @@ export default function ActivityDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["activity", id] });
       setEditingDetails(false);
-      setDetailFormError(null);
       toast.success("Details updated");
     },
     onError: () => toast.error("Failed to update details"),
@@ -233,17 +237,10 @@ export default function ActivityDetailPage() {
   const openDetailEditing = () => {
     if (!activity) return;
     setDetailMetaValues(activity.meta || {});
-    setDetailFormError(null);
     setEditingDetails(true);
   };
 
   const handleDetailSave = () => {
-    setDetailFormError(null);
-    const validationError = activityFieldsRef.current?.validate();
-    if (validationError) {
-      setDetailFormError(validationError);
-      return;
-    }
     updateDetailsMutation.mutate({ meta: detailMetaValues });
   };
 
@@ -665,20 +662,40 @@ export default function ActivityDetailPage() {
           }}
           className="space-y-3"
         >
-          {detailFormError && (
-            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-              {detailFormError}
-            </div>
-          )}
-          <ActivityFields
-            ref={activityFieldsRef}
-            activityTypeId={activityTypeId || null}
-            dimensionValueIds={(activity.dimensions || []).map((d) => d.value_id)}
-            allSchemas={allMetaSchemas}
-            metaValues={detailMetaValues}
-            onMetaChange={setDetailMetaValues}
-            mode="edit"
-          />
+          {detailFields.map((field) => {
+            if (field.type === "dimension") {
+              const dimId = field.dimension_id;
+              const dimInfo = activity.dimensions.find(
+                (d) => dimensions.find((dim) => dim.id === dimId)?.key === d.dimension_key,
+              );
+              const dimObj = dimensions.find((d) => d.id === dimId);
+              return (
+                <div key={`edit-dim-${field.key}`} className="flex items-center gap-2">
+                  <div>
+                    <p className="text-xs text-gray-500">{dimObj?.name || field.label}</p>
+                    <p className="text-sm font-medium">{dimInfo?.value_name || "—"}</p>
+                  </div>
+                </div>
+              );
+            }
+
+            // Title with generated mode: skip
+            if (field.key === "title") {
+              const titleConfig = field.config || { mode: "free_text" };
+              if ((titleConfig.mode as string) === "generated") return null;
+            }
+
+            return (
+              <div key={`edit-field-${field.key}`}>
+                <DynamicMetaForm
+                  fields={[field]}
+                  values={detailMetaValues}
+                  onChange={setDetailMetaValues}
+                  disabledKeys={editDisabledKeys}
+                />
+              </div>
+            );
+          })}
           <div className="flex gap-2 pt-2">
             <Button type="submit" disabled={updateDetailsMutation.isPending}>
               Save
