@@ -479,9 +479,26 @@ export const roleApi = {
 
 // --- Users (Admin) ---
 
+export interface UserListParams {
+  search?: string;
+  filters?: string;
+  sort_by?: string;
+  sort_order?: string;
+  page?: number;
+  limit?: number;
+}
+
 export const userApi = {
   list: async (): Promise<UserListItem[]> => {
     const response = await authAxios.get<UserListItem[]>('/user/list');
+    return response.data;
+  },
+  listPaginated: async (params: UserListParams): Promise<PaginatedResponse<UserListItem>> => {
+    const response = await authAxios.get<PaginatedResponse<UserListItem>>('/user/', { params });
+    return response.data;
+  },
+  getFilters: async (): Promise<FilterResponse> => {
+    const response = await authAxios.get<FilterResponse>('/user/filters');
     return response.data;
   },
   create: async (data: {

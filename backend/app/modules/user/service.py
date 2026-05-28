@@ -2,13 +2,19 @@
 User services for profile operations
 """
 
+import json
 import uuid
+from datetime import timedelta
+from typing import Any
 
-from sqlalchemy.orm import Session
+from sqlalchemy import exists, or_, select
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.common.exceptions import NotFoundError, ValidationError
+from app.common.helpers.list_query import _parse_date, apply_search, apply_sort, paginate
+from app.common.schemas.list_params import ListParams
 from app.modules.auth.model import User
-from app.modules.dimension.model import UserDimension
+from app.modules.dimension.model import DimensionValue, UserDimension
 from app.modules.role.model import Role
 
 
@@ -33,6 +39,127 @@ class UserService:
             .order_by(User.first_name, User.last_name)
             .all()
         )
+
+    def list_by_org_paginated(
+        self,
+        org_id: uuid.UUID,
+        params: ListParams,
+    ) -> tuple[list[User], int]:
+        """Paginated list with search, filter, and sort support."""
+        query = (
+            self.db.query(User)
+            .options(
+                joinedload(User.role),
+                selectinload(User.dimension_access),
+            )
+            .filter(User.organization_id == org_id)
+        )
+
+        # Search across first/last name + mobile
+        query = apply_search(
+            query,
+            params.search,
+            [User.first_name, User.last_name, User.mobile_number],
+        )
+
+        # Filters
+        query = self._apply_user_filters(query, params.filters)
+
+        # Sort — sort by "role" column joins the Role table
+        sort_config: dict[str, Any] = {
+            "name": User.first_name,
+            "created_at": User.created_at,
+        }
+        if params.sort_by == "role":
+            query = query.outerjoin(Role, User.role_id == Role.id)
+            sort_config["role"] = Role.name
+
+        query = apply_sort(
+            query,
+            params.sort_by,
+            params.sort_order,
+            sort_config,
+            User.created_at.desc(),
+        )
+
+        return paginate(query, params.page, params.limit)
+
+    def _apply_user_filters(self, query: Any, filters_json: str | None) -> Any:
+        """Apply user-specific filters: role, created_at range, dimension (with all-access)."""
+        if not filters_json:
+            return query
+
+        try:
+            raw = json.loads(filters_json)
+        except (json.JSONDecodeError, TypeError):
+            return query
+        if not isinstance(raw, dict):
+            return query
+
+        for key, value in raw.items():
+            if value is None or value == "" or value == []:
+                continue
+
+            if key == "role_id":
+                ids = value if isinstance(value, list) else [value]
+                try:
+                    coerced = [uuid.UUID(v) for v in ids]
+                except (ValueError, AttributeError):
+                    continue
+                query = query.filter(User.role_id.in_(coerced))
+
+            elif key == "created_at":
+                if not isinstance(value, dict):
+                    continue
+                start = _parse_date(value.get("start"))
+                end = _parse_date(value.get("end"))
+                if start:
+                    query = query.filter(User.created_at >= start)
+                if end:
+                    query = query.filter(User.created_at < end + timedelta(days=1))
+
+            elif key.startswith("dim:"):
+                try:
+                    dim_id = uuid.UUID(key.split(":", 1)[1])
+                except (ValueError, IndexError):
+                    continue
+
+                values = value if isinstance(value, list) else [value]
+                real_dv_ids: list[uuid.UUID] = []
+                all_access_selected = False
+                for v in values:
+                    if v == "all_access":
+                        all_access_selected = True
+                        continue
+                    try:
+                        real_dv_ids.append(uuid.UUID(v))
+                    except (ValueError, AttributeError):
+                        continue
+
+                clauses = []
+                if real_dv_ids:
+                    clauses.append(
+                        exists().where(
+                            UserDimension.user_id == User.id,
+                            UserDimension.dimension_value_id.in_(real_dv_ids),
+                        )
+                    )
+                if all_access_selected:
+                    # User is "all access" for this dimension when they have no
+                    # UserDimension rows pointing to any value within it.
+                    dim_value_ids = select(DimensionValue.id).where(
+                        DimensionValue.dimension_id == dim_id
+                    )
+                    clauses.append(
+                        ~exists().where(
+                            UserDimension.user_id == User.id,
+                            UserDimension.dimension_value_id.in_(dim_value_ids),
+                        )
+                    )
+                if clauses:
+                    query = query.filter(or_(*clauses))
+
+        return query
 
     def update_role(self, user_id: uuid.UUID, org_id: uuid.UUID, role_id: uuid.UUID) -> User:
         """Update a user's role."""

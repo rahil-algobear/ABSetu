@@ -289,6 +289,7 @@ export interface UserListItem {
   role_id: string | null;
   role_name: string | null;
   dimension_value_ids: string[];
+  created_at: string | null;
   updated_at: string | null;
 }
 

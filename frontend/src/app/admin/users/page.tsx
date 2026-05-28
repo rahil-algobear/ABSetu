@@ -1,14 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   userApi,
   roleApi,
   dimensionApi,
 } from "@/services/api";
-import { UserListItem, Role, Dimension, DimensionValue } from "@/types";
+import { UserListItem, Role, Dimension, DimensionValue, ListColumnConfig } from "@/types";
 import { Can } from "@/components/Auth/Permissions";
+import { useListParams } from "@/hooks/useListParams";
+import type { FilterDefinition } from "@/components/ui/filter-modal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,7 +25,11 @@ import {
 } from "@/components/ui/page-table";
 import { PageHeader } from "@/components/ui/page-header";
 import { PageContent } from "@/components/ui/page-content";
+import { ListToolbar } from "@/components/ui/list-toolbar";
+import { Pagination } from "@/components/ui/pagination";
+import { SortableTableHead } from "@/components/ui/sortable-table-head";
 import { Plus, Pencil, Phone, Shield, Trash2 } from "lucide-react";
+import { formatDate, DATE_FORMATS } from "@/utils/date";
 
 import toast from "react-hot-toast";
 
@@ -105,7 +111,60 @@ function AccessCheckboxSection({
   );
 }
 
-export default function UsersPage() {
+function renderUserCell(
+  user: UserListItem,
+  col: ListColumnConfig,
+  dvMap: Map<string, DimensionValue>,
+) {
+  if (col.field_type === "dimension" && col.dimension_key) {
+    const values = (user.dimension_value_ids ?? [])
+      .map((id) => dvMap.get(id))
+      .filter((dv): dv is DimensionValue => dv?.dimension_id === col.dimension_key);
+    if (values.length === 0) return <span className="text-sm text-gray-400">All</span>;
+    return (
+      <div className="flex flex-wrap gap-1">
+        {values.map((dv) => (
+          <span
+            key={dv.id}
+            className="inline-block text-sm bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full"
+          >
+            {dv.name}
+          </span>
+        ))}
+      </div>
+    );
+  }
+
+  switch (col.key) {
+    case "name":
+      return (
+        <span className="font-medium">
+          {user.first_name} {user.last_name}
+        </span>
+      );
+    case "mobile_number":
+      return (
+        <div className="flex items-center gap-1 text-sm text-gray-500">
+          <Phone className="h-3 w-3" />
+          {user.country_code} {user.mobile_number}
+        </div>
+      );
+    case "role":
+      return user.role_name ? (
+        <span className="text-sm bg-purple-50 text-purple-700 px-2 py-0.5 rounded">
+          {user.role_name}
+        </span>
+      ) : (
+        <span className="text-sm text-gray-400">No role</span>
+      );
+    case "created_at":
+      return user.created_at ? formatDate(user.created_at, DATE_FORMATS.DISPLAY) : "—";
+    default:
+      return "—";
+  }
+}
+
+function UsersPageContent() {
   const queryClient = useQueryClient();
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -131,10 +190,49 @@ export default function UsersPage() {
   const [accessUser, setAccessUser] = useState<UserListItem | null>(null);
   const [selectedDvIds, setSelectedDvIds] = useState<Set<string>>(new Set());
 
-  const { data: users = [], isLoading } = useQuery({
-    queryKey: ["users"],
-    queryFn: userApi.list,
+  // Filter definitions + column config from the backend
+  const { data: filterData } = useQuery({
+    queryKey: ["user-filters"],
+    queryFn: userApi.getFilters,
   });
+
+  const columns: ListColumnConfig[] = useMemo(
+    () => filterData?.columns || [],
+    [filterData],
+  );
+  const sortableKeys = useMemo(
+    () => new Set(filterData?.sortable_keys || []),
+    [filterData],
+  );
+  const filterDefinitions: FilterDefinition[] = useMemo(
+    () =>
+      (filterData?.filters || []).map((f) => ({
+        key: f.key,
+        label: f.label,
+        type: f.type as FilterDefinition["type"],
+        section: f.section,
+        options: f.options,
+        min: f.min,
+        max: f.max,
+      })),
+    [filterData],
+  );
+
+  const listParams = useListParams({
+    defaultSortBy: "created_at",
+    defaultSortOrder: "desc",
+    filterDefinitions,
+    columns,
+  });
+
+  const { data: response, isLoading } = useQuery({
+    queryKey: ["users-paginated", listParams.apiParams],
+    queryFn: () => userApi.listPaginated(listParams.apiParams),
+  });
+
+  const users = response?.data || [];
+  const totalCount = response?.count || 0;
+  const totalPages = Math.ceil(totalCount / listParams.limit);
 
   const { data: roles = [] } = useQuery<Role[]>({
     queryKey: ["roles"],
@@ -175,7 +273,7 @@ export default function UsersPage() {
       return user;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["users"] });
+      queryClient.invalidateQueries({ queryKey: ["users-paginated"] });
       queryClient.invalidateQueries({ queryKey: ["roles"] });
       closeCreateModal();
       toast.success("User added");
@@ -190,7 +288,7 @@ export default function UsersPage() {
     mutationFn: ({ userId, data }: { userId: string; data: typeof editForm }) =>
       userApi.update(userId, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["users"] });
+      queryClient.invalidateQueries({ queryKey: ["users-paginated"] });
       queryClient.invalidateQueries({ queryKey: ["roles"] });
       closeEditModal();
       toast.success("User updated");
@@ -210,7 +308,7 @@ export default function UsersPage() {
       data: { dimension_value_ids: string[] };
     }) => userApi.updateAccess(userId, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["users"] });
+      queryClient.invalidateQueries({ queryKey: ["users-paginated"] });
       closeAccessModal();
       toast.success("Access updated");
     },
@@ -220,7 +318,7 @@ export default function UsersPage() {
   const deleteMutation = useMutation({
     mutationFn: userApi.delete,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["users"] });
+      queryClient.invalidateQueries({ queryKey: ["users-paginated"] });
       toast.success("User deleted");
     },
     onError: () => toast.error("Failed to delete user"),
@@ -338,67 +436,52 @@ export default function UsersPage() {
         }
       />
       <PageContent>
+      <ListToolbar
+        search={listParams.search}
+        onSearchChange={listParams.setSearch}
+        filterDefinitions={filterDefinitions}
+        activeFilters={listParams.activeFilters}
+        onFiltersChange={listParams.setActiveFilters}
+        onRemoveFilter={listParams.removeFilter}
+        searchPlaceholder="Search users..."
+      />
       {isLoading ? (
         <p className="text-gray-500 text-sm">Loading...</p>
       ) : users.length === 0 ? (
-        <p className="text-gray-500 text-sm">No users yet.</p>
+        <p className="text-gray-500 text-sm">No users found.</p>
       ) : (
         <div className="bg-white shadow-sm border rounded-lg overflow-hidden">
         <Table stickyRows={1} className="max-h-[calc(100vh-400px)] lg:max-h-[calc(100vh-300px)]">
           <TableHeader>
             <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Mobile</TableHead>
-              <TableHead>Role</TableHead>
-              {dimensions.map((dim) => (
-                <TableHead key={dim.id}>{dim.name}</TableHead>
-              ))}
+              {columns.map((col) =>
+                sortableKeys.has(col.key) ? (
+                  <SortableTableHead
+                    key={col.key}
+                    label={col.label}
+                    sortKey={col.key}
+                    currentSortBy={listParams.sortBy}
+                    currentSortOrder={listParams.sortOrder}
+                    onSort={listParams.setSorting}
+                  />
+                ) : (
+                  <TableHead key={col.key}>{col.label}</TableHead>
+                ),
+              )}
               <TableHead className="w-24 text-center">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {users.map((user) => (
               <TableRow key={user.id}>
-                <TableCell>
-                  <span className="font-medium">
-                    {user.first_name} {user.last_name}
-                  </span>
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-1 text-sm text-gray-500">
-                    <Phone className="h-3 w-3" />
-                    {user.country_code} {user.mobile_number}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  {user.role_name ? (
-                    <span className="text-sm bg-purple-50 text-purple-700 px-2 py-0.5 rounded">
-                      {user.role_name}
-                    </span>
-                  ) : (
-                    <span className="text-sm text-gray-400">No role</span>
-                  )}
-                </TableCell>
-                {dimensions.map((dim) => {
-                  const values = (user.dimension_value_ids ?? [])
-                    .map((id) => dvMap.get(id))
-                    .filter((dv): dv is DimensionValue => dv?.dimension_id === dim.id);
-                  return (
-                    <TableCell key={dim.id}>
-                      <div className="flex flex-wrap gap-1">
-                        {values.length ? (
-                          values.map((dv) => (
-                            <span key={dv.id} className="inline-block text-sm bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">
-                              {dv.name}
-                            </span>
-                          ))
-                        ) : (
-                          <span className="text-sm text-gray-400">All</span>
-                        )}
-                      </div>
-                    </TableCell>
-                  );
-                })}
+                {columns.map((col) => (
+                  <TableCell
+                    key={col.key}
+                    className={col.key === "created_at" ? "text-gray-500 text-sm" : ""}
+                  >
+                    {renderUserCell(user, col, dvMap)}
+                  </TableCell>
+                ))}
                 <TableCell>
                   <Can permission="user:manage">
                     <div className="flex items-center justify-center gap-2">
@@ -433,6 +516,15 @@ export default function UsersPage() {
             ))}
           </TableBody>
         </Table>
+        <Pagination
+          currentPage={listParams.page}
+          totalPages={totalPages}
+          totalItems={totalCount}
+          itemsPerPage={listParams.limit}
+          onPageChange={listParams.setPage}
+          onItemsPerPageChange={listParams.setLimit}
+          itemLabel="users"
+        />
         </div>
       )}
 
@@ -632,5 +724,13 @@ export default function UsersPage() {
       </Dialog>
       </PageContent>
     </>
+  );
+}
+
+export default function UsersPage() {
+  return (
+    <Suspense fallback={<PageContent><p className="text-gray-500">Loading...</p></PageContent>}>
+      <UsersPageContent />
+    </Suspense>
   );
 }

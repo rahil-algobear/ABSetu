@@ -4,12 +4,16 @@ User FastAPI routes
 
 import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.core.database import get_db
 from app.common.dependencies import get_current_user, require_permissions
+from app.common.schemas.base_response import PaginatedResponse
+from app.common.schemas.list_params import ListParams
+from app.core.database import get_db
 from app.modules.auth.model import User
+from app.modules.dimension.model import Dimension, DimensionValue
+from app.modules.role.model import Role
 from app.modules.user.schemas import (
     UserAccessResponse,
     UserAccessUpdate,
@@ -22,6 +26,23 @@ from app.modules.user.schemas import (
 from app.modules.user.service import UserService
 
 router = APIRouter(prefix="/user", tags=["user"])
+
+
+def _serialize_user(u: User) -> dict:
+    """Build a UserListResponse dict from a user model."""
+    return UserListResponse(
+        id=str(u.id),
+        created_at=u.created_at,
+        updated_at=u.updated_at,
+        first_name=u.first_name,
+        last_name=u.last_name,
+        country_code=u.country_code,
+        mobile_number=u.mobile_number,
+        is_verified=u.is_verified,
+        role_id=str(u.role_id) if u.role_id else None,
+        role_name=u.role.name if u.role else None,
+        dimension_value_ids=[str(a.dimension_value_id) for a in u.dimension_access],
+    ).dump()
 
 
 @router.get("/profile", response_model=UserProfileResponse)
@@ -64,27 +85,164 @@ def list_users(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """List all users in the organization."""
+    """List all users in the organization (flat — used by pickers)."""
     service = UserService(db)
     users = service.list_by_org(current_user.organization_id)
-    results = []
-    for u in users:
-        role_name = u.role.name if u.role else None
-        results.append(
-            UserListResponse(
-                id=str(u.id),
-                updated_at=u.updated_at,
-                first_name=u.first_name,
-                last_name=u.last_name,
-                country_code=u.country_code,
-                mobile_number=u.mobile_number,
-                is_verified=u.is_verified,
-                role_id=str(u.role_id) if u.role_id else None,
-                role_name=role_name,
-                dimension_value_ids=[str(a.dimension_value_id) for a in u.dimension_access],
-            ).dump()
+    return [_serialize_user(u) for u in users]
+
+
+@router.get(
+    "/",
+    dependencies=[Depends(require_permissions("user:view"))],
+)
+def list_users_paginated(
+    page: int = Query(1, ge=1),
+    limit: int = Query(25, ge=1, le=100),
+    search: str | None = Query(None),
+    sort_by: str | None = Query(None),
+    sort_order: str = Query("desc", pattern="^(asc|desc)$"),
+    filters: str | None = Query(None),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Paginated user list with search, filter, and sort support."""
+    params = ListParams(
+        page=page,
+        limit=limit,
+        search=search,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        filters=filters,
+    )
+    service = UserService(db)
+    users, total = service.list_by_org_paginated(current_user.organization_id, params)
+    data = [_serialize_user(u) for u in users]
+    return PaginatedResponse(count=total, data=data)
+
+
+@router.get(
+    "/filters",
+    dependencies=[Depends(require_permissions("user:view"))],
+)
+def get_user_filters(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return filter definitions, sortable keys, and visible columns for the user list."""
+    org_id = current_user.organization_id
+
+    filters: list[dict] = []
+
+    # Role filter
+    roles = db.query(Role).filter_by(organization_id=org_id).order_by(Role.name).all()
+    if roles:
+        filters.append(
+            {
+                "key": "role_id",
+                "label": "Role",
+                "type": "select",
+                "options": [{"value": str(r.id), "label": r.name} for r in roles],
+            }
         )
-    return results
+
+    # Dimension filters — each with an "All access" pseudo-option that matches
+    # users with no explicit values for that dimension (i.e. unrestricted).
+    dimensions = (
+        db.query(Dimension)
+        .filter_by(organization_id=org_id, controls_access=True)
+        .order_by(Dimension.sort_order)
+        .all()
+    )
+    for dim in dimensions:
+        values = (
+            db.query(DimensionValue)
+            .filter_by(dimension_id=dim.id)
+            .order_by(DimensionValue.sort_order, DimensionValue.name)
+            .all()
+        )
+        options = [{"value": "all_access", "label": "All access"}]
+        options.extend({"value": str(v.id), "label": v.name} for v in values)
+        filters.append(
+            {
+                "key": f"dim:{dim.id}",
+                "label": dim.name,
+                "type": "select",
+                "options": options,
+            }
+        )
+
+    # Created date range
+    filters.append({"key": "created_at", "label": "Created Date", "type": "date_range"})
+
+    # Columns reported to the frontend (drives column rendering + slug mapping)
+    columns: list[dict] = [
+        {
+            "key": "name",
+            "label": "Name",
+            "field_type": "static",
+            "visible": True,
+            "filterable": False,
+            "sortable": True,
+            "searchable": True,
+            "sort_order": 0,
+        },
+        {
+            "key": "mobile_number",
+            "label": "Mobile",
+            "field_type": "static",
+            "visible": True,
+            "filterable": False,
+            "sortable": False,
+            "searchable": True,
+            "sort_order": 1,
+        },
+        {
+            "key": "role",
+            "label": "Role",
+            "field_type": "static",
+            "visible": True,
+            "filterable": True,
+            "sortable": True,
+            "searchable": False,
+            "sort_order": 2,
+        },
+    ]
+    for idx, dim in enumerate(dimensions):
+        columns.append(
+            {
+                "key": f"dim:{dim.id}",
+                "label": dim.name,
+                "field_type": "dimension",
+                "dimension_key": str(dim.id),
+                "visible": True,
+                "filterable": True,
+                "sortable": False,
+                "searchable": False,
+                "sort_order": 3 + idx,
+            }
+        )
+    columns.append(
+        {
+            "key": "created_at",
+            "label": "Created At",
+            "field_type": "static",
+            "visible": True,
+            "filterable": True,
+            "sortable": True,
+            "searchable": False,
+            "sort_order": 99,
+        }
+    )
+
+    # "first_name" maps to the "name" column key in the UI so the sort indicator
+    # appears on the correct header.
+    sortable_keys = ["name", "role", "created_at"]
+
+    return {
+        "filters": filters,
+        "sortable_keys": sortable_keys,
+        "columns": columns,
+    }
 
 
 @router.post(
