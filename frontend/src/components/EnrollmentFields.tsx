@@ -29,45 +29,9 @@ import type {
   MetaFieldSchemaItem,
 } from "@/types";
 import { collectEnrollmentFields } from "@/utils/meta-fields";
+import { filterVisibleFields, getStageDisabledKeys } from "@/utils/field-stage";
 
 import { DynamicMetaForm } from "@/components/DynamicMetaForm";
-
-/**
- * Filters the field list to what should actually render on the form.
- * Hides fields the admin has marked invisible, plus:
- *   - on create: hides stage = "edit" fields (only relevant after the
- *     record exists; org doesn't have the data at create time, so
- *     showing them as disabled placeholders is noise)
- *   - on edit:   keeps stage = "create" fields visible (they were set
- *     at creation and lock for editing — see getStageDisabledKeys)
- */
-function filterVisibleFields(
-  fields: MetaFieldDefinition[],
-  mode: "create" | "edit",
-): MetaFieldDefinition[] {
-  return fields.filter((f) => {
-    if (f.visible === false) return false;
-    if (mode === "create" && f.stage === "edit") return false;
-    return true;
-  });
-}
-
-/**
- * Returns the set of field keys that should render disabled. Only
- * applies to stage = "create" fields on edit — those were captured at
- * creation, so we keep them visible for context but lock editing.
- */
-function getStageDisabledKeys(
-  fields: MetaFieldDefinition[],
-  mode: "create" | "edit",
-): Set<string> {
-  const keys = new Set<string>();
-  if (mode !== "edit") return keys;
-  for (const f of fields) {
-    if (f.stage === "create") keys.add(f.key);
-  }
-  return keys;
-}
 
 /**
  * Thin wrapper around collectEnrollmentFields that applies the same

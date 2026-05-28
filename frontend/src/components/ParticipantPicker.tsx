@@ -29,15 +29,18 @@ import {
 } from "@/services/api";
 import {
   Entity,
-  MetaFieldDefinition,
   MetaFieldSchemaItem,
   UserListItem,
 } from "@/types";
-import { collectEnrollmentFields, getFieldsForScope } from "@/utils/meta-fields";
+import { collectEnrollmentFields } from "@/utils/meta-fields";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog } from "@/components/ui/dialog";
-import { DynamicMetaForm } from "@/components/DynamicMetaForm";
+import {
+  EntityFields,
+  useVisibleEntityFields,
+  type EntityFieldsHandle,
+} from "@/components/EntityFields";
 import {
   EnrollmentFields,
   useVisibleEnrollmentFields,
@@ -848,14 +851,11 @@ function CreateAndAddModal({
     [activityDimensions, enrollmentTrackedDimIds],
   );
 
-  const entityFields: MetaFieldDefinition[] = useMemo(
-    () =>
-      getFieldsForScope(allSchemas, {
-        type: "entity",
-        entity_type_id: entityTypeId,
-      }).filter((f) => f.visible !== false),
-    [allSchemas, entityTypeId],
-  );
+  const hasEntityFields = useVisibleEntityFields({
+    entityTypeId,
+    allSchemas,
+    mode: "create",
+  }).length > 0;
 
   const hasEnrollmentFields = useVisibleEnrollmentFields({
     entityTypeId,
@@ -866,6 +866,7 @@ function CreateAndAddModal({
   const [entityMeta, setEntityMeta] = useState<Record<string, unknown>>({});
   const [enrollmentMeta, setEnrollmentMeta] = useState<Record<string, unknown>>({});
   const [formError, setFormError] = useState<string | null>(null);
+  const entityFieldsRef = useRef<EntityFieldsHandle>(null);
   const fieldsRef = useRef<EnrollmentFieldsHandle>(null);
 
   const mutation = useMutation({
@@ -889,13 +890,10 @@ function CreateAndAddModal({
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
-    for (const f of entityFields) {
-      if (!f.required) continue;
-      const v = entityMeta[f.key];
-      if (v === undefined || v === null || v === "") {
-        setFormError(`${f.label} is required.`);
-        return;
-      }
+    const entityError = entityFieldsRef.current?.validate();
+    if (entityError) {
+      setFormError(entityError);
+      return;
     }
     const enrollmentError = fieldsRef.current?.validate();
     if (enrollmentError) {
@@ -914,15 +912,18 @@ function CreateAndAddModal({
           </div>
         )}
 
-        {entityFields.length > 0 && (
+        {hasEntityFields && (
           <div className="space-y-2">
             <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
               {entityTypeName} details
             </h4>
-            <DynamicMetaForm
-              fields={entityFields}
-              values={entityMeta}
-              onChange={setEntityMeta}
+            <EntityFields
+              ref={entityFieldsRef}
+              entityTypeId={entityTypeId}
+              allSchemas={allSchemas}
+              metaValues={entityMeta}
+              onMetaChange={setEntityMeta}
+              mode="create"
             />
           </div>
         )}
