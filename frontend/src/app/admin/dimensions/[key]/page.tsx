@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { Suspense, useState, useMemo } from "react";
 import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { dimensionApi, metaFieldSchemaApi } from "@/services/api";
 import { Dimension, DimensionValue, MetaFieldDefinition, MetaFieldSchemaItem } from "@/types";
 import { getFieldsForScope } from "@/utils/meta-fields";
 import { Can, usePermissions } from "@/components/Auth/Permissions";
+import { useListParams } from "@/hooks/useListParams";
 import { DimensionMatrixDialog } from "@/components/DimensionMatrixDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,10 +24,14 @@ import {
 import { DynamicMetaForm } from "@/components/DynamicMetaForm";
 import { PageHeader } from "@/components/ui/page-header";
 import { PageContent } from "@/components/ui/page-content";
+import { ListToolbar } from "@/components/ui/list-toolbar";
+import { SortableTableHead } from "@/components/ui/sortable-table-head";
 import { Plus, Pencil, Trash2, LayoutGrid } from "lucide-react";
 import toast from "react-hot-toast";
 
-export default function DimensionValuesPage() {
+const SORTABLE_COLUMNS = [{ key: "name", label: "Name" }];
+
+function DimensionValuesPageContent() {
   const params = useParams();
   const dimensionKey = params.key as string;
   const { can } = usePermissions();
@@ -45,9 +50,20 @@ export default function DimensionValuesPage() {
 
   const dimension = dimensions.find((d) => d.key === dimensionKey);
 
+  const listParams = useListParams({
+    defaultSortBy: "name",
+    defaultSortOrder: "asc",
+    columns: SORTABLE_COLUMNS,
+  });
+
   const { data: values = [], isLoading } = useQuery<DimensionValue[]>({
-    queryKey: ["dimension-values", dimension?.id],
-    queryFn: () => dimensionApi.listValues(dimension!.id),
+    queryKey: ["dimension-values", dimension?.id, listParams.apiParams],
+    queryFn: () =>
+      dimensionApi.listValues(dimension!.id, {
+        search: listParams.apiParams.search,
+        sort_by: listParams.apiParams.sort_by,
+        sort_order: listParams.apiParams.sort_order,
+      }),
     enabled: !!dimension,
   });
 
@@ -146,16 +162,33 @@ export default function DimensionValuesPage() {
         }
       />
       <PageContent>
+      <ListToolbar
+        search={listParams.search}
+        onSearchChange={listParams.setSearch}
+        filterDefinitions={[]}
+        activeFilters={[]}
+        onFiltersChange={() => {}}
+        onRemoveFilter={() => {}}
+        searchPlaceholder={`Search ${dimension.name.toLowerCase()}...`}
+      />
       {isLoading ? (
         <p className="text-gray-500 text-sm">Loading...</p>
       ) : values.length === 0 ? (
-        <p className="text-gray-500 text-sm">No values yet.</p>
+        <p className="text-gray-500 text-sm">
+          {listParams.search ? "No matches." : "No values yet."}
+        </p>
       ) : (
         <div className="bg-white shadow-sm border rounded-lg overflow-hidden">
         <Table stickyRows={1} className="max-h-[calc(100vh-400px)] lg:max-h-[calc(100vh-200px)]">
           <TableHeader>
             <TableRow>
-              <TableHead>Name</TableHead>
+              <SortableTableHead
+                label="Name"
+                sortKey="name"
+                currentSortBy={listParams.sortBy}
+                currentSortOrder={listParams.sortOrder}
+                onSort={listParams.setSorting}
+              />
               {metaFields.map((f) => (
                 <TableHead key={f.key}>{f.label}</TableHead>
               ))}
@@ -248,5 +281,13 @@ export default function DimensionValuesPage() {
       />
       </PageContent>
     </>
+  );
+}
+
+export default function DimensionValuesPage() {
+  return (
+    <Suspense fallback={<PageContent><p className="text-gray-500">Loading...</p></PageContent>}>
+      <DimensionValuesPageContent />
+    </Suspense>
   );
 }

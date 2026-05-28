@@ -7,6 +7,7 @@ import uuid
 from sqlalchemy.orm import Session
 
 from app.common.exceptions import NotFoundError, ValidationError
+from app.common.helpers.list_query import apply_search
 from app.common.helpers.slugify import slugify
 from app.modules.dimension.model import Dimension, DimensionValue, DimensionValueLink, UserDimension
 
@@ -69,6 +70,9 @@ class DimensionValueService:
         self,
         dimension_id: uuid.UUID,
         accessible_dv_ids: list[uuid.UUID] | None = None,
+        search: str | None = None,
+        sort_by: str | None = None,
+        sort_order: str = "asc",
     ) -> list[DimensionValue]:
         query = self.db.query(DimensionValue).filter_by(dimension_id=dimension_id)
         if accessible_dv_ids is not None:
@@ -85,7 +89,17 @@ class DimensionValueService:
             )
             if scoped_ids:
                 query = query.filter(DimensionValue.id.in_([r[0] for r in scoped_ids]))
-        return query.order_by(DimensionValue.sort_order, DimensionValue.name).all()
+
+        query = apply_search(query, search, [DimensionValue.name])
+        # Fallback preserves the manual sort_order admins set on values; the
+        # admin listing page passes sort_by=name explicitly when the user
+        # picks a different ordering.
+        if sort_by == "name":
+            col = DimensionValue.name
+            query = query.order_by(col.desc() if sort_order == "desc" else col.asc())
+        else:
+            query = query.order_by(DimensionValue.sort_order.asc(), DimensionValue.name.asc())
+        return query.all()
 
     def get_by_id(self, value_id: uuid.UUID) -> DimensionValue:
         value = self.db.query(DimensionValue).filter_by(id=value_id).first()
