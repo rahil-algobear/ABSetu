@@ -65,8 +65,23 @@ interface UseListParamsReturn {
   };
 }
 
+/** Keys this hook owns — any other param in the current URL is preserved as-is. */
+function isOwnedListParam(key: string): boolean {
+  return (
+    key === "search" ||
+    key === "sort_by" ||
+    key === "sort_order" ||
+    key === "page" ||
+    key === "show" ||
+    key.startsWith("filter_")
+  );
+}
+
 /**
  * URL param ordering:
+ * 0. preserved (non-owned params from the current URL — kept first so the
+ *    page-level context like ?tab=...&type=... stays stable when the hook
+ *    rewrites its own params)
  * 1. search
  * 2. filter_* params (slugified when mappings available)
  * 3. sort_by, sort_order
@@ -84,8 +99,18 @@ function buildOrderedUrl(
   },
   defaults: { sortOrder: string; limit: number },
   slugMappings: SlugMappings | null,
+  currentSearchParams?: URLSearchParams | null,
 ): string {
   const sp = new URLSearchParams();
+
+  // 0. Preserve params we don't own (e.g. tab, type set by the page).
+  if (currentSearchParams) {
+    currentSearchParams.forEach((value, key) => {
+      if (!isOwnedListParam(key)) {
+        sp.append(key, value);
+      }
+    });
+  }
 
   // 1. Search
   if (params.search) {
@@ -255,11 +280,12 @@ export function useListParams(
           },
           { sortOrder: defaultSortOrder, limit: defaultLimit },
           slugMappings,
+          searchParams,
         );
         navigate(url);
       }, 500);
     },
-    [pathname, activeFilters, sortBy, sortOrder, limit, defaultSortOrder, defaultLimit, navigate, slugMappings],
+    [pathname, activeFilters, sortBy, sortOrder, limit, defaultSortOrder, defaultLimit, navigate, slugMappings, searchParams],
   );
 
   // Clean up debounce timer
@@ -285,10 +311,11 @@ export function useListParams(
         },
         { sortOrder: defaultSortOrder, limit: defaultLimit },
         slugMappings,
+        searchParams,
       );
       navigate(url);
     },
-    [pathname, search, sortBy, sortOrder, limit, defaultSortOrder, defaultLimit, navigate, slugMappings],
+    [pathname, search, sortBy, sortOrder, limit, defaultSortOrder, defaultLimit, navigate, slugMappings, searchParams],
   );
 
   const removeFilter = useCallback(
@@ -327,10 +354,11 @@ export function useListParams(
         },
         { sortOrder: defaultSortOrder, limit: defaultLimit },
         slugMappings,
+        searchParams,
       );
       navigate(url);
     },
-    [pathname, search, activeFilters, page, limit, defaultSortOrder, defaultLimit, navigate, slugMappings],
+    [pathname, search, activeFilters, page, limit, defaultSortOrder, defaultLimit, navigate, slugMappings, searchParams],
   );
 
   const setPage = useCallback(
@@ -347,10 +375,11 @@ export function useListParams(
         },
         { sortOrder: defaultSortOrder, limit: defaultLimit },
         slugMappings,
+        searchParams,
       );
       navigate(url);
     },
-    [pathname, search, activeFilters, sortBy, sortOrder, limit, defaultSortOrder, defaultLimit, navigate, slugMappings],
+    [pathname, search, activeFilters, sortBy, sortOrder, limit, defaultSortOrder, defaultLimit, navigate, slugMappings, searchParams],
   );
 
   const setLimit = useCallback(
@@ -367,10 +396,11 @@ export function useListParams(
         },
         { sortOrder: defaultSortOrder, limit: defaultLimit },
         slugMappings,
+        searchParams,
       );
       navigate(url);
     },
-    [pathname, search, activeFilters, sortBy, sortOrder, defaultSortOrder, defaultLimit, navigate, slugMappings],
+    [pathname, search, activeFilters, sortBy, sortOrder, defaultSortOrder, defaultLimit, navigate, slugMappings, searchParams],
   );
 
   // Build API params — serialized for query key and API call

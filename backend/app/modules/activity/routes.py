@@ -328,10 +328,15 @@ def get_activity_filters(
 def list_activities_by_entity(
     entity_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
+    accessible_dv_ids: list[uuid.UUID] | None = Depends(get_accessible_dimension_value_ids),
     db: Session = Depends(get_db),
 ):
     service = ActivityService(db)
-    activities = service.list_by_entity(entity_id, current_user.organization_id)
+    activities = service.list_by_entity(
+        entity_id,
+        current_user.organization_id,
+        accessible_dv_ids=accessible_dv_ids,
+    )
     return [_build_activity_response(a) for a in activities]
 
 

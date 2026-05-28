@@ -334,7 +334,12 @@ class ActivityService:
         self.db.refresh(activity)
         return self.get_by_id(activity.id)
 
-    def list_by_entity(self, entity_id: uuid.UUID, org_id: uuid.UUID) -> list[Activity]:
+    def list_by_entity(
+        self,
+        entity_id: uuid.UUID,
+        org_id: uuid.UUID,
+        accessible_dv_ids: list[uuid.UUID] | None = None,
+    ) -> list[Activity]:
         """Return activities where the given entity is a participant."""
         participant_activity_ids = (
             self.db.query(ActivityParticipant.activity_id)
@@ -347,13 +352,24 @@ class ActivityService:
         activity_ids = [row[0] for row in participant_activity_ids]
         if not activity_ids:
             return []
-        return (
-            self.db.query(Activity)
-            .filter(
-                Activity.id.in_(activity_ids),
-                Activity.organization_id == org_id,
+        query = self.db.query(Activity).filter(
+            Activity.id.in_(activity_ids),
+            Activity.organization_id == org_id,
+        )
+
+        if accessible_dv_ids:
+            restricted_dims = group_dvs_by_dimension(self.db, accessible_dv_ids)
+            query = apply_dimension_access_scoping(
+                query,
+                self.db,
+                restricted_dims,
+                assoc_fk=ActivityDimension.activity_id,
+                assoc_dv=ActivityDimension.dimension_value_id,
+                parent_pk=Activity.id,
             )
-            .options(
+
+        return (
+            query.options(
                 joinedload(Activity.activity_type),
                 joinedload(Activity.dimensions)
                 .joinedload(ActivityDimension.dimension_value)
