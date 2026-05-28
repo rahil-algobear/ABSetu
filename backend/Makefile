@@ -1,4 +1,4 @@
-.PHONY: help install install-dev test test-coverage lint format type-check run run-local run-local-port migrate upgrade downgrade kill-server clean db-reset db-fresh seed seed-org
+.PHONY: help install install-dev test test-coverage lint format type-check run run-local run-local-port migrate upgrade downgrade kill-server clean db-reset db-fresh seed seed-org seed-test-entities
 
 # Use venv python if available, otherwise fall back to python3
 PYTHON := $(shell if [ -f venv/bin/python ]; then echo venv/bin/python; else echo python3; fi)
@@ -22,6 +22,7 @@ help:
 	@echo "  make kill-server          - Kill server running on port 8000"
 	@echo "  make db-reset             - Drop and recreate the database (WARNING: destroys all data)"
 	@echo "  make db-fresh             - Reset DB + run migrations + seed all (fresh start)"
+	@echo "  make seed-test-entities   - Bulk-create test entities (org=KSHAMATA type=Beneficiary count=1000 prefix='Auto-Test Beneficiary')"
 	@echo "  make clean                - Clean up cache and temporary files"
 
 install:
@@ -87,6 +88,21 @@ seed-org:
 		exit 1; \
 	fi
 	$(PYTHON) -m app.seeds.$(file)
+
+# Bulk-create test entities (defaults: org=KSHAMATA type=Beneficiary count=1000
+# prefix="Auto-Test Beneficiary"). Override any with var=value, e.g.:
+#   make seed-test-entities count=500
+#   make seed-test-entities org=KSHAMATA type=Facilitator count=50 prefix="Load Test"
+org ?= KSHAMATA
+type ?= Beneficiary
+count ?= 1000
+prefix ?= Auto-Test Beneficiary
+seed-test-entities:
+	$(PYTHON) -m app.seeds.test_entities \
+		--org "$(org)" \
+		--type "$(type)" \
+		--count $(count) \
+		--prefix "$(prefix)"
 
 db-reset:
 	@echo "WARNING: This will destroy ALL data in the database!"
