@@ -135,6 +135,8 @@ export function ListToolbar({
     return sum + vals.length;
   }, 0);
 
+  const hasFilters = filterDefinitions.length > 0;
+
   return (
     <div className="px-0 mb-4">
       {/* Desktop: single row — search (fixed) | filter button | chips (scrollable) */}
@@ -157,33 +159,7 @@ export function ListToolbar({
             </button>
           )}
         </div>
-        <div className="flex-shrink-0">
-          <Button
-            variant={chipCount > 0 ? "default" : "outline"}
-            className="flex items-center gap-2 h-10"
-            onClick={() => setShowFilterModal(true)}
-          >
-            <SlidersHorizontal className="h-4 w-4" />
-            Filter
-            {chipCount > 0 && (
-              <span className="bg-white/20 text-xs rounded-full px-1.5 py-0.5">
-                {chipCount}
-              </span>
-            )}
-          </Button>
-        </div>
-        <div className="flex min-w-0 items-center overflow-x-auto">
-          <FilterChips
-            activeFilters={activeFilters}
-            filterDefinitions={filterDefinitions}
-            onRemoveFilter={onRemoveFilter}
-          />
-        </div>
-      </div>
-
-      {/* Mobile: two rows — row 1: filter + chips | row 2: search */}
-      <div className="flex lg:hidden flex-col gap-3">
-        <div className="flex items-center gap-2 min-w-0">
+        {hasFilters && (
           <div className="flex-shrink-0">
             <Button
               variant={chipCount > 0 ? "default" : "outline"}
@@ -199,12 +175,42 @@ export function ListToolbar({
               )}
             </Button>
           </div>
+        )}
+        <div className="flex min-w-0 items-center overflow-x-auto">
           <FilterChips
             activeFilters={activeFilters}
             filterDefinitions={filterDefinitions}
             onRemoveFilter={onRemoveFilter}
           />
         </div>
+      </div>
+
+      {/* Mobile: two rows — row 1: filter + chips | row 2: search */}
+      <div className="flex lg:hidden flex-col gap-3">
+        {hasFilters && (
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="flex-shrink-0">
+              <Button
+                variant={chipCount > 0 ? "default" : "outline"}
+                className="flex items-center gap-2 h-10"
+                onClick={() => setShowFilterModal(true)}
+              >
+                <SlidersHorizontal className="h-4 w-4" />
+                Filter
+                {chipCount > 0 && (
+                  <span className="bg-white/20 text-xs rounded-full px-1.5 py-0.5">
+                    {chipCount}
+                  </span>
+                )}
+              </Button>
+            </div>
+            <FilterChips
+              activeFilters={activeFilters}
+              filterDefinitions={filterDefinitions}
+              onRemoveFilter={onRemoveFilter}
+            />
+          </div>
+        )}
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
           <Input
@@ -226,13 +232,15 @@ export function ListToolbar({
       </div>
 
       {/* Filter Modal */}
-      <FilterModal
-        open={showFilterModal}
-        onClose={() => setShowFilterModal(false)}
-        filterDefinitions={filterDefinitions}
-        activeFilters={activeFilters}
-        onApply={onFiltersChange}
-      />
+      {hasFilters && (
+        <FilterModal
+          open={showFilterModal}
+          onClose={() => setShowFilterModal(false)}
+          filterDefinitions={filterDefinitions}
+          activeFilters={activeFilters}
+          onApply={onFiltersChange}
+        />
+      )}
     </div>
   );
 }
