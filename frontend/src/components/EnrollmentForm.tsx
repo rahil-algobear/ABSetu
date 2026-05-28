@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 
 import { enrollmentApi } from "@/services/api";
 import type { Enrollment, MetaFieldSchemaItem } from "@/types";
+import type { FormValues } from "@/utils/field-visibility";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -37,22 +38,19 @@ export function EnrollmentForm({
   );
   const [formError, setFormError] = useState<string | null>(null);
 
-  const [dimensionValueIds, setDimensionValueIds] = useState<string[]>(
-    () => enrollment?.dimensions?.map((t) => t.value_id) || [],
-  );
-  const [metaValues, setMetaValues] = useState<Record<string, unknown>>(
-    () => enrollment?.meta || {},
-  );
+  const [values, setValues] = useState<FormValues>(() => ({
+    meta: enrollment?.meta || {},
+    dimensions: enrollment?.dimensions?.map((t) => t.value_id) || [],
+  }));
 
   const fieldsRef = useRef<EnrollmentFieldsHandle>(null);
 
-  // Used to decide whether to render the empty-state message and hide the
-  // submit/status toggle. Cheap re-derivation of the same field set the
-  // renderer computes.
+  // Empty-state branching for the form body + submit/status visibility.
+  // Uses the same evaluator the renderer uses, so they stay in sync.
   const visibleFields = useVisibleEnrollmentFields({
     entityTypeId,
     allSchemas,
-    knownDimensionValueIds: dimensionValueIds,
+    values,
     mode: isEdit ? "edit" : "create",
   });
   const hasFields = visibleFields.length > 0;
@@ -94,18 +92,19 @@ export function EnrollmentForm({
       return;
     }
 
-    const meta = Object.keys(metaValues).length > 0 ? metaValues : undefined;
+    // Translate FormValues → backend shape at the API boundary.
+    const meta = Object.keys(values.meta).length > 0 ? values.meta : undefined;
     if (isEdit && enrollment) {
       updateMutation.mutate({
         id: enrollment.id,
         updates: { meta, is_active: isActive },
-        tagIds: dimensionValueIds,
+        tagIds: values.dimensions,
       });
     } else {
       createMutation.mutate({
         entity_id: entityId,
         meta,
-        dimension_value_ids: dimensionValueIds,
+        dimension_value_ids: values.dimensions,
         is_active: isActive,
       });
     }
@@ -127,12 +126,8 @@ export function EnrollmentForm({
             ref={fieldsRef}
             entityTypeId={entityTypeId}
             allSchemas={allSchemas}
-            lockedDimensions={[]}
-            userDimensionValueIds={dimensionValueIds}
-            onUserDimensionsChange={setDimensionValueIds}
-            metaValues={metaValues}
-            onMetaChange={setMetaValues}
-            dimensionMode="picker"
+            values={values}
+            onChange={setValues}
             mode={isEdit ? "edit" : "create"}
           />
           <StatusToggle isActive={isActive} onChange={setIsActive} />

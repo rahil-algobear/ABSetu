@@ -1,25 +1,32 @@
 "use client";
 
 /**
- * Shared entity-meta fields renderer. Used by both places that collect
- * entity meta:
+ * Shared entity-meta fields wrapper. Used by:
  *   - Entity Listing (Add / Edit modal in /entities/[key]/page.tsx)
+ *   - Entity Details (edit card in /entities/[key]/[id]/page.tsx)
  *   - CreateAndAddModal (activity-context "Create new …" flow)
+ *   - SearchSelectParticipants (activity-create page's create dialog)
  *
- * The renderer owns: field collection (entity scope), stage-based
- * filtering, stage-based disabling, and required-field validation
- * (exposed via the ref handle). Parents own the form wrapper and the
- * create/update mutation.
+ * The wrapper owns scope (entity), stage filtering, and required-field
+ * validation (exposed via the ref handle). Rendering lives one layer
+ * down in DynamicMetaForm; per-field-type rendering is one layer below
+ * that in DynamicMetaField / DynamicDimensionField.
  *
- * For the same conventions applied to enrollment fields, see
- * EnrollmentFields.tsx — both go through utils/field-stage.ts.
+ * Entity scope doesn't carry dimension fields today, so the form
+ * values' `dimensions` array stays empty for this wrapper. The unified
+ * FormValues shape is still used so all wrappers feed DynamicMetaForm
+ * the same way.
  */
 
 import { useImperativeHandle, useMemo, type Ref } from "react";
 
 import type { MetaFieldDefinition, MetaFieldSchemaItem } from "@/types";
-import { getFieldsForScope } from "@/utils/meta-fields";
-import { filterVisibleFields, getStageDisabledKeys } from "@/utils/field-stage";
+import { getStageDisabledKeys } from "@/utils/field-stage";
+import {
+  EMPTY_FORM_VALUES,
+  getVisibleFields,
+  type FormValues,
+} from "@/utils/field-visibility";
 
 import { DynamicMetaForm } from "@/components/DynamicMetaForm";
 
@@ -32,8 +39,8 @@ export interface EntityFieldsProps {
   entityTypeId: string;
   allSchemas: MetaFieldSchemaItem[];
 
-  metaValues: Record<string, unknown>;
-  onMetaChange: (values: Record<string, unknown>) => void;
+  values: FormValues;
+  onChange: (values: FormValues) => void;
 
   /** Defaults to "create". Drives stage filtering/disabling per the
    *  shared convention — see utils/field-stage.ts. */
@@ -43,9 +50,10 @@ export interface EntityFieldsProps {
 }
 
 /**
- * Thin wrapper around getFieldsForScope that applies the same
- * visibility rules the renderer uses. Parents call this when they need
- * to decide whether to render an empty state or hide the submit button.
+ * Thin hook for callers that need to decide whether to render an
+ * empty-state message or hide the submit button. Goes through the
+ * same evaluator the renderer uses, so empty-state branching can't
+ * drift from what actually appears on screen.
  */
 export function useVisibleEntityFields({
   entityTypeId,
@@ -58,13 +66,12 @@ export function useVisibleEntityFields({
 }): MetaFieldDefinition[] {
   return useMemo(
     () =>
-      filterVisibleFields(
-        getFieldsForScope(allSchemas, {
-          type: "entity",
-          entity_type_id: entityTypeId,
-        }),
+      getVisibleFields({
+        allSchemas,
+        scope: { type: "entity", entity_type_id: entityTypeId },
+        values: EMPTY_FORM_VALUES, // entity scope has no dim deps today
         mode,
-      ),
+      }),
     [allSchemas, entityTypeId, mode],
   );
 }
@@ -72,28 +79,25 @@ export function useVisibleEntityFields({
 export function EntityFields({
   entityTypeId,
   allSchemas,
-  metaValues,
-  onMetaChange,
+  values,
+  onChange,
   mode = "create",
   ref,
 }: EntityFieldsProps) {
-  const allFields = useMemo(
-    () =>
-      getFieldsForScope(allSchemas, {
-        type: "entity",
-        entity_type_id: entityTypeId,
-      }),
-    [allSchemas, entityTypeId],
-  );
-
   const visibleFields = useMemo(
-    () => filterVisibleFields(allFields, mode),
-    [allFields, mode],
+    () =>
+      getVisibleFields({
+        allSchemas,
+        scope: { type: "entity", entity_type_id: entityTypeId },
+        values,
+        mode,
+      }),
+    [allSchemas, entityTypeId, values, mode],
   );
 
   const disabledKeys = useMemo(
-    () => getStageDisabledKeys(allFields, mode),
-    [allFields, mode],
+    () => getStageDisabledKeys(visibleFields, mode),
+    [visibleFields, mode],
   );
 
   useImperativeHandle(
@@ -102,7 +106,10 @@ export function EntityFields({
       validate: () => {
         for (const field of visibleFields) {
           if (!field.required || disabledKeys.has(field.key)) continue;
-          const val = metaValues[field.key];
+          // Entity scope has only meta fields today; dim/list types
+          // don't appear here. If/when they do, validation rules land
+          // alongside the renderer changes.
+          const val = values.meta[field.key];
           if (val === undefined || val === null || val === "") {
             return `${field.label} is required.`;
           }
@@ -110,14 +117,14 @@ export function EntityFields({
         return null;
       },
     }),
-    [visibleFields, disabledKeys, metaValues],
+    [visibleFields, disabledKeys, values],
   );
 
   return (
     <DynamicMetaForm
       fields={visibleFields}
-      values={metaValues}
-      onChange={onMetaChange}
+      values={values}
+      onChange={onChange}
       disabledKeys={disabledKeys}
     />
   );

@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { entityApi, metaFieldSchemaApi } from "@/services/api";
 import { MetaFieldDefinition, MetaFieldSchemaItem } from "@/types";
 import { useQuery } from "@tanstack/react-query";
+import { type FormValues } from "@/utils/field-visibility";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DateTimeInput } from "@/components/ui/date-time-input";
@@ -54,7 +55,10 @@ export function SearchSelectParticipants({
 }: SearchSelectParticipantsProps) {
   const [search, setSearch] = useState("");
   const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [newEntityMeta, setNewEntityMeta] = useState<Record<string, unknown>>({});
+  const [newEntityValues, setNewEntityValues] = useState<FormValues>({
+    meta: {},
+    dimensions: [],
+  });
   const [createFormError, setCreateFormError] = useState<string | null>(null);
   const entityFieldsRef = useRef<EntityFieldsHandle>(null);
   const queryClient = useQueryClient();
@@ -82,7 +86,7 @@ export function SearchSelectParticipants({
         },
       ]);
       setShowCreateDialog(false);
-      setNewEntityMeta({});
+      setNewEntityValues({ meta: {}, dimensions: [] });
       setCreateFormError(null);
       toast.success(`${entityTypeName} created and selected — save to confirm`);
     },
@@ -286,7 +290,10 @@ export function SearchSelectParticipants({
                 setCreateFormError(validationError);
                 return;
               }
-              const meta = Object.keys(newEntityMeta).length > 0 ? newEntityMeta : undefined;
+              const meta =
+                Object.keys(newEntityValues.meta).length > 0
+                  ? newEntityValues.meta
+                  : undefined;
               createEntityMutation.mutate({
                 entity_type_id: entityTypeId,
                 meta,
@@ -303,8 +310,8 @@ export function SearchSelectParticipants({
               ref={entityFieldsRef}
               entityTypeId={entityTypeId}
               allSchemas={allSchemas}
-              metaValues={newEntityMeta}
-              onMetaChange={setNewEntityMeta}
+              values={newEntityValues}
+              onChange={setNewEntityValues}
               mode="create"
             />
             <div className="flex justify-end gap-2 pt-2">

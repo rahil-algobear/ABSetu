@@ -1,130 +1,160 @@
 "use client";
 
+/**
+ * Form-level dispatcher. Given a resolved list of fields and the
+ * current FormValues, renders the right per-type component for each
+ * field. Owns the only piece of cross-field state we have today:
+ * cascading dimension filtering (selecting Centre narrows District).
+ *
+ * Layering:
+ *   Page / Modal  →  Wrapper (EntityFields / EnrollmentFields / …)
+ *                 →  DynamicMetaForm  (this file — dispatch + cascade)
+ *                 →  DynamicMetaField | DynamicDimensionField | …
+ *
+ * The wrapper is responsible for the field list (scope + stage); this
+ * file is responsible only for rendering whatever it's handed.
+ */
+
 import { MetaFieldDefinition } from "@/types";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { DateTimeInput } from "@/components/ui/date-time-input";
 import { formatDate, formatDateTime } from "@/utils/date";
 
-interface DynamicMetaFormProps {
+import { DynamicMetaField } from "@/components/DynamicMetaField";
+import { DynamicDimensionField } from "@/components/DynamicDimensionField";
+import {
+  buildSelectedByDim,
+  filterEligibleValues,
+  useDimensionData,
+} from "@/components/useDimensionData";
+import type { FormValues } from "@/utils/field-visibility";
+
+export interface DynamicMetaFormProps {
   fields: MetaFieldDefinition[];
-  values: Record<string, unknown>;
-  onChange: (values: Record<string, unknown>) => void;
-  /** Field keys that should be rendered as read-only / disabled */
+  values: FormValues;
+  onChange: (values: FormValues) => void;
+  /** Field keys to render disabled. For dimension fields, "disabled"
+   *  effectively means "locked at the current value" — the dispatcher
+   *  presents only that value as the option list. */
   disabledKeys?: Set<string>;
 }
 
-export function DynamicMetaForm({ fields, values, onChange, disabledKeys }: DynamicMetaFormProps) {
+export function DynamicMetaForm({
+  fields,
+  values,
+  onChange,
+  disabledKeys,
+}: DynamicMetaFormProps) {
+  const { dimensions, allDimensionValues, dimensionValueLinks } =
+    useDimensionData();
+
+  // Map of {dimension_id → currently-selected value_id} for cascading.
+  const selectedByDim = buildSelectedByDim(
+    values.dimensions,
+    allDimensionValues,
+  );
+
   if (fields.length === 0) return null;
-
-  const getVal = (field: MetaFieldDefinition) => {
-    const v = values[field.key];
-    if (v != null && v !== "") return v;
-    return field.default;
-  };
-
-  const setValue = (key: string, value: unknown) => {
-    onChange({ ...values, [key]: value });
-  };
 
   return (
     <div className="space-y-3">
       {fields.map((field) => {
         const isDisabled = disabledKeys?.has(field.key) ?? false;
+
+        if (field.type === "dimension") {
+          return renderDimensionField({
+            field,
+            values,
+            onChange,
+            isDisabled,
+            allDimensionValues,
+            dimensionValueLinks,
+            selectedByDim,
+          });
+        }
+
+        // Entity / user list types are out of scope for Phase 1 — they
+        // still live in SearchSelectParticipants / ParticipantPicker.
+        // The wrapper should not be handing these to DynamicMetaForm
+        // yet, but skip defensively if it does.
+        if (field.type === "entity_list" || field.type === "user_list") {
+          return null;
+        }
+
         return (
-        <div key={field.key} className={isDisabled ? "opacity-60" : undefined}>
-          <Label htmlFor={`meta-${field.key}`} className="text-sm mb-1 block">
-            {field.label}
-            {field.required && !isDisabled && <span className="text-red-500 ml-0.5">*</span>}
-          </Label>
-
-          {field.type === "text" && (
-            <Input
-              id={`meta-${field.key}`}
-              value={(getVal(field) as string) || ""}
-              onChange={(e) => setValue(field.key, e.target.value)}
-              required={field.required && !isDisabled}
-              disabled={isDisabled}
-            />
-          )}
-
-          {field.type === "number" && (
-            <Input
-              id={`meta-${field.key}`}
-              type="number"
-              value={getVal(field) != null ? String(getVal(field)) : ""}
-              onChange={(e) => setValue(field.key, e.target.value ? Number(e.target.value) : "")}
-              required={field.required && !isDisabled}
-              disabled={isDisabled}
-            />
-          )}
-
-          {(field.type === "date" || field.type === "datetime") && (
-            <DateTimeInput
-              value={(getVal(field) as string) || ""}
-              onChange={(val) => setValue(field.key, val)}
-              required={field.required && !isDisabled}
-              allowTime={field.type === "datetime"}
-              disabled={isDisabled}
-            />
-          )}
-
-          {field.type === "select" && (
-            <select
-              id={`meta-${field.key}`}
-              className="w-full border rounded-md p-2 text-sm"
-              value={(getVal(field) as string) || ""}
-              onChange={(e) => setValue(field.key, e.target.value)}
-              required={field.required && !isDisabled}
-              disabled={isDisabled}
-            >
-              <option value="">Select...</option>
-              {field.options?.map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt}
-                </option>
-              ))}
-            </select>
-          )}
-
-          {field.type === "multiselect" && (
-            <select
-              id={`meta-${field.key}`}
-              className="w-full border rounded-md p-2 text-sm"
-              multiple
-              value={Array.isArray(getVal(field)) ? (getVal(field) as string[]) : []}
-              onChange={(e) => {
-                const selected = Array.from(e.target.selectedOptions, (o) => o.value);
-                setValue(field.key, selected);
-              }}
-              disabled={isDisabled}
-            >
-              {field.options?.map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt}
-                </option>
-              ))}
-            </select>
-          )}
-
-          {field.type === "boolean" && (
-            <div className="flex items-center gap-2">
-              <Switch
-                id={`meta-${field.key}`}
-                checked={Boolean(getVal(field))}
-                onCheckedChange={(checked) => setValue(field.key, checked)}
-                disabled={isDisabled}
-              />
-              <span className="text-sm text-gray-600">
-                {getVal(field) ? "Yes" : "No"}
-              </span>
-            </div>
-          )}
-        </div>
+          <DynamicMetaField
+            key={field.key}
+            field={field}
+            value={values.meta[field.key]}
+            onChange={(newValue) =>
+              onChange({
+                ...values,
+                meta: { ...values.meta, [field.key]: newValue },
+              })
+            }
+            isDisabled={isDisabled}
+          />
         );
       })}
     </div>
+  );
+}
+
+function renderDimensionField({
+  field,
+  values,
+  onChange,
+  isDisabled,
+  allDimensionValues,
+  dimensionValueLinks,
+  selectedByDim,
+}: {
+  field: MetaFieldDefinition;
+  values: FormValues;
+  onChange: (values: FormValues) => void;
+  isDisabled: boolean;
+  allDimensionValues: ReturnType<typeof useDimensionData>["allDimensionValues"];
+  dimensionValueLinks: ReturnType<
+    typeof useDimensionData
+  >["dimensionValueLinks"];
+  selectedByDim: Record<string, string>;
+}) {
+  const dimId = field.dimension_id;
+  if (!dimId) return null;
+
+  const dimValues = allDimensionValues.filter(
+    (dv) => dv.dimension_id === dimId,
+  );
+  const selectedValueId = selectedByDim[dimId] || "";
+
+  // Disabled = locked at current value. Present only that value so the
+  // dropdown can't hint at any other option.
+  const options = isDisabled
+    ? dimValues.filter((dv) => dv.id === selectedValueId)
+    : filterEligibleValues(
+        dimValues,
+        selectedByDim,
+        dimId,
+        dimensionValueLinks,
+      );
+
+  return (
+    <DynamicDimensionField
+      key={`dim-${field.key}`}
+      field={field}
+      options={options}
+      selectedValueId={selectedValueId}
+      isDisabled={isDisabled}
+      onSelect={(newValueId) => {
+        // Remove any existing value belonging to this dimension, then
+        // add the new one (if non-empty).
+        const otherIds = values.dimensions.filter(
+          (dvId) => !dimValues.some((dv) => dv.id === dvId),
+        );
+        onChange({
+          ...values,
+          dimensions: newValueId ? [...otherIds, newValueId] : otherIds,
+        });
+      }}
+    />
   );
 }
 

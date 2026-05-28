@@ -17,6 +17,7 @@ import {
   MetaFieldSchemaItem,
 } from "@/types";
 import { collectEnrollmentFields, getFieldsForScope } from "@/utils/meta-fields";
+import { type FormValues } from "@/utils/field-visibility";
 
 import { Can, usePermissions } from "@/components/Auth/Permissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -65,7 +66,7 @@ export default function EntityDetailPage() {
   >(null);
   const [enrollmentTab, setEnrollmentTab] = useState<"active" | "ended" | "all">("active");
   const [editingDetails, setEditingDetails] = useState(false);
-  const [detailMetaValues, setDetailMetaValues] = useState<Record<string, unknown>>({});
+  const [detailValues, setDetailValues] = useState<FormValues>({ meta: {}, dimensions: [] });
   const [detailFormError, setDetailFormError] = useState<string | null>(null);
   const entityFieldsRef = useRef<EntityFieldsHandle>(null);
 
@@ -182,7 +183,7 @@ export default function EntityDetailPage() {
   });
 
   const openEditDetails = () => {
-    setDetailMetaValues(entity?.meta || {});
+    setDetailValues({ meta: entity?.meta || {}, dimensions: [] });
     setDetailFormError(null);
     setEditingDetails(true);
   };
@@ -200,7 +201,7 @@ export default function EntityDetailPage() {
       setDetailFormError(validationError);
       return;
     }
-    updateDetailsMutation.mutate(detailMetaValues);
+    updateDetailsMutation.mutate(detailValues.meta);
   };
 
   if (isLoading) return <PageLayout><PageContent><p>Loading...</p></PageContent></PageLayout>;
@@ -554,8 +555,8 @@ export default function EntityDetailPage() {
             ref={entityFieldsRef}
             entityTypeId={entity.entity_type_id}
             allSchemas={allSchemas}
-            metaValues={detailMetaValues}
-            onMetaChange={setDetailMetaValues}
+            values={detailValues}
+            onChange={setDetailValues}
             mode="edit"
           />
           <div className="flex gap-2 pt-2">
