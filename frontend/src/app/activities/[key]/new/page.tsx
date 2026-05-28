@@ -325,7 +325,7 @@ export default function NewActivityPage() {
         const statuses = (field.config?.statuses as string[]) || ["present", "absent"];
         const defaultStatus = (field.config?.default_status as string) || statuses[0];
         const etLabel = isUserSource
-          ? "Users (staff)"
+          ? "Users"
           : entityTypes.find((t) => t.id === etId)?.name || field.label;
 
         return (

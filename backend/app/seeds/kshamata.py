@@ -453,7 +453,7 @@ SESSION_DIMENSION_FIELDS = [
 # Participant fields added to Session scope (edit only, search_select)
 # (field_type, entity_type_name_or_none, label, sort_order)
 SESSION_PARTICIPANT_FIELDS = [
-    ("user_list", None, "Users (staff)", 5),
+    ("user_list", None, "Users", 5),
     ("entity_list", "Facilitator", "Facilitators", 6),
     ("entity_list", "Beneficiary", "Beneficiaries", 7),
 ]

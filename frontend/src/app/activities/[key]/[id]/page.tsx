@@ -288,7 +288,7 @@ export default function ActivityDetailPage() {
   }, [participants]);
 
   const getFieldLabel = (field: MetaFieldDefinition): string => {
-    if (field.type === "user_list") return "Users (staff)";
+    if (field.type === "user_list") return "Users";
     if (field.entity_type_id) {
       const et = entityTypes.find((t) => t.id === field.entity_type_id);
       return et?.name || field.label;

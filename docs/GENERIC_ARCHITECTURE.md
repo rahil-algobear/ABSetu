@@ -1049,7 +1049,7 @@ activity_participants rows:
   entity            → Beneficiary    entity_type:beneficiary    "absent"   null
                       "Suresh"
   user              → User           user                       "present"  null
-                      "Neha" (staff)
+                      "Neha"
 ```
 
 #### Status UX — Ensuring Generalization Doesn't Slow Down Field Workers

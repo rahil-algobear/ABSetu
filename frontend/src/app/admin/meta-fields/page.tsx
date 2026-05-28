@@ -533,7 +533,7 @@ export default function MetaFieldsPage() {
       return dim ? `Dimension: ${dim.name}` : "Dimension";
     }
     if (field.type === "user_list") {
-      return "Users (staff)";
+      return "Users";
     }
     if (field.type === "entity_list") {
       const et = entityTypesList.find((t) => t.id === field.entity_type_id);
@@ -567,7 +567,7 @@ export default function MetaFieldsPage() {
 
   // Entity type options for participant (includes "user")
   const participantEntityOptions = [
-    { id: "user", name: "Users (staff)" },
+    { id: "user", name: "Users" },
     ...entityTypesList,
   ];
 
