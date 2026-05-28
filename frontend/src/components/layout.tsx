@@ -19,7 +19,7 @@ export default function MainLayout({
   return (
     <div className="antialiased flex flex-col min-h-screen bg-gray-50">
       <Navigation />
-      <div className={`flex-1 mx-auto w-full min-h-[calc(100vh-100px)] ${isAuthRoute ? '' : 'pb-4'}`}>
+      <div className={`flex-1 mx-auto w-full min-h-[calc(100vh-200px)] ${isAuthRoute ? '' : 'pb-4'}`}>
         {children}
       </div>
       <footer className="border-t border-gray-200 bg-white">

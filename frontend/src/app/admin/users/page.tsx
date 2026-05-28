@@ -451,7 +451,7 @@ function UsersPageContent() {
         <p className="text-gray-500 text-sm">No users found.</p>
       ) : (
         <div className="bg-white shadow-sm border rounded-lg overflow-hidden">
-        <Table stickyRows={1} className="max-h-[calc(100vh-400px)] lg:max-h-[calc(100vh-300px)]">
+        <Table stickyRows={1} className="max-h-[calc(100vh-400px)] lg:max-h-[calc(100vh-200px)]">
           <TableHeader>
             <TableRow>
               {columns.map((col) =>
