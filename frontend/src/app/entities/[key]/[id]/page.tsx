@@ -207,7 +207,7 @@ export default function EntityDetailPage() {
         <TabsContent value="details">
           <div
             className={`grid grid-cols-1 gap-4 ${
-              canEnroll ? "md:grid-cols-3" : "md:grid-cols-2"
+              canEnroll ? "md:grid-cols-3 lg:grid-cols-4" : "md:grid-cols-2"
             }`}
           >
       {metaFields.length > 0 && (
@@ -234,7 +234,7 @@ export default function EntityDetailPage() {
       )}
 
       {canEnroll && (
-        <Card className="md:col-span-2">
+        <Card className="md:col-span-2 lg:col-span-3">
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg">Enrollments</CardTitle>
