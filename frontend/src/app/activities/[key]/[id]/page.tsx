@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   activityApi,
@@ -29,6 +29,8 @@ import { Badge } from "@/components/ui/badge";
 import { PageLayout } from "@/components/ui/page-layout";
 import { PageContent } from "@/components/ui/page-content";
 import { PageHeader } from "@/components/ui/page-header";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Dialog } from "@/components/ui/dialog";
 import { Search, Trash2, Pencil, Users, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import toast from "react-hot-toast";
@@ -37,11 +39,29 @@ export default function ActivityDetailPage() {
   const { key: typeKey, id } = useParams<{ key: string; id: string }>();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+
+  const tabParam = searchParams.get("tab");
+  const activeTab = tabParam === "participants" ? "participants" : "details";
+
+  const handleTabChange = (value: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (value === "details") {
+      params.delete("tab");
+    } else {
+      params.set("tab", value);
+    }
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  };
 
   // Phase 3.1: one section at a time. The section_key being edited, or null.
   const [editingSection, setEditingSection] = useState<string | null>(null);
   const [editingDetails, setEditingDetails] = useState(false);
   const [detailMetaValues, setDetailMetaValues] = useState<Record<string, unknown>>({});
+
+  const cancelEditDetails = () => setEditingDetails(false);
   const [participantState, setParticipantState] = useState<
     Record<string, { participant_id: string; participant_type: string; status?: string; meta?: Record<string, unknown> }[]>
   >({});
@@ -339,68 +359,28 @@ export default function ActivityDetailPage() {
         }
       />
 
-      <PageContent className="space-y-4">
-      {/* Details Card */}
-      <Card>
-        <CardHeader className="flex-row items-center justify-between pb-2">
-          <CardTitle className="text-base">Details</CardTitle>
-          {!editingDetails && (
-            <Can permission="activity:create">
-              <Button size="sm" variant="outline" onClick={openDetailEditing}>
-                <Pencil className="h-3.5 w-3.5 mr-1" />
-                Edit
-              </Button>
-            </Can>
-          )}
-        </CardHeader>
-        <CardContent>
-          {editingDetails ? (
-            <form onSubmit={(e) => { e.preventDefault(); handleDetailSave(); }} className="space-y-3">
-              {detailFields.map((field) => {
-                if (field.type === "dimension") {
-                  const dimId = field.dimension_id;
-                  const dimInfo = activity.dimensions.find(
-                    (d) => dimensions.find((dim) => dim.id === dimId)?.key === d.dimension_key
-                  );
-                  const dimObj = dimensions.find((d) => d.id === dimId);
-                  return (
-                    <div key={`edit-dim-${field.key}`} className="flex items-center gap-2">
-                      <div>
-                        <p className="text-xs text-gray-500">{dimObj?.name || field.label}</p>
-                        <p className="text-sm font-medium">{dimInfo?.value_name || "—"}</p>
-                      </div>
-                    </div>
-                  );
-                }
+      <PageContent>
+      <Tabs value={activeTab} onValueChange={handleTabChange}>
+        <TabsList className="mb-2">
+          <TabsTrigger value="details">Details</TabsTrigger>
+          <TabsTrigger value="participants">
+            Participants{participants.length > 0 ? ` (${participants.length})` : ""}
+          </TabsTrigger>
+        </TabsList>
 
-                // Title with generated mode: skip
-                if (field.key === "title") {
-                  const titleConfig = field.config || { mode: "free_text" };
-                  if ((titleConfig.mode as string) === "generated") return null;
-                }
-
-                return (
-                  <div key={`edit-field-${field.key}`}>
-                    <DynamicMetaForm
-                      fields={[field]}
-                      values={detailMetaValues}
-                      onChange={setDetailMetaValues}
-                      disabledKeys={editDisabledKeys}
-                    />
-                  </div>
-                );
-              })}
-              <div className="flex gap-2 pt-2">
-                <Button type="submit" disabled={updateDetailsMutation.isPending}>
-                  Save
+        <TabsContent value="details">
+          <Card>
+            <CardHeader className="flex-row items-center justify-between pb-2">
+              <CardTitle className="text-base">Details</CardTitle>
+              <Can permission="activity:create">
+                <Button size="sm" variant="outline" onClick={openDetailEditing}>
+                  <Pencil className="h-3.5 w-3.5 mr-1" />
+                  Edit
                 </Button>
-                <Button type="button" variant="outline" onClick={() => setEditingDetails(false)}>
-                  Cancel
-                </Button>
-              </div>
-            </form>
-          ) : (
-            <div className="space-y-3">
+              </Can>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
               {detailFields.map((field) => {
                 if (field.type === "dimension") {
                   const dimDef = dimensions.find((d) => d.id === field.dimension_id);
@@ -449,11 +429,12 @@ export default function ActivityDetailPage() {
                     <p className="text-sm font-medium">{String(val)}</p>
                   </div>
                 ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
+        <TabsContent value="participants">
       {/* Participant sections */}
       {participantListFields.length > 0 ? (
         <Card>
@@ -665,6 +646,66 @@ export default function ActivityDetailPage() {
           </CardContent>
         </Card>
       )}
+        </TabsContent>
+      </Tabs>
+
+      <Dialog
+        open={editingDetails}
+        onClose={cancelEditDetails}
+        title="Edit Details"
+        className="max-w-lg"
+      >
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleDetailSave();
+          }}
+          className="space-y-3"
+        >
+          {detailFields.map((field) => {
+            if (field.type === "dimension") {
+              const dimId = field.dimension_id;
+              const dimInfo = activity.dimensions.find(
+                (d) => dimensions.find((dim) => dim.id === dimId)?.key === d.dimension_key,
+              );
+              const dimObj = dimensions.find((d) => d.id === dimId);
+              return (
+                <div key={`edit-dim-${field.key}`} className="flex items-center gap-2">
+                  <div>
+                    <p className="text-xs text-gray-500">{dimObj?.name || field.label}</p>
+                    <p className="text-sm font-medium">{dimInfo?.value_name || "—"}</p>
+                  </div>
+                </div>
+              );
+            }
+
+            // Title with generated mode: skip
+            if (field.key === "title") {
+              const titleConfig = field.config || { mode: "free_text" };
+              if ((titleConfig.mode as string) === "generated") return null;
+            }
+
+            return (
+              <div key={`edit-field-${field.key}`}>
+                <DynamicMetaForm
+                  fields={[field]}
+                  values={detailMetaValues}
+                  onChange={setDetailMetaValues}
+                  disabledKeys={editDisabledKeys}
+                />
+              </div>
+            );
+          })}
+          <div className="flex gap-2 pt-2">
+            <Button type="submit" disabled={updateDetailsMutation.isPending}>
+              Save
+            </Button>
+            <Button type="button" variant="outline" onClick={cancelEditDetails}>
+              Cancel
+            </Button>
+          </div>
+        </form>
+      </Dialog>
       </PageContent>
     </PageLayout>
   );
