@@ -1,18 +1,17 @@
 "use client";
 
-import { Suspense, useState, useMemo } from "react";
+import { Suspense, useState, useMemo, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { entityApi, entityTypeApi, metaFieldSchemaApi } from "@/services/api";
 import { Entity, ListColumnConfig, MetaFieldSchemaItem } from "@/types";
-import { getFieldsForScope } from "@/utils/meta-fields";
 import { Can } from "@/components/Auth/Permissions";
 import { useListParams } from "@/hooks/useListParams";
 import type { FilterDefinition } from "@/components/ui/filter-modal";
 
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
-import { DynamicMetaForm } from "@/components/DynamicMetaForm";
+import { EntityFields, type EntityFieldsHandle } from "@/components/EntityFields";
 import { EnrollmentForm } from "@/components/EnrollmentForm";
 import { PageLayout } from "@/components/ui/page-layout";
 import { PageHeader } from "@/components/ui/page-header";
@@ -41,6 +40,8 @@ function EntityTypeEntitiesContent() {
   const [editing, setEditing] = useState<Entity | null>(null);
   const [metaValues, setMetaValues] = useState<Record<string, unknown>>({});
   const [quickEnrollEntity, setQuickEnrollEntity] = useState<Entity | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const entityFieldsRef = useRef<EntityFieldsHandle>(null);
 
   // Find the entity type by key
   const { data: entityTypes = [] } = useQuery({
@@ -168,6 +169,7 @@ function EntityTypeEntitiesContent() {
   const openCreate = () => {
     setEditing(null);
     setMetaValues({});
+    setFormError(null);
     setModalOpen(true);
   };
 
@@ -175,16 +177,24 @@ function EntityTypeEntitiesContent() {
     e.stopPropagation();
     setEditing(item);
     setMetaValues(item.meta || {});
+    setFormError(null);
     setModalOpen(true);
   };
 
   const closeModal = () => {
     setModalOpen(false);
     setEditing(null);
+    setFormError(null);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError(null);
+    const validationError = entityFieldsRef.current?.validate();
+    if (validationError) {
+      setFormError(validationError);
+      return;
+    }
     const meta = Object.keys(metaValues).length > 0 ? metaValues : undefined;
     if (editing) {
       updateMutation.mutate({
@@ -199,15 +209,11 @@ function EntityTypeEntitiesContent() {
     }
   };
 
-  // Meta fields for create/edit form
+  // Meta-field schemas (used by EntityFields + EnrollmentForm below).
   const { data: allSchemas = [] } = useQuery<MetaFieldSchemaItem[]>({
     queryKey: ["meta-field-schemas"],
     queryFn: metaFieldSchemaApi.getAll,
   });
-  const metaFields = useMemo(
-    () => entityType ? getFieldsForScope(allSchemas, { type: "entity", entity_type_id: entityType.id }) : [],
-    [allSchemas, entityType],
-  );
 
   const typeName = entityType?.name || "Entity";
 
@@ -344,24 +350,21 @@ function EntityTypeEntitiesContent() {
         title={editing ? `Edit ${typeName}` : `Add ${typeName}`}
       >
         <form onSubmit={handleSubmit} className="space-y-3">
-          <DynamicMetaForm
-            fields={metaFields.filter((f) => {
-              if (f.visible === false) return false;
-              // "edit only" fields should be hidden on create
-              if (!editing && f.stage === "edit") return false;
-              return true;
-            })}
-            values={metaValues}
-            onChange={setMetaValues}
-            disabledKeys={(() => {
-              const keys = new Set<string>();
-              for (const f of metaFields) {
-                // "create only" fields are visible but disabled on edit
-                if (editing && f.stage === "create") keys.add(f.key);
-              }
-              return keys;
-            })()}
-          />
+          {formError && (
+            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {formError}
+            </div>
+          )}
+          {entityType && (
+            <EntityFields
+              ref={entityFieldsRef}
+              entityTypeId={entityType.id}
+              allSchemas={allSchemas}
+              metaValues={metaValues}
+              onMetaChange={setMetaValues}
+              mode={editing ? "edit" : "create"}
+            />
+          )}
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={closeModal}>
               Cancel
