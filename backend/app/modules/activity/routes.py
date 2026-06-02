@@ -494,22 +494,30 @@ def get_participants_paginated(
     section_key: str = Query(..., min_length=1),
     page: int = Query(1, ge=1),
     limit: int = Query(25, ge=1, le=100),
+    search: str | None = Query(None),
+    sort_by: str | None = Query(None),
+    sort_order: str = Query("asc", pattern="^(asc|desc)$"),
     activity=Depends(get_accessible_activity),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Paginated participants scoped to a single section of an activity.
 
-    Each row carries a resolved display_name (entity: first visible meta
-    column of its type's list config; user: first + last name) so the
-    frontend doesn't have to batch-fetch names per page.
+    Supports search and sort_by=name. Each row carries a resolved
+    display_name (entity: first visible meta column of its type's list
+    config; user: first + last name) so the frontend doesn't have to
+    batch-fetch names per page.
     """
     service = ActivityParticipantService(db)
     rows, total = service.list_by_activity_paginated(
+        org_id=current_user.organization_id,
         activity_id=activity.id,
         section_key=section_key,
         page=page,
         limit=limit,
+        search=search,
+        sort_by=sort_by,
+        sort_order=sort_order,
     )
     name_by_row_id = service.resolve_display_names(
         current_user.organization_id, rows

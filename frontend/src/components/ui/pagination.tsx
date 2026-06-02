@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react";
 import { Button } from "./button";
 
 interface PaginationProps {
@@ -13,6 +13,32 @@ interface PaginationProps {
 }
 
 const ITEMS_PER_PAGE_OPTIONS = [10, 25, 50];
+
+/** Per-page select with a custom chevron — the native dropdown arrow
+ *  floats too far right with a gap, so we hide it (appearance-none) and
+ *  place our own. */
+function PerPageSelect({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (n: number) => void;
+}) {
+  return (
+    <div className="relative inline-block">
+      <select
+        value={value}
+        onChange={(e) => onChange(parseInt(e.target.value))}
+        className="appearance-none border rounded-md pl-2 pr-7 py-1 text-sm"
+      >
+        {ITEMS_PER_PAGE_OPTIONS.map((n) => (
+          <option key={n} value={n}>{n} per page</option>
+        ))}
+      </select>
+      <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+    </div>
+  );
+}
 
 export function Pagination({
   currentPage,
@@ -68,15 +94,7 @@ export function Pagination({
             <span className="font-medium">{endItem}</span> of{" "}
             <span className="font-medium">{totalItems}</span>
           </p>
-          <select
-            value={itemsPerPage}
-            onChange={(e) => onItemsPerPageChange(parseInt(e.target.value))}
-            className="border rounded-md px-2 py-1 text-sm"
-          >
-            {ITEMS_PER_PAGE_OPTIONS.map((n) => (
-              <option key={n} value={n}>{n} per page</option>
-            ))}
-          </select>
+          <PerPageSelect value={itemsPerPage} onChange={onItemsPerPageChange} />
         </div>
         {totalPages > 1 && (
           <div className="flex justify-center">
@@ -131,15 +149,7 @@ export function Pagination({
       {/* Desktop */}
       <div className="hidden sm:flex sm:items-center sm:justify-between">
         <div className="flex items-center gap-4">
-          <select
-            value={itemsPerPage}
-            onChange={(e) => onItemsPerPageChange(parseInt(e.target.value))}
-            className="border rounded-md px-2 py-1 text-sm"
-          >
-            {ITEMS_PER_PAGE_OPTIONS.map((n) => (
-              <option key={n} value={n}>{n} per page</option>
-            ))}
-          </select>
+          <PerPageSelect value={itemsPerPage} onChange={onItemsPerPageChange} />
           <p className="text-sm text-gray-700">
             Showing <span className="font-medium">{startItem}</span> to{" "}
             <span className="font-medium">{endItem}</span> of{" "}

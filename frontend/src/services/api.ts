@@ -394,7 +394,14 @@ export const activityApi = {
   },
   getParticipantsPage: async (
     activityId: string,
-    params: { section_key: string; page?: number; limit?: number },
+    params: {
+      section_key: string;
+      page?: number;
+      limit?: number;
+      search?: string;
+      sort_by?: string;
+      sort_order?: string;
+    },
   ): Promise<PaginatedResponse<ActivityParticipant>> => {
     const response = await authAxios.get<PaginatedResponse<ActivityParticipant>>(
       `/activities/${activityId}/participants/page`,

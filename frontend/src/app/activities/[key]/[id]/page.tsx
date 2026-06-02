@@ -148,6 +148,19 @@ export default function ActivityDetailPage() {
     } else {
       params.set("section", value);
     }
+    // Reset the list params so each section's search/sort/page starts fresh.
+    for (const k of Array.from(params.keys())) {
+      if (
+        k === "search" ||
+        k === "sort_by" ||
+        k === "sort_order" ||
+        k === "page" ||
+        k === "show" ||
+        k.startsWith("filter_")
+      ) {
+        params.delete(k);
+      }
+    }
     const query = params.toString();
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
   };
@@ -448,6 +461,7 @@ export default function ActivityDetailPage() {
             entityTypeKey={fieldEntityType?.key ?? null}
             metaFields={metaFields}
             hasStatus={hasStatus}
+            sectionLabel={getFieldLabel(field)}
           />
         )}
       </div>

@@ -10,6 +10,10 @@
  * on the page (and rows on other pages) are not in the payload and stay
  * untouched. Page navigation is blocked while there are unsaved edits
  * so we never silently drop a save.
+ *
+ * Page / search / sort come from the same useListParams URL state the
+ * view-mode list uses, so opening Edit keeps you on the page you were
+ * looking at, showing the same rows and count.
  */
 
 import { useMemo, useState } from "react";
@@ -17,6 +21,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { activityApi } from "@/services/api";
 import { MetaFieldDefinition } from "@/types";
+import { useListParams } from "@/hooks/useListParams";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Pagination } from "@/components/ui/pagination";
@@ -48,25 +53,34 @@ export function ParticipantSectionEditor({
   field,
   metaFields,
   onClose,
-  pageSize = 25,
 }: ParticipantSectionEditorProps) {
   const queryClient = useQueryClient();
   const captureStatus = (field.config?.capture_status as boolean) || false;
   const statuses = (field.config?.statuses as string[]) || ["present", "absent"];
 
-  const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(pageSize);
+  // Shares URL state with the view-mode list, so Edit opens on the same
+  // page / search / sort the user was looking at.
+  const listParams = useListParams({
+    defaultSortOrder: "asc",
+    defaultLimit: 25,
+  });
+  const page = listParams.page;
+  const limit = listParams.limit;
+
   // Edits keyed by participant-row id (server PK), scoped to the
   // current page. Cleared on successful save.
   const [pageEdits, setPageEdits] = useState<Record<string, PageEdit>>({});
 
   const { data: response, isLoading, isFetching } = useQuery({
-    queryKey: ["participants-page", activityId, sectionKey, page, limit],
+    queryKey: ["participants-page", activityId, sectionKey, listParams.apiParams],
     queryFn: () =>
       activityApi.getParticipantsPage(activityId, {
         section_key: sectionKey,
-        page,
-        limit,
+        page: listParams.apiParams.page,
+        limit: listParams.apiParams.limit,
+        search: listParams.apiParams.search,
+        sort_by: listParams.apiParams.sort_by,
+        sort_order: listParams.apiParams.sort_order,
       }),
   });
 
@@ -132,7 +146,7 @@ export function ParticipantSectionEditor({
       toast.error("Save your changes on this page first");
       return;
     }
-    setPage(newPage);
+    listParams.setPage(newPage);
   };
 
   const attemptClose = () => {
@@ -283,8 +297,7 @@ export function ParticipantSectionEditor({
                 toast.error("Save your changes on this page first");
                 return;
               }
-              setLimit(n);
-              setPage(1);
+              listParams.setLimit(n);
             }}
             itemLabel="participants"
           />

@@ -392,23 +392,102 @@ class ActivityParticipantService:
     def list_by_activity(self, activity_id: uuid.UUID) -> list[ActivityParticipant]:
         return self.db.query(ActivityParticipant).filter_by(activity_id=activity_id).all()
 
+    def _section_name_expr(
+        self,
+        org_id: uuid.UUID,
+        section_key: str,
+        sample: ActivityParticipant,
+    ):
+        """Build the SQL expression that resolves a participant's display
+        name, scoped to a single section (all rows share a type). Returns
+        (joined_query_base, name_expr) where name_expr can be None for an
+        entity section whose type has no visible meta column to name by.
+
+        Users: first + last name. Entities: the first visible meta column
+        of the entity type's list config, same key used by resolve_
+        display_names so view labels and sort/search agree."""
+        from sqlalchemy import func as _func
+
+        from app.modules.auth.model import User
+        from app.modules.entity.model import Entity
+        from app.modules.organization.service import ListConfigService
+
+        base = self.db.query(ActivityParticipant).filter_by(
+            activity_id=sample.activity_id, section_key=section_key
+        )
+
+        if sample.participant_type == "user":
+            joined = base.join(User, User.id == ActivityParticipant.participant_id)
+            return joined, _func.concat(User.first_name, " ", User.last_name)
+
+        # Entity section — resolve the name column for this type.
+        sample_entity = (
+            self.db.query(Entity).filter_by(id=sample.participant_id).first()
+        )
+        name_key = None
+        if sample_entity is not None:
+            columns = ListConfigService(self.db).get_config(
+                org_id, f"entity:{sample_entity.entity_type_id}"
+            )
+            first_meta_col = next(
+                (
+                    c["key"]
+                    for c in columns
+                    if c.get("visible") and c.get("key", "").startswith("meta:")
+                ),
+                None,
+            )
+            name_key = first_meta_col.replace("meta:", "", 1) if first_meta_col else None
+
+        joined = base.join(Entity, Entity.id == ActivityParticipant.participant_id)
+        name_expr = Entity.meta[name_key].astext if name_key else None
+        return joined, name_expr
+
     def list_by_activity_paginated(
         self,
+        org_id: uuid.UUID,
         activity_id: uuid.UUID,
         section_key: str,
         page: int = 1,
         limit: int = 25,
+        search: str | None = None,
+        sort_by: str | None = None,
+        sort_order: str = "asc",
     ) -> tuple[list[ActivityParticipant], int]:
         """Paginated participants for a single section of an activity.
 
-        Sort defaults to created_at ascending — the order rows were added
-        — so pages stay stable as new participants are appended.
+        Supports search and sort by participant name. Name resolution is
+        section-scoped (all rows in a section share a type), so the query
+        joins one source table — no cross-type union. Default order is
+        created_at ascending so pages stay stable as rows are appended.
         """
-        query = (
+        sample = (
             self.db.query(ActivityParticipant)
             .filter_by(activity_id=activity_id, section_key=section_key)
-            .order_by(ActivityParticipant.created_at.asc())
+            .first()
         )
+        if sample is None:
+            return [], 0
+
+        needs_name = bool(search) or sort_by == "name"
+        if needs_name:
+            query, name_expr = self._section_name_expr(org_id, section_key, sample)
+        else:
+            query = self.db.query(ActivityParticipant).filter_by(
+                activity_id=activity_id, section_key=section_key
+            )
+            name_expr = None
+
+        if search and name_expr is not None:
+            query = query.filter(name_expr.ilike(f"%{search}%"))
+
+        if sort_by == "name" and name_expr is not None:
+            query = query.order_by(
+                name_expr.desc() if sort_order == "desc" else name_expr.asc()
+            )
+        else:
+            query = query.order_by(ActivityParticipant.created_at.asc())
+
         total = query.count()
         offset = max(0, (page - 1) * limit)
         rows = query.offset(offset).limit(limit).all()
