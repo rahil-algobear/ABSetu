@@ -64,7 +64,10 @@ interface AlreadyAddedParticipant {
 }
 
 interface ParticipantPickerProps {
-  activityId: string;
+  /** Live mode (detail page): the activity to mutate. Omit for
+   *  deferred mode (create form), where there's no activity yet and
+   *  selections accumulate in form state via onDeferredAdd. */
+  activityId?: string;
   /** Dimensions the activity is scoped to. Used to derive scope for
    *  the Enrolled tab and to auto-apply onto new enrollments. Ignored
    *  outside Smart mode. */
@@ -91,9 +94,14 @@ interface ParticipantPickerProps {
    *  for the Added tab (no separate fetch needed) and to filter them
    *  out of the Enrolled tab. */
   alreadyAdded: AlreadyAddedParticipant[];
-  /** Fired after a successful picker action. Parent should re-fetch
-   *  the activity's participants. */
+  /** Live mode: fired after a successful API action so the parent can
+   *  re-fetch the activity's participants. */
   onAdded: () => void;
+  /** Deferred mode (create form): when set, Add and Create-new append
+   *  to form state via this callback instead of hitting the API. Its
+   *  presence is what puts the picker in deferred mode. The name is
+   *  passed so the caller can show it without a separate lookup. */
+  onDeferredAdd?: (participantId: string, name: string) => void;
   /** Trigger button label, e.g. "+ Beneficiary". */
   triggerLabel?: string;
 }
@@ -114,9 +122,11 @@ export function ParticipantPicker({
   canEnroll = true,
   alreadyAdded,
   onAdded,
+  onDeferredAdd,
   triggerLabel,
 }: ParticipantPickerProps) {
   const queryClient = useQueryClient();
+  const deferred = !!onDeferredAdd;
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   // Smart mode opens on Enrolled (the most useful list). Non-smart
@@ -329,7 +339,7 @@ export function ParticipantPicker({
 
   const addMutation = useMutation({
     mutationFn: (participantId: string) =>
-      activityApi.pickerAdd(activityId, {
+      activityApi.pickerAdd(activityId!, {
         entity_id: participantId,
         section_key: sectionKey,
         participant_type: isUserKind ? "user" : "entity",
@@ -342,6 +352,16 @@ export function ParticipantPicker({
       toast.error(err.response?.data?.message || "Failed to add");
     },
   });
+
+  // Live mode hits the API; deferred mode appends to form state. Name is
+  // forwarded so the create form can label the selection without a fetch.
+  const handleAdd = (participantId: string, name: string) => {
+    if (deferred) {
+      onDeferredAdd!(participantId, name);
+    } else {
+      addMutation.mutate(participantId);
+    }
+  };
 
   const close = () => {
     setOpen(false);
@@ -439,7 +459,7 @@ export function ParticipantPicker({
                       alreadyAdded={alreadyAddedIds.has(e.id)}
                       canEnrollAndAdd={true}
                       activeInScope={true}
-                      onAdd={() => addMutation.mutate(e.id)}
+                      onAdd={() => handleAdd(e.id, getName(e))}
                       onEnrollAndAdd={() => setEnrollFor(e)}
                       pending={addMutation.isPending}
                     />
@@ -482,7 +502,7 @@ export function ParticipantPicker({
                     alreadyAdded={alreadyAddedIds.has(u.id)}
                     canEnrollAndAdd={false}
                     activeInScope={true}
-                    onAdd={() => addMutation.mutate(u.id)}
+                    onAdd={() => handleAdd(u.id, getUserName(u))}
                     onEnrollAndAdd={() => {}}
                     pending={addMutation.isPending}
                   />
@@ -520,7 +540,7 @@ export function ParticipantPicker({
                         alreadyAdded={alreadyAddedIds.has(e.id)}
                         canEnrollAndAdd={smart}
                         activeInScope={smart ? activeInScope : true}
-                        onAdd={() => addMutation.mutate(e.id)}
+                        onAdd={() => handleAdd(e.id, getName(e))}
                         onEnrollAndAdd={() => setEnrollFor(e)}
                         pending={addMutation.isPending}
                       />
@@ -573,7 +593,7 @@ export function ParticipantPicker({
       {enrollFor && smart && (
         <EnrollAndAddModal
           entity={enrollFor}
-          activityId={activityId}
+          activityId={activityId!}
           activityDimensions={activityDimensions}
           sectionKey={sectionKey}
           onClose={() => setEnrollFor(null)}
@@ -584,9 +604,23 @@ export function ParticipantPicker({
         />
       )}
 
-      {showCreateNew && entityTypeId && (
+      {showCreateNew && entityTypeId && deferred && (
+        <DeferredCreateModal
+          entityTypeId={entityTypeId}
+          entityTypeName={entityTypeName}
+          onClose={() => setShowCreateNew(false)}
+          onCreated={(id, name) => {
+            setShowCreateNew(false);
+            onDeferredAdd!(id, name);
+            setSearch("");
+            setTab("added");
+          }}
+        />
+      )}
+
+      {showCreateNew && entityTypeId && !deferred && (
         <CreateAndAddModal
-          activityId={activityId}
+          activityId={activityId!}
           activityDimensions={activityDimensions}
           sectionKey={sectionKey}
           entityTypeId={entityTypeId}
@@ -995,6 +1029,90 @@ function CreateAndAddModal({
           </Button>
           <Button type="submit" disabled={mutation.isPending}>
             Create &amp; Add
+          </Button>
+        </div>
+      </form>
+    </Dialog>
+  );
+}
+
+/** Deferred-mode create: builds a brand-new entity (no enrollment, no
+ *  participant link — there's no activity yet) and hands its id + name
+ *  back so the create form can add it to the in-progress selection. */
+function DeferredCreateModal({
+  entityTypeId,
+  entityTypeName,
+  onClose,
+  onCreated,
+}: {
+  entityTypeId: string;
+  entityTypeName: string;
+  onClose: () => void;
+  onCreated: (id: string, name: string) => void;
+}) {
+  const { data: allSchemas = [] } = useQuery<MetaFieldSchemaItem[]>({
+    queryKey: ["meta-field-schemas"],
+    queryFn: metaFieldSchemaApi.getAll,
+  });
+
+  const [values, setValues] = useState<FormValues>({ meta: {}, dimensions: [] });
+  const [formError, setFormError] = useState<string | null>(null);
+  const entityFieldsRef = useRef<EntityFieldsHandle>(null);
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      entityApi.create({
+        entity_type_id: entityTypeId,
+        meta: Object.keys(values.meta).length ? values.meta : undefined,
+      }),
+    onSuccess: (newEntity) => {
+      const name =
+        (Object.values(newEntity.meta || {}).find(
+          (v) => typeof v === "string" && v,
+        ) as string | undefined) ||
+        newEntity.code ||
+        newEntity.id;
+      toast.success(`${entityTypeName} created — save the activity to confirm`);
+      onCreated(newEntity.id, name);
+    },
+    onError: (err: { response?: { data?: { message?: string } } }) => {
+      setFormError(err.response?.data?.message || "Failed to create");
+    },
+  });
+
+  const onSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormError(null);
+    const validationError = entityFieldsRef.current?.validate();
+    if (validationError) {
+      setFormError(validationError);
+      return;
+    }
+    mutation.mutate();
+  };
+
+  return (
+    <Dialog open onClose={onClose} title={`Create new ${entityTypeName}`}>
+      <form onSubmit={onSubmit} className="space-y-4">
+        {formError && (
+          <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            {formError}
+          </div>
+        )}
+        <EntityFields
+          ref={entityFieldsRef}
+          entityTypeId={entityTypeId}
+          allSchemas={allSchemas}
+          values={values}
+          onChange={setValues}
+          mode="create"
+        />
+        <div className="flex justify-end gap-2 pt-2 border-t">
+          <Button type="button" variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={mutation.isPending}>
+            Create
           </Button>
         </div>
       </form>

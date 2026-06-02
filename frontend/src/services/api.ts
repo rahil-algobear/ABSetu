@@ -254,17 +254,6 @@ export interface FilterResponse {
 }
 
 export const entityApi = {
-  list: async (entityTypeId?: string): Promise<Entity[]> => {
-    // High limit so the activity create page's SearchSelectParticipants
-    // options list covers orgs with hundreds of beneficiaries. Phase 3.2
-    // retires that flow; until then this is the patch.
-    const params = new URLSearchParams({ limit: "1000" });
-    if (entityTypeId) params.set("entity_type_id", entityTypeId);
-    const response = await authAxios.get<PaginatedResponse<Entity>>(
-      `/entities/?${params.toString()}`,
-    );
-    return response.data.data;
-  },
   /** Fetch entities by ID. Transparently chunks the request so an
    *  activity with hundreds of participants (or any other big batch
    *  caller) doesn't trip the backend's per-request `ids` cap and,

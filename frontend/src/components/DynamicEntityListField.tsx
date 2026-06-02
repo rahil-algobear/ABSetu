@@ -1,32 +1,22 @@
 "use client";
 
 /**
- * Per-type renderer for entity_list fields. Fetches entities of the
- * field's entity_type_id (plus the entity type's list-column config so
- * we can pick a display name) and renders the participant-section UI
- * via SearchSelectParticipants.
- *
- * Owns its own data fetches; callers don't need to wire up entity
- * queries or a list-config lookup. Multiple instances on the same page
- * share fetches via TanStack Query's queryKey dedupe.
+ * Per-type renderer for entity_list fields on the create form. Uses the
+ * shared ParticipantPicker in deferred mode (no activity exists yet, so
+ * picks accumulate in form state) plus a simple selected list. Status /
+ * meta per participant are set later on the activity detail page — the
+ * create form only chooses who's in.
  */
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { X } from "lucide-react";
 
-import {
-  entityApi,
-  entityTypeApi,
-  listConfigApi,
-} from "@/services/api";
-import type {
-  EntityType,
-  ListColumnConfig,
-  MetaFieldDefinition,
-} from "@/types";
+import { entityTypeApi } from "@/services/api";
+import type { EntityType, MetaFieldDefinition } from "@/types";
 import type { ParticipantRecord } from "@/utils/field-visibility";
 
-import { SearchSelectParticipants } from "@/components/SearchSelectParticipants";
+import { ParticipantPicker } from "@/components/ParticipantPicker";
 
 export interface DynamicEntityListFieldProps {
   field: MetaFieldDefinition;
@@ -43,51 +33,24 @@ export function DynamicEntityListField({
 }: DynamicEntityListFieldProps) {
   const entityTypeId = field.entity_type_id || null;
 
-  // Entity type for label resolution.
   const { data: entityTypes = [] } = useQuery<EntityType[]>({
     queryKey: ["entity-types"],
     queryFn: entityTypeApi.list,
   });
 
-  // Entities of this type — the picker's option pool.
-  const { data: entities = [] } = useQuery({
-    queryKey: ["entities-for-section", entityTypeId],
-    queryFn: () => entityApi.list(entityTypeId!),
-    enabled: !!entityTypeId,
-  });
-
-  // List column config — used to pick which meta field renders as the
-  // option's display name (the first visible meta column the admin
-  // configured for this entity type's list view).
-  const { data: columns = [] } = useQuery<ListColumnConfig[]>({
-    queryKey: ["list-config", `entity:${entityTypeId}`],
-    queryFn: () => listConfigApi.get(`entity:${entityTypeId}`),
-    enabled: !!entityTypeId,
-  });
-
-  const displayMetaKey = useMemo(() => {
-    const firstCol = columns.find((c) => c.visible && c.key.startsWith("meta:"));
-    return firstCol?.key.replace(/^meta:/, "");
-  }, [columns]);
-
-  const options = useMemo(
-    () =>
-      entities.map((e) => ({
-        id: e.id,
-        name: displayMetaKey
-          ? String((e.meta || {})[displayMetaKey] || "")
-          : "",
-      })),
-    [entities, displayMetaKey],
+  const entityType = useMemo(
+    () => entityTypes.find((t) => t.id === entityTypeId),
+    [entityTypes, entityTypeId],
   );
+  const entityTypeName = entityType?.name || field.label;
+  const canEnroll = entityType?.can_enroll ?? true;
 
-  const entityTypeName = useMemo(() => {
-    const et = entityTypes.find((t) => t.id === entityTypeId);
-    return et?.name || field.label;
-  }, [entityTypes, entityTypeId, field.label]);
+  // Names of selected participants, captured at add time so the
+  // selected list and the picker's "Added" tab can label rows without a
+  // separate lookup. Create starts empty and every id flows through the
+  // picker, so this stays in sync with `value`.
+  const [names, setNames] = useState<Record<string, string>>({});
 
-  // field.config supplies the participant-section UX knobs (per-row
-  // status column + the allowed statuses).
   const captureStatus = Boolean(field.config?.capture_status);
   const statuses =
     (field.config?.statuses as string[] | undefined) ?? ["present", "absent"];
@@ -96,25 +59,80 @@ export function DynamicEntityListField({
 
   if (isDisabled) return null;
 
+  const selectedIds = new Set(value.map((v) => v.participant_id));
+
+  const addParticipant = (id: string, name: string) => {
+    setNames((prev) => ({ ...prev, [id]: name }));
+    if (selectedIds.has(id)) return;
+    onChange([
+      ...value,
+      {
+        participant_id: id,
+        participant_type: "entity",
+        status: captureStatus ? defaultStatus : undefined,
+        meta: {},
+      },
+    ]);
+  };
+
+  const removeParticipant = (id: string) => {
+    onChange(value.filter((v) => v.participant_id !== id));
+  };
+
+  const alreadyAdded = value.map((v) => ({
+    id: v.participant_id,
+    name: names[v.participant_id] || v.participant_id,
+  }));
+
   return (
     <div>
-      <h3 className="text-sm font-semibold mb-2">
-        {entityTypeName}
-        {field.required && <span className="text-red-500 ml-0.5">*</span>}
-      </h3>
-      <SearchSelectParticipants
-        sectionKey={entityTypeId || field.key}
-        options={options}
-        participantType="entity"
-        selected={value}
-        onChange={onChange}
-        captureStatus={captureStatus}
-        statuses={statuses}
-        defaultStatus={defaultStatus}
-        metaFields={[]}
-        entityTypeId={entityTypeId}
-        entityTypeName={entityTypeName}
-      />
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-sm font-semibold">
+          {entityTypeName}
+          {field.required && <span className="text-red-500 ml-0.5">*</span>}
+        </h3>
+        <ParticipantPicker
+          activityDimensions={[]}
+          sectionKey={entityTypeId || field.key}
+          entityTypeId={entityTypeId || undefined}
+          entityTypeName={entityTypeName}
+          participantKind="entity"
+          smart={false}
+          canEnroll={canEnroll}
+          alreadyAdded={alreadyAdded}
+          onAdded={() => {}}
+          onDeferredAdd={addParticipant}
+        />
+      </div>
+
+      {value.length === 0 ? (
+        <p className="text-xs text-gray-400">
+          No {entityTypeName.toLowerCase()} added yet
+        </p>
+      ) : (
+        <div className="border rounded-md overflow-hidden">
+          <table className="w-full text-sm">
+            <tbody>
+              {value.map((p) => (
+                <tr key={p.participant_id} className="border-b last:border-0">
+                  <td className="px-3 py-2">
+                    {names[p.participant_id] || p.participant_id}
+                  </td>
+                  <td className="w-10 px-2 py-2 text-right">
+                    <button
+                      type="button"
+                      onClick={() => removeParticipant(p.participant_id)}
+                      className="text-gray-400 hover:text-red-500"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
