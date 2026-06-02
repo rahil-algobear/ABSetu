@@ -2,10 +2,12 @@
 
 import "../styles/globals.css";
 import { usePathname } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../services/auth';
 import { usePermissions } from './Auth/Permissions';
+import { activityTypeApi } from '@/services/api';
 import Image from "next/image";
-import { LayoutDashboard, Mail, Phone } from "lucide-react";
+import { LayoutDashboard, CalendarDays, Sparkles, LogIn, Mail, Phone } from "lucide-react";
 import Navigation from "./Navigation";
 import NoOrganization from "./NoOrganization";
 
@@ -16,8 +18,35 @@ export default function MainLayout({
 }>) {
   const pathname = usePathname();
   const { isAuthenticated } = useAuth();
-  const { userProfile, loading } = usePermissions();
+  const { userProfile, loading, can } = usePermissions();
   const isAuthRoute = pathname === '/login';
+
+  // Org-configured activity types — the same source the top nav uses. Shared
+  // query key, so this dedupes with Navigation's fetch rather than refetching.
+  const { data: activityTypes = [] } = useQuery({
+    queryKey: ["activity-types"],
+    queryFn: activityTypeApi.list,
+    enabled: isAuthenticated,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // The footer's "Product" column mirrors what the user can actually reach:
+  // real, permission-gated app links when signed in; marketing links otherwise.
+  const productLinks = isAuthenticated
+    ? [
+        { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+        ...(can("activity:view")
+          ? activityTypes.map((at) => ({
+              href: `/activities/${at.key}`,
+              label: at.name,
+              icon: CalendarDays,
+            }))
+          : []),
+      ]
+    : [
+        { href: "/#features", label: "Features", icon: Sparkles },
+        { href: "/login?redirect=/dashboard", label: "Sign in", icon: LogIn },
+      ];
   // Public, unauthenticated routes that should never be gated.
   const isPublicRoute = pathname === '/login' || pathname === '/';
 
@@ -56,7 +85,19 @@ export default function MainLayout({
             <div className="flex flex-col sm:flex-row gap-8 sm:gap-16 text-sm">
               <div className="flex flex-col items-center sm:items-start gap-2">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Product</p>
-                <a href="/dashboard" className="flex items-center gap-1.5 text-gray-400 hover:text-gray-600 transition-colors"><LayoutDashboard size={14} />Dashboard</a>
+                {productLinks.map((link) => {
+                  const Icon = link.icon;
+                  return (
+                    <a
+                      key={link.href}
+                      href={link.href}
+                      className="flex items-center gap-1.5 text-gray-400 hover:text-gray-600 transition-colors"
+                    >
+                      <Icon size={14} />
+                      {link.label}
+                    </a>
+                  );
+                })}
               </div>
               <div className="flex flex-col items-center sm:items-start gap-2">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Contact</p>
