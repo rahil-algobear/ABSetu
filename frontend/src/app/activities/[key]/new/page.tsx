@@ -190,7 +190,7 @@ export default function NewActivityPage() {
       <PageHeader title={`New ${typeName}`} />
 
       <PageContent>
-        <Card>
+        <Card className="max-w-2xl mx-auto">
           <CardHeader>
             <CardTitle className="text-lg">Create {typeName}</CardTitle>
           </CardHeader>
