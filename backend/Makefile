@@ -1,4 +1,4 @@
-.PHONY: help install install-dev test test-coverage lint format type-check run run-local run-local-port migrate upgrade downgrade kill-server clean db-reset db-fresh seed seed-org seed-test-entities
+.PHONY: help install install-dev test test-coverage lint format type-check run run-local run-local-port migrate upgrade downgrade kill-server clean db-reset db-fresh seed seed-org seed-test-entities seed-test-sessions
 
 # Use venv python if available, otherwise fall back to python3
 PYTHON := $(shell if [ -f venv/bin/python ]; then echo venv/bin/python; else echo python3; fi)
@@ -23,6 +23,7 @@ help:
 	@echo "  make db-reset             - Drop and recreate the database (WARNING: destroys all data)"
 	@echo "  make db-fresh             - Reset DB + run migrations + seed all (fresh start)"
 	@echo "  make seed-test-entities   - Bulk-create test entities (org=KSHAMATA type=Beneficiary count=1000 prefix='Auto-Test Beneficiary')"
+	@echo "  make seed-test-sessions   - Bulk-create test sessions (org=KSHAMATA n=30 clear=0)"
 	@echo "  make clean                - Clean up cache and temporary files"
 
 install:
@@ -103,6 +104,23 @@ seed-test-entities:
 		--type "$(type)" \
 		--count $(count) \
 		--prefix "$(prefix)"
+
+# Bulk-create test sessions covering Physical Health (custom participant
+# fields), Mental Health / Education / Life Skill Education / Skill Building
+# with Sub-Interventions, and an Outreach mix across Institutions /
+# Post-Institutions / Community. `n=` overrides count (defaults to 30).
+# Use `clear=1` to remove sessions tagged with meta._seed_marker="test-session"
+# before inserting a fresh batch.
+#   make seed-test-sessions
+#   make seed-test-sessions n=50
+#   make seed-test-sessions n=100 clear=1
+n ?= 30
+clear ?= 0
+seed-test-sessions:
+	$(PYTHON) -m app.seeds.test_sessions \
+		--org "$(org)" \
+		--count $(n) \
+		$(if $(filter-out 0,$(clear)),--clear,)
 
 db-reset:
 	@echo "WARNING: This will destroy ALL data in the database!"
