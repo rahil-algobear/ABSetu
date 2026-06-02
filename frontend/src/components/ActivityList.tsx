@@ -1,12 +1,14 @@
 "use client";
 
 import { useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 
 import { activityApi } from "@/services/api";
 import { Activity, ListColumnConfig } from "@/types";
 import { useListParams } from "@/hooks/useListParams";
+import { withFrom } from "@/hooks/useFromLink";
+import { pluralize } from "@/utils/pluralize";
 import type { FilterDefinition } from "@/components/ui/filter-modal";
 
 import { ListToolbar } from "@/components/ui/list-toolbar";
@@ -22,17 +24,6 @@ import {
 } from "@/components/ui/page-table";
 import { formatDate, formatDateTime, DATE_FORMATS } from "@/utils/date";
 
-/** Simple English pluralizer for display names */
-function pluralize(word: string): string {
-  if (word.endsWith("y") && !/[aeiou]y$/i.test(word)) {
-    return word.slice(0, -1) + "ies";
-  }
-  if (word.endsWith("s") || word.endsWith("x") || word.endsWith("z") || word.endsWith("sh") || word.endsWith("ch")) {
-    return word + "es";
-  }
-  return word + "s";
-}
-
 interface ActivityListProps {
   /** Activity-type key — used to build the row navigation link */
   activityTypeKey: string;
@@ -47,6 +38,13 @@ interface ActivityListProps {
    */
   extraFilters?: Record<string, string | undefined>;
   /**
+   * Label used as the back-link target when navigating into a row's detail
+   * page. Defaults to the plural activity-type name (e.g. "Sessions"). Pass
+   * a richer label when the list is embedded inside another detail view
+   * (e.g. the entity name when rendered under Entity → Activities).
+   */
+  fromLabel?: string;
+  /**
    * When true, clicking a row opens the activity detail in a new tab
    * instead of navigating the current tab. Useful when the list is
    * embedded inside another detail page (e.g., entity Activities tab).
@@ -59,9 +57,12 @@ export function ActivityList({
   activityTypeId,
   activityTypeName,
   extraFilters,
+  fromLabel,
   openRowInNewTab = false,
 }: ActivityListProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   const { data: filterData } = useQuery({
     queryKey: ["activity-filters", activityTypeId],
@@ -140,6 +141,9 @@ export function ActivityList({
   };
 
   const pluralName = pluralize(activityTypeName);
+  const backLabel = fromLabel ?? pluralName;
+  const search = searchParams.toString();
+  const fromUrl = search ? `${pathname}?${search}` : pathname;
 
   return (
     <>
@@ -186,7 +190,11 @@ export function ActivityList({
                 <TableRow
                   key={a.id}
                   onClick={() => {
-                    const href = `/activities/${activityTypeKey}/${a.id}`;
+                    const href = withFrom(
+                      `/activities/${activityTypeKey}/${a.id}`,
+                      fromUrl,
+                      backLabel,
+                    );
                     if (openRowInNewTab) {
                       window.open(href, "_blank", "noopener");
                     } else {

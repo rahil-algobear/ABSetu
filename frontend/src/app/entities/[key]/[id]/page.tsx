@@ -3,6 +3,7 @@
 import { useState, useMemo, useRef } from "react";
 import { useParams, useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useFromLink } from "@/hooks/useFromLink";
 import {
   entityApi,
   enrollmentApi,
@@ -37,7 +38,7 @@ import toast from "react-hot-toast";
 import { formatDate, formatDateTime } from "@/utils/date";
 
 export default function EntityDetailPage() {
-  const { id } = useParams<{ key: string; id: string }>();
+  const { key: entityTypeKey, id } = useParams<{ key: string; id: string }>();
   const queryClient = useQueryClient();
   const router = useRouter();
   const pathname = usePathname();
@@ -204,6 +205,11 @@ export default function EntityDetailPage() {
     updateDetailsMutation.mutate(detailValues.meta);
   };
 
+  const backLink = useFromLink({
+    fallbackHref: `/entities/${entityTypeKey}`,
+    fallbackLabel: entity?.entity_type_name || "Back",
+  });
+
   if (isLoading) return <PageLayout><PageContent><p>Loading...</p></PageContent></PageLayout>;
   if (!entity) return <PageLayout><PageContent><p>Not found</p></PageContent></PageLayout>;
 
@@ -217,6 +223,7 @@ export default function EntityDetailPage() {
       <PageHeader
         title={entityTitle}
         description={[entity.entity_type_name, entity.code].filter(Boolean).join(" - ")}
+        back={backLink}
       />
       <PageContent>
 
@@ -513,6 +520,7 @@ export default function EntityDetailPage() {
               activityTypeId={typesWithActivities[0].id}
               activityTypeName={typesWithActivities[0].name}
               extraFilters={{ entity_id: id }}
+              fromLabel={entityTitle}
               openRowInNewTab
             />
           ) : (
@@ -531,6 +539,7 @@ export default function EntityDetailPage() {
                     activityTypeId={t.id}
                     activityTypeName={t.name}
                     extraFilters={{ entity_id: id }}
+                    fromLabel={entityTitle}
                     openRowInNewTab
                   />
                 </TabsContent>
