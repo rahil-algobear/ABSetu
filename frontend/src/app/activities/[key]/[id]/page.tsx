@@ -115,6 +115,31 @@ export default function ActivityDetailPage() {
     );
   }, [allFields]);
 
+  const sections = useMemo(() => {
+    return participantListFields.map((field) => ({
+      key: field.type === "user_list" ? "user" : (field.entity_type_id || field.key),
+      field,
+    }));
+  }, [participantListFields]);
+
+  const sectionParam = searchParams.get("section");
+  const activeSectionKey =
+    sections.find((s) => s.key === sectionParam)?.key
+    ?? sections[0]?.key
+    ?? "";
+
+  const handleSectionChange = (value: string) => {
+    setEditingSection(null);
+    const params = new URLSearchParams(searchParams.toString());
+    if (value === sections[0]?.key) {
+      params.delete("section");
+    } else {
+      params.set("section", value);
+    }
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  };
+
   // Field keys not editable on the edit stage (create-only fields)
   const editDisabledKeys = useMemo(() => {
     const keys = new Set<string>();
@@ -332,6 +357,158 @@ export default function ActivityDetailPage() {
   if (isLoading) return <PageLayout><PageContent><p>Loading...</p></PageContent></PageLayout>;
   if (!activity) return <PageLayout><PageContent><p>Not found</p></PageContent></PageLayout>;
 
+  const renderSection = (field: MetaFieldDefinition) => {
+    const sectionKey = getSectionKey(field);
+    const sectionParticipants = participantsBySection[sectionKey] || [];
+    const metaFields = getParticipationMetaFields(field);
+    const captureStatus = field.config?.capture_status as boolean || false;
+    const hasStatus = captureStatus || sectionParticipants.some((p) => p.status);
+    const useTable = hasStatus || metaFields.length > 0;
+
+    const fieldEntityType = field.type === "entity_list"
+      ? entityTypes.find((t) => t.id === field.entity_type_id)
+      : null;
+    const isUserSection = field.type === "user_list";
+    const smartPickerEligible =
+      !isUserSection
+      && !!fieldEntityType?.can_enroll
+      && activity.dimensions.length > 0;
+    const alreadyAdded = sectionParticipants.map((p) => ({
+      id: p.participant_id,
+      name: getParticipantName(p),
+    }));
+
+    const isEditingThisSection = editingSection === sectionKey;
+    const anySectionEditing = editingSection !== null;
+
+    return (
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <h3 className="text-sm font-semibold flex items-center gap-1.5">
+            {getFieldLabel(field)}
+            {field.required && <span className="text-red-500 ml-0.5">*</span>}
+            <Badge variant="secondary" className="text-xs font-normal ml-1">
+              {sectionParticipants.length}
+            </Badge>
+          </h3>
+          <div className="flex items-center gap-2">
+            {!anySectionEditing && (isUserSection || fieldEntityType) && (
+              <Can permission="activity:create">
+                <ParticipantPicker
+                  activityId={activity.id}
+                  activityDimensions={activity.dimensions.map((d) => ({
+                    dimension_id: d.dimension_id,
+                    dimension_name: d.dimension_name,
+                    value_id: d.value_id,
+                    value_name: d.value_name,
+                  }))}
+                  sectionKey={sectionKey}
+                  entityTypeId={fieldEntityType?.id}
+                  entityTypeName={getFieldLabel(field)}
+                  participantKind={isUserSection ? "user" : "entity"}
+                  smart={smartPickerEligible}
+                  alreadyAdded={alreadyAdded}
+                  onAdded={() => {
+                    queryClient.invalidateQueries({ queryKey: ["participants", id] });
+                    queryClient.invalidateQueries({ queryKey: ["entities-for-sections"] });
+                  }}
+                />
+              </Can>
+            )}
+            {sectionParticipants.length > 0 && !anySectionEditing && (
+              <Can permission="activity:create">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => openSectionEditing(sectionKey)}
+                >
+                  <Pencil className="h-3.5 w-3.5 mr-1" />
+                  Edit
+                </Button>
+              </Can>
+            )}
+          </div>
+        </div>
+        {isEditingThisSection ? (
+          <SectionEditMode
+            field={field}
+            sectionKey={sectionKey}
+            metaFields={metaFields}
+            rows={participantState[sectionKey] || []}
+            onRowsChange={(rows) =>
+              setParticipantState({ ...participantState, [sectionKey]: rows })
+            }
+            getNameFor={(participantId) => {
+              const p = sectionParticipants.find(
+                (x) => x.participant_id === participantId,
+              );
+              return p ? getParticipantName(p) : participantId;
+            }}
+            onSave={() => handleSectionSave(field)}
+            onCancel={() => setEditingSection(null)}
+            saving={saveSectionMutation.isPending}
+          />
+        ) : sectionParticipants.length === 0 ? (
+          <p className="text-gray-400 text-xs italic py-2">No participants added yet</p>
+        ) : useTable ? (
+          <div className="border rounded-md overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b">
+                <tr>
+                  <th className="text-left px-3 py-2 font-medium">Name</th>
+                  {hasStatus && (
+                    <th className="text-left px-3 py-2 font-medium">Status</th>
+                  )}
+                  {metaFields.map((f) => (
+                    <th key={f.key} className="text-left px-3 py-2 font-medium">{f.label}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {sectionParticipants.map((p) => (
+                  <tr key={p.id} className="border-b last:border-0">
+                    <td className="px-3 py-2">{getParticipantName(p)}</td>
+                    {hasStatus && (
+                      <td className="px-3 py-2">
+                        {p.status && (
+                          <Badge variant={p.status === "present" ? "default" : "secondary"}>
+                            {p.status}
+                          </Badge>
+                        )}
+                      </td>
+                    )}
+                    {metaFields.map((f) => {
+                      const val = p.meta?.[f.key];
+                      return (
+                        <td key={f.key} className="px-3 py-2 text-gray-700">
+                          {val === undefined || val === null || val === ""
+                            ? "—"
+                            : f.type === "boolean"
+                              ? (val ? "Yes" : "No")
+                              : Array.isArray(val)
+                                ? val.join(", ")
+                                : String(val)}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-1.5">
+            {sectionParticipants.map((p) => (
+              <Badge key={p.id} variant="outline" className="text-sm font-normal py-1 px-2">
+                {getParticipantName(p)}
+              </Badge>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const activityTitle = activity.dimensions.length > 0 ? activity.dimensions[0].value_name : "Activity";
   const typeName = activity.activity_type_name || "Activity";
   const activitySubtitle = activity.dimensions.length > 1
@@ -445,173 +622,28 @@ export default function ActivityDetailPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {participantListFields.map((field) => {
-                const sectionKey = getSectionKey(field);
-                const sectionParticipants = participantsBySection[sectionKey] || [];
-                const metaFields = getParticipationMetaFields(field);
-                const captureStatus = field.config?.capture_status as boolean || false;
-                const hasStatus = captureStatus || sectionParticipants.some((p) => p.status);
-                const useTable = hasStatus || metaFields.length > 0;
-
-                // Phase 3 picker — shown for every entity_list / user_list
-                // section. Mode is derived per-section: Smart for
-                // enrollable entity types on a dimensioned activity,
-                // Basic for the rest.
-                const fieldEntityType = field.type === "entity_list"
-                  ? entityTypes.find((t) => t.id === field.entity_type_id)
-                  : null;
-                const isUserSection = field.type === "user_list";
-                const smartPickerEligible =
-                  !isUserSection
-                  && !!fieldEntityType?.can_enroll
-                  && activity.dimensions.length > 0;
-                const alreadyAdded = sectionParticipants.map((p) => ({
-                  id: p.participant_id,
-                  name: getParticipantName(p),
-                }));
-
-                const isEditingThisSection = editingSection === sectionKey;
-                const anySectionEditing = editingSection !== null;
-
-                return (
-                  <div key={sectionKey}>
-                    <div className="flex items-center justify-between mb-1">
-                      <h3 className="text-sm font-semibold flex items-center gap-1.5">
-                        {getFieldLabel(field)}
-                        {field.required && <span className="text-red-500 ml-0.5">*</span>}
-                        <Badge variant="secondary" className="text-xs font-normal ml-1">
-                          {sectionParticipants.length}
-                        </Badge>
-                      </h3>
-                      <div className="flex items-center gap-2">
-                        {/* Picker hidden while any section is in edit mode
-                            (v1). Shown for every entity_list / user_list
-                            section — only Smart mode requires the entity
-                            type + activity-dims combo. */}
-                        {!anySectionEditing && (isUserSection || fieldEntityType) && (
-                          <Can permission="activity:create">
-                            <ParticipantPicker
-                              activityId={activity.id}
-                              activityDimensions={activity.dimensions.map((d) => ({
-                                dimension_id: d.dimension_id,
-                                dimension_name: d.dimension_name,
-                                value_id: d.value_id,
-                                value_name: d.value_name,
-                              }))}
-                              sectionKey={sectionKey}
-                              entityTypeId={fieldEntityType?.id}
-                              entityTypeName={getFieldLabel(field)}
-                              participantKind={isUserSection ? "user" : "entity"}
-                              smart={smartPickerEligible}
-                              alreadyAdded={alreadyAdded}
-                              onAdded={() => {
-                                queryClient.invalidateQueries({
-                                  queryKey: ["participants", id],
-                                });
-                                queryClient.invalidateQueries({
-                                  queryKey: ["entities-for-sections"],
-                                });
-                              }}
-                            />
-                          </Can>
-                        )}
-                        {/* Per-section Edit button — only when there's something
-                            to edit, no other section is mid-edit, and this
-                            section isn't currently editing. */}
-                        {sectionParticipants.length > 0 &&
-                          !anySectionEditing && (
-                            <Can permission="activity:create">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => openSectionEditing(sectionKey)}
-                              >
-                                <Pencil className="h-3.5 w-3.5 mr-1" />
-                                Edit
-                              </Button>
-                            </Can>
-                          )}
-                      </div>
-                    </div>
-                    {isEditingThisSection ? (
-                      <SectionEditMode
-                        field={field}
-                        sectionKey={sectionKey}
-                        metaFields={metaFields}
-                        rows={participantState[sectionKey] || []}
-                        onRowsChange={(rows) =>
-                          setParticipantState({ ...participantState, [sectionKey]: rows })
-                        }
-                        getNameFor={(participantId) => {
-                          const p = sectionParticipants.find(
-                            (x) => x.participant_id === participantId,
-                          );
-                          return p ? getParticipantName(p) : participantId;
-                        }}
-                        onSave={() => handleSectionSave(field)}
-                        onCancel={() => setEditingSection(null)}
-                        saving={saveSectionMutation.isPending}
-                      />
-                    ) : sectionParticipants.length === 0 ? (
-                      <p className="text-gray-400 text-xs italic py-2">No participants added yet</p>
-                    ) : useTable ? (
-                      <div className="border rounded-md overflow-x-auto">
-                        <table className="w-full text-sm">
-                          <thead className="bg-gray-50 border-b">
-                            <tr>
-                              <th className="text-left px-3 py-2 font-medium">Name</th>
-                              {hasStatus && (
-                                <th className="text-left px-3 py-2 font-medium">Status</th>
-                              )}
-                              {metaFields.map((f) => (
-                                <th key={f.key} className="text-left px-3 py-2 font-medium">{f.label}</th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {sectionParticipants.map((p) => (
-                              <tr key={p.id} className="border-b last:border-0">
-                                <td className="px-3 py-2">{getParticipantName(p)}</td>
-                                {hasStatus && (
-                                  <td className="px-3 py-2">
-                                    {p.status && (
-                                      <Badge variant={p.status === "present" ? "default" : "secondary"}>
-                                        {p.status}
-                                      </Badge>
-                                    )}
-                                  </td>
-                                )}
-                                {metaFields.map((f) => {
-                                  const val = p.meta?.[f.key];
-                                  return (
-                                    <td key={f.key} className="px-3 py-2 text-gray-700">
-                                      {val === undefined || val === null || val === ""
-                                        ? "—"
-                                        : f.type === "boolean"
-                                          ? (val ? "Yes" : "No")
-                                          : Array.isArray(val)
-                                            ? val.join(", ")
-                                            : String(val)}
-                                    </td>
-                                  );
-                                })}
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    ) : (
-                      <div className="flex flex-wrap gap-1.5">
-                        {sectionParticipants.map((p) => (
-                          <Badge key={p.id} variant="outline" className="text-sm font-normal py-1 px-2">
-                            {getParticipantName(p)}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+            {sections.length === 1 ? (
+              renderSection(sections[0].field)
+            ) : (
+              <Tabs value={activeSectionKey} onValueChange={handleSectionChange}>
+                <TabsList className="mb-2">
+                  {sections.map((s) => {
+                    const count = (participantsBySection[s.key] || []).length;
+                    return (
+                      <TabsTrigger key={s.key} value={s.key}>
+                        {getFieldLabel(s.field)}
+                        {count > 0 ? ` (${count})` : ""}
+                      </TabsTrigger>
+                    );
+                  })}
+                </TabsList>
+                {sections.map((s) => (
+                  <TabsContent key={s.key} value={s.key}>
+                    {renderSection(s.field)}
+                  </TabsContent>
+                ))}
+              </Tabs>
+            )}
           </CardContent>
         </Card>
       ) : (
