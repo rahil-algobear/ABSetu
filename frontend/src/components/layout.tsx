@@ -3,9 +3,11 @@
 import "../styles/globals.css";
 import { usePathname } from 'next/navigation';
 import { useAuth } from '../services/auth';
+import { usePermissions } from './Auth/Permissions';
 import Image from "next/image";
 import { LayoutDashboard, CalendarDays, Mail, Phone } from "lucide-react";
 import Navigation from "./Navigation";
+import NoOrganization from "./NoOrganization";
 
 export default function MainLayout({
   children,
@@ -14,13 +16,27 @@ export default function MainLayout({
 }>) {
   const pathname = usePathname();
   const { isAuthenticated } = useAuth();
+  const { userProfile, loading } = usePermissions();
   const isAuthRoute = pathname === '/login';
+  // Public, unauthenticated routes that should never be gated.
+  const isPublicRoute = pathname === '/login' || pathname === '/';
+
+  // An authenticated user whose account isn't linked to an organization can't
+  // use the org-scoped app, so show a dedicated screen instead of an empty
+  // dashboard. Wait for the profile to load before deciding, and never gate
+  // public routes.
+  const showNoOrg =
+    isAuthenticated &&
+    !loading &&
+    !!userProfile &&
+    !userProfile.organization_id &&
+    !isPublicRoute;
 
   return (
     <div className="antialiased flex flex-col min-h-screen bg-gray-50">
       <Navigation />
       <div className={`flex-1 mx-auto w-full min-h-[calc(100vh-200px)] ${isAuthRoute ? '' : 'pb-4'}`}>
-        {children}
+        {showNoOrg ? <NoOrganization /> : children}
       </div>
       <footer className="border-t border-gray-200 bg-white">
         <div className="px-4 sm:px-6 py-8">

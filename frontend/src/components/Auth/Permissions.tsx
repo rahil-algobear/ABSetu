@@ -13,6 +13,7 @@ import { useAuth } from "@/services/auth";
 interface UserProfile {
   first_name: string;
   last_name: string;
+  organization_id: string | null;
 }
 
 interface PermissionsContextType {
@@ -59,6 +60,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
         setUserProfile({
           first_name: profile.first_name,
           last_name: profile.last_name,
+          organization_id: profile.organization_id ?? null,
         });
       })
       .catch(() => {
