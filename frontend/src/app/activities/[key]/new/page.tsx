@@ -33,6 +33,8 @@ import { PageContent } from "@/components/ui/page-content";
 import { PageHeader } from "@/components/ui/page-header";
 import { usePermissions } from "@/components/Auth/Permissions";
 import { useDimensionAutoSelect } from "@/hooks/useDimensionAutoSelect";
+import { useFromLink } from "@/hooks/useFromLink";
+import { pluralize } from "@/utils/pluralize";
 
 import toast from "react-hot-toast";
 
@@ -50,6 +52,11 @@ export default function NewActivityPage() {
   const activityType = activityTypes.find((c) => c.key === typeKey);
   const selectedTypeId = activityType?.id || "";
   const typeName = activityType?.name || "Activity";
+
+  const backLink = useFromLink({
+    fallbackHref: `/activities/${typeKey}`,
+    fallbackLabel: pluralize(typeName),
+  });
 
   const { data: allMetaSchemas = [] } = useQuery<MetaFieldSchemaItem[]>({
     queryKey: ["meta-field-schemas-all"],
@@ -187,7 +194,7 @@ export default function NewActivityPage() {
 
   return (
     <PageLayout>
-      <PageHeader title={`New ${typeName}`} />
+      <PageHeader title={`New ${typeName}`} back={backLink} />
 
       <PageContent>
         <Card className="max-w-2xl mx-auto">
