@@ -97,6 +97,32 @@ class ParticipantResponse(BaseResponseSchema):
     section_key: str
     status: str | None = None
     meta: dict[str, Any] | None = None
+    display_name: str | None = None
+
+
+class ParticipantPatchRow(BaseModel):
+    """One row in the bulk-patch payload. Identified by
+    (participant_id, section_key) — uniqueness is enforced by the section
+    schema. Pass status / meta only for fields you want to change; omit
+    to leave untouched."""
+
+    participant_id: str
+    section_key: str
+    status: str | None = None
+    meta: dict[str, Any] | None = None
+
+
+class ParticipantRemoveRow(BaseModel):
+    participant_id: str
+    section_key: str
+
+
+class ParticipantBulkPatchPayload(BaseModel):
+    """Apply per-row updates and removes atomically. Rows not in the
+    payload are untouched."""
+
+    updates: list[ParticipantPatchRow] = []
+    removes: list[ParticipantRemoveRow] = []
 
 
 # --- Smart picker (Phase 3) — per-action payloads ---

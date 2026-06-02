@@ -414,6 +414,116 @@ class ActivityParticipantService:
         rows = query.offset(offset).limit(limit).all()
         return rows, total
 
+    def resolve_display_names(
+        self,
+        org_id: uuid.UUID,
+        rows: list[ActivityParticipant],
+    ) -> dict[uuid.UUID, str]:
+        """Batch-resolve a participant-row id → display name. Entity
+        participants use the first visible meta column of the entity
+        type's list config; user participants use first + last name."""
+        from app.modules.auth.model import User
+        from app.modules.entity.model import Entity
+        from app.modules.organization.service import ListConfigService
+
+        entity_pids = {r.participant_id for r in rows if r.participant_type == "entity"}
+        user_pids = {r.participant_id for r in rows if r.participant_type == "user"}
+
+        entities_by_id: dict[uuid.UUID, Entity] = {}
+        if entity_pids:
+            for e in (
+                self.db.query(Entity).filter(Entity.id.in_(entity_pids)).all()
+            ):
+                entities_by_id[e.id] = e
+
+        # First visible meta column per entity type — one lookup per type.
+        type_ids = {e.entity_type_id for e in entities_by_id.values()}
+        name_key_by_type: dict[uuid.UUID, str | None] = {}
+        if type_ids:
+            list_config_service = ListConfigService(self.db)
+            for tid in type_ids:
+                columns = list_config_service.get_config(org_id, f"entity:{tid}")
+                first_meta_col = next(
+                    (
+                        c["key"]
+                        for c in columns
+                        if c.get("visible") and c.get("key", "").startswith("meta:")
+                    ),
+                    None,
+                )
+                name_key_by_type[tid] = (
+                    first_meta_col.replace("meta:", "", 1) if first_meta_col else None
+                )
+
+        users_by_id: dict[uuid.UUID, User] = {}
+        if user_pids:
+            for u in (
+                self.db.query(User).filter(User.id.in_(user_pids)).all()
+            ):
+                users_by_id[u.id] = u
+
+        result: dict[uuid.UUID, str] = {}
+        for r in rows:
+            if r.participant_type == "user":
+                u = users_by_id.get(r.participant_id)
+                result[r.id] = (
+                    f"{u.first_name} {u.last_name}".strip() if u else str(r.participant_id)
+                )
+                continue
+            e = entities_by_id.get(r.participant_id)
+            if not e:
+                result[r.id] = str(r.participant_id)
+                continue
+            name_key = name_key_by_type.get(e.entity_type_id)
+            name_value = (e.meta or {}).get(name_key) if name_key else None
+            result[r.id] = str(name_value) if name_value else str(r.participant_id)
+        return result
+
+    def bulk_patch(
+        self,
+        activity_id: uuid.UUID,
+        updates: list[dict],
+        removes: list[dict],
+    ) -> None:
+        """Apply per-row updates and removes atomically. Rows are
+        identified by (activity_id, section_key, participant_id).
+        Rows not in either list are untouched."""
+        try:
+            for u in updates:
+                row = (
+                    self.db.query(ActivityParticipant)
+                    .filter_by(
+                        activity_id=activity_id,
+                        section_key=u["section_key"],
+                        participant_id=uuid.UUID(u["participant_id"]),
+                    )
+                    .first()
+                )
+                if not row:
+                    raise NotFoundError(
+                        f"Participant {u['participant_id']} not found in section {u['section_key']}"
+                    )
+                if "status" in u and u["status"] is not None:
+                    row.status = u["status"]
+                if "meta" in u and u["meta"] is not None:
+                    row.meta = u["meta"]
+            for r in removes:
+                row = (
+                    self.db.query(ActivityParticipant)
+                    .filter_by(
+                        activity_id=activity_id,
+                        section_key=r["section_key"],
+                        participant_id=uuid.UUID(r["participant_id"]),
+                    )
+                    .first()
+                )
+                if row:
+                    self.db.delete(row)
+            self.db.commit()
+        except Exception:
+            self.db.rollback()
+            raise
+
     def bulk_create(self, activity_id: uuid.UUID, records: list[dict]) -> list[ActivityParticipant]:
         activity = self.db.query(Activity).filter_by(id=activity_id).first()
         if not activity:

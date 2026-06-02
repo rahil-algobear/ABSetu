@@ -26,6 +26,7 @@ from app.modules.activity.schemas import (
     ActivityUpdate,
     DimensionInfo,
     ParticipantBulkCreate,
+    ParticipantBulkPatchPayload,
     ParticipantResponse,
     ParticipantSectionReplace,
     PickerAddPayload,
@@ -495,13 +496,14 @@ def get_participants_paginated(
     page: int = Query(1, ge=1),
     limit: int = Query(25, ge=1, le=100),
     activity=Depends(get_accessible_activity),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Paginated participants scoped to a single section of an activity.
 
-    Separate from the load-everything `/participants` endpoint, which the
-    bulk-edit flow still uses. The view-mode UI uses this so sections of
-    100+ participants don't have to render all rows at once.
+    Each row carries a resolved display_name (entity: first visible meta
+    column of its type's list config; user: first + last name) so the
+    frontend doesn't have to batch-fetch names per page.
     """
     service = ActivityParticipantService(db)
     rows, total = service.list_by_activity_paginated(
@@ -509,6 +511,9 @@ def get_participants_paginated(
         section_key=section_key,
         page=page,
         limit=limit,
+    )
+    name_by_row_id = service.resolve_display_names(
+        current_user.organization_id, rows
     )
     data = [
         ParticipantResponse(
@@ -520,10 +525,32 @@ def get_participants_paginated(
             section_key=p.section_key,
             status=p.status,
             meta=p.meta,
+            display_name=name_by_row_id.get(p.id),
         ).dump()
         for p in rows
     ]
     return PaginatedResponse(count=total, data=data)
+
+
+@activity_router.patch(
+    "/{activity_id}/participants",
+    dependencies=[Depends(require_permissions("activity:create"))],
+)
+def bulk_patch_participants(
+    data: ParticipantBulkPatchPayload,
+    activity=Depends(get_accessible_activity),
+    db: Session = Depends(get_db),
+):
+    """Apply per-row participant updates and removes atomically. Rows
+    not in either list are left untouched — the page-by-page edit flow
+    relies on this to save only the rows the user actually touched."""
+    service = ActivityParticipantService(db)
+    service.bulk_patch(
+        activity_id=activity.id,
+        updates=[u.model_dump() for u in data.updates],
+        removes=[r.model_dump() for r in data.removes],
+    )
+    return {"ok": True}
 
 
 @activity_router.post(
