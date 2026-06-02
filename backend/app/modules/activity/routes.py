@@ -4,7 +4,7 @@ Activity, ActivityType, ActivityParticipant routes
 
 import uuid
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.orm import Session
 
 from app.common.dependencies import (
@@ -14,6 +14,7 @@ from app.common.dependencies import (
     require_permissions,
 )
 from app.common.exceptions import ValidationError
+from app.common.export import EXPORT_ROW_CAP, build_xlsx, export_filename, format_export_value
 from app.common.schemas.base_response import PaginatedResponse
 from app.common.schemas.list_params import ListParams
 from app.core.database import get_db
@@ -198,6 +199,44 @@ def _build_activity_response(
     ).dump()
 
 
+def _export_activity_cell(activity, participant_count, created_by_name, section_counts, col: dict):
+    """Resolve one column's value for an activity export row.
+
+    Mirrors the frontend renderCellValue: static built-ins, per-section
+    participant counts (entity_list / user_list), dimension names, and meta
+    fields formatted via the shared export formatter.
+    """
+    field_type = col.get("field_type")
+    key = col["key"]
+
+    if field_type == "static":
+        return {
+            "participant_count": participant_count or 0,
+            "created_at": activity.created_at,
+            "created_by": created_by_name or "",
+        }.get(key, "")
+
+    # entity_list / user_list columns render a participant count (keyed by the
+    # same meta:<field_key> the section-count map uses). Checked before the
+    # meta branch since these keys also start with "meta:".
+    if field_type in ("entity_list", "user_list"):
+        return section_counts.get(key, 0)
+
+    if field_type == "dimension":
+        dim_key = col.get("dimension_key")
+        names = [
+            d.dimension_value.name
+            for d in (activity.dimensions or [])
+            if d.dimension_value
+            and d.dimension_value.dimension
+            and d.dimension_value.dimension.key == dim_key
+        ]
+        return ", ".join(names)
+
+    meta_key = key[len("meta:") :] if key.startswith("meta:") else key
+    return format_export_value(field_type, (activity.meta or {}).get(meta_key))
+
+
 @activity_router.get("/", dependencies=[Depends(require_permissions("activity:view"))])
 def list_activities(
     page: int = Query(1, ge=1),
@@ -365,6 +404,146 @@ def get_activity_filters(
         ],
         default_sortable_keys=["created_at"],
         extra_filters=[created_by_filter],
+    )
+
+
+@activity_router.get("/export", dependencies=[Depends(require_permissions("activity:export"))])
+def export_activities(
+    search: str | None = Query(None),
+    sort_by: str | None = Query(None),
+    sort_order: str = Query("desc", pattern="^(asc|desc)$"),
+    filters: str | None = Query(None),
+    activity_type_id: uuid.UUID | None = Query(None),
+    entity_id: uuid.UUID | None = Query(None),
+    current_user: User = Depends(get_current_user),
+    accessible_dv_ids: list[uuid.UUID] | None = Depends(get_accessible_dimension_value_ids),
+    db: Session = Depends(get_db),
+):
+    """Download activities as an Excel file.
+
+    Honors the same search / filters / sort and org + dimension scoping as the
+    activity list. Pass the active list filters for a "current view" export, or
+    omit them for "all". XLSX only; columns mirror the configured list view.
+    """
+    import json
+
+    service = ActivityService(db)
+
+    # Merge activity_type_id into filters JSON (matches the list endpoint).
+    merged_filters = filters
+    if activity_type_id:
+        try:
+            f = json.loads(filters) if filters else {}
+        except (json.JSONDecodeError, TypeError):
+            f = {}
+        f["activity_type_id"] = str(activity_type_id)
+        merged_filters = json.dumps(f)
+
+    # page/limit are unused by the export path but required by ListParams.
+    params = ListParams(
+        page=1,
+        limit=1,
+        search=search,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        filters=merged_filters,
+    )
+
+    list_columns = None
+    type_name = "Activities"
+    if activity_type_id:
+        from app.modules.organization.service import ListConfigService
+
+        list_columns = ListConfigService(db).get_config(
+            current_user.organization_id, f"activity:{activity_type_id}"
+        )
+        at = ActivityTypeService(db).get_by_id(activity_type_id, current_user.organization_id)
+        type_name = at.name if at else "Activities"
+
+    rows, truncated = service.list_all_for_export(
+        current_user.organization_id,
+        params=params,
+        accessible_dv_ids=accessible_dv_ids,
+        list_columns=list_columns,
+    )
+    if truncated:
+        raise ValidationError(
+            f"This export exceeds the {EXPORT_ROW_CAP:,}-row limit. "
+            "Apply filters to narrow the results, then download again."
+        )
+
+    # Per-section participant counts for entity_list / user_list columns, keyed
+    # by the column key the list config uses (meta:<field_key>) — same mapping
+    # the list endpoint applies.
+    section_to_colkey: dict[str, str] = {}
+    if activity_type_id:
+        for fd in _collect_field_defs(
+            db, current_user.organization_id, activity_type_id
+        ).values():
+            ftype = fd.get("type")
+            if ftype == "user_list":
+                section_to_colkey["user"] = f"meta:{fd['key']}"
+            elif ftype == "entity_list":
+                skey = fd.get("entity_type_id") or fd["key"]
+                section_to_colkey[str(skey)] = f"meta:{fd['key']}"
+
+    counts_by_activity: dict[uuid.UUID, dict[str, int]] = {}
+    if section_to_colkey:
+        from sqlalchemy import func as _func
+
+        from app.modules.activity.model import ActivityParticipant
+
+        activity_ids = [a.id for a, _, _ in rows]
+        if activity_ids:
+            grouped = (
+                db.query(
+                    ActivityParticipant.activity_id,
+                    ActivityParticipant.section_key,
+                    _func.count(ActivityParticipant.id),
+                )
+                .filter(ActivityParticipant.activity_id.in_(activity_ids))
+                .group_by(
+                    ActivityParticipant.activity_id,
+                    ActivityParticipant.section_key,
+                )
+                .all()
+            )
+            for aid, skey, cnt in grouped:
+                counts_by_activity.setdefault(aid, {})[str(skey)] = cnt
+
+    columns = [c for c in (list_columns or []) if c.get("visible", True)]
+    if not columns:
+        columns = [
+            {"key": "participant_count", "label": "Participants", "field_type": "static"},
+            {"key": "created_at", "label": "Created", "field_type": "static"},
+            {"key": "created_by", "label": "Created By", "field_type": "static"},
+        ]
+
+    headers = [c["label"] for c in columns]
+    data_rows = []
+    for activity, participant_count, created_by_name in rows:
+        section_counts: dict[str, int] = {}
+        if section_to_colkey:
+            per = counts_by_activity.get(activity.id, {})
+            section_counts = {
+                colkey: per.get(skey, 0) for skey, colkey in section_to_colkey.items()
+            }
+        data_rows.append(
+            [
+                _export_activity_cell(
+                    activity, participant_count, created_by_name, section_counts, col
+                )
+                for col in columns
+            ]
+        )
+
+    content = build_xlsx(headers, data_rows, sheet_name=type_name)
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f'attachment; filename="{export_filename(type_name)}"'
+        },
     )
 
 

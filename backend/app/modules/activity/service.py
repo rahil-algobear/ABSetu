@@ -5,9 +5,10 @@ Activity, ActivityType, ActivityParticipant services
 import uuid
 
 from sqlalchemy import func
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.common.exceptions import NotFoundError, ValidationError
+from app.common.export import EXPORT_ROW_CAP
 from app.common.helpers.dimension_scoping import (
     apply_dimension_access_scoping,
     group_dvs_by_dimension,
@@ -188,6 +189,55 @@ class ActivityService:
         participant_entity_id: uuid.UUID | None = None,
     ) -> tuple[list[tuple], int]:
         """Paginated list with search, filter, sort support."""
+        query = self._build_list_query(
+            org_id,
+            params,
+            accessible_dv_ids=accessible_dv_ids,
+            list_columns=list_columns,
+            participant_entity_id=participant_entity_id,
+        )
+        return paginate(query, params.page, params.limit)
+
+    def list_all_for_export(
+        self,
+        org_id: uuid.UUID,
+        params: ListParams,
+        accessible_dv_ids: list[uuid.UUID] | None = None,
+        list_columns: list[dict] | None = None,
+        cap: int = EXPORT_ROW_CAP,
+    ) -> tuple[list[tuple], bool]:
+        """All matching rows for an Excel export.
+
+        Same search/filter/sort and org + dimension scoping as the paginated
+        list — just without paging — so the download mirrors the on-screen
+        view. Capped at `cap`: returns (rows, truncated). Eager-loads the
+        dimension chain to avoid N+1 during serialization.
+        """
+        query = self._build_list_query(
+            org_id, params, accessible_dv_ids=accessible_dv_ids, list_columns=list_columns
+        )
+        query = query.options(
+            selectinload(Activity.dimensions)
+            .joinedload(ActivityDimension.dimension_value)
+            .joinedload(DimensionValue.dimension)
+        )
+        rows = query.limit(cap + 1).all()
+        truncated = len(rows) > cap
+        return rows[:cap], truncated
+
+    def _build_list_query(
+        self,
+        org_id: uuid.UUID,
+        params: ListParams,
+        accessible_dv_ids: list[uuid.UUID] | None = None,
+        list_columns: list[dict] | None = None,
+        participant_entity_id: uuid.UUID | None = None,
+    ):
+        """Shared query builder for the paginated list and the export.
+
+        Applies participant scoping, dimension-access scoping, search,
+        filters, and sort.
+        """
         query = self._build_base_query(org_id, accessible_dv_ids)
 
         if participant_entity_id is not None:
@@ -259,8 +309,7 @@ class ActivityService:
             Activity.created_at.desc(),
         )
 
-        # Paginate
-        return paginate(query, params.page, params.limit)
+        return query
 
     def get_by_id(self, activity_id: uuid.UUID) -> Activity:
         activity = (

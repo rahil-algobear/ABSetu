@@ -31,6 +31,7 @@ PERMISSIONS = [
     ("activity_type:manage", "Create/edit/delete activity types and form builder config"),
     ("activity:view", "View activities"),
     ("activity:create", "Create activities and record participants"),
+    ("activity:export", "Download activities to Excel"),
     ("entity:view", "View entities"),
     ("entity:create", "Create entities"),
     ("entity:edit", "Edit entity details"),

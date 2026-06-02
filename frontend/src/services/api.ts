@@ -368,6 +368,16 @@ export interface ActivityListParams {
   entity_id?: string;
 }
 
+/** Query params for the activity Excel export — a subset of the list params. */
+export interface ActivityExportParams {
+  search?: string;
+  filters?: string;
+  sort_by?: string;
+  sort_order?: string;
+  activity_type_id?: string;
+  entity_id?: string;
+}
+
 export const activityApi = {
   listPaginated: async (params: ActivityListParams): Promise<PaginatedResponse<Activity>> => {
     const response = await authAxios.get<PaginatedResponse<Activity>>('/activities/', { params });
@@ -377,6 +387,15 @@ export const activityApi = {
     const params = activityTypeId ? { activity_type_id: activityTypeId } : {};
     const response = await authAxios.get<FilterResponse>('/activities/filters', { params });
     return response.data;
+  },
+  /** Download activities as an Excel file. Pass the active list params for a
+   *  "current view" export, or just activity_type_id for "all". */
+  export: async (params: ActivityExportParams): Promise<{ blob: Blob; filename: string }> => {
+    const response = await authAxios.get('/activities/export', { params, responseType: 'blob' });
+    return {
+      blob: response.data as Blob,
+      filename: filenameFromDisposition(response.headers['content-disposition'], 'activities.xlsx'),
+    };
   },
   listByEntity: async (entityId: string): Promise<Activity[]> => {
     const response = await authAxios.get<Activity[]>(`/activities/entity/${entityId}`);

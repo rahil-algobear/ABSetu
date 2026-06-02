@@ -2,9 +2,7 @@
 Entity and EntityType routes
 """
 
-import re
 import uuid
-from datetime import datetime
 
 from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.orm import Session
@@ -16,7 +14,7 @@ from app.common.dependencies import (
     require_permissions,
 )
 from app.common.exceptions import ValidationError
-from app.common.export import EXPORT_ROW_CAP, build_xlsx, format_export_value
+from app.common.export import EXPORT_ROW_CAP, build_xlsx, export_filename, format_export_value
 from app.common.schemas.base_response import PaginatedResponse
 from app.common.schemas.list_params import ListParams
 from app.core.database import get_db
@@ -114,11 +112,6 @@ def _export_cell(entity, enrollment_count, activity_count, created_by_name, col:
     # Meta field columns (key format "meta:{field_key}").
     meta_key = key[len("meta:") :] if key.startswith("meta:") else key
     return format_export_value(field_type, (entity.meta or {}).get(meta_key))
-
-
-def _export_filename(type_name: str) -> str:
-    slug = re.sub(r"[^A-Za-z0-9]+", "_", type_name).strip("_").lower() or "entities"
-    return f"{slug}_{datetime.now().strftime('%Y%m%d')}.xlsx"
 
 
 # --- Entity Types ---
@@ -528,7 +521,9 @@ def export_entities(
     return Response(
         content=content,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f'attachment; filename="{_export_filename(type_name)}"'},
+        headers={
+            "Content-Disposition": f'attachment; filename="{export_filename(type_name)}"'
+        },
     )
 
 

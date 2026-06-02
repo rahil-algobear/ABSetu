@@ -57,6 +57,12 @@ def format_export_value(field_type: str | None, value: Any) -> Any:
     return value
 
 
+def export_filename(name: str, ext: str = "xlsx") -> str:
+    """Build a download filename: '<slug>_<YYYYMMDD>.<ext>'."""
+    slug = re.sub(r"[^A-Za-z0-9]+", "_", name).strip("_").lower() or "export"
+    return f"{slug}_{datetime.now().strftime('%Y%m%d')}.{ext}"
+
+
 def build_xlsx(headers: list[str], rows: list[list[Any]], sheet_name: str = "Export") -> bytes:
     """Build an XLSX workbook from headers + a row matrix and return its bytes."""
     wb = Workbook()

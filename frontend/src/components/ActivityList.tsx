@@ -4,14 +4,17 @@ import { useMemo } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 
-import { activityApi } from "@/services/api";
+import { activityApi, type ActivityExportParams } from "@/services/api";
 import { Activity, ListColumnConfig } from "@/types";
+import { usePermissions } from "@/components/Auth/Permissions";
 import { useListParams } from "@/hooks/useListParams";
+import { useExport } from "@/hooks/useExport";
 import { withFrom } from "@/hooks/useFromLink";
 import { pluralize } from "@/utils/pluralize";
 import type { FilterDefinition } from "@/components/ui/filter-modal";
 
 import { ListToolbar } from "@/components/ui/list-toolbar";
+import { ExportMenu, type ExportScope } from "@/components/ui/export-menu";
 import { Pagination } from "@/components/ui/pagination";
 import { SortableTableHead } from "@/components/ui/sortable-table-head";
 import {
@@ -111,6 +114,24 @@ export function ActivityList({
   const totalCount = response?.count || 0;
   const totalPages = Math.ceil(totalCount / listParams.limit);
 
+  // Excel export — same search/filters/sort + scope (incl. extraFilters) as
+  // the list for "current view"; just the type scope for "all". Backend
+  // applies the same org + dimension scoping.
+  const { can } = usePermissions();
+  const { isExporting, runExport } = useExport();
+  const handleExport = (scope: ExportScope) => {
+    const params: ActivityExportParams = {
+      activity_type_id: activityTypeId || undefined,
+      sort_by: listParams.apiParams.sort_by,
+      sort_order: listParams.apiParams.sort_order,
+      ...(scope === "current"
+        ? { search: listParams.apiParams.search, filters: listParams.apiParams.filters }
+        : {}),
+      ...extraFilters,
+    };
+    runExport(() => activityApi.export(params));
+  };
+
   const renderCellValue = (activity: Activity, col: ListColumnConfig) => {
     if (col.field_type === "static") {
       switch (col.key) {
@@ -161,6 +182,15 @@ export function ActivityList({
         onFiltersChange={listParams.setActiveFilters}
         onRemoveFilter={listParams.removeFilter}
         searchPlaceholder={`Search ${pluralName.toLowerCase()}...`}
+        actions={
+          can("activity:export") ? (
+            <ExportMenu
+              onExport={handleExport}
+              isExporting={isExporting}
+              hasActiveFilters={listParams.activeFilters.length > 0}
+            />
+          ) : undefined
+        }
       />
 
       {isLoading ? (
