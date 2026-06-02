@@ -372,7 +372,7 @@ export function ParticipantPicker({
 
   return (
     <>
-      <Button size="sm" onClick={() => setOpen(true)}>
+      <Button type="button" size="sm" onClick={() => setOpen(true)}>
         <Plus className="h-4 w-4 mr-1" />
         {triggerLabel || entityTypeName}
       </Button>
