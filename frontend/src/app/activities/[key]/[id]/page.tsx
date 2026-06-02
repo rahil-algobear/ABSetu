@@ -38,6 +38,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog } from "@/components/ui/dialog";
 import { Search, Trash2, Pencil, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import Link from "next/link";
 import toast from "react-hot-toast";
 
 export default function ActivityDetailPage() {
@@ -524,7 +525,20 @@ export default function ActivityDetailPage() {
               <tbody>
                 {sectionParticipants.map((p) => (
                   <tr key={p.id} className="border-b last:border-0">
-                    <td className="px-3 py-2">{getParticipantName(p)}</td>
+                    <td className="px-3 py-2">
+                      {p.participant_type === "entity" && fieldEntityType?.key ? (
+                        <Link
+                          href={`/entities/${fieldEntityType.key}/${p.participant_id}`}
+                          target="_blank"
+                          rel="noopener"
+                          className="text-purple-600 hover:underline"
+                        >
+                          {getParticipantName(p)}
+                        </Link>
+                      ) : (
+                        getParticipantName(p)
+                      )}
+                    </td>
                     {hasStatus && (
                       <td className="px-3 py-2">
                         {p.status && (
