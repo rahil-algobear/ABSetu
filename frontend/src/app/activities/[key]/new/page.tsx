@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -14,15 +14,20 @@ import {
   Dimension,
   DimensionValue,
   DimensionValueLink,
-  MetaFieldDefinition,
   MetaFieldSchemaItem,
 } from "@/types";
-import { collectActivityFields } from "@/utils/meta-fields";
+import {
+  deriveParticipantSectionKey,
+  type FormValues,
+} from "@/utils/field-visibility";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DynamicMetaForm } from "@/components/DynamicMetaForm";
-import { deriveParticipantSectionKey } from "@/utils/field-visibility";
+import {
+  ActivityFields,
+  useVisibleActivityFields,
+  type ActivityFieldsHandle,
+} from "@/components/ActivityFields";
 import { PageLayout } from "@/components/ui/page-layout";
 import { PageContent } from "@/components/ui/page-content";
 import { PageHeader } from "@/components/ui/page-header";
@@ -30,37 +35,6 @@ import { usePermissions } from "@/components/Auth/Permissions";
 import { useDimensionAutoSelect } from "@/hooks/useDimensionAutoSelect";
 
 import toast from "react-hot-toast";
-
-/**
- * Given a set of dimension value links and the currently selected dimension value IDs,
- * return the filtered list of allowed values for a target dimension.
- */
-function getFilteredValues(
-  targetDimValues: DimensionValue[],
-  selectedByDim: Record<string, string>,
-  targetDimId: string,
-  dimensionValueLinks: DimensionValueLink[],
-): DimensionValue[] {
-  const otherSelections = Object.entries(selectedByDim)
-    .filter(([dimId, dvId]) => dimId !== targetDimId && dvId)
-    .map(([, dvId]) => dvId);
-
-  if (otherSelections.length === 0) {
-    return targetDimValues;
-  }
-
-  const linkPairs = new Set<string>();
-  for (const link of dimensionValueLinks) {
-    linkPairs.add(`${link.dimension_value_id_1}:${link.dimension_value_id_2}`);
-    linkPairs.add(`${link.dimension_value_id_2}:${link.dimension_value_id_1}`);
-  }
-
-  return targetDimValues.filter((dv) =>
-    otherSelections.every(
-      (selectedId) => linkPairs.has(`${dv.id}:${selectedId}`)
-    )
-  );
-}
 
 export default function NewActivityPage() {
   const queryClient = useQueryClient();
@@ -77,6 +51,15 @@ export default function NewActivityPage() {
   const selectedTypeId = activityType?.id || "";
   const typeName = activityType?.name || "Activity";
 
+  const { data: allMetaSchemas = [] } = useQuery<MetaFieldSchemaItem[]>({
+    queryKey: ["meta-field-schemas-all"],
+    queryFn: metaFieldSchemaApi.getAll,
+  });
+
+  // Dimension queries are still kept at the page level — they feed the
+  // useDimensionAutoSelect hook below. The form's dimension picker
+  // itself goes through DynamicMetaForm + useDimensionData (which
+  // dedupes against these same query keys).
   const { data: dimensions = [] } = useQuery<Dimension[]>({
     queryKey: ["dimensions"],
     queryFn: dimensionApi.list,
@@ -86,7 +69,7 @@ export default function NewActivityPage() {
     queryKey: ["all-dimension-values", dimensions.map((d) => d.id).join(",")],
     queryFn: async () => {
       const results = await Promise.all(
-        dimensions.map((d) => dimensionApi.listAccessibleValues(d.id))
+        dimensions.map((d) => dimensionApi.listAccessibleValues(d.id)),
       );
       return results.flat();
     },
@@ -98,78 +81,46 @@ export default function NewActivityPage() {
     queryFn: () => dimensionValueLinkApi.list(),
   });
 
-  const { data: allMetaSchemas = [] } = useQuery<MetaFieldSchemaItem[]>({
-    queryKey: ["meta-field-schemas-all"],
-    queryFn: metaFieldSchemaApi.getAll,
+  // Single source of truth for everything the form-builder collects.
+  const [values, setValues] = useState<FormValues>({
+    meta: {},
+    dimensions: [],
+    participants: {},
+  });
+  const [formError, setFormError] = useState<string | null>(null);
+  const fieldsRef = useRef<ActivityFieldsHandle>(null);
+
+  const visibleFields = useVisibleActivityFields({
+    activityTypeId: selectedTypeId || null,
+    allSchemas: allMetaSchemas,
+    values,
+    mode: "create",
   });
 
-  const [formData, setFormData] = useState({
-    dimension_value_ids: [] as string[],
-  });
-  const [metaValues, setMetaValues] = useState<Record<string, unknown>>({});
-  const [participantState, setParticipantState] = useState<
-    Record<string, { participant_id: string; participant_type: string; status?: string; meta?: Record<string, unknown> }[]>
-  >({});
+  const hasFields = visibleFields.length > 0;
 
-  // All field definitions from meta schemas — the sole source of truth
-  const allFields = useMemo((): MetaFieldDefinition[] => {
-    return collectActivityFields(allMetaSchemas, selectedTypeId || null, formData.dimension_value_ids);
-  }, [selectedTypeId, formData.dimension_value_ids, allMetaSchemas]);
+  // Used by both useDimensionAutoSelect (below) and the save payload
+  // assembler. Derived from the visible field list so it tracks
+  // dim-value-scoped visibility changes.
+  const formDimensions = useMemo(
+    () =>
+      visibleFields
+        .filter((f) => f.type === "dimension" && f.dimension_id)
+        .map((f) => ({ id: f.dimension_id! })),
+    [visibleFields],
+  );
 
-  // Split fields by type for rendering
-  const formFields = useMemo(() => {
-    return allFields.filter((f) => f.visible !== false);
-  }, [allFields]);
-
-  // Fields that are not editable on the create stage (edit-only fields)
-  const createDisabledKeys = useMemo(() => {
-    const keys = new Set<string>();
-    for (const f of allFields) {
-      if (f.stage && f.stage !== "both" && f.stage !== "create") {
-        keys.add(f.key);
-      }
-    }
-    return keys;
-  }, [allFields]);
-
-  // List-type fields used at save time to assemble the participants
-  // payload. Rendering / data-fetching for these now lives in the
-  // per-type Dynamic{Entity,User}ListField components, dispatched via
-  // DynamicMetaForm.
-  const participantFields = useMemo(() => {
-    return formFields.filter(
-      (f) =>
-        (f.type === "entity_list" || f.type === "user_list") &&
-        !createDisabledKeys.has(f.key),
-    );
-  }, [formFields, createDisabledKeys]);
-
-  const selectedByDim = useMemo(() => {
-    const map: Record<string, string> = {};
-    for (const dim of dimensions) {
-      const dimValues = allDimensionValues.filter(
-        (dv) => dv.dimension_id === dim.id
-      );
-      const selected = formData.dimension_value_ids.find((id) =>
-        dimValues.some((dv) => dv.id === id)
-      );
-      if (selected) {
-        map[dim.id] = selected;
-      }
-    }
-    return map;
-  }, [dimensions, allDimensionValues, formData.dimension_value_ids]);
-
-  // Dimension fields in the form (for auto-select)
-  const formDimensions = useMemo(() => {
-    return formFields
-      .filter((f) => f.type === "dimension" && f.dimension_id)
-      .map((f) => ({ id: f.dimension_id! }));
-  }, [formFields]);
+  const participantFields = useMemo(
+    () =>
+      visibleFields.filter(
+        (f) => f.type === "entity_list" || f.type === "user_list",
+      ),
+    [visibleFields],
+  );
 
   const handleAutoSelect = useCallback(
     (dvIds: string[]) => {
-      setFormData((prev) => ({ ...prev, dimension_value_ids: dvIds }));
+      setValues((prev) => ({ ...prev, dimensions: dvIds }));
     },
     [],
   );
@@ -179,17 +130,23 @@ export default function NewActivityPage() {
     allDimensionValues,
     dimensionValueLinks,
     userDimensionValueIds,
-    currentSelections: formData.dimension_value_ids,
+    currentSelections: values.dimensions,
     onAutoSelect: handleAutoSelect,
   });
 
   const createMutation = useMutation({
     mutationFn: async (payload: Parameters<typeof activityApi.create>[0]) => {
       const activity = await activityApi.create(payload);
-      const allRecords: { participant_type: string; participant_id: string; section_key: string; status?: string; meta?: Record<string, unknown> }[] = [];
+      const allRecords: {
+        participant_type: string;
+        participant_id: string;
+        section_key: string;
+        status?: string;
+        meta?: Record<string, unknown>;
+      }[] = [];
       for (const field of participantFields) {
         const sectionKey = deriveParticipantSectionKey(field);
-        const sectionState = participantState[sectionKey] || [];
+        const sectionState = values.participants?.[sectionKey] ?? [];
         for (const p of sectionState) {
           allRecords.push({
             participant_type: p.participant_type,
@@ -213,177 +170,70 @@ export default function NewActivityPage() {
     onError: () => toast.error(`Failed to create ${typeName.toLowerCase()}`),
   });
 
-  const renderField = (field: MetaFieldDefinition) => {
-    const isDisabled = createDisabledKeys.has(field.key);
-
-    switch (field.type) {
-      case "dimension": {
-        const dimId = field.dimension_id;
-        const dim = dimensions.find((d) => d.id === dimId);
-        if (!dim) return null;
-        // Hide dimension fields that are edit-only on create stage
-        if (field.stage && field.stage !== "both" && field.stage !== "create") return null;
-        const dimValues = allDimensionValues.filter(
-          (dv) => dv.dimension_id === dim.id
-        );
-        const filtered = getFilteredValues(
-          dimValues,
-          selectedByDim,
-          dim.id,
-          dimensionValueLinks
-        );
-        const currentSelection =
-          formData.dimension_value_ids.find((id) =>
-            dimValues.some((dv) => dv.id === id)
-          ) || "";
-
-        return (
-          <div key={`dimension-${field.key}`}>
-            <label className="text-sm font-medium">
-              {field.label}
-              {field.required && <span className="text-red-500 ml-0.5">*</span>}
-            </label>
-            <select
-              className="w-full mt-1 border rounded-md p-2 text-sm"
-              value={currentSelection}
-              onChange={(e) => {
-                const newId = e.target.value;
-                const otherIds = formData.dimension_value_ids.filter(
-                  (id) => !dimValues.some((dv) => dv.id === id)
-                );
-                setFormData({
-                  ...formData,
-                  dimension_value_ids: newId
-                    ? [...otherIds, newId]
-                    : otherIds,
-                });
-              }}
-              required={field.required}
-            >
-              <option value="">Select {field.label}...</option>
-              {filtered.map((dv) => (
-                <option key={dv.id} value={dv.id}>
-                  {dv.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        );
-      }
-
-      case "entity_list":
-      case "user_list": {
-        // Entity_list / user_list dispatch through DynamicMetaForm now;
-        // the per-type components own their data fetches and the
-        // create-new dialog. Adapt this page's participantState (keyed
-        // by section key) to the FormValues.participants shape at the
-        // boundary so we don't have to rewrite the page's state model.
-        return (
-          <div key={`participant-${field.key}`}>
-            <DynamicMetaForm
-              fields={[field]}
-              values={{
-                meta: {},
-                dimensions: [],
-                participants: participantState,
-              }}
-              onChange={(next) =>
-                setParticipantState(next.participants ?? {})
-              }
-              disabledKeys={createDisabledKeys}
-            />
-          </div>
-        );
-      }
-
-      default: {
-        // Standard meta field types (text, number, date, select, etc.)
-        // Title field with "generated" mode: skip rendering
-        if (field.key === "title") {
-          const titleConfig = field.config || { mode: "free_text" };
-          if ((titleConfig.mode as string) === "generated") return null;
-        }
-
-        return (
-          <div key={`field-${field.key}`}>
-            <DynamicMetaForm
-              fields={[field]}
-              // This page keeps activity meta + dimension selections in
-              // separate state buckets and renders its own dim picker
-              // above (not via DynamicMetaForm). Adapt at the boundary
-              // so the renderer sees the unified FormValues shape.
-              values={{ meta: metaValues, dimensions: [] }}
-              onChange={(next) => setMetaValues(next.meta)}
-              disabledKeys={createDisabledKeys}
-            />
-          </div>
-        );
-      }
+  const onSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormError(null);
+    const validationError = fieldsRef.current?.validate();
+    if (validationError) {
+      setFormError(validationError);
+      return;
     }
+    createMutation.mutate({
+      dimension_value_ids: values.dimensions,
+      activity_type_id: selectedTypeId || undefined,
+      meta: values.meta,
+    });
   };
-
-  const hasFields = formFields.length > 0;
 
   return (
     <PageLayout>
       <PageHeader title={`New ${typeName}`} />
 
       <PageContent>
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Create {typeName}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Create {typeName}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={onSubmit} className="space-y-3">
+              {formError && (
+                <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {formError}
+                </div>
+              )}
 
-              // Validate required meta fields (skip disabled/edit-only and structural types)
-              for (const field of formFields) {
-                if (!field.required || createDisabledKeys.has(field.key)) continue;
-                if (field.type === "dimension" || field.type === "entity_list" || field.type === "user_list") continue;
-                const val = metaValues[field.key];
-                if (val === undefined || val === null || val === "") {
-                  toast.error(`${field.label} is required`);
-                  return;
-                }
-              }
-
-              const payload = {
-                dimension_value_ids: formData.dimension_value_ids,
-                activity_type_id: selectedTypeId || undefined,
-                meta: metaValues,
-              };
-              createMutation.mutate(payload);
-            }}
-            className="space-y-3"
-          >
-            {hasFields
-              ? formFields.map(renderField)
-              : (
+              {hasFields ? (
+                <ActivityFields
+                  ref={fieldsRef}
+                  activityTypeId={selectedTypeId || null}
+                  allSchemas={allMetaSchemas}
+                  values={values}
+                  onChange={setValues}
+                  mode="create"
+                />
+              ) : (
                 <p className="text-sm text-gray-500">
                   No fields have been configured for this activity type. Please ask your admin to set them up in Form Fields under Admin settings.
                 </p>
-              )
-            }
-
-            <div className="flex gap-2">
-              {hasFields && (
-                <Button type="submit" disabled={createMutation.isPending}>
-                  Create
-                </Button>
               )}
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => router.push(`/activities/${typeKey}`)}
-              >
-                Cancel
-              </Button>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
+
+              <div className="flex gap-2">
+                {hasFields && (
+                  <Button type="submit" disabled={createMutation.isPending}>
+                    Create
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => router.push(`/activities/${typeKey}`)}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
       </PageContent>
     </PageLayout>
   );
