@@ -73,6 +73,10 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
+    # Window after rotation during which the old refresh token can be presented
+    # again and receive the same successor pair (instead of triggering reuse
+    # detection). Covers multi-tab races and network retries.
+    REFRESH_TOKEN_GRACE_SECONDS: int = 10
     OTP_EXPIRY_MINUTES: int = 5
 
     # Twilio

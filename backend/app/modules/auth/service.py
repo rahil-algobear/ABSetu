@@ -13,9 +13,10 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import exc
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
+from app.common.helpers import secretbox
 from app.common.helpers.smshelper import SMSHelper
 from app.common.helpers.tokenhelper import TokenHelper
+from app.core.config import settings
 from app.modules.auth.model import OTP, RefreshToken, User
 
 logger = logging.getLogger(__name__)
@@ -228,10 +229,14 @@ class AuthService:
         """
         Validate a refresh token, rotate it, and return new tokens.
 
-        Rotation: the old token is revoked and a fresh one issued.
-        This limits the blast radius of a leaked refresh token.
+        Rotation: the old token is soft-rotated (rotated_at set, successor
+        recorded) and a fresh pair is issued. Re-presenting the old token
+        within REFRESH_TOKEN_GRACE_SECONDS returns the same successor —
+        absorbing multi-tab/retry races. Re-presenting it after the grace
+        window is treated as a reuse attack and revokes all user tokens.
         """
         token_hash = self._hash_token(raw_refresh_token)
+        now = datetime.now(timezone.utc)
 
         stored_token = self.db.query(RefreshToken).filter_by(token_hash=token_hash).first()
 
@@ -239,7 +244,9 @@ class AuthService:
             raise ValueError("Invalid refresh token")
 
         if stored_token.revoked:
-            # Possible token reuse attack — revoke all tokens for this user
+            # Token was hard-revoked (logout, prior reuse detection, or
+            # rotated-then-replayed-after-grace). Treat any further use as
+            # a reuse attack.
             logger.warning(
                 "Revoked refresh token reuse detected for user_id=%s. "
                 "Revoking all tokens for safety.",
@@ -248,12 +255,47 @@ class AuthService:
             self._revoke_all_user_tokens(stored_token.user_id)
             raise ValueError("Refresh token has been revoked")
 
-        if stored_token.expires_at < datetime.now(timezone.utc):
+        if stored_token.expires_at < now:
             raise ValueError("Refresh token has expired")
 
-        # Revoke the old token (rotation)
-        stored_token.revoked = True
-        self.db.commit()
+        # Within-grace replay path: token was already rotated, but recently
+        # enough that this is almost certainly a legitimate race (another tab,
+        # a retry). Return the same successor pair.
+        if stored_token.rotated_at is not None:
+            grace_cutoff = stored_token.rotated_at + timedelta(
+                seconds=settings.REFRESH_TOKEN_GRACE_SECONDS
+            )
+            if now <= grace_cutoff and stored_token.successor_token_encrypted:
+                user = self.db.query(User).filter_by(id=stored_token.user_id).first()
+                if not user:
+                    raise ValueError("User not found")
+                successor_refresh = secretbox.decrypt(stored_token.successor_token_encrypted)
+                # Always mint a fresh access JWT — they're short-lived and
+                # cheap; this also keeps the access token's exp aligned with
+                # the caller's wall clock.
+                new_access_token = self.token_helper.create_access_token(
+                    {"sub": str(user.id), "mobile": user.mobile_number}
+                )
+                logger.info(
+                    "Refresh token replayed within grace window for user_id=%s",
+                    user.id,
+                )
+                return {
+                    "access_token": new_access_token,
+                    "refresh_token": successor_refresh,
+                    "refresh_token_expires_in_days": settings.REFRESH_TOKEN_EXPIRE_DAYS,
+                }
+
+            # Rotated, but outside the grace window → real reuse signal.
+            logger.warning(
+                "Refresh token reuse after grace window detected for user_id=%s. "
+                "Revoking all tokens for safety.",
+                stored_token.user_id,
+            )
+            stored_token.revoked = True
+            self.db.commit()
+            self._revoke_all_user_tokens(stored_token.user_id)
+            raise ValueError("Refresh token has been revoked")
 
         # Look up the user for the new access token payload
         user = self.db.query(User).filter_by(id=stored_token.user_id).first()
@@ -261,8 +303,9 @@ class AuthService:
             raise ValueError("User not found")
 
         # Issue new JWT access token
-        token_data = {"sub": str(user.id), "mobile": user.mobile_number}
-        new_access_token = self.token_helper.create_access_token(token_data)
+        new_access_token = self.token_helper.create_access_token(
+            {"sub": str(user.id), "mobile": user.mobile_number}
+        )
 
         # Issue new DB-backed refresh token
         new_refresh_token = self._create_refresh_token(
@@ -270,6 +313,19 @@ class AuthService:
             user_agent=user_agent,
             ip_address=ip_address,
         )
+
+        # Soft-rotate the old token: record successor + rotation time. We keep
+        # revoked=False so the grace-window branch above can recognize this
+        # row on replay. After the grace window, that branch flips revoked=True.
+        new_token_row = (
+            self.db.query(RefreshToken)
+            .filter_by(token_hash=self._hash_token(new_refresh_token))
+            .first()
+        )
+        stored_token.rotated_at = datetime.now(timezone.utc)
+        stored_token.replaced_by_id = new_token_row.id if new_token_row else None
+        stored_token.successor_token_encrypted = secretbox.encrypt(new_refresh_token)
+        self.db.commit()
 
         return {
             "access_token": new_access_token,

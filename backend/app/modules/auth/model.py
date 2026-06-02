@@ -71,3 +71,16 @@ class RefreshToken(BaseModel):
     revoked = Column(Boolean, nullable=False, default=False)
     user_agent = Column(Text, nullable=True)
     ip_address = Column(String(45), nullable=True)
+
+    # Rotation grace-window fields. When this token is rotated, we don't revoke
+    # it immediately — we record rotated_at + the successor it produced. A
+    # subsequent presentation of this token within REFRESH_TOKEN_GRACE_SECONDS
+    # is treated as a legitimate race (multi-tab, retry) and returns the same
+    # successor. Outside the window, it's treated as a reuse attack.
+    rotated_at = Column(DateTime(timezone=True), nullable=True)
+    replaced_by_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("refresh_tokens.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    successor_token_encrypted = Column(Text, nullable=True)

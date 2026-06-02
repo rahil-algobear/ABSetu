@@ -59,6 +59,10 @@ class ActivityResponse(BaseResponseSchema):
     activity_type_name: str | None = None
     dimensions: list[DimensionInfo] = []
     participant_count: int = 0
+    # Per-section participant counts keyed by the list column key
+    # (meta:<field_key>) for entity_list / user_list columns. Only
+    # populated by the paginated list endpoint.
+    section_counts: dict[str, int] = {}
 
 
 # --- Activity Participant ---
