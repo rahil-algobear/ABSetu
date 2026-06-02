@@ -1040,6 +1040,7 @@ def seed():
         SESSION_LIST_SPEC = [
             ("Date", {"filterable": True, "sortable": True}),
             ("Intervention", {"filterable": True, "searchable": True}),
+            ("Sub-Intervention", {"filterable": True}),
             ("Location", {"filterable": True}),
             ("Programme", {"filterable": True}),
             ("Project", {"filterable": True}),
@@ -1050,7 +1051,15 @@ def seed():
             if col:
                 sess_cols.append({**col, "sort_order": i, **overrides})
         for s in sess_static:
-            sess_cols.append({**s, "sort_order": len(sess_cols)})
+            # Hide the generic Participants count — the per-section
+            # Users / Facilitators / Beneficiaries columns replace it.
+            extra = {"visible": False} if s["key"] == "participant_count" else {}
+            sess_cols.append({**s, "sort_order": len(sess_cols), **extra})
+        # Per-section participant counts, placed after Created / Created By.
+        for label in ("Users", "Facilitators", "Beneficiaries"):
+            col = sess_catalog.get(label)
+            if col:
+                sess_cols.append({**col, "sort_order": len(sess_cols)})
         list_service.update_config(org.id, session_scope, sess_cols)
         print(f"  Seeded session list config ({len(sess_cols)} columns)")
 

@@ -14,6 +14,28 @@ interface PaginationProps {
 
 const ITEMS_PER_PAGE_OPTIONS = [10, 25, 50];
 
+/** Per-page select. The dropdown chevron is handled globally by the
+ *  `select` rule in globals.css, so this is a plain styled select. */
+function PerPageSelect({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (n: number) => void;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(parseInt(e.target.value))}
+      className="border rounded-md px-2 py-1 text-sm"
+    >
+      {ITEMS_PER_PAGE_OPTIONS.map((n) => (
+        <option key={n} value={n}>{n} per page</option>
+      ))}
+    </select>
+  );
+}
+
 export function Pagination({
   currentPage,
   totalPages,
@@ -68,15 +90,7 @@ export function Pagination({
             <span className="font-medium">{endItem}</span> of{" "}
             <span className="font-medium">{totalItems}</span>
           </p>
-          <select
-            value={itemsPerPage}
-            onChange={(e) => onItemsPerPageChange(parseInt(e.target.value))}
-            className="border rounded-md px-2 py-1 text-sm"
-          >
-            {ITEMS_PER_PAGE_OPTIONS.map((n) => (
-              <option key={n} value={n}>{n} per page</option>
-            ))}
-          </select>
+          <PerPageSelect value={itemsPerPage} onChange={onItemsPerPageChange} />
         </div>
         {totalPages > 1 && (
           <div className="flex justify-center">
@@ -131,15 +145,7 @@ export function Pagination({
       {/* Desktop */}
       <div className="hidden sm:flex sm:items-center sm:justify-between">
         <div className="flex items-center gap-4">
-          <select
-            value={itemsPerPage}
-            onChange={(e) => onItemsPerPageChange(parseInt(e.target.value))}
-            className="border rounded-md px-2 py-1 text-sm"
-          >
-            {ITEMS_PER_PAGE_OPTIONS.map((n) => (
-              <option key={n} value={n}>{n} per page</option>
-            ))}
-          </select>
+          <PerPageSelect value={itemsPerPage} onChange={onItemsPerPageChange} />
           <p className="text-sm text-gray-700">
             Showing <span className="font-medium">{startItem}</span> to{" "}
             <span className="font-medium">{endItem}</span> of{" "}

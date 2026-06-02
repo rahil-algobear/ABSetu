@@ -26,8 +26,8 @@ from app.modules.activity.schemas import (
     ActivityUpdate,
     DimensionInfo,
     ParticipantBulkCreate,
+    ParticipantBulkPatchPayload,
     ParticipantResponse,
-    ParticipantSectionReplace,
     PickerAddPayload,
     PickerCreateAndAddPayload,
     PickerEnrollAndAddPayload,
@@ -252,10 +252,57 @@ def list_activities(
         participant_entity_id=entity_id,
     )
 
+    # Per-section participant counts, keyed by the column key the list
+    # config uses (meta:<field_key>), so entity_list / user_list columns
+    # can render a count instead of "—". Only meaningful when scoped to a
+    # single activity type (the list always is) — that's where we know
+    # the section → column mapping from the schema.
+    section_to_colkey: dict[str, str] = {}
+    if activity_type_id:
+        for fd in _collect_field_defs(
+            db, current_user.organization_id, activity_type_id
+        ).values():
+            ftype = fd.get("type")
+            if ftype == "user_list":
+                section_to_colkey["user"] = f"meta:{fd['key']}"
+            elif ftype == "entity_list":
+                skey = fd.get("entity_type_id") or fd["key"]
+                section_to_colkey[str(skey)] = f"meta:{fd['key']}"
+
+    counts_by_activity: dict[uuid.UUID, dict[str, int]] = {}
+    if section_to_colkey:
+        from sqlalchemy import func as _func
+
+        from app.modules.activity.model import ActivityParticipant
+
+        activity_ids = [a.id for a, _, _ in rows]
+        if activity_ids:
+            grouped = (
+                db.query(
+                    ActivityParticipant.activity_id,
+                    ActivityParticipant.section_key,
+                    _func.count(ActivityParticipant.id),
+                )
+                .filter(ActivityParticipant.activity_id.in_(activity_ids))
+                .group_by(
+                    ActivityParticipant.activity_id,
+                    ActivityParticipant.section_key,
+                )
+                .all()
+            )
+            for aid, skey, cnt in grouped:
+                counts_by_activity.setdefault(aid, {})[str(skey)] = cnt
+
     data = []
     for activity, participant_count, created_by_name in rows:
         resp = _build_activity_response(activity, created_by_name=created_by_name)
         resp["participant_count"] = participant_count or 0
+        if section_to_colkey:
+            per_section = counts_by_activity.get(activity.id, {})
+            resp["section_counts"] = {
+                colkey: per_section.get(skey, 0)
+                for skey, colkey in section_to_colkey.items()
+            }
         data.append(resp)
 
     return PaginatedResponse(count=total, data=data)
@@ -486,6 +533,80 @@ def get_participants(
     return results
 
 
+@activity_router.get(
+    "/{activity_id}/participants/page",
+    dependencies=[Depends(require_permissions("activity:view"))],
+)
+def get_participants_paginated(
+    section_key: str = Query(..., min_length=1),
+    page: int = Query(1, ge=1),
+    limit: int = Query(25, ge=1, le=100),
+    search: str | None = Query(None),
+    sort_by: str | None = Query(None),
+    sort_order: str = Query("asc", pattern="^(asc|desc)$"),
+    activity=Depends(get_accessible_activity),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Paginated participants scoped to a single section of an activity.
+
+    Supports search and sort_by=name. Each row carries a resolved
+    display_name (entity: first visible meta column of its type's list
+    config; user: first + last name) so the frontend doesn't have to
+    batch-fetch names per page.
+    """
+    service = ActivityParticipantService(db)
+    rows, total = service.list_by_activity_paginated(
+        org_id=current_user.organization_id,
+        activity_id=activity.id,
+        section_key=section_key,
+        page=page,
+        limit=limit,
+        search=search,
+        sort_by=sort_by,
+        sort_order=sort_order,
+    )
+    name_by_row_id = service.resolve_display_names(
+        current_user.organization_id, rows
+    )
+    data = [
+        ParticipantResponse(
+            id=str(p.id),
+            updated_at=p.updated_at,
+            activity_id=str(p.activity_id),
+            participant_type=p.participant_type,
+            participant_id=str(p.participant_id),
+            section_key=p.section_key,
+            status=p.status,
+            meta=p.meta,
+            display_name=name_by_row_id.get(p.id),
+        ).dump()
+        for p in rows
+    ]
+    return PaginatedResponse(count=total, data=data)
+
+
+@activity_router.patch(
+    "/{activity_id}/participants",
+    dependencies=[Depends(require_permissions("activity:create"))],
+)
+def bulk_patch_participants(
+    data: ParticipantBulkPatchPayload,
+    activity=Depends(get_accessible_activity),
+    db: Session = Depends(get_db),
+):
+    """Apply per-row participant updates and removes atomically. Rows
+    not in either list are left untouched — the page-by-page edit flow
+    relies on this to save only the rows the user actually touched."""
+    service = ActivityParticipantService(db)
+    service.bulk_patch(
+        activity_id=activity.id,
+        updates=[u.model_dump() for u in data.updates],
+        removes=[r.model_dump() for r in data.removes],
+    )
+    return {"ok": True}
+
+
 @activity_router.post(
     "/{activity_id}/participants",
     dependencies=[Depends(require_permissions("activity:create"))],
@@ -628,41 +749,6 @@ def _verify_dimensions_cover_activity(
         raise ValidationError(
             "Enrollment dimensions must include this activity's enrollment-tracked dimensions."
         )
-
-
-@activity_router.put(
-    "/{activity_id}/participants",
-    dependencies=[Depends(require_permissions("activity:create"))],
-)
-def replace_section_participants(
-    data: ParticipantSectionReplace,
-    section_key: str = Query(..., description="Section key (entity_type_id or 'user')"),
-    activity=Depends(get_accessible_activity),
-    db: Session = Depends(get_db),
-):
-    """Phase 3.1 section-scoped bulk save. Replaces just this section's
-    participants with the submitted set; other sections on the activity
-    are untouched. Used by per-section edit mode for status / meta
-    updates and removals."""
-    service = ActivityParticipantService(db)
-    participants = service.replace_section(
-        activity.id,
-        section_key,
-        [r.model_dump() for r in data.records],
-    )
-    return [
-        ParticipantResponse(
-            id=str(p.id),
-            updated_at=p.updated_at,
-            activity_id=str(p.activity_id),
-            participant_type=p.participant_type,
-            participant_id=str(p.participant_id),
-            section_key=p.section_key,
-            status=p.status,
-            meta=p.meta,
-        ).dump()
-        for p in participants
-    ]
 
 
 @activity_router.post(

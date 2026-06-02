@@ -59,6 +59,10 @@ class ActivityResponse(BaseResponseSchema):
     activity_type_name: str | None = None
     dimensions: list[DimensionInfo] = []
     participant_count: int = 0
+    # Per-section participant counts keyed by the list column key
+    # (meta:<field_key>) for entity_list / user_list columns. Only
+    # populated by the paginated list endpoint.
+    section_counts: dict[str, int] = {}
 
 
 # --- Activity Participant ---
@@ -76,20 +80,6 @@ class ParticipantBulkCreate(BaseModel):
     records: list[ParticipantRecord]
 
 
-class ParticipantSectionRecord(BaseModel):
-    """Row for the section-scoped bulk save. section_key comes from the
-    query param so the body is just the rows."""
-
-    participant_type: str
-    participant_id: str
-    status: str | None = None
-    meta: dict[str, Any] | None = None
-
-
-class ParticipantSectionReplace(BaseModel):
-    records: list[ParticipantSectionRecord]
-
-
 class ParticipantResponse(BaseResponseSchema):
     activity_id: str
     participant_type: str
@@ -97,6 +87,32 @@ class ParticipantResponse(BaseResponseSchema):
     section_key: str
     status: str | None = None
     meta: dict[str, Any] | None = None
+    display_name: str | None = None
+
+
+class ParticipantPatchRow(BaseModel):
+    """One row in the bulk-patch payload. Identified by
+    (participant_id, section_key) — uniqueness is enforced by the section
+    schema. Pass status / meta only for fields you want to change; omit
+    to leave untouched."""
+
+    participant_id: str
+    section_key: str
+    status: str | None = None
+    meta: dict[str, Any] | None = None
+
+
+class ParticipantRemoveRow(BaseModel):
+    participant_id: str
+    section_key: str
+
+
+class ParticipantBulkPatchPayload(BaseModel):
+    """Apply per-row updates and removes atomically. Rows not in the
+    payload are untouched."""
+
+    updates: list[ParticipantPatchRow] = []
+    removes: list[ParticipantRemoveRow] = []
 
 
 # --- Smart picker (Phase 3) — per-action payloads ---

@@ -130,6 +130,12 @@ export function ActivityList({
       );
       return dim ? dim.value_name : "—";
     }
+    // entity_list / user_list participant sections render as a count —
+    // a name list doesn't fit a table cell. Keyed by column key on the
+    // server so 0 is a real value (not "—").
+    if (col.field_type === "entity_list" || col.field_type === "user_list") {
+      return activity.section_counts?.[col.key] ?? 0;
+    }
     const metaKey = col.key.replace(/^meta:/, "");
     const val = activity.meta?.[metaKey];
     if (val === undefined || val === null) return "—";

@@ -254,17 +254,6 @@ export interface FilterResponse {
 }
 
 export const entityApi = {
-  list: async (entityTypeId?: string): Promise<Entity[]> => {
-    // High limit so the activity create page's SearchSelectParticipants
-    // options list covers orgs with hundreds of beneficiaries. Phase 3.2
-    // retires that flow; until then this is the patch.
-    const params = new URLSearchParams({ limit: "1000" });
-    if (entityTypeId) params.set("entity_type_id", entityTypeId);
-    const response = await authAxios.get<PaginatedResponse<Entity>>(
-      `/entities/?${params.toString()}`,
-    );
-    return response.data.data;
-  },
   /** Fetch entities by ID. Transparently chunks the request so an
    *  activity with hundreds of participants (or any other big batch
    *  caller) doesn't trip the backend's per-request `ids` cap and,
@@ -392,23 +381,40 @@ export const activityApi = {
     const response = await authAxios.get<ActivityParticipant[]>(`/activities/${activityId}/participants`);
     return response.data;
   },
+  getParticipantsPage: async (
+    activityId: string,
+    params: {
+      section_key: string;
+      page?: number;
+      limit?: number;
+      search?: string;
+      sort_by?: string;
+      sort_order?: string;
+    },
+  ): Promise<PaginatedResponse<ActivityParticipant>> => {
+    const response = await authAxios.get<PaginatedResponse<ActivityParticipant>>(
+      `/activities/${activityId}/participants/page`,
+      { params },
+    );
+    return response.data;
+  },
+  bulkPatchParticipants: async (
+    activityId: string,
+    payload: {
+      updates: { participant_id: string; section_key: string; status?: string | null; meta?: Record<string, unknown> | null }[];
+      removes: { participant_id: string; section_key: string }[];
+    },
+  ): Promise<{ ok: boolean }> => {
+    const response = await authAxios.patch<{ ok: boolean }>(
+      `/activities/${activityId}/participants`,
+      payload,
+    );
+    return response.data;
+  },
   saveParticipants: async (activityId: string, records: { participant_type: string; participant_id: string; section_key: string; status?: string; meta?: Record<string, unknown> }[]): Promise<ActivityParticipant[]> => {
     const response = await authAxios.post<ActivityParticipant[]>(`/activities/${activityId}/participants`, { records });
     return response.data;
   },
-  replaceSectionParticipants: async (
-    activityId: string,
-    sectionKey: string,
-    records: { participant_type: string; participant_id: string; status?: string; meta?: Record<string, unknown> }[],
-  ): Promise<ActivityParticipant[]> => {
-    const response = await authAxios.put<ActivityParticipant[]>(
-      `/activities/${activityId}/participants`,
-      { records },
-      { params: { section_key: sectionKey } },
-    );
-    return response.data;
-  },
-
   // --- Smart picker (Phase 3) ---
 
   pickerAdd: async (
