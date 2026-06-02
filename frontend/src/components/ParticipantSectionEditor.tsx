@@ -167,12 +167,19 @@ export function ParticipantSectionEditor({
               <thead className="bg-gray-50 border-b">
                 <tr>
                   <th className="w-8" />
-                  <th className="text-left px-3 py-2 font-medium">Name</th>
+                  <th className="text-left px-3 py-2 font-medium min-w-[10rem]">
+                    Name
+                  </th>
                   {captureStatus && (
-                    <th className="text-left px-3 py-2 font-medium">Status</th>
+                    <th className="text-left px-3 py-2 font-medium min-w-[6rem]">
+                      Status
+                    </th>
                   )}
                   {metaFields.map((f) => (
-                    <th key={f.key} className="text-left px-3 py-2 font-medium">
+                    <th
+                      key={f.key}
+                      className="text-left px-3 py-2 font-medium min-w-[12rem]"
+                    >
                       {f.label}
                       {f.required && (
                         <span className="text-red-500 ml-0.5">*</span>
@@ -198,13 +205,13 @@ export function ParticipantSectionEditor({
                           <X className="h-4 w-4" />
                         </button>
                       </td>
-                      <td className="px-3 py-2">
+                      <td className="px-3 py-2 min-w-[10rem] whitespace-nowrap">
                         {r.display_name || r.participant_id}
                       </td>
                       {captureStatus && (
-                        <td className="px-3 py-2">
+                        <td className="px-3 py-2 min-w-[6rem]">
                           <select
-                            className="border rounded px-2 py-1 text-xs"
+                            className="border rounded px-2 py-1 text-xs w-full"
                             value={status}
                             onChange={(e) =>
                               setEdit(r.id, { status: e.target.value })
@@ -220,7 +227,7 @@ export function ParticipantSectionEditor({
                         </td>
                       )}
                       {metaFields.map((f) => (
-                        <td key={f.key} className="px-3 py-2">
+                        <td key={f.key} className="px-3 py-2 min-w-[12rem]">
                           <DynamicMetaForm
                             fields={[f]}
                             values={{ meta, dimensions: [] }}

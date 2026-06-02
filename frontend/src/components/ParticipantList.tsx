@@ -91,12 +91,15 @@ export function ParticipantList({
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b">
             <tr>
-              <th className="text-left px-3 py-2 font-medium">Name</th>
+              <th className="text-left px-3 py-2 font-medium min-w-[10rem]">Name</th>
               {hasStatus && (
-                <th className="text-left px-3 py-2 font-medium">Status</th>
+                <th className="text-left px-3 py-2 font-medium min-w-[6rem]">Status</th>
               )}
               {metaFields.map((f) => (
-                <th key={f.key} className="text-left px-3 py-2 font-medium">
+                <th
+                  key={f.key}
+                  className="text-left px-3 py-2 font-medium min-w-[10rem]"
+                >
                   {f.label}
                 </th>
               ))}
@@ -105,9 +108,11 @@ export function ParticipantList({
           <tbody>
             {rows.map((p) => (
               <tr key={p.id} className="border-b last:border-0">
-                <td className="px-3 py-2">{renderName(p)}</td>
+                <td className="px-3 py-2 min-w-[10rem] whitespace-nowrap">
+                  {renderName(p)}
+                </td>
                 {hasStatus && (
-                  <td className="px-3 py-2">
+                  <td className="px-3 py-2 min-w-[6rem]">
                     {p.status && (
                       <Badge
                         variant={p.status === "present" ? "default" : "secondary"}
@@ -128,7 +133,10 @@ export function ParticipantList({
                         ? val.join(", ")
                         : String(val);
                   return (
-                    <td key={f.key} className="px-3 py-2 text-gray-700">
+                    <td
+                      key={f.key}
+                      className="px-3 py-2 text-gray-700 min-w-[10rem]"
+                    >
                       {display}
                     </td>
                   );
