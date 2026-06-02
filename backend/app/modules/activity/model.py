@@ -50,7 +50,13 @@ class Activity(BaseModel):
     meta = Column(JSONB, nullable=True, default=dict)
 
     activity_type = relationship("ActivityType")
-    participants = relationship("ActivityParticipant", back_populates="activity", lazy="dynamic")
+    participants = relationship(
+        "ActivityParticipant",
+        back_populates="activity",
+        cascade="all, delete",
+        passive_deletes=True,
+        lazy="dynamic",
+    )
     dimensions = relationship(
         "ActivityDimension",
         back_populates="activity",
