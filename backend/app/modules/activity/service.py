@@ -392,6 +392,28 @@ class ActivityParticipantService:
     def list_by_activity(self, activity_id: uuid.UUID) -> list[ActivityParticipant]:
         return self.db.query(ActivityParticipant).filter_by(activity_id=activity_id).all()
 
+    def list_by_activity_paginated(
+        self,
+        activity_id: uuid.UUID,
+        section_key: str,
+        page: int = 1,
+        limit: int = 25,
+    ) -> tuple[list[ActivityParticipant], int]:
+        """Paginated participants for a single section of an activity.
+
+        Sort defaults to created_at ascending — the order rows were added
+        — so pages stay stable as new participants are appended.
+        """
+        query = (
+            self.db.query(ActivityParticipant)
+            .filter_by(activity_id=activity_id, section_key=section_key)
+            .order_by(ActivityParticipant.created_at.asc())
+        )
+        total = query.count()
+        offset = max(0, (page - 1) * limit)
+        rows = query.offset(offset).limit(limit).all()
+        return rows, total
+
     def bulk_create(self, activity_id: uuid.UUID, records: list[dict]) -> list[ActivityParticipant]:
         activity = self.db.query(Activity).filter_by(id=activity_id).first()
         if not activity:

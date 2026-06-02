@@ -486,6 +486,46 @@ def get_participants(
     return results
 
 
+@activity_router.get(
+    "/{activity_id}/participants/page",
+    dependencies=[Depends(require_permissions("activity:view"))],
+)
+def get_participants_paginated(
+    section_key: str = Query(..., min_length=1),
+    page: int = Query(1, ge=1),
+    limit: int = Query(25, ge=1, le=100),
+    activity=Depends(get_accessible_activity),
+    db: Session = Depends(get_db),
+):
+    """Paginated participants scoped to a single section of an activity.
+
+    Separate from the load-everything `/participants` endpoint, which the
+    bulk-edit flow still uses. The view-mode UI uses this so sections of
+    100+ participants don't have to render all rows at once.
+    """
+    service = ActivityParticipantService(db)
+    rows, total = service.list_by_activity_paginated(
+        activity_id=activity.id,
+        section_key=section_key,
+        page=page,
+        limit=limit,
+    )
+    data = [
+        ParticipantResponse(
+            id=str(p.id),
+            updated_at=p.updated_at,
+            activity_id=str(p.activity_id),
+            participant_type=p.participant_type,
+            participant_id=str(p.participant_id),
+            section_key=p.section_key,
+            status=p.status,
+            meta=p.meta,
+        ).dump()
+        for p in rows
+    ]
+    return PaginatedResponse(count=total, data=data)
+
+
 @activity_router.post(
     "/{activity_id}/participants",
     dependencies=[Depends(require_permissions("activity:create"))],
