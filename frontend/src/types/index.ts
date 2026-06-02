@@ -184,6 +184,11 @@ export interface ActivityParticipant {
   status: string | null;
   meta: Record<string, unknown> | null;
   updated_at: string | null;
+  /** Resolved server-side on the paginated endpoint only.
+   *  For entities: first visible meta column of the entity type's list config.
+   *  For users: first + last name.
+   *  Null on the legacy load-all endpoint. */
+  display_name?: string | null;
 }
 
 // --- Meta Field Definitions ---

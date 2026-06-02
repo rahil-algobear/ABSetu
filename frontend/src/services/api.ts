@@ -392,6 +392,29 @@ export const activityApi = {
     const response = await authAxios.get<ActivityParticipant[]>(`/activities/${activityId}/participants`);
     return response.data;
   },
+  getParticipantsPage: async (
+    activityId: string,
+    params: { section_key: string; page?: number; limit?: number },
+  ): Promise<PaginatedResponse<ActivityParticipant>> => {
+    const response = await authAxios.get<PaginatedResponse<ActivityParticipant>>(
+      `/activities/${activityId}/participants/page`,
+      { params },
+    );
+    return response.data;
+  },
+  bulkPatchParticipants: async (
+    activityId: string,
+    payload: {
+      updates: { participant_id: string; section_key: string; status?: string | null; meta?: Record<string, unknown> | null }[];
+      removes: { participant_id: string; section_key: string }[];
+    },
+  ): Promise<{ ok: boolean }> => {
+    const response = await authAxios.patch<{ ok: boolean }>(
+      `/activities/${activityId}/participants`,
+      payload,
+    );
+    return response.data;
+  },
   saveParticipants: async (activityId: string, records: { participant_type: string; participant_id: string; section_key: string; status?: string; meta?: Record<string, unknown> }[]): Promise<ActivityParticipant[]> => {
     const response = await authAxios.post<ActivityParticipant[]>(`/activities/${activityId}/participants`, { records });
     return response.data;
