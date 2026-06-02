@@ -1,12 +1,13 @@
 "use client";
 
 import { Suspense, useState, useMemo, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { entityApi, entityTypeApi, metaFieldSchemaApi } from "@/services/api";
 import { Entity, ListColumnConfig, MetaFieldSchemaItem } from "@/types";
 import { Can } from "@/components/Auth/Permissions";
 import { useListParams } from "@/hooks/useListParams";
+import { withFrom } from "@/hooks/useFromLink";
 import type { FilterDefinition } from "@/components/ui/filter-modal";
 import { type FormValues } from "@/utils/field-visibility";
 
@@ -37,6 +38,8 @@ function EntityTypeEntitiesContent() {
   const { key: entityTypeKey } = useParams<{ key: string }>();
   const queryClient = useQueryClient();
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Entity | null>(null);
   const [values, setValues] = useState<FormValues>({ meta: {}, dimensions: [] });
@@ -51,6 +54,10 @@ function EntityTypeEntitiesContent() {
   });
 
   const entityType = entityTypes.find((et) => et.key === entityTypeKey);
+
+  const backLabel = entityType?.name || "Back";
+  const search = searchParams.toString();
+  const fromUrl = search ? `${pathname}?${search}` : pathname;
 
   // Fetch filter definitions + column config (scoped by entity type)
   const { data: filterData } = useQuery({
@@ -135,7 +142,11 @@ function EntityTypeEntitiesContent() {
     if (col.label === "Name") {
       return (
         <Link
-          href={`/entities/${entityTypeKey}/${entity.id}`}
+          href={withFrom(
+            `/entities/${entityTypeKey}/${entity.id}`,
+            fromUrl,
+            backLabel,
+          )}
           className="text-primary hover:underline"
           onClick={(ev) => ev.stopPropagation()}
         >
@@ -274,7 +285,15 @@ function EntityTypeEntitiesContent() {
               {entities.map((e) => (
                 <TableRow
                   key={e.id}
-                  onClick={() => router.push(`/entities/${entityTypeKey}/${e.id}`)}
+                  onClick={() =>
+                    router.push(
+                      withFrom(
+                        `/entities/${entityTypeKey}/${e.id}`,
+                        fromUrl,
+                        backLabel,
+                      ),
+                    )
+                  }
                 >
                   {columns.map((col) => (
                     <TableCell

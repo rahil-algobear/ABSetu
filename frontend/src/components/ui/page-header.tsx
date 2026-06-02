@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
+import { BackLink } from "./back-link";
 
 interface PageHeaderProps {
   title: string | React.ReactNode;
@@ -10,6 +11,13 @@ interface PageHeaderProps {
   className?: string;
   isCollapsible?: boolean;
   defaultCollapsed?: boolean;
+  /**
+   * Renders a "← {label}" link above the title that returns the user to
+   * the page they came from. Pages typically resolve this via the
+   * {@link useFromLink} hook so deep links still fall back to a sensible
+   * parent.
+   */
+  back?: { href: string; label: string };
 }
 
 export function PageHeader({
@@ -19,6 +27,7 @@ export function PageHeader({
   className = "",
   isCollapsible = true,
   defaultCollapsed = false,
+  back,
 }: PageHeaderProps) {
   const [isCollapsed, setIsCollapsed] = useState(
     isCollapsible ? defaultCollapsed : false
@@ -30,6 +39,9 @@ export function PageHeader({
     >
       {(!isCollapsible || !isCollapsed) && (
         <div className="px-4 lg:px-6 pt-4 pb-4">
+          {back && (
+            <BackLink href={back.href} label={back.label} className="mb-1.5" />
+          )}
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 lg:gap-4">
             <div className="flex-1 min-w-0">
               <h1 className="text-2xl font-bold text-gray-900 break-words">

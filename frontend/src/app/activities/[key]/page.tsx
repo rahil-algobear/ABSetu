@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { activityTypeApi } from "@/services/api";
 import { Can } from "@/components/Auth/Permissions";
+import { pluralize } from "@/utils/pluralize";
 
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
@@ -13,17 +14,6 @@ import { PageLayout } from "@/components/ui/page-layout";
 import { PageContent } from "@/components/ui/page-content";
 import { ActivityList } from "@/components/ActivityList";
 import { Plus } from "lucide-react";
-
-/** Simple English pluralizer for display names */
-function pluralize(word: string): string {
-  if (word.endsWith("y") && !/[aeiou]y$/i.test(word)) {
-    return word.slice(0, -1) + "ies";
-  }
-  if (word.endsWith("s") || word.endsWith("x") || word.endsWith("z") || word.endsWith("sh") || word.endsWith("ch")) {
-    return word + "es";
-  }
-  return word + "s";
-}
 
 function ActivityTypeListContent() {
   const { key: typeKey } = useParams<{ key: string }>();

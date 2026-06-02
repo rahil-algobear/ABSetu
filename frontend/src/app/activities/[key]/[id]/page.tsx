@@ -19,6 +19,8 @@ import {
 } from "@/types";
 import { collectActivityFields, collectParticipantFields } from "@/utils/meta-fields";
 import { formatDate, formatDateTime } from "@/utils/date";
+import { pluralize } from "@/utils/pluralize";
+import { useFromLink } from "@/hooks/useFromLink";
 import { Can } from "@/components/Auth/Permissions";
 
 import { DynamicMetaForm } from "@/components/DynamicMetaForm";
@@ -368,6 +370,11 @@ export default function ActivityDetailPage() {
     return p.participant_id;
   };
 
+  const backLink = useFromLink({
+    fallbackHref: `/activities/${typeKey}`,
+    fallbackLabel: pluralize(activity?.activity_type_name || "Activity"),
+  });
+
   if (isLoading) return <PageLayout><PageContent><p>Loading...</p></PageContent></PageLayout>;
   if (!activity) return <PageLayout><PageContent><p>Not found</p></PageContent></PageLayout>;
 
@@ -578,6 +585,7 @@ export default function ActivityDetailPage() {
       <PageHeader
         title={activityTitle}
         description={activitySubtitle}
+        back={backLink}
         actions={
           <Can permission="activity:create">
             <Button
