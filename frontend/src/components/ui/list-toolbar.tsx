@@ -199,9 +199,10 @@ export function ListToolbar({
                   variant={chipCount > 0 ? "default" : "outline"}
                   className="flex items-center gap-2 h-10"
                   onClick={() => setShowFilterModal(true)}
+                  aria-label="Filter"
                 >
                   <SlidersHorizontal className="h-4 w-4" />
-                  Filter
+                  <span className="hidden sm:inline">Filter</span>
                   {chipCount > 0 && (
                     <span className="bg-white/20 text-xs rounded-full px-1.5 py-0.5">
                       {chipCount}

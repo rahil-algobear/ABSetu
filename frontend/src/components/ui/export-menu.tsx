@@ -1,7 +1,7 @@
 "use client";
 
 import { Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
-import { Download } from "lucide-react";
+import { Download, Loader2 } from "lucide-react";
 import { Button } from "./button";
 
 export type ExportScope = "current" | "all";
@@ -27,9 +27,20 @@ export function ExportMenu({
 }: ExportMenuProps) {
   return (
     <Menu as="div" className="relative flex-shrink-0">
-      <MenuButton as={Button} variant="outline" size="sm" disabled={isExporting} className="h-10 gap-2">
-        <Download className="h-4 w-4" />
-        {isExporting ? "Preparing…" : label}
+      <MenuButton
+        as={Button}
+        variant="outline"
+        size="sm"
+        disabled={isExporting}
+        className="h-10 gap-2"
+        aria-label={label}
+      >
+        {isExporting ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <Download className="h-4 w-4" />
+        )}
+        <span className="hidden sm:inline">{isExporting ? "Preparing…" : label}</span>
       </MenuButton>
       <MenuItems
         anchor="bottom end"
