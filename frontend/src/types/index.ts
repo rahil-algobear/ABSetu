@@ -171,6 +171,10 @@ export interface Activity {
   activity_type_name: string | null;
   dimensions: DimensionInfo[];
   participant_count: number;
+  /** Per-section participant counts keyed by list column key
+   *  (meta:<field_key>). Populated by the paginated list endpoint;
+   *  used to render entity_list / user_list columns as counts. */
+  section_counts?: Record<string, number>;
   created_at: string | null;
   updated_at: string | null;
 }

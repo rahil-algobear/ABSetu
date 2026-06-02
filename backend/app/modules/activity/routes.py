@@ -252,10 +252,57 @@ def list_activities(
         participant_entity_id=entity_id,
     )
 
+    # Per-section participant counts, keyed by the column key the list
+    # config uses (meta:<field_key>), so entity_list / user_list columns
+    # can render a count instead of "—". Only meaningful when scoped to a
+    # single activity type (the list always is) — that's where we know
+    # the section → column mapping from the schema.
+    section_to_colkey: dict[str, str] = {}
+    if activity_type_id:
+        for fd in _collect_field_defs(
+            db, current_user.organization_id, activity_type_id
+        ).values():
+            ftype = fd.get("type")
+            if ftype == "user_list":
+                section_to_colkey["user"] = f"meta:{fd['key']}"
+            elif ftype == "entity_list":
+                skey = fd.get("entity_type_id") or fd["key"]
+                section_to_colkey[str(skey)] = f"meta:{fd['key']}"
+
+    counts_by_activity: dict[uuid.UUID, dict[str, int]] = {}
+    if section_to_colkey:
+        from sqlalchemy import func as _func
+
+        from app.modules.activity.model import ActivityParticipant
+
+        activity_ids = [a.id for a, _, _ in rows]
+        if activity_ids:
+            grouped = (
+                db.query(
+                    ActivityParticipant.activity_id,
+                    ActivityParticipant.section_key,
+                    _func.count(ActivityParticipant.id),
+                )
+                .filter(ActivityParticipant.activity_id.in_(activity_ids))
+                .group_by(
+                    ActivityParticipant.activity_id,
+                    ActivityParticipant.section_key,
+                )
+                .all()
+            )
+            for aid, skey, cnt in grouped:
+                counts_by_activity.setdefault(aid, {})[str(skey)] = cnt
+
     data = []
     for activity, participant_count, created_by_name in rows:
         resp = _build_activity_response(activity, created_by_name=created_by_name)
         resp["participant_count"] = participant_count or 0
+        if section_to_colkey:
+            per_section = counts_by_activity.get(activity.id, {})
+            resp["section_counts"] = {
+                colkey: per_section.get(skey, 0)
+                for skey, colkey in section_to_colkey.items()
+            }
         data.append(resp)
 
     return PaginatedResponse(count=total, data=data)
