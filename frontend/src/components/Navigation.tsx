@@ -479,20 +479,36 @@ function NavigationContent() {
             )}
           </div>
 
-          {/* Desktop: User dropdown */}
+          {/* Desktop: User dropdown / Sign in */}
           <div className="hidden md:flex items-center gap-2">
-            {isAuthenticated && (
+            {isAuthenticated ? (
               <UserDropdown
                 firstName={firstName}
                 lastName={lastName}
                 pathname={pathname}
                 onSignout={handleSignout}
               />
+            ) : (
+              <Link
+                href="/login?redirect=/dashboard"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:shadow-md hover:brightness-110"
+              >
+                Sign in
+              </Link>
             )}
           </div>
 
-          {/* Mobile: spacer to balance hamburger */}
-          <div className="w-9 md:hidden" />
+          {/* Mobile: spacer / Sign in */}
+          {isAuthenticated ? (
+            <div className="w-9 md:hidden" />
+          ) : (
+            <Link
+              href="/login?redirect=/dashboard"
+              className="md:hidden ml-auto inline-flex items-center rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 px-3.5 py-1.5 text-sm font-semibold text-white shadow-sm"
+            >
+              Sign in
+            </Link>
+          )}
         </div>
       </div>
 
