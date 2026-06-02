@@ -44,6 +44,12 @@ interface ActivityListProps {
    * (e.g. the entity name when rendered under Entity → Activities).
    */
   fromLabel?: string;
+  /**
+   * When true, clicking a row opens the activity detail in a new tab
+   * instead of navigating the current tab. Useful when the list is
+   * embedded inside another detail page (e.g., entity Activities tab).
+   */
+  openRowInNewTab?: boolean;
 }
 
 export function ActivityList({
@@ -52,6 +58,7 @@ export function ActivityList({
   activityTypeName,
   extraFilters,
   fromLabel,
+  openRowInNewTab = false,
 }: ActivityListProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -182,15 +189,18 @@ export function ActivityList({
               {activities.map((a) => (
                 <TableRow
                   key={a.id}
-                  onClick={() =>
-                    router.push(
-                      withFrom(
-                        `/activities/${activityTypeKey}/${a.id}`,
-                        fromUrl,
-                        backLabel,
-                      ),
-                    )
-                  }
+                  onClick={() => {
+                    const href = withFrom(
+                      `/activities/${activityTypeKey}/${a.id}`,
+                      fromUrl,
+                      backLabel,
+                    );
+                    if (openRowInNewTab) {
+                      window.open(href, "_blank", "noopener");
+                    } else {
+                      router.push(href);
+                    }
+                  }}
                 >
                   {columns.map((col) => (
                     <TableCell

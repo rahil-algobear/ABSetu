@@ -38,8 +38,9 @@ import { PageContent } from "@/components/ui/page-content";
 import { PageHeader } from "@/components/ui/page-header";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog } from "@/components/ui/dialog";
-import { Search, Trash2, Pencil, Users, X } from "lucide-react";
+import { Search, Trash2, Pencil, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import Link from "next/link";
 import toast from "react-hot-toast";
 
 export default function ActivityDetailPage() {
@@ -65,6 +66,7 @@ export default function ActivityDetailPage() {
 
   // Phase 3.1: one section at a time. The section_key being edited, or null.
   const [editingSection, setEditingSection] = useState<string | null>(null);
+  const [viewSectionSearch, setViewSectionSearch] = useState("");
   const [editingDetails, setEditingDetails] = useState(false);
   const [detailValues, setDetailValues] = useState<FormValues>({
     meta: {},
@@ -145,6 +147,7 @@ export default function ActivityDetailPage() {
 
   const handleSectionChange = (value: string) => {
     setEditingSection(null);
+    setViewSectionSearch("");
     const params = new URLSearchParams(searchParams.toString());
     if (value === sections[0]?.key) {
       params.delete("section");
@@ -428,7 +431,6 @@ export default function ActivityDetailPage() {
     const metaFields = getParticipationMetaFields(field);
     const captureStatus = field.config?.capture_status as boolean || false;
     const hasStatus = captureStatus || sectionParticipants.some((p) => p.status);
-    const useTable = hasStatus || metaFields.length > 0;
 
     const fieldEntityType = field.type === "entity_list"
       ? entityTypes.find((t) => t.id === field.entity_type_id)
@@ -472,6 +474,7 @@ export default function ActivityDetailPage() {
                   entityTypeName={getFieldLabel(field)}
                   participantKind={isUserSection ? "user" : "entity"}
                   smart={smartPickerEligible}
+                  canEnroll={!!fieldEntityType?.can_enroll}
                   alreadyAdded={alreadyAdded}
                   onAdded={() => {
                     queryClient.invalidateQueries({ queryKey: ["participants", id] });
@@ -515,7 +518,30 @@ export default function ActivityDetailPage() {
           />
         ) : sectionParticipants.length === 0 ? (
           <p className="text-gray-400 text-xs italic py-2">No participants added yet</p>
-        ) : useTable ? (
+        ) : (() => {
+          const normalize = (s: string) => s.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+          const needle = viewSectionSearch.trim() ? normalize(viewSectionSearch) : "";
+          const visibleParticipants = needle
+            ? sectionParticipants.filter((p) =>
+                normalize(getParticipantName(p)).includes(needle),
+              )
+            : sectionParticipants;
+          return (
+        <div className="space-y-2">
+          {sectionParticipants.length > 5 && (
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
+              <Input
+                placeholder="Search…"
+                value={viewSectionSearch}
+                onChange={(e) => setViewSectionSearch(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+          )}
+          {visibleParticipants.length === 0 ? (
+            <p className="text-gray-400 text-xs italic py-2">No matches</p>
+          ) : (
           <div className="border rounded-md overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b">
@@ -530,9 +556,22 @@ export default function ActivityDetailPage() {
                 </tr>
               </thead>
               <tbody>
-                {sectionParticipants.map((p) => (
+                {visibleParticipants.map((p) => (
                   <tr key={p.id} className="border-b last:border-0">
-                    <td className="px-3 py-2">{getParticipantName(p)}</td>
+                    <td className="px-3 py-2">
+                      {p.participant_type === "entity" && fieldEntityType?.key ? (
+                        <Link
+                          href={`/entities/${fieldEntityType.key}/${p.participant_id}`}
+                          target="_blank"
+                          rel="noopener"
+                          className="text-purple-600 hover:underline"
+                        >
+                          {getParticipantName(p)}
+                        </Link>
+                      ) : (
+                        getParticipantName(p)
+                      )}
+                    </td>
                     {hasStatus && (
                       <td className="px-3 py-2">
                         {p.status && (
@@ -561,15 +600,10 @@ export default function ActivityDetailPage() {
               </tbody>
             </table>
           </div>
-        ) : (
-          <div className="flex flex-wrap gap-1.5">
-            {sectionParticipants.map((p) => (
-              <Badge key={p.id} variant="outline" className="text-sm font-normal py-1 px-2">
-                {getParticipantName(p)}
-              </Badge>
-            ))}
-          </div>
-        )}
+          )}
+        </div>
+        );
+        })()}
       </div>
     );
   };
@@ -643,13 +677,7 @@ export default function ActivityDetailPage() {
       {/* Participant sections */}
       {participantListFields.length > 0 ? (
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Users className="h-4 w-4 text-gray-500" />
-              Participants
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 pt-6">
             {sections.length === 1 ? (
               renderSection(sections[0].field)
             ) : (
@@ -677,13 +705,7 @@ export default function ActivityDetailPage() {
       ) : (
         /* No participant fields — show flat participant list */
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <Users className="h-4 w-4 text-gray-500" />
-              Participants
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+          <CardContent className="pt-6">
             {participants.length === 0 ? (
               <p className="text-gray-400 text-sm italic">No participants recorded</p>
             ) : (

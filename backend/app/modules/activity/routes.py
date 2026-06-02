@@ -810,19 +810,35 @@ def picker_create_and_add(
     accessible_dv_ids: list[uuid.UUID] | None = Depends(get_accessible_dimension_value_ids),
     db: Session = Depends(get_db),
 ):
-    """Smart-picker action: brand new beneficiary. Creates entity +
-    active enrollment + participant in one transaction. Any step
-    failing rolls everything back."""
+    """Picker action: brand new entity + (optional) active enrollment +
+    participant in one transaction. Enrollment is skipped when the
+    entity type isn't enrollable (e.g., Facilitator). Any step failing
+    rolls everything back."""
+    from app.modules.entity.model import EntityType
     from app.modules.enrollment.service import EnrollmentService
     from app.modules.entity.service import EntityService
 
-    _verify_dimensions_cover_activity(
-        db,
-        current_user.organization_id,
-        uuid.UUID(data.entity_type_id),
-        activity,
-        data.enrollment_dimension_value_ids,
+    entity_type = (
+        db.query(EntityType)
+        .filter_by(
+            id=uuid.UUID(data.entity_type_id),
+            organization_id=current_user.organization_id,
+        )
+        .first()
     )
+    if not entity_type:
+        raise ValidationError("Entity type not found in this organization")
+
+    can_enroll = bool(entity_type.can_enroll)
+
+    if can_enroll:
+        _verify_dimensions_cover_activity(
+            db,
+            current_user.organization_id,
+            uuid.UUID(data.entity_type_id),
+            activity,
+            data.enrollment_dimension_value_ids,
+        )
 
     entity_service = EntityService(db)
     enrollment_service = EnrollmentService(db)
@@ -838,16 +854,17 @@ def picker_create_and_add(
             created_by=current_user.id,
             commit=False,
         )
-        enrollment_service.create(
-            current_user.organization_id,
-            {
-                "entity_id": str(entity.id),
-                "meta": data.enrollment_meta or {},
-                "is_active": True,
-            },
-            dimension_value_ids=data.enrollment_dimension_value_ids,
-            commit=False,
-        )
+        if can_enroll:
+            enrollment_service.create(
+                current_user.organization_id,
+                {
+                    "entity_id": str(entity.id),
+                    "meta": data.enrollment_meta or {},
+                    "is_active": True,
+                },
+                dimension_value_ids=data.enrollment_dimension_value_ids,
+                commit=False,
+            )
         p = _create_picker_participant(db, activity.id, entity.id, data.section_key)
         db.commit()
     except Exception:

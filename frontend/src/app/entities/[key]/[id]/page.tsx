@@ -521,6 +521,7 @@ export default function EntityDetailPage() {
               activityTypeName={typesWithActivities[0].name}
               extraFilters={{ entity_id: id }}
               fromLabel={entityTitle}
+              openRowInNewTab
             />
           ) : (
             <Tabs value={activeSubTabKey} onValueChange={handleSubTabChange}>
@@ -539,6 +540,7 @@ export default function EntityDetailPage() {
                     activityTypeName={t.name}
                     extraFilters={{ entity_id: id }}
                     fromLabel={entityTitle}
+                    openRowInNewTab
                   />
                 </TabsContent>
               ))}
