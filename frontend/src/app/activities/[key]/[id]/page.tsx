@@ -21,13 +21,14 @@ import { collectActivityFields, collectParticipantFields } from "@/utils/meta-fi
 import { formatDate, formatDateTime } from "@/utils/date";
 import { Can } from "@/components/Auth/Permissions";
 
-import { DynamicMetaForm } from "@/components/DynamicMetaForm";
 import {
   ActivityFields,
   type ActivityFieldsHandle,
 } from "@/components/ActivityFields";
 import { type FormValues } from "@/utils/field-visibility";
 import { ParticipantPicker } from "@/components/ParticipantPicker";
+import { ParticipantList } from "@/components/ParticipantList";
+import { ParticipantSectionEditor } from "@/components/ParticipantSectionEditor";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -36,9 +37,7 @@ import { PageContent } from "@/components/ui/page-content";
 import { PageHeader } from "@/components/ui/page-header";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog } from "@/components/ui/dialog";
-import { Search, Trash2, Pencil, X } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import Link from "next/link";
+import { Trash2, Pencil } from "lucide-react";
 import toast from "react-hot-toast";
 
 export default function ActivityDetailPage() {
@@ -62,9 +61,8 @@ export default function ActivityDetailPage() {
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
   };
 
-  // Phase 3.1: one section at a time. The section_key being edited, or null.
+  // One section at a time. The section_key being edited, or null.
   const [editingSection, setEditingSection] = useState<string | null>(null);
-  const [viewSectionSearch, setViewSectionSearch] = useState("");
   const [editingDetails, setEditingDetails] = useState(false);
   const [detailValues, setDetailValues] = useState<FormValues>({
     meta: {},
@@ -77,9 +75,6 @@ export default function ActivityDetailPage() {
     setEditingDetails(false);
     setDetailFormError(null);
   };
-  const [participantState, setParticipantState] = useState<
-    Record<string, { participant_id: string; participant_type: string; status?: string; meta?: Record<string, unknown> }[]>
-  >({});
 
   const { data: activity, isLoading } = useQuery({
     queryKey: ["activity", id],
@@ -145,7 +140,6 @@ export default function ActivityDetailPage() {
 
   const handleSectionChange = (value: string) => {
     setEditingSection(null);
-    setViewSectionSearch("");
     const params = new URLSearchParams(searchParams.toString());
     if (value === sections[0]?.key) {
       params.delete("section");
@@ -227,22 +221,6 @@ export default function ActivityDetailPage() {
     return field.entity_type_id || field.key;
   };
 
-  const saveSectionMutation = useMutation({
-    mutationFn: (args: {
-      sectionKey: string;
-      records: { participant_type: string; participant_id: string; status?: string; meta?: Record<string, unknown> }[];
-    }) => activityApi.replaceSectionParticipants(id, args.sectionKey, args.records),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["participants", id] });
-      setEditingSection(null);
-      toast.success("Saved");
-    },
-    onError: (err: unknown) => {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      toast.error(msg || "Failed to save");
-    },
-  });
-
   const updateDetailsMutation = useMutation({
     mutationFn: (data: { meta?: Record<string, unknown> }) =>
       activityApi.update(id, data),
@@ -290,54 +268,6 @@ export default function ActivityDetailPage() {
     if (confirm("Delete this activity? This cannot be undone.")) {
       deleteMutation.mutate();
     }
-  };
-
-  const openSectionEditing = (sectionKey: string) => {
-    const sectionParticipants = participants.filter((p) => p.section_key === sectionKey);
-    setParticipantState({
-      ...participantState,
-      [sectionKey]: sectionParticipants.map((p) => ({
-        participant_id: p.participant_id,
-        participant_type: p.participant_type,
-        status: p.status || undefined,
-        meta: p.meta || undefined,
-      })),
-    });
-    setEditingSection(sectionKey);
-  };
-
-  const handleSectionSave = (field: MetaFieldDefinition) => {
-    const sectionKey = getSectionKey(field);
-    const sectionState = participantState[sectionKey] || [];
-
-    if (field.required && sectionState.length === 0) {
-      toast.error(
-        `${getFieldLabel(field)} is required — add at least one participant`,
-      );
-      return;
-    }
-
-    const metaFields = getParticipationMetaFields(field);
-    const requiredFields = metaFields.filter((f) => f.required);
-    for (const p of sectionState) {
-      const meta = p.meta || {};
-      for (const f of requiredFields) {
-        if (!meta[f.key]) {
-          toast.error(`"${f.label}" is required for all participants`);
-          return;
-        }
-      }
-    }
-
-    saveSectionMutation.mutate({
-      sectionKey,
-      records: sectionState.map((p) => ({
-        participant_type: p.participant_type,
-        participant_id: p.participant_id,
-        status: p.status,
-        meta: p.meta,
-      })),
-    });
   };
 
   const participantsBySection = useMemo(() => {
@@ -471,6 +401,9 @@ export default function ActivityDetailPage() {
                   alreadyAdded={alreadyAdded}
                   onAdded={() => {
                     queryClient.invalidateQueries({ queryKey: ["participants", id] });
+                    queryClient.invalidateQueries({
+                      queryKey: ["participants-page", activity.id, sectionKey],
+                    });
                     queryClient.invalidateQueries({ queryKey: ["entities-for-sections"] });
                   }}
                 />
@@ -481,7 +414,7 @@ export default function ActivityDetailPage() {
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => openSectionEditing(sectionKey)}
+                  onClick={() => setEditingSection(sectionKey)}
                 >
                   <Pencil className="h-3.5 w-3.5 mr-1" />
                   Edit
@@ -491,112 +424,25 @@ export default function ActivityDetailPage() {
           </div>
         </div>
         {isEditingThisSection ? (
-          <SectionEditMode
-            field={field}
+          <ParticipantSectionEditor
+            activityId={activity.id}
             sectionKey={sectionKey}
+            field={field}
             metaFields={metaFields}
-            rows={participantState[sectionKey] || []}
-            onRowsChange={(rows) =>
-              setParticipantState({ ...participantState, [sectionKey]: rows })
-            }
-            getNameFor={(participantId) => {
-              const p = sectionParticipants.find(
-                (x) => x.participant_id === participantId,
-              );
-              return p ? getParticipantName(p) : participantId;
+            onClose={() => {
+              setEditingSection(null);
+              queryClient.invalidateQueries({ queryKey: ["participants", id] });
             }}
-            onSave={() => handleSectionSave(field)}
-            onCancel={() => setEditingSection(null)}
-            saving={saveSectionMutation.isPending}
           />
-        ) : sectionParticipants.length === 0 ? (
-          <p className="text-gray-400 text-xs italic py-2">No participants added yet</p>
-        ) : (() => {
-          const normalize = (s: string) => s.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
-          const needle = viewSectionSearch.trim() ? normalize(viewSectionSearch) : "";
-          const visibleParticipants = needle
-            ? sectionParticipants.filter((p) =>
-                normalize(getParticipantName(p)).includes(needle),
-              )
-            : sectionParticipants;
-          return (
-        <div className="space-y-2">
-          {sectionParticipants.length > 5 && (
-            <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
-              <Input
-                placeholder="Search…"
-                value={viewSectionSearch}
-                onChange={(e) => setViewSectionSearch(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-          )}
-          {visibleParticipants.length === 0 ? (
-            <p className="text-gray-400 text-xs italic py-2">No matches</p>
-          ) : (
-          <div className="border rounded-md overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b">
-                <tr>
-                  <th className="text-left px-3 py-2 font-medium">Name</th>
-                  {hasStatus && (
-                    <th className="text-left px-3 py-2 font-medium">Status</th>
-                  )}
-                  {metaFields.map((f) => (
-                    <th key={f.key} className="text-left px-3 py-2 font-medium">{f.label}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {visibleParticipants.map((p) => (
-                  <tr key={p.id} className="border-b last:border-0">
-                    <td className="px-3 py-2">
-                      {p.participant_type === "entity" && fieldEntityType?.key ? (
-                        <Link
-                          href={`/entities/${fieldEntityType.key}/${p.participant_id}`}
-                          target="_blank"
-                          rel="noopener"
-                          className="text-purple-600 hover:underline"
-                        >
-                          {getParticipantName(p)}
-                        </Link>
-                      ) : (
-                        getParticipantName(p)
-                      )}
-                    </td>
-                    {hasStatus && (
-                      <td className="px-3 py-2">
-                        {p.status && (
-                          <Badge variant={p.status === "present" ? "default" : "secondary"}>
-                            {p.status}
-                          </Badge>
-                        )}
-                      </td>
-                    )}
-                    {metaFields.map((f) => {
-                      const val = p.meta?.[f.key];
-                      return (
-                        <td key={f.key} className="px-3 py-2 text-gray-700">
-                          {val === undefined || val === null || val === ""
-                            ? "—"
-                            : f.type === "boolean"
-                              ? (val ? "Yes" : "No")
-                              : Array.isArray(val)
-                                ? val.join(", ")
-                                : String(val)}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          )}
-        </div>
-        );
-        })()}
+        ) : (
+          <ParticipantList
+            activityId={activity.id}
+            sectionKey={sectionKey}
+            entityTypeKey={fieldEntityType?.key ?? null}
+            metaFields={metaFields}
+            hasStatus={hasStatus}
+          />
+        )}
       </div>
     );
   };
@@ -762,165 +608,5 @@ export default function ActivityDetailPage() {
       </Dialog>
       </PageContent>
     </PageLayout>
-  );
-}
-
-interface SectionRow {
-  participant_id: string;
-  participant_type: string;
-  status?: string;
-  meta?: Record<string, unknown>;
-}
-
-/** Phase 3.1 per-section edit mode. Renders the existing rows (no
- *  add affordance — that's the picker's job) with editable status +
- *  meta cells + ✕ remove. Save calls the section-scoped endpoint. */
-function SectionEditMode({
-  field,
-  metaFields,
-  rows,
-  onRowsChange,
-  getNameFor,
-  onSave,
-  onCancel,
-  saving,
-}: {
-  field: MetaFieldDefinition;
-  sectionKey: string;
-  metaFields: MetaFieldDefinition[];
-  rows: SectionRow[];
-  onRowsChange: (rows: SectionRow[]) => void;
-  getNameFor: (participantId: string) => string;
-  onSave: () => void;
-  onCancel: () => void;
-  saving: boolean;
-}) {
-  const [search, setSearch] = useState("");
-  const captureStatus = (field.config?.capture_status as boolean) || false;
-  const statuses = (field.config?.statuses as string[]) || ["present", "absent"];
-
-  const normalize = (s: string) => s.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
-  const filteredRows = useMemo(() => {
-    if (!search.trim()) return rows;
-    const needle = normalize(search);
-    return rows.filter((r) => normalize(getNameFor(r.participant_id)).includes(needle));
-  }, [rows, search, getNameFor]);
-
-  const updateRow = (participantId: string, patch: Partial<SectionRow>) => {
-    onRowsChange(
-      rows.map((r) =>
-        r.participant_id === participantId ? { ...r, ...patch } : r,
-      ),
-    );
-  };
-  const removeRow = (participantId: string) => {
-    onRowsChange(rows.filter((r) => r.participant_id !== participantId));
-  };
-
-  return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        onSave();
-      }}
-      className="space-y-3"
-    >
-      {rows.length > 5 && (
-        <div className="relative">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
-          <Input
-            placeholder="Search…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-8"
-          />
-        </div>
-      )}
-
-      {rows.length === 0 ? (
-        <p className="text-gray-400 text-xs italic py-2">
-          No participants in this section. Cancel and use {`"+`} {field.label}{`"`} to add.
-        </p>
-      ) : filteredRows.length === 0 ? (
-        <p className="text-gray-400 text-xs italic py-2">No matches.</p>
-      ) : (
-        <div className="border rounded-md overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b">
-              <tr>
-                <th className="w-8" />
-                <th className="text-left px-3 py-2 font-medium">Name</th>
-                {captureStatus && (
-                  <th className="text-left px-3 py-2 font-medium">Status</th>
-                )}
-                {metaFields.map((f) => (
-                  <th key={f.key} className="text-left px-3 py-2 font-medium">
-                    {f.label}
-                    {f.required && <span className="text-red-500 ml-0.5">*</span>}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filteredRows.map((r) => (
-                <tr key={r.participant_id} className="border-b last:border-0">
-                  <td className="px-2 py-2 text-center">
-                    <button
-                      type="button"
-                      onClick={() => removeRow(r.participant_id)}
-                      className="text-gray-400 hover:text-red-500"
-                      title="Remove"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </td>
-                  <td className="px-3 py-2">{getNameFor(r.participant_id)}</td>
-                  {captureStatus && (
-                    <td className="px-3 py-2">
-                      <select
-                        className="border rounded px-2 py-1 text-xs"
-                        value={r.status || ""}
-                        onChange={(e) =>
-                          updateRow(r.participant_id, { status: e.target.value })
-                        }
-                      >
-                        <option value=""></option>
-                        {statuses.map((s) => (
-                          <option key={s} value={s}>
-                            {s}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                  )}
-                  {metaFields.map((f) => (
-                    <td key={f.key} className="px-3 py-2">
-                      {/* Per-row inline cell editor — only the meta
-                          bucket is meaningful here; no dim selections. */}
-                      <DynamicMetaForm
-                        fields={[f]}
-                        values={{ meta: r.meta || {}, dimensions: [] }}
-                        onChange={(next) =>
-                          updateRow(r.participant_id, { meta: next.meta })
-                        }
-                      />
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      <div className="flex gap-2 pt-2">
-        <Button type="submit" disabled={saving}>
-          Save
-        </Button>
-        <Button type="button" variant="outline" onClick={onCancel}>
-          Cancel
-        </Button>
-      </div>
-    </form>
   );
 }

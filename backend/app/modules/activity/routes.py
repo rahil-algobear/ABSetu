@@ -28,7 +28,6 @@ from app.modules.activity.schemas import (
     ParticipantBulkCreate,
     ParticipantBulkPatchPayload,
     ParticipantResponse,
-    ParticipantSectionReplace,
     PickerAddPayload,
     PickerCreateAndAddPayload,
     PickerEnrollAndAddPayload,
@@ -695,41 +694,6 @@ def _verify_dimensions_cover_activity(
         raise ValidationError(
             "Enrollment dimensions must include this activity's enrollment-tracked dimensions."
         )
-
-
-@activity_router.put(
-    "/{activity_id}/participants",
-    dependencies=[Depends(require_permissions("activity:create"))],
-)
-def replace_section_participants(
-    data: ParticipantSectionReplace,
-    section_key: str = Query(..., description="Section key (entity_type_id or 'user')"),
-    activity=Depends(get_accessible_activity),
-    db: Session = Depends(get_db),
-):
-    """Phase 3.1 section-scoped bulk save. Replaces just this section's
-    participants with the submitted set; other sections on the activity
-    are untouched. Used by per-section edit mode for status / meta
-    updates and removals."""
-    service = ActivityParticipantService(db)
-    participants = service.replace_section(
-        activity.id,
-        section_key,
-        [r.model_dump() for r in data.records],
-    )
-    return [
-        ParticipantResponse(
-            id=str(p.id),
-            updated_at=p.updated_at,
-            activity_id=str(p.activity_id),
-            participant_type=p.participant_type,
-            participant_id=str(p.participant_id),
-            section_key=p.section_key,
-            status=p.status,
-            meta=p.meta,
-        ).dump()
-        for p in participants
-    ]
 
 
 @activity_router.post(

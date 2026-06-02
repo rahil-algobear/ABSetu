@@ -549,37 +549,3 @@ class ActivityParticipantService:
             self.db.refresh(p)
         return participants
 
-    def replace_section(
-        self,
-        activity_id: uuid.UUID,
-        section_key: str,
-        records: list[dict],
-    ) -> list[ActivityParticipant]:
-        """Replace participants in a single section with the submitted set.
-        Other sections on the activity are untouched. Used by Phase 3.1's
-        per-section edit mode."""
-        activity = self.db.query(Activity).filter_by(id=activity_id).first()
-        if not activity:
-            raise NotFoundError("Activity not found")
-
-        self.db.query(ActivityParticipant).filter_by(
-            activity_id=activity_id, section_key=section_key
-        ).delete()
-
-        participants = []
-        for record in records:
-            p = ActivityParticipant(
-                activity_id=activity_id,
-                participant_type=record["participant_type"],
-                participant_id=uuid.UUID(record["participant_id"]),
-                section_key=section_key,
-                status=record.get("status"),
-                meta=record.get("meta"),
-            )
-            self.db.add(p)
-            participants.append(p)
-
-        self.db.commit()
-        for p in participants:
-            self.db.refresh(p)
-        return participants
