@@ -371,6 +371,50 @@ export default function ActivityDetailPage() {
   if (isLoading) return <PageLayout><PageContent><p>Loading...</p></PageContent></PageLayout>;
   if (!activity) return <PageLayout><PageContent><p>Not found</p></PageContent></PageLayout>;
 
+  const renderDetailField = (field: MetaFieldDefinition) => {
+    if (field.type === "dimension") {
+      const dimDef = dimensions.find((d) => d.id === field.dimension_id);
+      const dimInfo = dimDef
+        ? activity.dimensions.find((d) => d.dimension_key === dimDef.key)
+        : undefined;
+      return (
+        <div key={`dim-${field.key}`}>
+          <p className="text-xs text-gray-500">
+            {dimInfo?.dimension_name || dimDef?.name || field.label}
+          </p>
+          {dimInfo ? (
+            <p className="text-sm font-medium">{dimInfo.value_name}</p>
+          ) : (
+            <p className="text-sm text-gray-300 italic">Not set</p>
+          )}
+        </div>
+      );
+    }
+
+    const val = (activity.meta || {})[field.key];
+    const isEmpty = val === undefined || val === null || val === "";
+    const formatted =
+      isEmpty
+        ? "Not set"
+        : field.type === "boolean"
+          ? (val ? "Yes" : "No")
+          : field.type === "date" && typeof val === "string"
+            ? formatDate(val)
+            : field.type === "datetime" && typeof val === "string"
+              ? formatDateTime(val)
+              : Array.isArray(val)
+                ? val.join(", ")
+                : String(val);
+    return (
+      <div key={`view-field-${field.key}`}>
+        <p className="text-xs text-gray-500">{field.label}</p>
+        <p className={`text-sm ${isEmpty ? "text-gray-300 italic" : "font-medium"}`}>
+          {formatted}
+        </p>
+      </div>
+    );
+  };
+
   const renderSection = (field: MetaFieldDefinition) => {
     const sectionKey = getSectionKey(field);
     const sectionParticipants = participantsBySection[sectionKey] || [];
@@ -572,54 +616,16 @@ export default function ActivityDetailPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-              {detailFields.map((field) => {
-                if (field.type === "dimension") {
-                  const dimDef = dimensions.find((d) => d.id === field.dimension_id);
-                  const dimInfo = dimDef
-                    ? activity.dimensions.find((d) => d.dimension_key === dimDef.key)
-                    : undefined;
-                  return (
-                    <div key={`dim-${field.key}`}>
-                      <p className="text-xs text-gray-500">{dimInfo?.dimension_name || dimDef?.name || field.label}</p>
-                      {dimInfo ? (
-                        <p className="text-sm font-medium">{dimInfo.value_name}</p>
-                      ) : (
-                        <p className="text-sm text-gray-300 italic">Not set</p>
-                      )}
+                {detailFields.map((field) => renderDetailField(field))}
+                {/* Show any meta values not in the schema */}
+                {Object.entries(activity.meta || {})
+                  .filter(([key]) => !detailFields.some((f) => f.key === key))
+                  .map(([key, val]) => (
+                    <div key={`extra-${key}`}>
+                      <p className="text-xs text-gray-500 capitalize">{key.replace(/_/g, " ")}</p>
+                      <p className="text-sm font-medium">{String(val)}</p>
                     </div>
-                  );
-                }
-
-                const val = (activity.meta || {})[field.key];
-                const isEmpty = val === undefined || val === null || val === "";
-                return (
-                  <div key={`view-field-${field.key}`}>
-                    <p className="text-xs text-gray-500">{field.label}</p>
-                    <p className={`text-sm ${isEmpty ? "text-gray-300 italic" : "font-medium"}`}>
-                      {isEmpty
-                        ? "Not set"
-                        : field.type === "boolean"
-                          ? val ? "Yes" : "No"
-                          : field.type === "date" && typeof val === "string"
-                            ? formatDate(val)
-                            : field.type === "datetime" && typeof val === "string"
-                              ? formatDateTime(val)
-                              : Array.isArray(val)
-                                ? val.join(", ")
-                                : String(val)}
-                    </p>
-                  </div>
-                );
-              })}
-              {/* Show any meta values not in the schema */}
-              {Object.entries(activity.meta || {})
-                .filter(([key]) => !detailFields.some((f) => f.key === key))
-                .map(([key, val]) => (
-                  <div key={`extra-${key}`}>
-                    <p className="text-xs text-gray-500 capitalize">{key.replace(/_/g, " ")}</p>
-                    <p className="text-sm font-medium">{String(val)}</p>
-                  </div>
-                ))}
+                  ))}
               </div>
             </CardContent>
           </Card>
