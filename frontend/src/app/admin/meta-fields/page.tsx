@@ -428,8 +428,11 @@ export default function MetaFieldsPage() {
         ? fieldForm.config
         : undefined,
     };
-    // On create, omit key — the backend auto-assigns via _ensure_field_keys
+    // On create, omit id + key — the backend assigns both via _ensure_field_keys.
+    // (Edits keep both: `field` spreads them from `fieldForm`, so the backend
+    // matches by id and preserves the storage slug.)
     if (editingIndex === null) {
+      delete (field as Partial<MetaFieldDefinition>).id;
       delete (field as Partial<MetaFieldDefinition>).key;
     }
 

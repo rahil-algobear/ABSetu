@@ -101,22 +101,53 @@ class MetaFieldSchemaService:
     _PREFIX_PATTERN = re.compile(r"^[a-z0-9]{4}_")
 
     @classmethod
-    def _ensure_field_keys(cls, fields: list[dict]) -> list[dict]:
-        """Ensure every field has a unique key with a random 4-char prefix.
+    def _ensure_field_keys(
+        cls, fields: list[dict], existing: list[dict] | None = None
+    ) -> list[dict]:
+        """Give every field a stable ``id`` and a unique, immutable ``key``.
 
-        Keys with an existing prefix (e.g. psw7_name) are left as-is.
-        Format: {4-char random}_{descriptive_base}  (e.g. a3x9_name)
+        Each field carries two identifiers:
+        - ``id``: an opaque uuid — the field's permanent identity.
+        - ``key``: the slug used as the storage key inside row ``meta`` JSONB.
+
+        Both are immutable for a field's lifetime. Incoming fields are matched
+        against the previously-stored schema (``existing``) by ``id``; on a
+        match, the stored id and key are restored verbatim and any
+        client-supplied drift is ignored. This guarantees the storage slug
+        never changes under an existing field, so values already written to row
+        ``meta`` are never orphaned. A field with no matching id is treated as
+        new: it receives a fresh uuid and a freshly generated key
+        (format: ``{4-char random}_{descriptive_base}``, e.g. ``a3x9_name``).
         """
         import random
         import string
 
-        existing_keys = {f.get("key") for f in fields if f.get("key")}
+        existing = existing or []
+        existing_by_id = {f["id"]: f for f in existing if f.get("id")}
+        # Reserve keys already taken by stored fields (including any that were
+        # dropped from this update) so a new field never collides with — or
+        # silently reclaims the orphaned data of — an old slug.
+        used_keys = {f["key"] for f in existing if f.get("key")}
+
         result = []
         for f in fields:
             f = dict(f)
+            prior = existing_by_id.get(f.get("id"))
+            if prior:
+                # Existing field — pin its identity. id + key never change.
+                f["id"] = prior["id"]
+                f["key"] = prior["key"]
+                used_keys.add(prior["key"])
+                result.append(f)
+                continue
+
+            # New field — mint a permanent id (ignore any unmatched client id).
+            f["id"] = str(uuid.uuid4())
+
             key = f.get("key") or ""
-            # Already has a random prefix — keep it
-            if key and cls._PREFIX_PATTERN.search(key):
+            # Honor a pre-supplied prefixed key only if it doesn't collide.
+            if key and cls._PREFIX_PATTERN.search(key) and key not in used_keys:
+                used_keys.add(key)
                 result.append(f)
                 continue
             # Generate a descriptive base from the field
@@ -135,10 +166,10 @@ class MetaFieldSchemaService:
             for _ in range(100):
                 prefix = "".join(random.choices(string.ascii_lowercase + string.digits, k=4))
                 new_key = f"{prefix}_{base}"
-                if new_key not in existing_keys:
+                if new_key not in used_keys:
                     break
             f["key"] = new_key
-            existing_keys.add(new_key)
+            used_keys.add(new_key)
             result.append(f)
         return result
 
@@ -157,7 +188,6 @@ class MetaFieldSchemaService:
         All fields are user-defined — no system field restrictions.
         Automatically ensures all field keys have unique random suffixes.
         """
-        fields = self._ensure_field_keys(fields)
         row = (
             self.db.query(MetaFieldSchema)
             .filter_by(
@@ -170,6 +200,9 @@ class MetaFieldSchemaService:
             )
             .first()
         )
+        # Reconcile against the currently-stored fields so existing fields keep
+        # their id + storage key (slug). Only genuinely new fields get fresh ones.
+        fields = self._ensure_field_keys(fields, row.fields if row else [])
         if row:
             row.fields = fields
         else:
