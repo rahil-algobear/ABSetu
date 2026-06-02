@@ -8,6 +8,7 @@ import { Entity, ListColumnConfig, MetaFieldSchemaItem } from "@/types";
 import { Can } from "@/components/Auth/Permissions";
 import { useListParams } from "@/hooks/useListParams";
 import type { FilterDefinition } from "@/components/ui/filter-modal";
+import { type FormValues } from "@/utils/field-visibility";
 
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -38,7 +39,7 @@ function EntityTypeEntitiesContent() {
   const router = useRouter();
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Entity | null>(null);
-  const [metaValues, setMetaValues] = useState<Record<string, unknown>>({});
+  const [values, setValues] = useState<FormValues>({ meta: {}, dimensions: [] });
   const [quickEnrollEntity, setQuickEnrollEntity] = useState<Entity | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const entityFieldsRef = useRef<EntityFieldsHandle>(null);
@@ -168,7 +169,7 @@ function EntityTypeEntitiesContent() {
 
   const openCreate = () => {
     setEditing(null);
-    setMetaValues({});
+    setValues({ meta: {}, dimensions: [] });
     setFormError(null);
     setModalOpen(true);
   };
@@ -176,7 +177,7 @@ function EntityTypeEntitiesContent() {
   const openEdit = (e: React.MouseEvent, item: Entity) => {
     e.stopPropagation();
     setEditing(item);
-    setMetaValues(item.meta || {});
+    setValues({ meta: item.meta || {}, dimensions: [] });
     setFormError(null);
     setModalOpen(true);
   };
@@ -195,7 +196,8 @@ function EntityTypeEntitiesContent() {
       setFormError(validationError);
       return;
     }
-    const meta = Object.keys(metaValues).length > 0 ? metaValues : undefined;
+    // Translate FormValues → backend shape at the API boundary.
+    const meta = Object.keys(values.meta).length > 0 ? values.meta : undefined;
     if (editing) {
       updateMutation.mutate({
         id: editing.id,
@@ -360,8 +362,8 @@ function EntityTypeEntitiesContent() {
               ref={entityFieldsRef}
               entityTypeId={entityType.id}
               allSchemas={allSchemas}
-              metaValues={metaValues}
-              onMetaChange={setMetaValues}
+              values={values}
+              onChange={setValues}
               mode={editing ? "edit" : "create"}
             />
           )}

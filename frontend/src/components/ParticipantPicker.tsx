@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Phase 3 participant picker. Replaces SearchSelectParticipants for all
+ * Phase 3 participant picker. Replaces the simpler section UI for all
  * entity_list and user_list fields on an activity. Calls the atomic
  * /participants/{add|enroll_and_add|create_and_add} endpoints directly
  * — no client-side orchestration.
@@ -44,9 +44,10 @@ import {
 import {
   EnrollmentFields,
   useVisibleEnrollmentFields,
+  type ActivitySuppliedDimension,
   type EnrollmentFieldsHandle,
-  type EnrollmentLockedDimension,
 } from "@/components/EnrollmentFields";
+import { type FormValues } from "@/utils/field-visibility";
 import { Plus, Search } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -715,31 +716,43 @@ function EnrollAndAddModal({
     return ids;
   }, [allSchemas, entity.entity_type_id]);
 
-  const lockedDimensions: EnrollmentLockedDimension[] = useMemo(
+  const activitySuppliedDimensions: ActivitySuppliedDimension[] = useMemo(
     () =>
-      activityDimensions.filter((d) =>
-        enrollmentTrackedDimIds.has(d.dimension_id),
-      ),
+      activityDimensions
+        .filter((d) => enrollmentTrackedDimIds.has(d.dimension_id))
+        .map((d) => ({ dimension_id: d.dimension_id, value_id: d.value_id })),
     [activityDimensions, enrollmentTrackedDimIds],
   );
 
+  const [values, setValues] = useState<FormValues>({
+    meta: {},
+    dimensions: [],
+  });
+  const [formError, setFormError] = useState<string | null>(null);
+  const fieldsRef = useRef<EnrollmentFieldsHandle>(null);
+
+  // Empty-state check goes through the same evaluator the renderer
+  // uses, with the activity-supplied dims merged in so dim-value-scoped
+  // fields surface correctly.
   const hasFields = useVisibleEnrollmentFields({
     entityTypeId: entity.entity_type_id,
     allSchemas,
-    knownDimensionValueIds: lockedDimensions.map((d) => d.value_id),
+    values: {
+      ...values,
+      dimensions: [
+        ...values.dimensions,
+        ...activitySuppliedDimensions.map((d) => d.value_id),
+      ],
+    },
   }).length > 0;
-
-  const [metaValues, setMetaValues] = useState<Record<string, unknown>>({});
-  const [formError, setFormError] = useState<string | null>(null);
-  const fieldsRef = useRef<EnrollmentFieldsHandle>(null);
 
   const mutation = useMutation({
     mutationFn: () =>
       activityApi.pickerEnrollAndAdd(activityId, {
         entity_id: entity.id,
         section_key: sectionKey,
-        enrollment_meta: Object.keys(metaValues).length ? metaValues : undefined,
-        enrollment_dimension_value_ids: lockedDimensions.map((d) => d.value_id),
+        enrollment_meta: Object.keys(values.meta).length ? values.meta : undefined,
+        enrollment_dimension_value_ids: activitySuppliedDimensions.map((d) => d.value_id),
       }),
     onSuccess: () => {
       toast.success("Enrolled and added");
@@ -781,12 +794,9 @@ function EnrollAndAddModal({
               ref={fieldsRef}
               entityTypeId={entity.entity_type_id}
               allSchemas={allSchemas}
-              lockedDimensions={lockedDimensions}
-              userDimensionValueIds={[]}
-              onUserDimensionsChange={() => {}}
-              metaValues={metaValues}
-              onMetaChange={setMetaValues}
-              dimensionMode="activity"
+              values={values}
+              onChange={setValues}
+              activitySuppliedDimensions={activitySuppliedDimensions}
             />
           </div>
         ) : (
@@ -843,13 +853,25 @@ function CreateAndAddModal({
     return ids;
   }, [allSchemas, entityTypeId]);
 
-  const lockedDimensions: EnrollmentLockedDimension[] = useMemo(
+  const activitySuppliedDimensions: ActivitySuppliedDimension[] = useMemo(
     () =>
-      activityDimensions.filter((d) =>
-        enrollmentTrackedDimIds.has(d.dimension_id),
-      ),
+      activityDimensions
+        .filter((d) => enrollmentTrackedDimIds.has(d.dimension_id))
+        .map((d) => ({ dimension_id: d.dimension_id, value_id: d.value_id })),
     [activityDimensions, enrollmentTrackedDimIds],
   );
+
+  const [entityValues, setEntityValues] = useState<FormValues>({
+    meta: {},
+    dimensions: [],
+  });
+  const [enrollmentValues, setEnrollmentValues] = useState<FormValues>({
+    meta: {},
+    dimensions: [],
+  });
+  const [formError, setFormError] = useState<string | null>(null);
+  const entityFieldsRef = useRef<EntityFieldsHandle>(null);
+  const fieldsRef = useRef<EnrollmentFieldsHandle>(null);
 
   const hasEntityFields = useVisibleEntityFields({
     entityTypeId,
@@ -860,23 +882,23 @@ function CreateAndAddModal({
   const hasEnrollmentFields = useVisibleEnrollmentFields({
     entityTypeId,
     allSchemas,
-    knownDimensionValueIds: lockedDimensions.map((d) => d.value_id),
+    values: {
+      ...enrollmentValues,
+      dimensions: [
+        ...enrollmentValues.dimensions,
+        ...activitySuppliedDimensions.map((d) => d.value_id),
+      ],
+    },
   }).length > 0;
-
-  const [entityMeta, setEntityMeta] = useState<Record<string, unknown>>({});
-  const [enrollmentMeta, setEnrollmentMeta] = useState<Record<string, unknown>>({});
-  const [formError, setFormError] = useState<string | null>(null);
-  const entityFieldsRef = useRef<EntityFieldsHandle>(null);
-  const fieldsRef = useRef<EnrollmentFieldsHandle>(null);
 
   const mutation = useMutation({
     mutationFn: () =>
       activityApi.pickerCreateAndAdd(activityId, {
         entity_type_id: entityTypeId,
-        entity_meta: Object.keys(entityMeta).length ? entityMeta : undefined,
+        entity_meta: Object.keys(entityValues.meta).length ? entityValues.meta : undefined,
         section_key: sectionKey,
-        enrollment_meta: Object.keys(enrollmentMeta).length ? enrollmentMeta : undefined,
-        enrollment_dimension_value_ids: lockedDimensions.map((d) => d.value_id),
+        enrollment_meta: Object.keys(enrollmentValues.meta).length ? enrollmentValues.meta : undefined,
+        enrollment_dimension_value_ids: activitySuppliedDimensions.map((d) => d.value_id),
       }),
     onSuccess: () => {
       toast.success(`${entityTypeName} created and added`);
@@ -921,8 +943,8 @@ function CreateAndAddModal({
               ref={entityFieldsRef}
               entityTypeId={entityTypeId}
               allSchemas={allSchemas}
-              metaValues={entityMeta}
-              onMetaChange={setEntityMeta}
+              values={entityValues}
+              onChange={setEntityValues}
               mode="create"
             />
           </div>
@@ -937,12 +959,9 @@ function CreateAndAddModal({
               ref={fieldsRef}
               entityTypeId={entityTypeId}
               allSchemas={allSchemas}
-              lockedDimensions={lockedDimensions}
-              userDimensionValueIds={[]}
-              onUserDimensionsChange={() => {}}
-              metaValues={enrollmentMeta}
-              onMetaChange={setEnrollmentMeta}
-              dimensionMode="activity"
+              values={enrollmentValues}
+              onChange={setEnrollmentValues}
+              activitySuppliedDimensions={activitySuppliedDimensions}
             />
           ) : (
             <p className="text-xs text-gray-500">

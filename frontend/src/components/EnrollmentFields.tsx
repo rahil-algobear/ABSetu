@@ -1,188 +1,160 @@
 "use client";
 
 /**
- * Shared enrollment-fields renderer. Used by all three places that
- * collect enrollment data:
- *   - EnrollmentForm (entity detail / quick enroll) — picker mode
- *   - EnrollAndAddModal (activity context, existing entity) — activity mode
- *   - CreateAndAddModal (activity context, new entity) — activity mode
+ * Shared enrollment-fields wrapper. Used by:
+ *   - EnrollmentForm (entity detail / quick enroll) — standalone
+ *   - EnrollAndAddModal (activity context, existing entity) — activity-supplied dims
+ *   - CreateAndAddModal (activity context, new entity)    — activity-supplied dims
  *
- * The renderer owns: field collection, sort order, stage-based disabling,
- * locked-dim chips, cascading dim dropdowns, and required-field validation.
- * Parents own: the form wrapper, the mutation, surrounding sections (status
- * toggle, entity fields, etc.).
+ * Owns: scope (enrollment), stage filtering, required-field validation
+ * (via ref handle), and the small piece of activity-domain bookkeeping
+ * needed to surface activity-supplied dimensions as pre-filled and
+ * locked.
  *
- * Validation is exposed via the ref handle so a single submit handler in
- * the parent can call `ref.current?.validate()` instead of duplicating the
- * field walk.
+ * Doesn't own: dimension data fetching, cascading-filter logic, or any
+ * per-field-type rendering. All of that lives in DynamicMetaForm + the
+ * Dynamic*Field components.
  */
 
 import { useImperativeHandle, useMemo, type Ref } from "react";
-import { useQuery } from "@tanstack/react-query";
 
-import { dimensionApi, dimensionValueLinkApi } from "@/services/api";
-import type {
-  Dimension,
-  DimensionValue,
-  DimensionValueLink,
-  MetaFieldDefinition,
-  MetaFieldSchemaItem,
-} from "@/types";
-import { collectEnrollmentFields } from "@/utils/meta-fields";
-import { filterVisibleFields, getStageDisabledKeys } from "@/utils/field-stage";
+import type { MetaFieldDefinition, MetaFieldSchemaItem } from "@/types";
+import { getStageDisabledKeys } from "@/utils/field-stage";
+import {
+  getVisibleFields,
+  type FormValues,
+} from "@/utils/field-visibility";
+import { useDimensionData } from "@/components/useDimensionData";
 
 import { DynamicMetaForm } from "@/components/DynamicMetaForm";
-
-/**
- * Thin wrapper around collectEnrollmentFields that applies the same
- * visibility rules the renderer uses. Parents call this when they need
- * to decide whether to render an empty state (or hide the submit
- * button), without paying for the renderer's dimension queries.
- */
-export function useVisibleEnrollmentFields({
-  entityTypeId,
-  allSchemas,
-  knownDimensionValueIds,
-  mode = "create",
-}: {
-  entityTypeId: string;
-  allSchemas: MetaFieldSchemaItem[];
-  knownDimensionValueIds: string[];
-  mode?: "create" | "edit";
-}): MetaFieldDefinition[] {
-  return useMemo(
-    () =>
-      filterVisibleFields(
-        collectEnrollmentFields(allSchemas, entityTypeId, knownDimensionValueIds),
-        mode,
-      ),
-    [allSchemas, entityTypeId, knownDimensionValueIds, mode],
-  );
-}
-
-export interface EnrollmentLockedDimension {
-  dimension_id: string;
-  value_id: string;
-  value_name: string;
-}
-
-export type EnrollmentDimensionMode = "picker" | "activity";
 
 export interface EnrollmentFieldsHandle {
   /** Returns an error message, or null when all required fields are filled. */
   validate: () => string | null;
 }
 
+/**
+ * Identifies a dimension whose value is supplied by the surrounding
+ * activity (not picked by the user). Pass these and the wrapper:
+ *   - merges them into values.dimensions (so dim-value-scoped fields
+ *     surface based on them)
+ *   - marks the corresponding form-builder field keys as disabled (so
+ *     the dispatcher renders them as locked-at-current-value)
+ *
+ * Used by EnrollAndAddModal and CreateAndAddModal; not used by the
+ * standalone EnrollmentForm.
+ */
+export interface ActivitySuppliedDimension {
+  dimension_id: string;
+  value_id: string;
+}
+
 export interface EnrollmentFieldsProps {
   entityTypeId: string;
   allSchemas: MetaFieldSchemaItem[];
 
-  /** Dimensions whose value is fixed by the surrounding context (the
-   *  activity supplies these). Rendered as locked chips. Pass `[]` for the
-   *  standalone entity flow. */
-  lockedDimensions: EnrollmentLockedDimension[];
+  values: FormValues;
+  onChange: (values: FormValues) => void;
 
-  /** Dimension value IDs the user has picked (does NOT include locked
-   *  ones). Always required, even when empty. */
-  userDimensionValueIds: string[];
-  onUserDimensionsChange: (ids: string[]) => void;
+  /** Optional. Activity-side flows pass these to lock + preset the
+   *  matching dimension fields. Standalone entity flows pass nothing
+   *  (or an empty array). */
+  activitySuppliedDimensions?: ActivitySuppliedDimension[];
 
-  metaValues: Record<string, unknown>;
-  onMetaChange: (values: Record<string, unknown>) => void;
-
-  /** `picker`  → unlocked dimension fields render as cascading dropdowns
-   *              (standalone entity flow).
-   *  `activity` → unlocked dimension fields render as an italic
-   *              "configure via entity detail" hint (activity flow does
-   *              not let users pick dimensions outside the activity). */
-  dimensionMode: EnrollmentDimensionMode;
-
-  /** Defaults to "create". Drives stage-based handling:
-   *  - create → hide fields with stage = "edit" (not yet relevant)
-   *  - edit   → disable fields with stage = "create" (locked after first save) */
+  /** Defaults to "create". */
   mode?: "create" | "edit";
 
   ref?: Ref<EnrollmentFieldsHandle>;
 }
 
+/**
+ * Thin hook for callers that need to decide whether to render an
+ * empty-state message or hide the submit button. Goes through the
+ * same evaluator the renderer uses.
+ */
+export function useVisibleEnrollmentFields({
+  entityTypeId,
+  allSchemas,
+  values,
+  mode = "create",
+}: {
+  entityTypeId: string;
+  allSchemas: MetaFieldSchemaItem[];
+  values: FormValues;
+  mode?: "create" | "edit";
+}): MetaFieldDefinition[] {
+  return useMemo(
+    () =>
+      getVisibleFields({
+        allSchemas,
+        scope: { type: "enrollment", entity_type_id: entityTypeId },
+        values,
+        mode,
+      }),
+    [allSchemas, entityTypeId, values, mode],
+  );
+}
+
 export function EnrollmentFields({
   entityTypeId,
   allSchemas,
-  lockedDimensions,
-  userDimensionValueIds,
-  onUserDimensionsChange,
-  metaValues,
-  onMetaChange,
-  dimensionMode,
+  values,
+  onChange,
+  activitySuppliedDimensions,
   mode = "create",
   ref,
 }: EnrollmentFieldsProps) {
-  const { data: dimensions = [] } = useQuery<Dimension[]>({
-    queryKey: ["dimensions"],
-    queryFn: dimensionApi.list,
-  });
+  const { allDimensionValues } = useDimensionData();
 
-  const { data: allDimensionValues = [] } = useQuery<DimensionValue[]>({
-    queryKey: ["all-dimension-values", dimensions.map((d) => d.id).join(",")],
-    queryFn: async () => {
-      const results = await Promise.all(
-        dimensions.map((d) => dimensionApi.listAccessibleValues(d.id)),
-      );
-      return results.flat();
-    },
-    enabled: dimensions.length > 0,
-  });
-
-  const { data: dimensionValueLinks = [] } = useQuery<DimensionValueLink[]>({
-    queryKey: ["dimension-value-links-all"],
-    queryFn: () => dimensionValueLinkApi.list(),
-  });
-
-  const lockedDimByDimId = useMemo(
-    () => new Map(lockedDimensions.map((d) => [d.dimension_id, d])),
-    [lockedDimensions],
-  );
-
-  // Field set: depends on EVERY currently-known dimension value (locked +
-  // user), so dimension-value-scoped fields appear as the user picks.
-  const allKnownDimValueIds = useMemo(
-    () => [
-      ...lockedDimensions.map((d) => d.value_id),
-      ...userDimensionValueIds,
-    ],
-    [lockedDimensions, userDimensionValueIds],
-  );
-
-  const allFields = useMemo(
-    () => collectEnrollmentFields(allSchemas, entityTypeId, allKnownDimValueIds),
-    [allSchemas, entityTypeId, allKnownDimValueIds],
-  );
+  // Merge any activity-supplied dim values into values.dimensions for
+  // the purposes of field collection. We don't write these back to
+  // parent state — they're transient render-time facts. Parent state
+  // continues to hold only what the user has picked + whatever it
+  // seeded at mount.
+  const effectiveValues = useMemo<FormValues>(() => {
+    if (!activitySuppliedDimensions?.length) return values;
+    const suppliedIds = activitySuppliedDimensions.map((d) => d.value_id);
+    const merged = new Set<string>([...values.dimensions, ...suppliedIds]);
+    return { ...values, dimensions: Array.from(merged) };
+  }, [values, activitySuppliedDimensions]);
 
   const visibleFields = useMemo(
-    () => filterVisibleFields(allFields, mode),
-    [allFields, mode],
+    () =>
+      getVisibleFields({
+        allSchemas,
+        scope: { type: "enrollment", entity_type_id: entityTypeId },
+        values: effectiveValues,
+        mode,
+      }),
+    [allSchemas, entityTypeId, effectiveValues, mode],
   );
 
-  const disabledKeys = useMemo(
-    () => getStageDisabledKeys(visibleFields, mode),
-    [visibleFields, mode],
-  );
-
-  // Cascading dropdown filter: only the user-selected ids participate,
-  // since locked ones come from a different (non-user) axis.
-  const selectedByDim = useMemo(() => {
-    const map: Record<string, string> = {};
-    for (const dim of dimensions) {
-      const dimValues = allDimensionValues.filter(
-        (dv) => dv.dimension_id === dim.id,
-      );
-      const selected = userDimensionValueIds.find((id) =>
-        dimValues.some((dv) => dv.id === id),
-      );
-      if (selected) map[dim.id] = selected;
+  // Disabled keys come from two places:
+  //   1. Stage rules (create-only fields locked on edit)
+  //   2. Activity-supplied dim fields (locked + preset)
+  const activitySuppliedFieldKeys = useMemo(() => {
+    if (!activitySuppliedDimensions?.length) return new Set<string>();
+    const suppliedDimIds = new Set(
+      activitySuppliedDimensions.map((d) => d.dimension_id),
+    );
+    const keys = new Set<string>();
+    for (const f of visibleFields) {
+      if (
+        f.type === "dimension" &&
+        f.dimension_id &&
+        suppliedDimIds.has(f.dimension_id)
+      ) {
+        keys.add(f.key);
+      }
     }
-    return map;
-  }, [dimensions, allDimensionValues, userDimensionValueIds]);
+    return keys;
+  }, [visibleFields, activitySuppliedDimensions]);
+
+  const disabledKeys = useMemo(() => {
+    const stageKeys = getStageDisabledKeys(visibleFields, mode);
+    if (activitySuppliedFieldKeys.size === 0) return stageKeys;
+    return new Set<string>([...stageKeys, ...activitySuppliedFieldKeys]);
+  }, [visibleFields, mode, activitySuppliedFieldKeys]);
 
   useImperativeHandle(
     ref,
@@ -190,31 +162,20 @@ export function EnrollmentFields({
       validate: () => {
         for (const field of visibleFields) {
           if (!field.required || disabledKeys.has(field.key)) continue;
+
           if (field.type === "dimension") {
-            // Activity mode: the activity supplies the locked ones and we
-            // deliberately don't surface a picker for the rest, so we
-            // can't validate user input here. Backend will reject if a
-            // required field is genuinely missing.
-            if (dimensionMode === "activity") {
-              const dimId = field.dimension_id;
-              if (!dimId) continue;
-              // Locked dimensions are always satisfied by the activity.
-              if (lockedDimByDimId.has(dimId)) continue;
-              continue;
-            }
-            // Picker mode: every required dim field must have a value
-            // among userDimensionValueIds.
             const dimId = field.dimension_id;
             if (!dimId) continue;
-            const hasValue = userDimensionValueIds.some(
+            const hasValue = effectiveValues.dimensions.some(
               (dvId) =>
-                allDimensionValues.find((dv) => dv.id === dvId)?.dimension_id ===
-                dimId,
+                allDimensionValues.find((dv) => dv.id === dvId)
+                  ?.dimension_id === dimId,
             );
             if (!hasValue) return `${field.label} is required.`;
             continue;
           }
-          const val = metaValues[field.key];
+
+          const val = effectiveValues.meta[field.key];
           if (val === undefined || val === null || val === "") {
             return `${field.label} is required.`;
           }
@@ -222,138 +183,33 @@ export function EnrollmentFields({
         return null;
       },
     }),
-    [
-      visibleFields,
-      disabledKeys,
-      dimensionMode,
-      lockedDimByDimId,
-      userDimensionValueIds,
-      allDimensionValues,
-      metaValues,
-    ],
+    [visibleFields, disabledKeys, effectiveValues, allDimensionValues],
   );
 
-  const renderField = (field: MetaFieldDefinition) => {
-    if (field.type === "dimension") {
-      const dimId = field.dimension_id;
-
-      // Locked → readonly chip (activity-supplied).
-      const locked = dimId ? lockedDimByDimId.get(dimId) : undefined;
-      if (locked) {
-        return (
-          <div key={`dim-${field.key}`}>
-            <label className="text-sm font-medium">
-              {field.label}
-              {field.required && <span className="text-red-500 ml-0.5">*</span>}
-            </label>
-            <div className="mt-1 px-3 py-2 border rounded-md bg-gray-50 text-sm text-gray-700">
-              {locked.value_name}
-            </div>
-          </div>
-        );
-      }
-
-      // Activity mode without a locked value: deferred — user must
-      // configure on the entity detail page.
-      if (dimensionMode === "activity") {
-        return (
-          <div
-            key={`dim-${field.key}`}
-            className="text-xs text-gray-400 italic"
-          >
-            {field.label}: configure via the entity detail page
-          </div>
-        );
-      }
-
-      // Picker mode → cascading dropdown.
-      const dim = dimensions.find((d) => d.id === dimId);
-      if (!dim) return null;
-      const dimValues = allDimensionValues.filter(
-        (dv) => dv.dimension_id === dim.id,
-      );
-      const filtered = filterByLinkedValues(
-        dimValues,
-        selectedByDim,
-        dim.id,
-        dimensionValueLinks,
-      );
-      const currentSelection =
-        userDimensionValueIds.find((dvId) =>
-          dimValues.some((dv) => dv.id === dvId),
-        ) || "";
-      const isFieldDisabled = disabledKeys.has(field.key);
-      return (
-        <div key={`dim-${field.key}`}>
-          <label className="text-sm font-medium">
-            {field.label}
-            {field.required && <span className="text-red-500 ml-0.5">*</span>}
-          </label>
-          <select
-            className="w-full mt-1 border rounded-md p-2 text-sm disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
-            value={currentSelection}
-            onChange={(e) => {
-              const newId = e.target.value;
-              const otherIds = userDimensionValueIds.filter(
-                (dvId) => !dimValues.some((dv) => dv.id === dvId),
-              );
-              onUserDimensionsChange(newId ? [...otherIds, newId] : otherIds);
-            }}
-            required={field.required}
-            disabled={isFieldDisabled}
-          >
-            <option value="">Select {field.label}...</option>
-            {filtered.map((dv) => (
-              <option key={dv.id} value={dv.id}>
-                {dv.name}
-              </option>
-            ))}
-          </select>
-        </div>
-      );
+  // Pass the EFFECTIVE values down so activity-supplied dim values
+  // render correctly. Parent's onChange still flows through unchanged
+  // — when the user edits something, we drop the supplied-dim entries
+  // because they shouldn't end up in user-managed state.
+  const handleChange = (next: FormValues) => {
+    if (!activitySuppliedDimensions?.length) {
+      onChange(next);
+      return;
     }
-
-    return (
-      <div key={`field-${field.key}`}>
-        <DynamicMetaForm
-          fields={[field]}
-          values={metaValues}
-          onChange={onMetaChange}
-          disabledKeys={disabledKeys}
-        />
-      </div>
+    const suppliedIds = new Set(
+      activitySuppliedDimensions.map((d) => d.value_id),
     );
+    onChange({
+      ...next,
+      dimensions: next.dimensions.filter((id) => !suppliedIds.has(id)),
+    });
   };
 
-  return <>{visibleFields.map(renderField)}</>;
-}
-
-/**
- * Cascading dimension filter — values for one dimension narrow when other
- * dimensions are already selected, using the admin-configured value links.
- * Pulled out of EnrollmentForm so it can be shared with the picker mode.
- */
-function filterByLinkedValues(
-  targetDimValues: DimensionValue[],
-  selectedByDim: Record<string, string>,
-  targetDimId: string,
-  dimensionValueLinks: DimensionValueLink[],
-): DimensionValue[] {
-  const otherSelections = Object.entries(selectedByDim)
-    .filter(([dimId, dvId]) => dimId !== targetDimId && dvId)
-    .map(([, dvId]) => dvId);
-
-  if (otherSelections.length === 0) return targetDimValues;
-
-  const linkPairs = new Set<string>();
-  for (const link of dimensionValueLinks) {
-    linkPairs.add(`${link.dimension_value_id_1}:${link.dimension_value_id_2}`);
-    linkPairs.add(`${link.dimension_value_id_2}:${link.dimension_value_id_1}`);
-  }
-
-  return targetDimValues.filter((dv) =>
-    otherSelections.every((selectedId) =>
-      linkPairs.has(`${dv.id}:${selectedId}`),
-    ),
+  return (
+    <DynamicMetaForm
+      fields={visibleFields}
+      values={effectiveValues}
+      onChange={handleChange}
+      disabledKeys={disabledKeys}
+    />
   );
 }
