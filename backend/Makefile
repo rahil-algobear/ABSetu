@@ -1,4 +1,4 @@
-.PHONY: help install install-dev test test-coverage lint format type-check run run-local run-local-port migrate upgrade downgrade kill-server clean db-reset db-fresh seed seed-org seed-test-entities seed-test-sessions
+.PHONY: help install install-dev test test-coverage lint format type-check run run-local run-local-port migrate upgrade downgrade kill-server clean db-reset db-fresh seed seed-org seed-test-entities seed-test-sessions seed-test-all
 
 # Use venv python if available, otherwise fall back to python3
 PYTHON := $(shell if [ -f venv/bin/python ]; then echo venv/bin/python; else echo python3; fi)
@@ -24,6 +24,7 @@ help:
 	@echo "  make db-fresh             - Reset DB + run migrations + seed all (fresh start)"
 	@echo "  make seed-test-entities   - Bulk-create test entities (org=KSHAMATA type=Beneficiary count=1000 prefix='Auto-Test Beneficiary')"
 	@echo "  make seed-test-sessions   - Bulk-create test sessions (org=KSHAMATA n=30 clear=0)"
+	@echo "  make seed-test-all        - Run all test seeders (entities + sessions + gramodaya)"
 	@echo "  make clean                - Clean up cache and temporary files"
 
 install:
@@ -121,6 +122,17 @@ seed-test-sessions:
 		--org "$(org)" \
 		--count $(n) \
 		$(if $(filter-out 0,$(clear)),--clear,)
+
+# Convenience target: run every test seeder in one shot instead of remembering
+# each command. Runs seed-test-entities, then seed-test-sessions, then the
+# gramodaya org seed. Variables propagate, so overrides still work, e.g.:
+#   make seed-test-all
+#   make seed-test-all count=500 n=50
+seed-test-all:
+	$(MAKE) seed-test-entities
+	$(MAKE) seed-test-sessions
+	$(PYTHON) -m app.seeds.gramodaya
+	@echo "All test data seeded!"
 
 db-reset:
 	@echo "WARNING: This will destroy ALL data in the database!"
