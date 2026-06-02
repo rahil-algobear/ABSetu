@@ -208,6 +208,9 @@ export type MetaFieldDisplayType =
 export type MetaFieldStage = "create" | "edit" | "both";
 
 export interface MetaFieldDefinition {
+  // Server-assigned permanent identity. Round-tripped on every save so the
+  // backend keeps the field's storage key stable; absent for a new field.
+  id?: string;
   key: string;
   label: string;
   type: MetaFieldType;

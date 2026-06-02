@@ -41,6 +41,11 @@ STAGE_TYPES = Literal["create", "edit", "both"]
 class FieldDefinition(BaseModel):
     """Typed definition for a single field in a meta field schema."""
 
+    # Permanent, opaque identity for the field. Assigned server-side on
+    # creation and never changes. The frontend round-trips it on every save so
+    # the backend can recognize an existing field and keep its storage ``key``
+    # stable. Omitted (null) for a brand-new field.
+    id: str | None = None
     key: str = Field(default="")
     label: str = Field(..., min_length=1)
     type: FIELD_TYPES
