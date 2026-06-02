@@ -31,15 +31,46 @@ import {
 } from "@/utils/meta-fields";
 import { filterVisibleFields } from "@/utils/field-stage";
 
+/** Participant section record shape carried by `FormValues.participants`. */
+export interface ParticipantRecord {
+  participant_id: string;
+  participant_type: "user" | "entity";
+  status?: string;
+  meta?: Record<string, unknown>;
+}
+
+/**
+ * Convention for the key under which a participant section's records
+ * live inside `FormValues.participants`.
+ *
+ * - "user_list"   → "user"  (single user section per activity)
+ * - "entity_list" → field.entity_type_id (one section per entity type)
+ *                   falls back to field.key for legacy fields without
+ *                   an entity_type_id set.
+ *
+ * Centralized so the dispatcher (DynamicMetaForm) and the page
+ * (activity create's save path) agree on the same key.
+ */
+export function deriveParticipantSectionKey(
+  field: Pick<MetaFieldDefinition, "type" | "entity_type_id" | "key">,
+): string {
+  if (field.type === "user_list") return "user";
+  if (field.type === "entity_list") return field.entity_type_id || field.key;
+  throw new Error(
+    `deriveParticipantSectionKey called on non-list field type: ${field.type}`,
+  );
+}
+
 /**
  * Unified value bag for any form-builder form. Each field type reads
  * from / writes to the bucket it owns:
  *
  *   - "text"/"number"/"date"/"select"/etc. → values.meta[field.key]
  *   - "dimension"                          → values.dimensions (array of value IDs)
+ *   - "entity_list" / "user_list"          → values.participants[sectionKey]
  *
- * Future: entity_list / user_list will land here as a `participants`
- * bucket keyed by section key.
+ * The participants bucket is optional because most wrappers
+ * (EntityFields, EnrollmentFields) never carry list-type fields.
  */
 export interface FormValues {
   meta: Record<string, unknown>;
@@ -47,6 +78,10 @@ export interface FormValues {
    *  significant; uniqueness across dimensions is the caller's
    *  responsibility (one value per dimension). */
   dimensions: string[];
+  /** Participant sections keyed by `deriveParticipantSectionKey(field)`.
+   *  Optional — wrappers without entity_list/user_list fields leave
+   *  this undefined. */
+  participants?: Record<string, ParticipantRecord[]>;
 }
 
 export const EMPTY_FORM_VALUES: FormValues = Object.freeze({

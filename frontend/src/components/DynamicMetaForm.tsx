@@ -20,12 +20,18 @@ import { formatDate, formatDateTime } from "@/utils/date";
 
 import { DynamicMetaField } from "@/components/DynamicMetaField";
 import { DynamicDimensionField } from "@/components/DynamicDimensionField";
+import { DynamicEntityListField } from "@/components/DynamicEntityListField";
+import { DynamicUserListField } from "@/components/DynamicUserListField";
 import {
   buildSelectedByDim,
   filterEligibleValues,
   useDimensionData,
 } from "@/components/useDimensionData";
-import type { FormValues } from "@/utils/field-visibility";
+import {
+  deriveParticipantSectionKey,
+  type FormValues,
+  type ParticipantRecord,
+} from "@/utils/field-visibility";
 
 export interface DynamicMetaFormProps {
   fields: MetaFieldDefinition[];
@@ -71,12 +77,13 @@ export function DynamicMetaForm({
           });
         }
 
-        // Entity / user list types are out of scope for Phase 1 — they
-        // still live in SearchSelectParticipants / ParticipantPicker.
-        // The wrapper should not be handing these to DynamicMetaForm
-        // yet, but skip defensively if it does.
         if (field.type === "entity_list" || field.type === "user_list") {
-          return null;
+          return renderParticipantField({
+            field,
+            values,
+            onChange,
+            isDisabled,
+          });
         }
 
         return (
@@ -154,6 +161,53 @@ function renderDimensionField({
           dimensions: newValueId ? [...otherIds, newValueId] : otherIds,
         });
       }}
+    />
+  );
+}
+
+function renderParticipantField({
+  field,
+  values,
+  onChange,
+  isDisabled,
+}: {
+  field: MetaFieldDefinition;
+  values: FormValues;
+  onChange: (values: FormValues) => void;
+  isDisabled: boolean;
+}) {
+  const sectionKey = deriveParticipantSectionKey(field);
+  const current = values.participants?.[sectionKey] ?? [];
+
+  const handleSectionChange = (next: ParticipantRecord[]) => {
+    onChange({
+      ...values,
+      participants: {
+        ...(values.participants ?? {}),
+        [sectionKey]: next,
+      },
+    });
+  };
+
+  if (field.type === "user_list") {
+    return (
+      <DynamicUserListField
+        key={`user-${field.key}`}
+        field={field}
+        value={current}
+        onChange={handleSectionChange}
+        isDisabled={isDisabled}
+      />
+    );
+  }
+
+  return (
+    <DynamicEntityListField
+      key={`entity-${field.key}`}
+      field={field}
+      value={current}
+      onChange={handleSectionChange}
+      isDisabled={isDisabled}
     />
   );
 }

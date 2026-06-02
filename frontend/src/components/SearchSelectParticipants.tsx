@@ -174,11 +174,7 @@ export function SearchSelectParticipants({
               {entityTypeId && (
                 <button
                   type="button"
-                  onClick={() => {
-                    const nameF = entityMetaFields.find((f) => f.label === "Name");
-                    setNewEntityMeta(nameF ? { [nameF.key]: search } : {});
-                    setShowCreateDialog(true);
-                  }}
+                  onClick={() => setShowCreateDialog(true)}
                   className="block mx-auto mt-1 text-blue-600 hover:underline text-xs"
                 >
                   + Create &ldquo;{search}&rdquo;

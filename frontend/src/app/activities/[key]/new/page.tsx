@@ -8,17 +8,12 @@ import {
   activityTypeApi,
   dimensionApi,
   dimensionValueLinkApi,
-  entityApi,
-  entityTypeApi,
-  listConfigApi,
   metaFieldSchemaApi,
-  userApi,
 } from "@/services/api";
 import {
   Dimension,
   DimensionValue,
   DimensionValueLink,
-  EntityType,
   MetaFieldDefinition,
   MetaFieldSchemaItem,
 } from "@/types";
@@ -27,7 +22,7 @@ import { collectActivityFields } from "@/utils/meta-fields";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DynamicMetaForm } from "@/components/DynamicMetaForm";
-import { SearchSelectParticipants } from "@/components/SearchSelectParticipants";
+import { deriveParticipantSectionKey } from "@/utils/field-visibility";
 import { PageLayout } from "@/components/ui/page-layout";
 import { PageContent } from "@/components/ui/page-content";
 import { PageHeader } from "@/components/ui/page-header";
@@ -87,11 +82,6 @@ export default function NewActivityPage() {
     queryFn: dimensionApi.list,
   });
 
-  const { data: entityTypes = [] } = useQuery<EntityType[]>({
-    queryKey: ["entity-types"],
-    queryFn: entityTypeApi.list,
-  });
-
   const { data: allDimensionValues = [] } = useQuery<DimensionValue[]>({
     queryKey: ["all-dimension-values", dimensions.map((d) => d.id).join(",")],
     queryFn: async () => {
@@ -142,46 +132,17 @@ export default function NewActivityPage() {
     return keys;
   }, [allFields]);
 
-  // Participant list fields for entity queries
+  // List-type fields used at save time to assemble the participants
+  // payload. Rendering / data-fetching for these now lives in the
+  // per-type Dynamic{Entity,User}ListField components, dispatched via
+  // DynamicMetaForm.
   const participantFields = useMemo(() => {
-    return formFields.filter((f) => (f.type === "entity_list" || f.type === "user_list")
-      && !createDisabledKeys.has(f.key));
+    return formFields.filter(
+      (f) =>
+        (f.type === "entity_list" || f.type === "user_list") &&
+        !createDisabledKeys.has(f.key),
+    );
   }, [formFields, createDisabledKeys]);
-
-  const entitySourceIds = useMemo(() => {
-    return participantFields
-      .filter((f) => f.type === "entity_list" && f.entity_type_id)
-      .map((f) => f.entity_type_id!);
-  }, [participantFields]);
-
-  const hasCreateUserSection = participantFields.some((f) => f.type === "user_list");
-
-  const { data: createEntitiesByType = {} } = useQuery({
-    queryKey: ["entities-for-create", entitySourceIds.join(",")],
-    queryFn: async () => {
-      const result: Record<string, { id: string; name: string }[]> = {};
-      for (const typeId of entitySourceIds) {
-        const [entities, columns] = await Promise.all([
-          entityApi.list(typeId),
-          listConfigApi.get(`entity:${typeId}`),
-        ]);
-        const firstCol = columns.find((c) => c.visible && c.key.startsWith("meta:"));
-        const metaKey = firstCol?.key.replace(/^meta:/, "");
-        result[typeId] = entities.map((e) => ({
-          id: e.id,
-          name: metaKey ? String((e.meta || {})[metaKey] || "") : "",
-        }));
-      }
-      return result;
-    },
-    enabled: entitySourceIds.length > 0,
-  });
-
-  const { data: createUsers = [] } = useQuery({
-    queryKey: ["users"],
-    queryFn: userApi.list,
-    enabled: hasCreateUserSection,
-  });
 
   const selectedByDim = useMemo(() => {
     const map: Record<string, string> = {};
@@ -227,7 +188,7 @@ export default function NewActivityPage() {
       const activity = await activityApi.create(payload);
       const allRecords: { participant_type: string; participant_id: string; section_key: string; status?: string; meta?: Record<string, unknown> }[] = [];
       for (const field of participantFields) {
-        const sectionKey = field.entity_type_id || field.key;
+        const sectionKey = deriveParticipantSectionKey(field);
         const sectionState = participantState[sectionKey] || [];
         for (const p of sectionState) {
           allRecords.push({
@@ -312,42 +273,24 @@ export default function NewActivityPage() {
 
       case "entity_list":
       case "user_list": {
-        if (isDisabled) return null;
-        const isUserSource = field.type === "user_list";
-        const etId = field.entity_type_id;
-        const sectionKey = isUserSource ? "user" : (etId || field.key);
-        const options = isUserSource
-          ? createUsers.map((u) => ({ id: u.id, name: `${u.first_name} ${u.last_name}` }))
-          : (createEntitiesByType[etId || ""] || []);
-        const participantType = isUserSource ? "user" : "entity";
-        const sectionState = participantState[sectionKey] || [];
-        const captureStatus = field.config?.capture_status as boolean || false;
-        const statuses = (field.config?.statuses as string[]) || ["present", "absent"];
-        const defaultStatus = (field.config?.default_status as string) || statuses[0];
-        const etLabel = isUserSource
-          ? "Users"
-          : entityTypes.find((t) => t.id === etId)?.name || field.label;
-
+        // Entity_list / user_list dispatch through DynamicMetaForm now;
+        // the per-type components own their data fetches and the
+        // create-new dialog. Adapt this page's participantState (keyed
+        // by section key) to the FormValues.participants shape at the
+        // boundary so we don't have to rewrite the page's state model.
         return (
-          <div key={`participant-${sectionKey}`}>
-            <h3 className="text-sm font-semibold mb-2">
-              {etLabel}
-              {field.required && <span className="text-red-500 ml-0.5">*</span>}
-            </h3>
-            <SearchSelectParticipants
-              sectionKey={sectionKey}
-              options={options}
-              participantType={participantType}
-              selected={sectionState}
-              onChange={(records) =>
-                setParticipantState({ ...participantState, [sectionKey]: records })
+          <div key={`participant-${field.key}`}>
+            <DynamicMetaForm
+              fields={[field]}
+              values={{
+                meta: {},
+                dimensions: [],
+                participants: participantState,
+              }}
+              onChange={(next) =>
+                setParticipantState(next.participants ?? {})
               }
-              captureStatus={captureStatus}
-              statuses={statuses}
-              defaultStatus={defaultStatus}
-              metaFields={[]}
-              entityTypeId={isUserSource ? null : (etId || null)}
-              entityTypeName={etLabel}
+              disabledKeys={createDisabledKeys}
             />
           </div>
         );

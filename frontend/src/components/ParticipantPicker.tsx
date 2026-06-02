@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Phase 3 participant picker. Replaces SearchSelectParticipants for all
+ * Phase 3 participant picker. Replaces the simpler section UI for all
  * entity_list and user_list fields on an activity. Calls the atomic
  * /participants/{add|enroll_and_add|create_and_add} endpoints directly
  * — no client-side orchestration.

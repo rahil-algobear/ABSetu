@@ -5,7 +5,8 @@
  *   - Entity Listing (Add / Edit modal in /entities/[key]/page.tsx)
  *   - Entity Details (edit card in /entities/[key]/[id]/page.tsx)
  *   - CreateAndAddModal (activity-context "Create new …" flow)
- *   - SearchSelectParticipants (activity-create page's create dialog)
+ *   - DynamicEntityListField's create-new dialog (via the participant
+ *     section UI that powers activity-create's entity_list sections)
  *
  * The wrapper owns scope (entity), stage filtering, and required-field
  * validation (exposed via the ref handle). Rendering lives one layer
