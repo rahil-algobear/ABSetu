@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react";
+import { ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react";
 import { Button } from "./button";
 
 interface PaginationProps {
@@ -14,9 +14,8 @@ interface PaginationProps {
 
 const ITEMS_PER_PAGE_OPTIONS = [10, 25, 50];
 
-/** Per-page select with a custom chevron — the native dropdown arrow
- *  floats too far right with a gap, so we hide it (appearance-none) and
- *  place our own. */
+/** Per-page select. The dropdown chevron is handled globally by the
+ *  `select` rule in globals.css, so this is a plain styled select. */
 function PerPageSelect({
   value,
   onChange,
@@ -25,18 +24,15 @@ function PerPageSelect({
   onChange: (n: number) => void;
 }) {
   return (
-    <div className="relative inline-block">
-      <select
-        value={value}
-        onChange={(e) => onChange(parseInt(e.target.value))}
-        className="appearance-none border rounded-md pl-2 pr-7 py-1 text-sm"
-      >
-        {ITEMS_PER_PAGE_OPTIONS.map((n) => (
-          <option key={n} value={n}>{n} per page</option>
-        ))}
-      </select>
-      <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-    </div>
+    <select
+      value={value}
+      onChange={(e) => onChange(parseInt(e.target.value))}
+      className="border rounded-md px-2 py-1 text-sm"
+    >
+      {ITEMS_PER_PAGE_OPTIONS.map((n) => (
+        <option key={n} value={n}>{n} per page</option>
+      ))}
+    </select>
   );
 }
 
