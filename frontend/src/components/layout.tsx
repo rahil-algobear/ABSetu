@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useAuth } from '../services/auth';
 import { usePermissions } from './Auth/Permissions';
 import Image from "next/image";
-import { LayoutDashboard, CalendarDays, Mail, Phone } from "lucide-react";
+import { LayoutDashboard, Mail, Phone } from "lucide-react";
 import Navigation from "./Navigation";
 import NoOrganization from "./NoOrganization";
 
@@ -57,7 +57,6 @@ export default function MainLayout({
               <div className="flex flex-col items-center sm:items-start gap-2">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Product</p>
                 <a href="/dashboard" className="flex items-center gap-1.5 text-gray-400 hover:text-gray-600 transition-colors"><LayoutDashboard size={14} />Dashboard</a>
-                <a href="/sessions" className="flex items-center gap-1.5 text-gray-400 hover:text-gray-600 transition-colors"><CalendarDays size={14} />Sessions</a>
               </div>
               <div className="flex flex-col items-center sm:items-start gap-2">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Contact</p>
