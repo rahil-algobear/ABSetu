@@ -36,7 +36,7 @@ import { PageContent } from "@/components/ui/page-content";
 import { PageHeader } from "@/components/ui/page-header";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog } from "@/components/ui/dialog";
-import { Search, Trash2, Pencil, Users, X } from "lucide-react";
+import { Search, Trash2, Pencil, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import toast from "react-hot-toast";
 
@@ -421,7 +421,6 @@ export default function ActivityDetailPage() {
     const metaFields = getParticipationMetaFields(field);
     const captureStatus = field.config?.capture_status as boolean || false;
     const hasStatus = captureStatus || sectionParticipants.some((p) => p.status);
-    const useTable = hasStatus || metaFields.length > 0;
 
     const fieldEntityType = field.type === "entity_list"
       ? entityTypes.find((t) => t.id === field.entity_type_id)
@@ -508,7 +507,7 @@ export default function ActivityDetailPage() {
           />
         ) : sectionParticipants.length === 0 ? (
           <p className="text-gray-400 text-xs italic py-2">No participants added yet</p>
-        ) : useTable ? (
+        ) : (
           <div className="border rounded-md overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b">
@@ -553,14 +552,6 @@ export default function ActivityDetailPage() {
                 ))}
               </tbody>
             </table>
-          </div>
-        ) : (
-          <div className="flex flex-wrap gap-1.5">
-            {sectionParticipants.map((p) => (
-              <Badge key={p.id} variant="outline" className="text-sm font-normal py-1 px-2">
-                {getParticipantName(p)}
-              </Badge>
-            ))}
           </div>
         )}
       </div>
@@ -635,13 +626,7 @@ export default function ActivityDetailPage() {
       {/* Participant sections */}
       {participantListFields.length > 0 ? (
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Users className="h-4 w-4 text-gray-500" />
-              Participants
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 pt-6">
             {sections.length === 1 ? (
               renderSection(sections[0].field)
             ) : (
@@ -669,13 +654,7 @@ export default function ActivityDetailPage() {
       ) : (
         /* No participant fields — show flat participant list */
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <Users className="h-4 w-4 text-gray-500" />
-              Participants
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+          <CardContent className="pt-6">
             {participants.length === 0 ? (
               <p className="text-gray-400 text-sm italic">No participants recorded</p>
             ) : (
