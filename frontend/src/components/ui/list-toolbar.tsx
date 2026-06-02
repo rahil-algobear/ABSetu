@@ -16,6 +16,8 @@ interface ListToolbarProps {
   onFiltersChange: (filters: FilterValue[]) => void;
   onRemoveFilter: (key: string, value?: string) => void;
   searchPlaceholder?: string;
+  /** Right-aligned action area (e.g. a Download button). */
+  actions?: ReactNode;
 }
 
 const DATE_CHIP_FORMAT = "d MMM yyyy";
@@ -126,6 +128,7 @@ export function ListToolbar({
   onFiltersChange,
   onRemoveFilter,
   searchPlaceholder = "Search...",
+  actions,
 }: ListToolbarProps) {
   const [showFilterModal, setShowFilterModal] = useState(false);
 
@@ -176,39 +179,45 @@ export function ListToolbar({
             </Button>
           </div>
         )}
-        <div className="flex min-w-0 items-center overflow-x-auto">
+        <div className="flex flex-1 min-w-0 items-center overflow-x-auto">
           <FilterChips
             activeFilters={activeFilters}
             filterDefinitions={filterDefinitions}
             onRemoveFilter={onRemoveFilter}
           />
         </div>
+        {actions && <div className="flex-shrink-0">{actions}</div>}
       </div>
 
-      {/* Mobile: two rows — row 1: filter + chips | row 2: search */}
+      {/* Mobile: two rows — row 1: filter + chips + actions | row 2: search */}
       <div className="flex lg:hidden flex-col gap-3">
-        {hasFilters && (
+        {(hasFilters || actions) && (
           <div className="flex items-center gap-2 min-w-0">
-            <div className="flex-shrink-0">
-              <Button
-                variant={chipCount > 0 ? "default" : "outline"}
-                className="flex items-center gap-2 h-10"
-                onClick={() => setShowFilterModal(true)}
-              >
-                <SlidersHorizontal className="h-4 w-4" />
-                Filter
-                {chipCount > 0 && (
-                  <span className="bg-white/20 text-xs rounded-full px-1.5 py-0.5">
-                    {chipCount}
-                  </span>
-                )}
-              </Button>
+            {hasFilters && (
+              <div className="flex-shrink-0">
+                <Button
+                  variant={chipCount > 0 ? "default" : "outline"}
+                  className="flex items-center gap-2 h-10"
+                  onClick={() => setShowFilterModal(true)}
+                >
+                  <SlidersHorizontal className="h-4 w-4" />
+                  Filter
+                  {chipCount > 0 && (
+                    <span className="bg-white/20 text-xs rounded-full px-1.5 py-0.5">
+                      {chipCount}
+                    </span>
+                  )}
+                </Button>
+              </div>
+            )}
+            <div className="flex min-w-0 flex-1 items-center overflow-x-auto">
+              <FilterChips
+                activeFilters={activeFilters}
+                filterDefinitions={filterDefinitions}
+                onRemoveFilter={onRemoveFilter}
+              />
             </div>
-            <FilterChips
-              activeFilters={activeFilters}
-              filterDefinitions={filterDefinitions}
-              onRemoveFilter={onRemoveFilter}
-            />
+            {actions && <div className="flex-shrink-0">{actions}</div>}
           </div>
         )}
         <div className="relative">

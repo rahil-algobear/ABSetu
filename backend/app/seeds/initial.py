@@ -34,6 +34,7 @@ PERMISSIONS = [
     ("entity:view", "View entities"),
     ("entity:create", "Create entities"),
     ("entity:edit", "Edit entity details"),
+    ("entity:export", "Download entities to Excel"),
     ("entity_type:view", "View entity types"),
     ("entity_type:manage", "Create/edit/delete entity types"),
     ("enrollment:view", "View enrollments"),

@@ -3,11 +3,13 @@
 import { Suspense, useState, useMemo, useRef } from "react";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { entityApi, entityTypeApi, metaFieldSchemaApi } from "@/services/api";
+import { entityApi, entityTypeApi, metaFieldSchemaApi, type EntityExportParams } from "@/services/api";
 import { Entity, ListColumnConfig, MetaFieldSchemaItem } from "@/types";
-import { Can } from "@/components/Auth/Permissions";
+import { Can, usePermissions } from "@/components/Auth/Permissions";
 import { useListParams } from "@/hooks/useListParams";
+import { useExport } from "@/hooks/useExport";
 import { withFrom } from "@/hooks/useFromLink";
+import { ExportMenu, type ExportScope } from "@/components/ui/export-menu";
 import type { FilterDefinition } from "@/components/ui/filter-modal";
 import { type FormValues } from "@/utils/field-visibility";
 
@@ -110,6 +112,25 @@ function EntityTypeEntitiesContent() {
   const entities = response?.data || [];
   const totalCount = response?.count || 0;
   const totalPages = Math.ceil(totalCount / listParams.limit);
+
+  // Excel export — reuses the active search/filters/sort for "current view",
+  // or just the entity-type scope for "all". Backend applies the same
+  // org + dimension scoping as the list.
+  const { can } = usePermissions();
+  const { isExporting, runExport } = useExport();
+  const handleExport = (scope: ExportScope) => {
+    if (!entityType) return;
+    const params: EntityExportParams = {
+      entity_type_id: entityType.id,
+      sort_by: listParams.apiParams.sort_by,
+      sort_order: listParams.apiParams.sort_order,
+    };
+    if (scope === "current") {
+      params.search = listParams.apiParams.search;
+      params.filters = listParams.apiParams.filters;
+    }
+    runExport(() => entityApi.export(params));
+  };
 
   // Helper to render a cell value for a given column config
   const renderCellValue = (entity: Entity, col: ListColumnConfig) => {
@@ -252,6 +273,15 @@ function EntityTypeEntitiesContent() {
         onFiltersChange={listParams.setActiveFilters}
         onRemoveFilter={listParams.removeFilter}
         searchPlaceholder={`Search ${typeName.toLowerCase()}...`}
+        actions={
+          can("entity:export") ? (
+            <ExportMenu
+              onExport={handleExport}
+              isExporting={isExporting}
+              hasActiveFilters={listParams.activeFilters.length > 0}
+            />
+          ) : undefined
+        }
       />
 
       {isLoading ? (

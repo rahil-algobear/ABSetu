@@ -253,6 +253,22 @@ export interface FilterResponse {
   columns: ListColumnConfig[];
 }
 
+/** Query params for the entity Excel export — a subset of the list params. */
+export interface EntityExportParams {
+  search?: string;
+  filters?: string;
+  sort_by?: string;
+  sort_order?: string;
+  entity_type_id?: string;
+}
+
+/** Pull the server-provided filename out of a Content-Disposition header. */
+function filenameFromDisposition(disposition: string | undefined, fallback: string): string {
+  if (!disposition) return fallback;
+  const match = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposition);
+  return match ? decodeURIComponent(match[1]) : fallback;
+}
+
 export const entityApi = {
   /** Fetch entities by ID. Transparently chunks the request so an
    *  activity with hundreds of participants (or any other big batch
@@ -285,6 +301,15 @@ export const entityApi = {
     const params = entityTypeId ? { entity_type_id: entityTypeId } : {};
     const response = await authAxios.get<FilterResponse>('/entities/filters', { params });
     return response.data;
+  },
+  /** Download entities as an Excel file. Pass the active list params for a
+   *  "current view" export, or just entity_type_id for "all". */
+  export: async (params: EntityExportParams): Promise<{ blob: Blob; filename: string }> => {
+    const response = await authAxios.get('/entities/export', { params, responseType: 'blob' });
+    return {
+      blob: response.data as Blob,
+      filename: filenameFromDisposition(response.headers['content-disposition'], 'entities.xlsx'),
+    };
   },
   get: async (id: string): Promise<Entity> => {
     const response = await authAxios.get<Entity>(`/entities/${id}`);

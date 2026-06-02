@@ -6,9 +6,10 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.common.exceptions import NotFoundError, ValidationError
+from app.common.export import EXPORT_ROW_CAP
 from app.common.helpers.dimension_scoping import (
     apply_dimension_access_scoping,
     group_dvs_by_dimension,
@@ -23,7 +24,7 @@ from app.common.helpers.slugify import slugify
 from app.common.schemas.list_params import ListParams
 from app.modules.activity.model import ActivityParticipant
 from app.modules.auth.model import User
-from app.modules.dimension.model import EntityDimension
+from app.modules.dimension.model import DimensionValue, EntityDimension
 from app.modules.enrollment.model import Enrollment
 from app.modules.entity.model import Entity, EntityType
 from app.modules.organization.model import Organization
@@ -269,12 +270,68 @@ class EntityService:
         `include_entity_ids` / `exclude_entity_ids` apply a pre-filter on
         Entity.id before paging — used by the picker's enrollment-status
         filter so the total count reflects the filtered set."""
+        query = self._build_list_query(
+            org_id,
+            params,
+            accessible_dv_ids=accessible_dv_ids,
+            list_columns=list_columns,
+            include_entity_ids=include_entity_ids,
+            exclude_entity_ids=exclude_entity_ids,
+        )
+        if query is None:
+            # Empty include set → no results, short-circuit.
+            return ([], 0)
+        return paginate(query, params.page, params.limit)
+
+    def list_all_for_export(
+        self,
+        org_id: uuid.UUID,
+        params: ListParams,
+        accessible_dv_ids: list[uuid.UUID] | None = None,
+        list_columns: list[dict] | None = None,
+        cap: int = EXPORT_ROW_CAP,
+    ) -> tuple[list[tuple], bool]:
+        """All matching rows for an Excel export.
+
+        Same search/filter/sort/org-and-dimension scoping as the paginated
+        list — just without paging — so the download mirrors the on-screen
+        view exactly. Capped at `cap`: returns (rows, truncated), where
+        truncated signals the caller to ask the user to narrow filters.
+
+        Eager-loads the dimension chain so per-row serialization doesn't fire
+        N+1 queries across a large export.
+        """
+        query = self._build_list_query(
+            org_id, params, accessible_dv_ids=accessible_dv_ids, list_columns=list_columns
+        )
+        query = query.options(
+            selectinload(Entity.dimensions)
+            .joinedload(EntityDimension.dimension_value)
+            .joinedload(DimensionValue.dimension)
+        )
+        rows = query.limit(cap + 1).all()
+        truncated = len(rows) > cap
+        return rows[:cap], truncated
+
+    def _build_list_query(
+        self,
+        org_id: uuid.UUID,
+        params: ListParams,
+        accessible_dv_ids: list[uuid.UUID] | None = None,
+        list_columns: list[dict] | None = None,
+        include_entity_ids: set[uuid.UUID] | None = None,
+        exclude_entity_ids: set[uuid.UUID] | None = None,
+    ):
+        """Shared query builder for the paginated list and the export.
+
+        Applies dimension-access scoping, search, filters, and sort. Returns
+        None when an empty include set means there can be no results.
+        """
         query = self._build_base_query(org_id, accessible_dv_ids)
 
         if include_entity_ids is not None:
             if not include_entity_ids:
-                # Empty include set → no results, short-circuit.
-                return ([], 0)
+                return None
             query = query.filter(Entity.id.in_(include_entity_ids))
         if exclude_entity_ids:
             query = query.filter(~Entity.id.in_(exclude_entity_ids))
@@ -357,8 +414,7 @@ class EntityService:
             Entity.created_at.desc(),
         )
 
-        # Paginate
-        return paginate(query, params.page, params.limit)
+        return query
 
     def get_by_id(self, entity_id: uuid.UUID, org_id: uuid.UUID) -> Entity:
         entity = self.db.query(Entity).filter_by(id=entity_id, organization_id=org_id).first()

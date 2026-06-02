@@ -2,9 +2,11 @@
 Entity and EntityType routes
 """
 
+import re
 import uuid
+from datetime import datetime
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.orm import Session
 
 from app.common.dependencies import (
@@ -14,6 +16,7 @@ from app.common.dependencies import (
     require_permissions,
 )
 from app.common.exceptions import ValidationError
+from app.common.export import EXPORT_ROW_CAP, build_xlsx, format_export_value
 from app.common.schemas.base_response import PaginatedResponse
 from app.common.schemas.list_params import ListParams
 from app.core.database import get_db
@@ -76,6 +79,46 @@ def _build_entity_response(
         activity_count=activity_count,
         enrollment_status=enrollment_status,
     ).dump()
+
+
+def _export_cell(entity, enrollment_count, activity_count, created_by_name, col: dict):
+    """Resolve one column's value for an entity export row.
+
+    Mirrors the frontend renderCellValue so the spreadsheet matches the
+    on-screen table: static built-ins, dimension names, and meta fields
+    (dates/booleans/lists) formatted via the shared export formatter.
+    """
+    field_type = col.get("field_type")
+    key = col["key"]
+
+    if field_type == "static":
+        return {
+            "code": entity.code or "",
+            "enrollment_count": enrollment_count,
+            "activity_count": activity_count,
+            "created_at": entity.created_at,
+            "created_by": created_by_name or "",
+        }.get(key, "")
+
+    if field_type == "dimension":
+        dim_key = col.get("dimension_key")
+        names = [
+            d.dimension_value.name
+            for d in (entity.dimensions or [])
+            if d.dimension_value
+            and d.dimension_value.dimension
+            and d.dimension_value.dimension.key == dim_key
+        ]
+        return ", ".join(names)
+
+    # Meta field columns (key format "meta:{field_key}").
+    meta_key = key[len("meta:") :] if key.startswith("meta:") else key
+    return format_export_value(field_type, (entity.meta or {}).get(meta_key))
+
+
+def _export_filename(type_name: str) -> str:
+    slug = re.sub(r"[^A-Za-z0-9]+", "_", type_name).strip("_").lower() or "entities"
+    return f"{slug}_{datetime.now().strftime('%Y%m%d')}.xlsx"
 
 
 # --- Entity Types ---
@@ -399,6 +442,94 @@ def get_entity_filters(
         response["filters"].extend(enrollment_filters)
 
     return response
+
+
+@entity_router.get("/export", dependencies=[Depends(require_permissions("entity:export"))])
+def export_entities(
+    search: str | None = Query(None),
+    sort_by: str | None = Query(None),
+    sort_order: str = Query("desc", pattern="^(asc|desc)$"),
+    filters: str | None = Query(None),
+    entity_type_id: uuid.UUID | None = Query(None),
+    current_user: User = Depends(get_current_user),
+    accessible_dv_ids: list[uuid.UUID] | None = Depends(get_accessible_dimension_value_ids),
+    db: Session = Depends(get_db),
+):
+    """Download entities as an Excel file.
+
+    Honors the same search / filters / sort and org-and-dimension scoping as
+    the entity list. Pass the active list filters for a "current view" export,
+    or omit them for "all". XLSX only; columns mirror the configured list view.
+    """
+    import json
+
+    service = EntityService(db)
+
+    # Merge entity_type_id into filters JSON (matches the list endpoint).
+    merged_filters = filters
+    if entity_type_id:
+        try:
+            f = json.loads(filters) if filters else {}
+        except (json.JSONDecodeError, TypeError):
+            f = {}
+        f["entity_type_id"] = str(entity_type_id)
+        merged_filters = json.dumps(f)
+
+    # page/limit are unused by the export path but required by ListParams.
+    params = ListParams(
+        page=1,
+        limit=1,
+        search=search,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        filters=merged_filters,
+    )
+
+    list_columns = None
+    type_name = "Entities"
+    if entity_type_id:
+        from app.modules.organization.service import ListConfigService
+
+        list_columns = ListConfigService(db).get_config(
+            current_user.organization_id, f"entity:{entity_type_id}"
+        )
+        et = EntityTypeService(db).get_by_id(entity_type_id, current_user.organization_id)
+        type_name = et.name if et else "Entities"
+
+    rows, truncated = service.list_all_for_export(
+        current_user.organization_id,
+        params=params,
+        accessible_dv_ids=accessible_dv_ids,
+        list_columns=list_columns,
+    )
+    if truncated:
+        raise ValidationError(
+            f"This export exceeds the {EXPORT_ROW_CAP:,}-row limit. "
+            "Apply filters to narrow the results, then download again."
+        )
+
+    # Export the visible columns the list config defines. With no type scope
+    # (all-types export) fall back to a minimal static set.
+    columns = [c for c in (list_columns or []) if c.get("visible", True)]
+    if not columns:
+        columns = [
+            {"key": "code", "label": "Code", "field_type": "static"},
+            {"key": "created_at", "label": "Created", "field_type": "static"},
+            {"key": "created_by", "label": "Created By", "field_type": "static"},
+        ]
+
+    headers = [c["label"] for c in columns]
+    data_rows = [
+        [_export_cell(entity, enr, act, created_by_name, col) for col in columns]
+        for entity, enr, act, created_by_name in rows
+    ]
+
+    content = build_xlsx(headers, data_rows, sheet_name=type_name)
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{_export_filename(type_name)}"'},
+    )
 
 
 @entity_router.get(
