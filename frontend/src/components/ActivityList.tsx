@@ -46,6 +46,12 @@ interface ActivityListProps {
    * in the filter modal.
    */
   extraFilters?: Record<string, string | undefined>;
+  /**
+   * When true, clicking a row opens the activity detail in a new tab
+   * instead of navigating the current tab. Useful when the list is
+   * embedded inside another detail page (e.g., entity Activities tab).
+   */
+  openRowInNewTab?: boolean;
 }
 
 export function ActivityList({
@@ -53,6 +59,7 @@ export function ActivityList({
   activityTypeId,
   activityTypeName,
   extraFilters,
+  openRowInNewTab = false,
 }: ActivityListProps) {
   const router = useRouter();
 
@@ -178,7 +185,14 @@ export function ActivityList({
               {activities.map((a) => (
                 <TableRow
                   key={a.id}
-                  onClick={() => router.push(`/activities/${activityTypeKey}/${a.id}`)}
+                  onClick={() => {
+                    const href = `/activities/${activityTypeKey}/${a.id}`;
+                    if (openRowInNewTab) {
+                      window.open(href, "_blank", "noopener");
+                    } else {
+                      router.push(href);
+                    }
+                  }}
                 >
                   {columns.map((col) => (
                     <TableCell
