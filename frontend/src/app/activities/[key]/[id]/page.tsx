@@ -64,6 +64,7 @@ export default function ActivityDetailPage() {
 
   // Phase 3.1: one section at a time. The section_key being edited, or null.
   const [editingSection, setEditingSection] = useState<string | null>(null);
+  const [viewSectionSearch, setViewSectionSearch] = useState("");
   const [editingDetails, setEditingDetails] = useState(false);
   const [detailValues, setDetailValues] = useState<FormValues>({
     meta: {},
@@ -144,6 +145,7 @@ export default function ActivityDetailPage() {
 
   const handleSectionChange = (value: string) => {
     setEditingSection(null);
+    setViewSectionSearch("");
     const params = new URLSearchParams(searchParams.toString());
     if (value === sections[0]?.key) {
       params.delete("section");
@@ -508,7 +510,30 @@ export default function ActivityDetailPage() {
           />
         ) : sectionParticipants.length === 0 ? (
           <p className="text-gray-400 text-xs italic py-2">No participants added yet</p>
-        ) : (
+        ) : (() => {
+          const normalize = (s: string) => s.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+          const needle = viewSectionSearch.trim() ? normalize(viewSectionSearch) : "";
+          const visibleParticipants = needle
+            ? sectionParticipants.filter((p) =>
+                normalize(getParticipantName(p)).includes(needle),
+              )
+            : sectionParticipants;
+          return (
+        <div className="space-y-2">
+          {sectionParticipants.length > 5 && (
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
+              <Input
+                placeholder="Search…"
+                value={viewSectionSearch}
+                onChange={(e) => setViewSectionSearch(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+          )}
+          {visibleParticipants.length === 0 ? (
+            <p className="text-gray-400 text-xs italic py-2">No matches</p>
+          ) : (
           <div className="border rounded-md overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b">
@@ -523,7 +548,7 @@ export default function ActivityDetailPage() {
                 </tr>
               </thead>
               <tbody>
-                {sectionParticipants.map((p) => (
+                {visibleParticipants.map((p) => (
                   <tr key={p.id} className="border-b last:border-0">
                     <td className="px-3 py-2">
                       {p.participant_type === "entity" && fieldEntityType?.key ? (
@@ -567,7 +592,10 @@ export default function ActivityDetailPage() {
               </tbody>
             </table>
           </div>
-        )}
+          )}
+        </div>
+        );
+        })()}
       </div>
     );
   };
