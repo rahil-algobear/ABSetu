@@ -58,6 +58,10 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization"],
+    # Expose Content-Disposition so the browser can read the server-set
+    # download filename on the cross-origin Excel export responses
+    # (frontend and API are different origins in dev and on the AWS stack).
+    expose_headers=["Content-Disposition"],
 )
 
 # Rate limiting (production only)
