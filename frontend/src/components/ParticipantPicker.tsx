@@ -82,6 +82,11 @@ interface ParticipantPickerProps {
   /** True only for Smart mode: entity, enrollable type, activity has
    *  dimensions. Controls the Enrolled tab + Enroll & Add path. */
   smart?: boolean;
+  /** Whether the entity type supports enrollment. Drives whether the
+   *  Create New flow includes enrollment fields. Defaults to true to
+   *  match the historical Smart-only behavior; non-enrollable entity
+   *  types (e.g. Facilitator) should pass false. */
+  canEnroll?: boolean;
   /** Currently-added participants in this section. Picker uses these
    *  for the Added tab (no separate fetch needed) and to filter them
    *  out of the Enrolled tab. */
@@ -106,6 +111,7 @@ export function ParticipantPicker({
   entityTypeName,
   participantKind = "entity",
   smart = true,
+  canEnroll = true,
   alreadyAdded,
   onAdded,
   triggerLabel,
@@ -542,12 +548,13 @@ export function ParticipantPicker({
             )}
           </div>
 
-          {/* "Create new …" only for entity sections. Smart sections
-              run create + enrollment together via the combined modal;
-              basic-entity sections defer to the regular entity-create
-              page. User sections never get a create CTA — admins
-              manage users via /admin/users. */}
-          {!isUserKind && smart && entityTypeId && (
+          {/* "Create new …" — shown for every entity section regardless
+              of enrollability. Enrollable types create entity +
+              enrollment together via the combined modal; non-enrollable
+              types (e.g. Facilitator) create entity only. User sections
+              never get a create CTA — admins manage users via
+              /admin/users. */}
+          {!isUserKind && entityTypeId && (
             <div className="pt-2 border-t">
               <Button
                 type="button"
@@ -577,21 +584,22 @@ export function ParticipantPicker({
         />
       )}
 
-      {showCreateNew && smart && entityTypeId && (
+      {showCreateNew && entityTypeId && (
         <CreateAndAddModal
           activityId={activityId}
           activityDimensions={activityDimensions}
           sectionKey={sectionKey}
           entityTypeId={entityTypeId}
           entityTypeName={entityTypeName}
+          canEnroll={canEnroll}
           onClose={() => setShowCreateNew(false)}
           onSuccess={() => {
             setShowCreateNew(false);
             // Land back on the picker with a clean state so the
-            // freshly-created beneficiary actually surfaces — they
+            // freshly-created entity actually surfaces — they
             // wouldn't match whatever the user had typed before.
             setSearch("");
-            setTab("enrolled");
+            setTab(smart ? "enrolled" : "added");
             refreshAfterAction();
           }}
         />
@@ -827,6 +835,7 @@ function CreateAndAddModal({
   sectionKey,
   entityTypeId,
   entityTypeName,
+  canEnroll,
   onClose,
   onSuccess,
 }: {
@@ -835,6 +844,7 @@ function CreateAndAddModal({
   sectionKey: string;
   entityTypeId: string;
   entityTypeName: string;
+  canEnroll: boolean;
   onClose: () => void;
   onSuccess: () => void;
 }) {
@@ -897,8 +907,13 @@ function CreateAndAddModal({
         entity_type_id: entityTypeId,
         entity_meta: Object.keys(entityValues.meta).length ? entityValues.meta : undefined,
         section_key: sectionKey,
-        enrollment_meta: Object.keys(enrollmentValues.meta).length ? enrollmentValues.meta : undefined,
-        enrollment_dimension_value_ids: activitySuppliedDimensions.map((d) => d.value_id),
+        enrollment_meta:
+          canEnroll && Object.keys(enrollmentValues.meta).length
+            ? enrollmentValues.meta
+            : undefined,
+        enrollment_dimension_value_ids: canEnroll
+          ? activitySuppliedDimensions.map((d) => d.value_id)
+          : [],
       }),
     onSuccess: () => {
       toast.success(`${entityTypeName} created and added`);
@@ -917,10 +932,12 @@ function CreateAndAddModal({
       setFormError(entityError);
       return;
     }
-    const enrollmentError = fieldsRef.current?.validate();
-    if (enrollmentError) {
-      setFormError(enrollmentError);
-      return;
+    if (canEnroll) {
+      const enrollmentError = fieldsRef.current?.validate();
+      if (enrollmentError) {
+        setFormError(enrollmentError);
+        return;
+      }
     }
     mutation.mutate();
   };
@@ -950,25 +967,27 @@ function CreateAndAddModal({
           </div>
         )}
 
-        <div className="space-y-3">
-          <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-            Enrollment
-          </h4>
-          {hasEnrollmentFields ? (
-            <EnrollmentFields
-              ref={fieldsRef}
-              entityTypeId={entityTypeId}
-              allSchemas={allSchemas}
-              values={enrollmentValues}
-              onChange={setEnrollmentValues}
-              activitySuppliedDimensions={activitySuppliedDimensions}
-            />
-          ) : (
-            <p className="text-xs text-gray-500">
-              No additional enrollment fields configured.
-            </p>
-          )}
-        </div>
+        {canEnroll && (
+          <div className="space-y-3">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+              Enrollment
+            </h4>
+            {hasEnrollmentFields ? (
+              <EnrollmentFields
+                ref={fieldsRef}
+                entityTypeId={entityTypeId}
+                allSchemas={allSchemas}
+                values={enrollmentValues}
+                onChange={setEnrollmentValues}
+                activitySuppliedDimensions={activitySuppliedDimensions}
+              />
+            ) : (
+              <p className="text-xs text-gray-500">
+                No additional enrollment fields configured.
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="flex justify-end gap-2 pt-2 border-t">
           <Button type="button" variant="outline" onClick={onClose}>

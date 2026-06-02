@@ -467,6 +467,7 @@ export default function ActivityDetailPage() {
                   entityTypeName={getFieldLabel(field)}
                   participantKind={isUserSection ? "user" : "entity"}
                   smart={smartPickerEligible}
+                  canEnroll={!!fieldEntityType?.can_enroll}
                   alreadyAdded={alreadyAdded}
                   onAdded={() => {
                     queryClient.invalidateQueries({ queryKey: ["participants", id] });
