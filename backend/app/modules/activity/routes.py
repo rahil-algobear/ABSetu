@@ -449,14 +449,21 @@ def export_activities(
         filters=merged_filters,
     )
 
+    # `list_columns` (the configured listing columns) drives the export query so
+    # the filter/search/sort and the resulting row set match the listing.
+    # `output_columns` is the full field catalog — every defined field, not just
+    # the visible ones — and drives which columns land in the spreadsheet.
     list_columns = None
+    output_columns = None
     type_name = "Activities"
     if activity_type_id:
         from app.modules.organization.service import ListConfigService
 
-        list_columns = ListConfigService(db).get_config(
+        settings = ListConfigService(db).get_settings(
             current_user.organization_id, f"activity:{activity_type_id}"
         )
+        list_columns = settings["columns"]
+        output_columns = settings["columns"] + settings["available_columns"]
         at = ActivityTypeService(db).get_by_id(activity_type_id, current_user.organization_id)
         type_name = at.name if at else "Activities"
 
@@ -511,7 +518,9 @@ def export_activities(
             for aid, skey, cnt in grouped:
                 counts_by_activity.setdefault(aid, {})[str(skey)] = cnt
 
-    columns = [c for c in (list_columns or []) if c.get("visible", True)]
+    # Export every defined field (not just the visible listing columns). With no
+    # type scope (all-types export) fall back to a minimal static set.
+    columns = output_columns
     if not columns:
         columns = [
             {"key": "participant_count", "label": "Participants", "field_type": "static"},

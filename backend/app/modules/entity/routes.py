@@ -478,14 +478,21 @@ def export_entities(
         filters=merged_filters,
     )
 
+    # `list_columns` (the configured listing columns) drives the export query so
+    # the filter/search/sort and the resulting row set match the listing.
+    # `output_columns` is the full field catalog — every defined field, not just
+    # the visible ones — and drives which columns land in the spreadsheet.
     list_columns = None
+    output_columns = None
     type_name = "Entities"
     if entity_type_id:
         from app.modules.organization.service import ListConfigService
 
-        list_columns = ListConfigService(db).get_config(
+        settings = ListConfigService(db).get_settings(
             current_user.organization_id, f"entity:{entity_type_id}"
         )
+        list_columns = settings["columns"]
+        output_columns = settings["columns"] + settings["available_columns"]
         et = EntityTypeService(db).get_by_id(entity_type_id, current_user.organization_id)
         type_name = et.name if et else "Entities"
 
@@ -501,9 +508,9 @@ def export_entities(
             "Apply filters to narrow the results, then download again."
         )
 
-    # Export the visible columns the list config defines. With no type scope
-    # (all-types export) fall back to a minimal static set.
-    columns = [c for c in (list_columns or []) if c.get("visible", True)]
+    # Export every defined field (not just the visible listing columns). With no
+    # type scope (all-types export) fall back to a minimal static set.
+    columns = output_columns
     if not columns:
         columns = [
             {"key": "code", "label": "Code", "field_type": "static"},
