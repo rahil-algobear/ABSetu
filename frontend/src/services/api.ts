@@ -260,6 +260,8 @@ export interface EntityExportParams {
   sort_by?: string;
   sort_order?: string;
   entity_type_id?: string;
+  /** Columns to include: "all" defined fields (default) or only "visible" listing columns. */
+  columns?: "all" | "visible";
 }
 
 /** Pull the server-provided filename out of a Content-Disposition header. */
@@ -376,6 +378,8 @@ export interface ActivityExportParams {
   sort_order?: string;
   activity_type_id?: string;
   entity_id?: string;
+  /** Columns to include: "all" defined fields (default) or only "visible" listing columns. */
+  columns?: "all" | "visible";
 }
 
 export const activityApi = {

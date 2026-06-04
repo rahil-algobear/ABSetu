@@ -415,6 +415,12 @@ def export_activities(
     filters: str | None = Query(None),
     activity_type_id: uuid.UUID | None = Query(None),
     entity_id: uuid.UUID | None = Query(None),
+    columns: str = Query(
+        "all",
+        pattern="^(all|visible)$",
+        description="Which columns to include: 'all' defined fields (default) or "
+        "only the 'visible' listing columns.",
+    ),
     current_user: User = Depends(get_current_user),
     accessible_dv_ids: list[uuid.UUID] | None = Depends(get_accessible_dimension_value_ids),
     db: Session = Depends(get_db),
@@ -423,7 +429,8 @@ def export_activities(
 
     Honors the same search / filters / sort and org + dimension scoping as the
     activity list. Pass the active list filters for a "current view" export, or
-    omit them for "all". XLSX only; columns mirror the configured list view.
+    omit them for "all". `columns` selects all defined fields (default) or only
+    the visible listing columns. XLSX only.
     """
     import json
 
@@ -518,17 +525,21 @@ def export_activities(
             for aid, skey, cnt in grouped:
                 counts_by_activity.setdefault(aid, {})[str(skey)] = cnt
 
-    # Export every defined field (not just the visible listing columns). With no
-    # type scope (all-types export) fall back to a minimal static set.
-    columns = output_columns
-    if not columns:
-        columns = [
+    # Pick the output columns: all defined fields (default) or only the visible
+    # listing columns, per the `columns` query param. With no type scope
+    # (all-types export) fall back to a minimal static set.
+    if columns == "visible":
+        export_columns = [c for c in (list_columns or []) if c.get("visible", True)]
+    else:
+        export_columns = output_columns
+    if not export_columns:
+        export_columns = [
             {"key": "participant_count", "label": "Participants", "field_type": "static"},
             {"key": "created_at", "label": "Created", "field_type": "static"},
             {"key": "created_by", "label": "Created By", "field_type": "static"},
         ]
 
-    headers = [c["label"] for c in columns]
+    headers = [c["label"] for c in export_columns]
     data_rows = []
     for activity, participant_count, created_by_name in rows:
         section_counts: dict[str, int] = {}
@@ -542,7 +553,7 @@ def export_activities(
                 _export_activity_cell(
                     activity, participant_count, created_by_name, section_counts, col
                 )
-                for col in columns
+                for col in export_columns
             ]
         )
 
