@@ -2,8 +2,8 @@ name: DB Migrate
 
 # Runs Alembic migrations against the correct RDS database based on the
 # branch that was pushed:
-#   - push to `staging`      -> GitHub Environment "staging"    -> staging DB
-#   - push to `release/prod` -> GitHub Environment "production" -> prod DB
+#   - push to `release/staging` -> GitHub Environment "staging"    -> staging DB
+#   - push to `release/prod`    -> GitHub Environment "production" -> prod DB
 #
 # Each GitHub Environment holds its OWN `DATABASE_URL` secret, so the same
 # `secrets.DATABASE_URL` reference below resolves to a different value per
@@ -12,7 +12,7 @@ name: DB Migrate
 on:
   push:
     branches:
-      - staging
+      - release/staging
       - release/prod
     paths:
       - "backend/migrations/**"
