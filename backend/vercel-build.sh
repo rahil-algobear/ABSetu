@@ -9,8 +9,9 @@ echo "Starting build process..."
 echo "Installing Python dependencies..."
 pip install -r requirements.txt
 
-# Run database migrations
-echo "Running database migrations..."
-alembic upgrade head
+# NOTE: Database migrations are intentionally NOT run here.
+# Vercel build machines have ephemeral IPs and the build should not depend
+# on reaching RDS. Migrations run via the GitHub Actions workflow
+# (.github/workflows/db-migrate.yml) on push to release/prod.
 
 echo "Build completed successfully" 
