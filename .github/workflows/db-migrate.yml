@@ -49,6 +49,16 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Verify DATABASE_URL secret is present
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::DATABASE_URL is empty for environment '${{ github.ref_name == 'release/prod' && 'production' || 'staging' }}'. Add it as an Environment SECRET (not a Variable) named DATABASE_URL under repo Settings -> Environments."
+            exit 1
+          fi
+          echo "DATABASE_URL is set (length ${#DATABASE_URL})."
+
       - name: Show target + current + pending migrations
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
