@@ -1,28 +1,39 @@
-name: DB Migrate (production)
+name: DB Migrate
 
-# Runs Alembic migrations against the production RDS database whenever
-# schema changes land on the release/prod branch. Vercel handles the
-# frontend/backend deploy separately via its git integration; this job
-# owns the database schema so migrations aren't coupled to the build.
+# Runs Alembic migrations against the correct RDS database based on the
+# branch that was pushed:
+#   - push to `staging`      -> GitHub Environment "staging"    -> staging DB
+#   - push to `release/prod` -> GitHub Environment "production" -> prod DB
+#
+# Each GitHub Environment holds its OWN `DATABASE_URL` secret, so the same
+# `secrets.DATABASE_URL` reference below resolves to a different value per
+# environment. Vercel handles the frontend/backend deploy separately via its
+# git integration; this job owns the database schema.
 on:
   push:
     branches:
+      - staging
       - release/prod
     paths:
       - "backend/migrations/**"
       - "backend/requirements.txt"
       - ".github/workflows/db-migrate.yml"
-  # Allow manual runs from the Actions tab.
+  # Allow manual runs from the Actions tab (uses the branch you run it from).
   workflow_dispatch:
 
-# Never run two migration jobs at once against the same DB.
+# Serialize per-branch so two migration jobs never hit the same DB at once,
+# while still allowing staging and prod to run independently.
 concurrency:
-  group: db-migrate-prod
+  group: db-migrate-${{ github.ref_name }}
   cancel-in-progress: false
 
 jobs:
   migrate:
     runs-on: ubuntu-latest
+    # Map branch -> GitHub Environment. The environment scopes which
+    # DATABASE_URL secret is used, and lets you add protection rules
+    # (e.g. required reviewers) on "production".
+    environment: ${{ github.ref_name == 'release/prod' && 'production' || 'staging' }}
     defaults:
       run:
         working-directory: backend
@@ -38,10 +49,11 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Show current + pending migrations
+      - name: Show target + current + pending migrations
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
+          echo "Branch: ${{ github.ref_name }}  ->  Environment: ${{ github.ref_name == 'release/prod' && 'production' || 'staging' }}"
           echo "Current DB revision:"
           alembic current
           echo "Migration history:"
