@@ -1,0 +1,62 @@
+name: DB Seed (manual)
+
+# Manually seed a database with the initial org / permissions / roles / admin
+# user. Run it from the Actions tab against the branch whose environment you
+# want to target:
+#   - run on `release/staging` -> environment "staging"    -> staging DB
+#   - run on `release/prod`    -> environment "production" -> prod DB
+#
+# The seeders are idempotent, but this is manual-only (workflow_dispatch) so it
+# never runs automatically on a push. Requires the workflow to exist on the
+# default branch for the "Run workflow" button to appear.
+on:
+  workflow_dispatch:
+    inputs:
+      seeder:
+        description: "Which seeder module to run (app.seeds.<name>)"
+        type: choice
+        default: initial
+        options:
+          - initial
+          - kshamata
+          - gramodaya
+
+concurrency:
+  group: db-seed-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'release/prod' && 'production' || 'staging' }}
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Verify DATABASE_URL secret is present
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::DATABASE_URL is empty for environment '${{ github.ref_name == 'release/prod' && 'production' || 'staging' }}'. Add it as an Environment SECRET named DATABASE_URL."
+            exit 1
+          fi
+          echo "DATABASE_URL is set (length ${#DATABASE_URL})."
+
+      - name: Run seeder
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          echo "Seeding '${{ inputs.seeder }}' into environment '${{ github.ref_name == 'release/prod' && 'production' || 'staging' }}'"
+          python -m app.seeds.${{ inputs.seeder }}
